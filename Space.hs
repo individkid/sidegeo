@@ -1,16 +1,17 @@
+-- TRY use lists instead of Set and Map
+-- TRY rely on lazy evaluation instead of representations
 module Space (
  Boundary,Region,Sidedness,Space,
- space_bs,space_rs,space_ss,space_st,
+ space_bs,space_rs,space_ss,
+ space_st,space_bz,side,rename,
  empty,order,system,simplex,
- subspace,section,superspace,
- polytope,equivalent,equal,compare,
- linear) where
+ subspace,superspace,equivalent,
+ polytope,spaces,overlaps,construct) where
 
-import Prelude hiding (take,zip,unzip,map,foldl,foldr,fold,compare,length,concat)
+import Prelude hiding (take,zip,unzip,map,fold,compare,length,concat,reverse)
 import qualified Data.List
 import qualified Data.Set
 import qualified Data.Map
--- TODO import qualified Numeric.LinearAlgebra
 
 linear :: Int -> Int -> Int
 linear 0 n = 1
@@ -32,26 +33,17 @@ strip :: Maybe (Maybe a) -> Maybe a
 strip Nothing = Nothing
 strip (Just a) = a
 
-sort :: Ord a => [a] -> [a]
-sort = Data.List.sort
+listSize :: [a] -> Int
+listSize = Data.List.length
 
 map :: (a -> b) -> [a] -> [b]
 map = Data.List.map
-
-foldl :: (a -> b -> b) -> [a] -> b -> b
-foldl f a b = Data.List.foldl' g b a where g b a = f a b
-
-foldr :: (a -> b -> b) -> [a] -> b -> b
-foldr f a b = Data.List.foldr f b a
 
 fold :: (a -> a -> a) -> [a] -> a
 fold = Data.List.foldl1
 
 maybeFind :: (a -> Bool) -> [a] -> Maybe a
 maybeFind = Data.List.find
-
-find :: (a -> Bool) -> [a] -> a
-find f a = bang (maybeFind f a) "list wrong"
 
 maybeOptFind :: Eq a => [Maybe a] -> Maybe a
 maybeOptFind a = strip (maybeFind f a) where
@@ -71,11 +63,11 @@ zip = Data.List.zip
 unzip :: [(a,b)] -> ([a],[b])
 unzip = Data.List.unzip
 
-listSize :: [a] -> Int
-listSize = Data.List.length
-
 concat :: [[a]] -> [a]
 concat = Data.List.concat
+
+reverse :: [a] -> [a]
+reverse = Data.List.reverse
 
 type Set = Data.Set.Set
 
@@ -119,7 +111,7 @@ consChoose :: Ord a => Set a -> (a,Set a)
 consChoose a = (bang a0 "set empty", a1) where (a0,a1) = maybeConsChoose a
 
 setToList :: Ord a => Set a -> [a]
-setToList = Data.Set.toList
+setToList = Data.Set.toAscList
 
 setFromList :: Ord a => [a] -> Set a
 setFromList = Data.Set.fromList
@@ -161,8 +153,19 @@ setSets a b
  i :: Ord a => a -> Set a -> Set a
  i c d = insert d c
 
+selects :: Ord a => Set a -> Set (a, Set a)
+selects as = setMap f as where
+ f a = (a, remove as a)
+
+permutes :: Ord a => Set a -> Set [a]
+permutes as = unions (setMap f (selects as)) where
+ f (a,as) = setMap (g a) (permutes as)
+ g a al = a:al
+
 setMaps :: Ord a => Ord b => Set a -> Set b -> Set (Map a b)
-setMaps a b = undefined
+setMaps as bs = setMap f (permutes bs) where
+ al = setToList as
+ f bl = mapFromList (zip al bl)
 
 setAll :: Ord a => (a -> Bool) -> Set a -> Bool
 setAll f a = Data.List.all f (setToList a)
@@ -173,21 +176,19 @@ setAny f a = Data.List.any f (setToList a)
 setMap :: Ord a => Ord b => (a -> b) -> Set a -> Set b
 setMap = Data.Set.map
 
-setMap2 :: Ord a => Ord b => (a -> Set b) -> (b -> c) -> Set a -> Set c
-setMap2 f g a = undefined
+setMap2 :: Ord a => Ord b => Ord c => (a -> b -> c) -> Set a -> Set b -> Set c
+setMap2 f a b = unions (setMap g a) where
+ g a = setMap (f a) b
 
 setConnect :: Ord a => (a -> Set a) -> a -> Set a
-setConnect f a = undefined
-{-
-connect (Blot0 rm) rs r = f r (forceOptRemove rs r) setEmpty setEmpty where
- f :: Maybe Region -> Regions -> Regions -> Regions -> Regions
- f Nothing pool todo rslt = rslt
- f (Just r) pool todo rslt = f (maybeChoose todo0) pool0 todo0 rslt0 where
-  blot = intersect (sub rm r) pool
-  pool0 = removes pool blot
-  todo0 = forceRemove (union todo blot) r
-  rslt0 = insert rslt r
--}
+setConnect f a = setConnect2 f (single a)
+
+setConnect2 :: Ord a => (a -> Set a) -> Set a -> Set a
+setConnect2 f a = g a setEmpty where
+ g todo rslt = if (setSize todo) == 0 then rslt else g todo0 rslt0 where
+  a = choose todo
+  rslt0 = insert rslt a
+  todo0 = differ (union todo (f a)) rslt0
 
 setOptMap :: Ord a => Ord b => (a -> Maybe b) -> Set a -> Set b
 setOptMap f a = setMap g (setFilter h (setMap f a)) where
@@ -310,9 +311,6 @@ type Map = Data.Map.Map
 mapSize :: Map k a -> Int
 mapSize = Data.Map.size
 
-mapped :: Ord k => Map k a -> k -> Bool
-mapped m a = Data.Map.member a m
-
 maybeSub :: Ord k => Map k a -> k -> Maybe a
 maybeSub m a = Data.Map.lookup a m
 
@@ -379,28 +377,19 @@ fromOptSet2 f a b = Data.Map.filter h (fromSet g a) where
 mapFromList :: Ord a => [(a,b)] -> Map a b
 mapFromList = Data.Map.fromList
 
-mapFromList2 :: Ord a => Ord b => Ord c => [(a,(b,c))] -> Map a (Map b c)
-mapFromList2 a = mapFromList (map f (foldl g (sort a) [])) where
- f :: Ord b => (a,[(b,c)]) -> (a,Map b c)
- f (a,b) = (a,mapFromList b)
- g :: Ord a => (a,(b,c)) -> [(a,[(b,c)])] -> [(a,[(b,c)])]
- g (a,(b,c)) [] = [(a,[(b,c)])]
- g (a,(b,c)) d@((e,f):g)
-  | a == e = (e,(b,c):f):g
-  | a /= e = (a,[(b,c)]):d
-
-mapToList2 :: Ord a => Ord b => Map a (Map b c) -> [(a,(b,c))]
-mapToList2 a = concat (map f (setToList (keysSet a))) where
- f k = map (g k) (setToList (keysSet (sub a k)))
- g k0 k1 = (k0,(k1,(sub2 a k0 k1)))
+mapToList :: Ord a => Map a b -> [(a,b)]
+mapToList = Data.Map.toList
 
 inverse :: Ord b => Map a b -> Map b a
 inverse a = mapFromList (map f (Data.Map.toList a)) where f (a,b) = (b,a)
 
+image :: Ord a => Ord b => Map a b -> Set a -> Set b
+image m a = setMap (sub m) a
+
 mapMap :: Ord c => ((a,b) -> (c,d)) -> Map a b -> Map c d
 mapMap f a = mapFromList (map f (Data.Map.toList a))
 
-mapVals :: (a ->b) -> Map k a -> Map k b
+mapVals :: (a -> b) -> Map k a -> Map k b
 mapVals = Data.Map.map
 
 count :: Ord a => Set a -> Map a Int
@@ -412,54 +401,23 @@ relate a b = fromSet f a where f k = Data.Set.elemAt (Data.Set.findIndex k a) b
 extend :: Ord a => Map a b -> (a,b) -> Map a b
 extend m (k,v) = Data.Map.insert k v m
 
+restrict :: Ord a => Map a b -> Set a -> Map a b
+restrict m a = fromSet (sub m) a
+
 mapUnion :: Ord a => Map a b -> Map a b -> Map a b
 mapUnion a b = mapFromList ((Data.Map.toList a)++(Data.Map.toList b))
 
-{- TODO
-type Matrix Numeric.LinearAlgebra.Data.Matrix
-
-nrows :: Matrix a -> Int
-nrows = undefined
-
-ncols :: Matrix a -> Int
-ncols = undefined
-
-transpose :: Matrix a -> Matrix a
-transpose = undefined
-
-determinant :: (Ord a, Fractional a) => Matrix a -> a
-determinant = undefined
-
-multiply :: Num a => Matrix a -> Matrix a -> Matrix a
-multiply = undefined
-
-add :: (a -> b -> c) -> Matrix a -> Matrix b -> Matrix c
-add = undefined
-
-elem :: Matrix a -> Int -> Int -> a
-elem a r c = undefined
-
-getRows :: Matrix a -> Map Int Int -> Matrix a
-getRows a m = undefined
-
-getCols :: Matrix a -> Map Int Int -> Matrix a
-getCols a m = undefined
-
-setRows :: Matrix a -> Matrix a -> Map Int Int -> Matrix a
-setRows a b m = undefined
-
-setCols :: Matrix a -> Matrix a -> Map Int Int -> Matrix a
-setCols a b m = undefined
--}
+parity :: Ord a => Map a a -> Bool
+parity a = f (mapToList a) where
+ f [] = False
+ f ((k,v):t) = (f t) /= (g k ((k,v):t) False)
+ g a ((k,v):t) b = if a == v then b else g a t (not b)
 
 -- undefined
 data Boundary = Boundary Int deriving (Show, Eq, Ord)
 data Region = Region Int deriving (Show, Eq, Ord)
 data Sidedness = Sidedness Int deriving (Show, Eq, Ord)
-data Order = Order Int deriving (Show, Eq, Ord)
-data Index = Index Int deriving (Show, Eq, Ord)
 data Vertex = Vertex Int deriving (Show, Eq, Ord)
-data Signedness = Before | During | After deriving (Show, Eq, Ord)
 
 instance Enum Boundary where
  succ (Boundary x) = Boundary (succ x); pred (Boundary x) = Boundary (pred x)
@@ -470,12 +428,6 @@ instance Enum Region where
 instance Enum Sidedness where
  succ (Sidedness x) = Sidedness (succ x); pred (Sidedness x) = Sidedness (pred x)
  toEnum x = Sidedness x; fromEnum (Sidedness x) = x
-instance Enum Order where
- succ (Order x) = Order (succ x); pred (Order x) = Order (pred x)
- toEnum x = Order x; fromEnum (Order x) = x
-instance Enum Index where
- succ (Index x) = Index (succ x); pred (Index x) = Index (pred x)
- toEnum x = Index x; fromEnum (Index x) = x
 instance Enum Vertex where
  succ (Vertex x) = Vertex (succ x); pred (Vertex x) = Vertex (pred x)
  toEnum x = Vertex x; fromEnum (Vertex x) = x
@@ -483,8 +435,6 @@ instance Enum Vertex where
 instance Holes Boundary where zero = Boundary 0
 instance Holes Region where zero = Region 0
 instance Holes Sidedness where zero = Sidedness 0
-instance Holes Order where zero = Order 0
-instance Holes Index where zero = Index 0
 instance Holes Vertex where zero = Vertex 0
 
 -- collections of undefined
@@ -492,16 +442,16 @@ type Boundaries = Set Boundary
 type Regions = Set Region
 type Sidednesses = Set Sidedness
 type Vertices = Set Vertex
-type Hop = (Region,Boundary,Region)
+type Direction = Map Boundary Sidedness
+type Directions = Set Direction
+type Polytope = Set [Directions]
 
 -- representations
 type Side = Map Boundary (Map Region Sidedness) -- st
 type Dual = Map Sidedness (Map Region Boundaries) -- dt
 type Duali = Map Sidedness (Map Boundaries Region) -- di
-type Dualj = Set (Set Boundaries) -- dj
 type Half = Map Sidedness (Map Boundary Regions) -- ht
 type Halfi = Map Sidedness (Map Regions Boundary) -- hi
-type Halfj = Set (Set Regions) -- hj
 type Bounds = Boundaries -- bs
 type Regs = Regions -- rs
 type Sides = Sidednesses -- ss
@@ -519,15 +469,7 @@ type Pencil = Map Vertex Regions -- pm
 type Corner = Map Region Vertices -- qm
 type Inside = Regions -- is
 type Outside = Regions -- os
-type Partial = Map Region (Map Order (Map Index Hop)) -- pt
-type Partiali = Map Region (Map Region (Map Order Index)) -- pi
-type Partialj = Map Region (Map Boundary (Map Order Index)) -- pj
-type Partialk = Map Region (Map Region (Map Order Index)) -- pk
-type Sign = Map Region (Map Boundary (Map Vertex Signedness)) -- gt
-type Signi = Map Region (Map Vertex (Map Boundary Signedness)) -- gi
-type Signj = Map Region (Map Boundary (Map Region Signedness)) -- gj
-type Signk = Map Region (Map Region (Map Boundary Signedness)) -- gk
-type TODO = Int -- xx
+type Hive = Set Boundaries -- bz
 
 -- return values and parameters for inducers and generators
 data Side0 = Side0 Side deriving (Show, Eq, Ord) -- st
@@ -539,18 +481,15 @@ data Dual0 = Dual0 Dual deriving (Show, Eq, Ord) -- dt
 data Dual1 = Dual1 Side Bounds Sides deriving (Show, Eq, Ord) -- st bs ss
 data Dual2 = Dual2 Side Bounds Regs Sides deriving (Show, Eq, Ord) -- st bs rs ss
 data Dual3 = Dual3 Duali Sides deriving (Show, Eq, Ord) -- dt ss
+data Dual4 = Dual4 Regs Sides Directions deriving (Show, Eq, Ord) -- rs ss ds
 data Duali0 = Duali0 Duali deriving (Show, Eq, Ord) -- di
 data Duali1 = Duali1 Dual Sides deriving (Show, Eq, Ord) -- dt ss
-data Dualj0 = Dualj0 Dualj deriving (Show, Eq, Ord) -- dj
-data Dualj1 = Dualj1 Dual Regs Sides deriving (Show, Eq, Ord) -- dt rs ss
 data Half0 = Half0 Half deriving (Show, Eq, Ord) -- ht
 data Half1 = Half1 Side Regs Sides deriving (Show, Eq, Ord) -- st rs ss
 data Half2 = Half2 Side Bounds Regs Sides deriving (Show, Eq, Ord) -- st bs rs ss
 data Half3 = Half3 Halfi Sides deriving (Show, Eq, Ord) -- hi ss
 data Halfi0 = Halfi0 Halfi deriving (Show, Eq, Ord) -- hi
 data Halfi1 = Halfi1 Half Sides deriving (Show, Eq, Ord) -- ht ss
-data Halfj0 = Halfj0 Halfj deriving (Show, Eq, Ord) -- hj
-data Halfj1 = Halfj1 Half Bounds Sides deriving (Show, Eq, Ord) -- ht bs ss
 data Bounds0 = Bounds0 Bounds deriving (Show, Eq, Ord) -- bs
 data Regs0 = Regs0 Regs deriving (Show, Eq, Ord) -- rs
 data Sides0 = Sides0 Sides deriving (Show, Eq, Ord) -- ss
@@ -591,27 +530,20 @@ data Inside0 = Inside0 Inside deriving (Show, Eq, Ord) -- is
 data Inside1 = Inside1 Dual Duali Bounds Regs Sides deriving (Show, Eq, Ord) -- dt di bs rs ss
 data Outside0 = Outside0 Outside deriving (Show, Eq, Ord) -- os
 data Outside1 = Outside1 Regs Inside deriving (Show, Eq, Ord) -- rs is
-data Partial0 = Partial0 Partial deriving (Show, Eq, Ord) -- pt
-data Partial1 = Partial1 Bounds Neighbor Cage Outside deriving (Show, Eq, Ord) -- bs nt bm os
-data Partiali0 = Partiali0 Partiali deriving (Show, Eq, Ord) -- pi
-data Partiali1 = Partiali1 Outside Partial deriving (Show, Eq, Ord) -- os pt
-data Partialj0 = Partialj0 Partialj deriving (Show, Eq, Ord) -- pj
-data Partialj1 = Partialj1 Outside Partial deriving (Show, Eq, Ord) -- os pt
-data Partialk0 = Partialk0 Partialk deriving (Show, Eq, Ord) -- pk
-data Partialk1 = Partialk1 Outside Partial deriving (Show, Eq, Ord) -- os pt
-data Sign0 = Sign0 Sign deriving (Show, Eq, Ord) -- gt
-data Sign1 = Sign1 Bounds Verti Verts Pencil Outside Partiali Partialj deriving (Show, Eq, Ord)
- -- bs vi vs pm os pi pj
+data Hive0 = Hive0 Hive deriving (Show, Eq, Ord) -- bz
+data Hive1 = Hive1 Cage Inside deriving (Show, Eq, Ord) -- bm is
 
 -- parameters for deducers and constructors
-data Take0 = Take0 Dual Bounds Sides deriving (Show, Eq, Ord) -- dt bs ss
-data Take1 = Take1 Dual Bounds Regs Sides deriving (Show, Eq, Ord) -- dt bs rs ss
+data Take0 = Take0 Dual Bounds Sides deriving (Show, Eq, Ord)
+ -- dt bs ss
+data Take1 = Take1 Dual Bounds Regs Sides deriving (Show, Eq, Ord)
+ -- dt bs rs ss
 data Signify0 = Signify0 Dual Duali Half Sides Flat Verti Verts deriving (Show, Eq, Ord)
  -- dt di ht ss am vi vs
-data Signify1 = Signify1 Neighbor Verti Pencil deriving (Show, Eq, Ord) -- nt vi pm
-data Signify2 = Signify2 Dual Duali Half Sides Neighbor Flat Verti Verts Pencil deriving (Show, Eq, Ord)
- -- dt di ht ss nt am vi vs pm
-data Polycil0 = Polycil0 Dual Duali Half Sides Flat deriving (Show, Eq, Ord) -- dt di ht ss am
+data Signify1 = Signify1 Neighbor Verti Pencil deriving (Show, Eq, Ord)
+ -- nt vi pm
+data Polycil0 = Polycil0 Dual Duali Half Sides Flat deriving (Show, Eq, Ord)
+ -- dt di ht ss am
 data Subspace0 = Subspace0 Dual Sides deriving (Show, Eq, Ord)
  -- dt ss
 data Surspace0 = Surspace0 Side Bounds Regs deriving (Show, Eq, Ord)
@@ -638,20 +570,38 @@ data Superspace0 = Superspace0 Dual Bounds Sides deriving (Show, Eq, Ord)
  -- dt bs ss
 data Equivalent0 = Equivalent0 Dual Bounds Sides deriving (Show, Eq, Ord)
  -- dt bs ss
-data Rotate0 = Rotate0 Side Half Bounds Sides Outside deriving (Show, Eq, Ord)
- -- st ht bs ss os
-data Rotate1 = Rotate1 TODO deriving (Show, Eq, Ord)
- -- xx
-data Migrate0 = Migrate0 TODO deriving (Show, Eq, Ord)
- -- xx
-data Migrate1 = Migrate1 TODO deriving (Show, Eq, Ord)
- -- xx
-data Cospace0 = Cospace0 Side Dual Half Bounds Regs Sides Outside Corner deriving (Show, Eq, Ord)
- -- st dt ht bs rs ss os qm
-data Cospace1 = Cospace1 Dual Bounds Regs Sides TODO deriving (Show, Eq, Ord)
- -- dt bs rs ss xx
-data Cospace2 = Cospace2 TODO deriving (Show, Eq, Ord)
- -- xx
+data Equivalent1 = Equivalent1 Bounds Hive deriving (Show, Eq, Ord)
+ -- bs bz
+data Migrate0 = Migrate0 Side Bounds Regs Sides Cage deriving (Show, Eq, Ord)
+ -- st bs rs ss bm
+data Cospace0 = Cospace0 Side Dual Bounds Regs Sides Attached Blot Verti Corner deriving (Show, Eq, Ord)
+ -- st dt bs rs ss at rm vi qm
+data Cospace1 = Cospace1 Side Bounds Regs Corner deriving (Show, Eq, Ord)
+ -- st bs rs qm
+data Cospace2 = Cospace2 Dual Sides deriving (Show, Eq, Ord)
+ -- dt ss
+data Cospace3 = Cospace3 Side Dual Bounds Regs Sides Cage deriving (Show, Eq, Ord)
+ -- st dt bs rs ss bm
+data Cospace4 = Cospace4 Dual Bounds Regs Sides Cage deriving (Show, Eq, Ord)
+ -- dt bs rs ss bm
+data Cospace5 = Cospace5 Dual Bounds Sides Inside deriving (Show, Eq, Ord)
+ -- dt bs ss is
+data Cospace6 = Cospace6 Dual Bounds Regs Sides deriving (Show, Eq, Ord)
+ -- dt bs rs ss
+data Spaces0 = Spaces0 Side Dual Bounds Regs Sides Attached Blot Verti Corner deriving (Show, Eq, Ord)
+ -- st dt bs rs ss at rm vi qm
+data Spaces1 = Spaces1 Dual Regs Sides Verts deriving (Show, Eq, Ord)
+ -- dt rs ss vs
+data Rotate0 = Rotate0 Side Bounds Sides Half Outside deriving (Show, Eq, Ord)
+ -- st bs ss ht os
+data Polytope0 = Polytope0 Dual Duali Half Bounds Sides Neighbor Flat Verti Verts Pencil deriving (Show, Eq, Ord)
+ -- dt di ht bs ss nt am vi vs pm
+data Polytope1 = Polytope1 Side Dual Half Bounds Sides Attached Blot deriving (Show, Eq, Ord)
+ -- st dt ht bs ss at rm
+data Polytope2 = Polytope2 Side Dual Bounds Regs Sides deriving (Show, Eq, Ord)
+ -- st dt bs rs ss
+data Polytope3 = Polytope3 Dual Bounds Regs Sides deriving (Show, Eq, Ord)
+ -- dt bs rs ss
 
 -- generators take several types to produce one type, and call only inducers and accessors.
 -- converters take one type to produce several types, and call only generators.
@@ -703,18 +653,18 @@ dual2_dual0 (Dual2 st bs rs ss) = Dual0 (fromSet2 (dual1_bs dt1) ss rs) where
  dt1 = Dual1 st bs ss
 dual3_dual0 (Dual3 di ss) = Dual0 (fromSet f ss) where
  f s = inverse (sub di s)
+dual4_dual0 (Dual4 rs ss ds) = Dual0 (fromSet2 f ss rs) where
+ t = relate rs ds
+ f s r = let m = (sub t r) in setFilter (g m s) (keysSet m)
+ g m s b = (sub m b) == s
 duali1_duali0 (Duali1 dt ss) = Duali0 (fromSet f ss) where
  f s = inverse (sub dt s)
-dualj1_dualj0 (Dualj1 dt rs ss) = Dualj0 (setMap f rs) where
- f r = setMap (g r) ss; g r s = sub2 dt s r
 half2_half0 (Half2 st bs rs ss) = Half0 (fromSet2 (half1_rs ht1) ss bs) where
  ht1 = Half1 st rs ss
 half3_half0 (Half3 hi ss) = Half0 (fromSet f ss) where
  f s = inverse (sub hi s)
 halfi1_halfi0 (Halfi1 ht ss) = Halfi0 (fromSet f ss) where
  f s = inverse (sub ht s)
-halfj1_halfj0 (Halfj1 ht bs ss) = Halfj0 (setMap f bs) where
- f b = setMap (g b) ss; g b s = sub2 ht s b
 side0_bounds0 (Side0 st) = Bounds0 (keysSet st) where
  -- nothing
 dual0_bounds0 (Dual0 dt) = Bounds0 (unions (valsSet2 dt)) where
@@ -779,29 +729,8 @@ inside1_inside0 (Inside1 dt di bs rs ss) = Inside0 (setFilter f rs) where
  n1 = (Neighbor1 dt di ss); f r = (colleague n1 bs r) == Nothing
 outside1_outside0 (Outside1 rs is) = Outside0 (differ rs is) where
  -- nothing
-partial1_partial0 (Partial1 bs nt bm os) = Partial0 (fromSet pt os) where
- pt r = let a = ps r in mapFromList (zip [zero..(Order ((listSize a)-1))] a)
- ps r = setToList (setMap f (g r bs []))
- f :: [a] -> Map Index a
- f a = mapFromList (zip [zero..(Index ((listSize a)-1))] a)
- g :: Region -> Boundaries -> [Hop] -> Set [Hop]
- g r bs a | (setSize bs) == 0 = single a
-  | otherwise = unions (setMap (h r bs a) (intersect (sub bm r) bs))
- h :: Region -> Boundaries -> [Hop] -> Boundary -> Set [Hop]
- h r bs a b = let n = (sub2 nt b r) in g n (remove bs b) ((r,b,n):a)
-partiali1_partiali0 (Partiali1 os pt) = Partiali0 (fromSet g os) where
- g r = mapFromList2 (map f (mapToList2 (sub pt r)))
- f (o,(i,(r,b,n))) = (r,(o,i))
-partialj1_partialj0 (Partialj1 os pt) = Partialj0 (fromSet g os) where
- g r = mapFromList2 (map f (mapToList2 (sub pt r)))
- f (o,(i,(r,b,n))) = (b,(o,i))
-partialk1_partialk0 (Partialk1 os pt) = Partialk0 (fromSet g os) where
- g r = mapFromList2 (map f (mapToList2 (sub pt r)))
- f (o,(i,(r,b,n))) = (n,(o,i))
-sign1_sign0 (Sign1 bs vi vs pm os pi pj) = Sign0 (fromSet3 f os bs vs) where
- f r0 b v | member (sub vi v) b = During | i < j = Before | i > j = After where
-  r1 = choose (sub pm v); m = sub2 pi r0 r1; o = choose (keysSet m)
-  i = sub m o; j = sub3 pj r0 b o
+hive1_hive0 (Hive1 bm is) = Hive0 (image bm is) where
+ -- nothing
 
 -- selectors
 section0_side0 (Section0 st bs ss at) = Side0 st
@@ -816,8 +745,32 @@ supersection3_subsection1 (Supersection3 st dt bs rs ss rm b) = Subsection1 dt s
 supersection3_supersection0 (Supersection3 st dt bs rs ss rm b) = Supersection0 st dt bs rs ss rm
 supersection3_supersection1b (Supersection3 st dt bs rs ss rm b) = (Supersection1 dt bs rs ss, b)
 supersection4_subsection1b (Supersection4 dt ss b) = (Subsection1 dt ss, b)
-equivalent_subspace0 (Equivalent0 dt bs ss) = Subspace0 dt ss
-equivalent_bs (Equivalent0 dt bs ss) = bs
+equivalent0_subspace0 (Equivalent0 dt bs ss) = Subspace0 dt ss
+equivalent0_bs (Equivalent0 dt bs ss) = bs
+migrate0_side0 (Migrate0 st bs rs ss bm) = Side0 st
+spaces0_side0 (Spaces0 st dt bs rs ss at rm vi qm) = Side0 st
+spaces0_bs (Spaces0 st dt bs rs ss at rm vi qm) = bs
+spaces0_cospace0 (Spaces0 st dt bs rs ss at rm vi qm) = Cospace0 st dt bs rs ss at rm vi qm
+spaces0_supersection0 (Spaces0 st dt bs rs ss at rm vi qm) = Supersection0 st dt bs rs ss rm
+spaces0_cospace1 (Spaces0 st dt bs rs ss at rm vi qm) = Cospace1 st bs rs qm
+spaces1_cospace2 (Spaces1 dt rs ss vs) = Cospace2 dt ss
+spaces1_vs (Spaces1 dt rs ss vs) = vs
+spaces1_rs (Spaces1 dt rs ss vs) = rs
+rotate0_side0 (Rotate0 st bs ss ht os) = Side0 st
+polytope0_signify0 (Polytope0 dt di ht bs ss nt am vi vs pm) = Signify0 dt di ht ss am vi vs
+polytope0_signify1 (Polytope0 dt di ht bs ss nt am vi vs pm) = Signify1 nt vi pm
+polytope0_subspace0 (Polytope0 dt di ht bs ss nt am vi vs pm) = Subspace0 dt ss
+polytope0_take0 (Polytope0 dt di ht bs ss nt am vi vs pm) = Take0 dt bs ss
+polytope1_superspace0 (Polytope1 st dt ht bs ss at rm) = Superspace0 dt bs ss
+polytope1_section0 (Polytope1 st dt ht bs ss at rm) = Section0 st bs ss at
+polytope1_take0 (Polytope1 st dt ht bs ss at rm) = Take0 dt bs ss
+polytope1_ht (Polytope1 st dt ht bs ss at rm) = ht
+polytope1_rm (Polytope1 st dt ht bs ss at rm) = rm
+polytope2_st (Polytope2 st dt bs rs ss) = st
+polytope2_rs (Polytope2 st dt bs rs ss) = rs
+polytope2_take1 (Polytope2 st dt bs rs ss) = Take1 dt bs rs ss
+polytope3_take1 (Polytope3 dt bs rs ss) = Take1 dt bs rs ss
+polytope3_rs (Polytope3 dt bs rs ss) = rs
 
 -- converter
 duali0_subsection0 (Duali0 di) = Subsection0 st dt bs ss at where
@@ -831,6 +784,12 @@ duali0_subsection0 (Duali0 di) = Subsection0 st dt bs ss at where
 duali0_subsection1 (Duali0 di) = Subsection1 dt ss where
  (Sides0 ss) = duali0_sides0 (Duali0 di)
  (Dual0 dt) = dual3_dual0 (Dual3 di ss)
+duali0_polytope2 (Duali0 di) = Polytope2 st dt bs rs ss where
+ (Bounds0 bs) = duali0_bounds0 (Duali0 di)
+ (Regs0 rs) = duali0_regs0 (Duali0 di)
+ (Sides0 ss) = duali0_sides0 (Duali0 di)
+ (Dual0 dt) = dual3_dual0 (Dual3 di ss)
+ (Side0 st) = side3_side0 (Side3 dt bs rs ss)
 side0_subsection1 (Side0 st) = Subsection1 dt ss where
  (Bounds0 bs) = side0_bounds0 (Side0 st)
  (Regs0 rs) = side0_regs0 (Side0 st)
@@ -851,8 +810,60 @@ side0_supersection1 (Side0 st) = Supersection1 dt bs rs ss where
  (Regs0 rs) = side0_regs0 (Side0 st)
  (Sides0 ss) = side0_sides0 (Side0 st)
  (Dual0 dt) = dual2_dual0 (Dual2 st bs rs ss)
-side0_cospace1 (Side0 st) = undefined
-dual0_section0 (Dual0 dt) = undefined
+side0_migrate0 (Side0 st) = Migrate0 st bs rs ss bm where
+ (Bounds0 bs) = side0_bounds0 (Side0 st)
+ (Regs0 rs) = side0_regs0 (Side0 st)
+ (Sides0 ss) = side0_sides0 (Side0 st)
+ (Dual0 dt) = dual2_dual0 (Dual2 st bs rs ss)
+ (Duali0 di) = duali1_duali0 (Duali1 dt ss)
+ (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
+ (Shell0 bt) = shell2_shell0 (Shell2 st bs rs ss nt)
+ (Cage0 bm) = cage2_cage0 (Cage2 rs ss bt)
+side0_cospace3 (Side0 st) = (Cospace3 st dt bs rs ss bm) where
+ (Bounds0 bs) = side0_bounds0 (Side0 st)
+ (Regs0 rs) = side0_regs0 (Side0 st)
+ (Sides0 ss) = side0_sides0 (Side0 st)
+ (Dual0 dt) = dual2_dual0 (Dual2 st bs rs ss)
+ (Duali0 di) = duali1_duali0 (Duali1 dt ss)
+ (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
+ (Shell0 bt) = shell2_shell0 (Shell2 st bs rs ss nt)
+ (Cage0 bm) = cage2_cage0 (Cage2 rs ss bt)
+side0_cospace6 (Side0 st) = (Cospace6 dt bs rs ss) where
+ (Bounds0 bs) = side0_bounds0 (Side0 st)
+ (Regs0 rs) = side0_regs0 (Side0 st)
+ (Sides0 ss) = side0_sides0 (Side0 st)
+ (Dual0 dt) = dual2_dual0 (Dual2 st bs rs ss)
+side0_spaces0 (Side0 st) = Spaces0 st dt bs rs ss at rm vi qm where
+ (Bounds0 bs) = side0_bounds0 (Side0 st)
+ (Regs0 rs) = side0_regs0 (Side0 st)
+ (Sides0 ss) = side0_sides0 (Side0 st)
+ (Dual0 dt) = dual2_dual0 (Dual2 st bs rs ss)
+ (Duali0 di) = duali1_duali0 (Duali1 dt ss)
+ (Half0 ht) = half2_half0 (Half2 st bs rs ss)
+ (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
+ (Attached0 at) = attached2_attached0 (Attached2 st bs rs ss nt)
+ (Flat0 am) = flat2_flat0 (Flat2 bs ss at)
+ (Shell0 bt) = shell2_shell0 (Shell2 st bs rs ss nt)
+ (Cage0 bm) = cage2_cage0 (Cage2 rs ss bt)
+ (Disk0 rt) = disk2_disk0 (Disk2 rs ss nt bt)
+ (Blot0 rm) = blot2_blot0 (Blot2 rs ss rt)
+ (Vert0 vm) = vert1_vert0 (Vert1 dt di ht rs ss am bm)
+ (Verti0 vi) = verti1_verti0 (Verti1 vm)
+ (Corner0 qm) = corner1_corner0 (Corner1 rs bm vm)
+ (Inside0 is) = inside1_inside0 (Inside1 dt di bs rs ss)
+ (Outside0 os) = outside1_outside0 (Outside1 rs is)
+side0_polytope1 (Side0 st) = Polytope1 st dt ht bs ss at rm where
+ (Bounds0 bs) = side0_bounds0 (Side0 st)
+ (Regs0 rs) = side0_regs0 (Side0 st)
+ (Sides0 ss) = side0_sides0 (Side0 st)
+ (Dual0 dt) = dual2_dual0 (Dual2 st bs rs ss)
+ (Duali0 di) = duali1_duali0 (Duali1 dt ss)
+ (Half0 ht) = half2_half0 (Half2 st bs rs ss)
+ (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
+ (Attached0 at) = attached2_attached0 (Attached2 st bs rs ss nt)
+ (Shell0 bt) = shell2_shell0 (Shell2 st bs rs ss nt)
+ (Disk0 rt) = disk2_disk0 (Disk2 rs ss nt bt)
+ (Blot0 rm) = blot2_blot0 (Blot2 rs ss rt)
 dual0_supersection0 (Dual0 dt) = Supersection0 st dt bs rs ss rm where
  (Bounds0 bs) = dual0_bounds0 (Dual0 dt)
  (Regs0 rs) = dual0_regs0 (Dual0 dt)
@@ -864,6 +875,24 @@ dual0_supersection0 (Dual0 dt) = Supersection0 st dt bs rs ss rm where
  (Disk0 rt) = disk2_disk0 (Disk2 rs ss nt bt)
  (Blot0 rm) = blot2_blot0 (Blot2 rs ss rt)
 dual0_supersection1 (Dual0 dt) = Supersection1 dt bs rs ss where
+ (Bounds0 bs) = dual0_bounds0 (Dual0 dt)
+ (Regs0 rs) = dual0_regs0 (Dual0 dt)
+ (Sides0 ss) = dual0_sides0 (Dual0 dt)
+dual0_spaces1 (Dual0 dt) = Spaces1 dt rs ss vs where
+ (Bounds0 bs) = dual0_bounds0 (Dual0 dt)
+ (Regs0 rs) = dual0_regs0 (Dual0 dt)
+ (Sides0 ss) = dual0_sides0 (Dual0 dt)
+ (Side0 st) = side3_side0 (Side3 dt bs rs ss)
+ (Duali0 di) = duali1_duali0 (Duali1 dt ss)
+ (Half0 ht) = half2_half0 (Half2 st bs rs ss)
+ (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
+ (Attached0 at) = attached2_attached0 (Attached2 st bs rs ss nt)
+ (Flat0 am) = flat2_flat0 (Flat2 bs ss at)
+ (Shell0 bt) = shell2_shell0 (Shell2 st bs rs ss nt)
+ (Cage0 bm) = cage2_cage0 (Cage2 rs ss bt)
+ (Vert0 vm) = vert1_vert0 (Vert1 dt di ht rs ss am bm)
+ (Verts0 vs) = verts1_verts0 (Verts1 vm)
+dual0_polytope3 (Dual0 dt) = Polytope3 dt bs rs ss where
  (Bounds0 bs) = dual0_bounds0 (Dual0 dt)
  (Regs0 rs) = dual0_regs0 (Dual0 dt)
  (Sides0 ss) = dual0_sides0 (Dual0 dt)
@@ -909,7 +938,6 @@ duali0_section0 (Duali0 di) = Section0 st bs ss at where
  (Side0 st) = side3_side0 (Side3 dt bs rs ss)
  (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
  (Attached0 at) = attached2_attached0 (Attached2 st bs rs ss nt)
-duali0_supersection0 (Duali0 di) = undefined
 duali0_supersection2 (Duali0 di) = Supersection2 st dt bs rs ss at rm where
  (Bounds0 bs) = duali0_bounds0 (Duali0 di)
  (Regs0 rs) = duali0_regs0 (Duali0 di)
@@ -936,6 +964,12 @@ duali0_supersection4 (Duali0 di,b) = Supersection4 dt ss b where
  (Regs0 rs) = duali0_regs0 (Duali0 di)
  (Sides0 ss) = duali0_sides0 (Duali0 di)
  (Dual0 dt) = dual3_dual0 (Dual3 di ss)
+duali0_cospace5 (Duali0 di) = (Cospace5 dt bs ss is) where
+ (Bounds0 bs) = duali0_bounds0 (Duali0 di)
+ (Regs0 rs) = duali0_regs0 (Duali0 di)
+ (Sides0 ss) = duali0_sides0 (Duali0 di)
+ (Dual0 dt) = dual3_dual0 (Dual3 di ss)
+ (Inside0 is) = inside1_inside0 (Inside1 dt di bs rs ss)
 side0_superspace0 (Side0 st) = Superspace0 dt bs ss where
  (Bounds0 bs) = side0_bounds0 (Side0 st)
  (Regs0 rs) = side0_regs0 (Side0 st)
@@ -949,12 +983,41 @@ dual0_surspace0 (Dual0 dt) = Surspace0 st bs rs where
  (Regs0 rs) = dual0_regs0 (Dual0 dt)
  (Sides0 ss) = dual0_sides0 (Dual0 dt)
  (Side0 st) = side3_side0 (Side3 dt bs rs ss)
-duali0_dualj0 (Duali0 di) = Dualj0 dj where
+dual0_take1 (Dual0 dt) = Take1 dt bs rs ss where
+ (Bounds0 bs) = dual0_bounds0 (Dual0 dt)
+ (Regs0 rs) = dual0_regs0 (Dual0 dt)
+ (Sides0 ss) = dual0_sides0 (Dual0 dt)
+duali0_hive0 (Duali0 di) = Hive0 bz where
  (Bounds0 bs) = duali0_bounds0 (Duali0 di)
  (Regs0 rs) = duali0_regs0 (Duali0 di)
  (Sides0 ss) = duali0_sides0 (Duali0 di)
+ (Side0 st) = side3_side0 (Side3 dt bs rs ss)
  (Dual0 dt) = dual3_dual0 (Dual3 di ss)
- (Dualj0 dj) = dualj1_dualj0 (Dualj1 dt rs ss)
+ (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
+ (Shell0 bt) = shell2_shell0 (Shell2 st bs rs ss nt)
+ (Cage0 bm) = cage2_cage0 (Cage2 rs ss bt)
+ (Inside0 is) = inside1_inside0 (Inside1 dt di bs rs ss)
+ (Hive0 bz) = hive1_hive0 (Hive1 bm is)
+duali0_equivalent1 (Duali0 di) = Equivalent1 bs bz where
+ (Bounds0 bs) = duali0_bounds0 (Duali0 di)
+ (Regs0 rs) = duali0_regs0 (Duali0 di)
+ (Sides0 ss) = duali0_sides0 (Duali0 di)
+ (Side0 st) = side3_side0 (Side3 dt bs rs ss)
+ (Dual0 dt) = dual3_dual0 (Dual3 di ss)
+ (Neighbor0 nt) = neighbor2_neighbor0 (Neighbor2 dt di bs rs ss)
+ (Shell0 bt) = shell2_shell0 (Shell2 st bs rs ss nt)
+ (Cage0 bm) = cage2_cage0 (Cage2 rs ss bt)
+ (Inside0 is) = inside1_inside0 (Inside1 dt di bs rs ss)
+ (Hive0 bz) = hive1_hive0 (Hive1 bm is)
+side0_rotate0 (Side0 st) = Rotate0 st bs ss ht os where
+ (Bounds0 bs) = side0_bounds0 (Side0 st)
+ (Regs0 rs) = side0_regs0 (Side0 st)
+ (Sides0 ss) = side0_sides0 (Side0 st)
+ (Dual0 dt) = dual2_dual0 (Dual2 st bs rs ss)
+ (Duali0 di) = duali1_duali0 (Duali1 dt ss)
+ (Half0 ht) = half2_half0 (Half2 st bs rs ss)
+ (Inside0 is) = inside1_inside0 (Inside1 dt di bs rs ss)
+ (Outside0 os) = outside1_outside0 (Outside1 rs is)
 
 -- unconverter, for rare case only
 subsection1_side0 (Subsection1 dt ss) = Side0 st where
@@ -964,7 +1027,7 @@ subsection1_side0 (Subsection1 dt ss) = Side0 st where
  (Side0 st) = side3_side0 (Side3 dt bs rs ss)
 
 -- deducers
-polyant :: Half0 -> Map Boundary Sidedness -> Regions
+polyant :: Half0 -> Direction -> Regions
 polyant (Half0 ht) b2s = intersects (setMap f (keysSet b2s)) where
  f b = sub2 ht (sub b2s b) b
 colleague :: Neighbor1 -> Boundaries -> Region -> Maybe Region
@@ -974,7 +1037,7 @@ pencil :: Pencil2 -> Boundaries -> Regions
 pencil (Pencil2 dt di ss am) bs = setFilter f (intersects (setMap (sub am) bs)) where
  n1 = Neighbor1 dt di ss
  f r = (colleague n1 bs r) /= Nothing
-polycil :: Polycil0 -> Map Boundary Sidedness -> Regions
+polycil :: Polycil0 -> Direction -> Regions
 polycil (Polycil0 dt di ht ss am) b2s = intersect rs0 rs1 where
  rs0 = (polyant (Half0 ht) b2s)
  rs1 = (pencil (Pencil2 dt di ss am) (keysSet b2s))
@@ -988,11 +1051,6 @@ take (Take0 dt0 bs0 ss0) (Take1 dt1 bs1 rs1 ss1) rs0 = unions (setMap f rs0) whe
  bs = intersect bs0 bs1
  f r0 = setFilter (g r0) rs1
  g r0 r1 = (intersect bs (sub2 dt0 s r0)) == (intersect bs (sub2 dt1 s r1))
-signify :: Signify2 -> Regions -> Map Vertex Boundaries
-signify (Signify2 dt di ht ss nt am vi vs pm) rs =
- fromSet f (signifyv (Signify0 dt di ht ss am vi vs) rs) where
- s1 = Signify1 nt vi pm
- f v = signifyb s1 rs v
 signifyv :: Signify0 -> Regions -> Vertices
 signifyv (Signify0 dt di ht ss am vi vs) rs = setFilter f vs where
  f v = let bs = sub vi v in setAll g (setSets bs (single ((setSize bs)-1)))
@@ -1004,6 +1062,13 @@ signifyb (Signify1 nt vi pm) rs v = setFilter f (sub vi v) where
  p = sub pm v
  f b = setAny (g b) p
  g b r = h r (maybeSub2 nt b r)
+ h r0 Nothing = False
+ h r0 (Just r1) = (member rs r0) /= (member rs r1)
+signifyr :: Signify1 -> Regions -> Vertex -> Regions
+signifyr (Signify1 nt vi pm) rs v = setFilter f (sub pm v) where
+ bs = sub vi v
+ f r = setAny (g r) bs
+ g r b = h r (maybeSub2 nt b r)
  h r0 Nothing = False
  h r0 (Just r1) = (member rs r0) /= (member rs r1)
 
@@ -1021,9 +1086,10 @@ order1 (Sides0 ss) bn = Side0 (fromSet2 f bs rs) where
  rs = setFromList [zero..(Region bn)]
  f (Boundary b) (Region r) = if r <= b then inside else outside
 system1 :: Sides0 -> Int -> Dual0
-system1 (Sides0 ss) bn = superspace2 (setMap f bs) where
- bs = setFromList [zero..(Boundary (bn-1))]
- dual0 = empty1 (Sides0 ss)
+system1 (Sides0 ss) bn = system2 (Sides0 ss) (setFromList [zero..(Boundary (bn-1))])
+system2 :: Sides0 -> Boundaries -> Dual0
+system2 ss bs = superspace2 (setMap f bs) where
+ dual0 = empty1 ss
  s0 = dual0_supersection0 dual0
  s1 = dual0_supersection1 dual0
  f b = side0_superspace0 (supersection1 s0 s1 b)
@@ -1138,7 +1204,7 @@ superspace1 (Superspace0 dt0 bs0 ss0) (Superspace0 dt1 bs1 ss1)
  sub1 = subspace2 (Subspace0 dt1 ss1) bounds1
  sect1 = section1 (duali0_section0 sub1) bound1
  sub2 = subspace2 (Subspace0 dt0 ss0) shared
- -- sub2 = subspace2 (Subspace0 dt1 ss1) shared -- dj equal?
+ -- sub2 = subspace2 (Subspace0 dt1 ss1) shared -- bz equal?
  arg0 = duali0_supersection2 sub2
  arg1 = side0b_supersection3 (sect0,bound0)
  arg2 = single (side0b_supersection4 (sect1,bound1))
@@ -1151,92 +1217,245 @@ superspace2 a = setFoldBackElse superspace1 dual0_superspace0 f g a where
  f (Superspace0 dt bs ss) = Dual0 dt
  g = Dual0 (fromSet2 h setEmpty setEmpty)
  h s b = setEmpty
--- rename returns s with boundaries mapped by m
-rename_duali_b1 :: Duali0 -> Map Boundary Boundary -> Duali0
-rename_duali_b1 (Duali0 di) m = Duali0 (mapMap f di) where
- f (k,v) = (k,mapMap g v)
- g (k,v) = (setMap (sub m) k,v)
 -- equivalent returns s1 with boundaries renamed such that result is subspace in s0
 equivalent1 :: Equivalent0 -> Equivalent0 -> Maybe Duali0
-equivalent1 s0 s1 = f (equivalent2 (single s0) (single s1)) where
- f Nothing = Nothing
- f (Just s) = Just (choose s)
-equivalent2 :: Set Equivalent0 -> Set Equivalent0 -> Maybe (Set Duali0)
-equivalent2 s0 s1 = f bs0 bs1 mapEmpty setEmpty setEmpty where
- sub0 = setMap equivalent_subspace0 s0
- bs0 = unions (setMap equivalent_bs s0)
- sub1 = setMap equivalent_subspace0 s1
- bs1 = unions (setMap equivalent_bs s1)
+equivalent1 s0 s1 = f bs0 bs1 mapEmpty setEmpty setEmpty where
+ sub0 :: Subspace0
+ sub0 = equivalent0_subspace0 s0
+ bs0 :: Boundaries
+ bs0 = equivalent0_bs s0
+ sub1 :: Subspace0
+ sub1 = equivalent0_subspace0 s1
+ bs1 :: Boundaries
+ bs1 = equivalent0_bs s1
+ f :: Boundaries -> Boundaries -> Map Boundary Boundary -> Boundaries -> Boundaries -> Maybe Duali0
  f bs0 bs1 m ks vs
-  | (setMap duali0_dualj0 s0) /= (setMap duali0_dualj0 s1) = Nothing
+  | (duali0_hive0 s0) /= (duali0_hive0 s1) = Nothing
   | (setSize bs1) == 0 = Just s1
-  | otherwise = maybeOptFind [g b0 b1 | b0 <- bl0, b1 <- bl1] where
-  s0 = (setMap f0 sub0)
-  s1 = (setMap f1 sub1)
-  f0 s0 = subspace2 s0 vs
-  f1 s1 = rename_duali_b1 (subspace2 s1 ks) m
+  | otherwise = maybeOptFind [f4 b0 b1 | b0 <- bl0, b1 <- bl1] where
+  s0 = (subspace2 sub0 vs)
+  s1 = (subspace2 sub1 ks)
   bl0 = setToList bs0
   bl1 = setToList bs1
-  g b0 b1 = f (remove bs0 b0) (remove bs1 b1) (extend m (b1,b0)) (insert ks b1) (insert vs b0)
--- surspace of outside regions on one side of boundary
-rotate1 :: Rotate0 -> Boundary -> Side0
-rotate1 s0@(Rotate0 st0 ht0 bs0 ss0 os0) b = surspace2 (Surspace1 st0 bs0) rs where
- rs = intersect os0 (sub2 ht0 (choose ss0) b)
---
-rotate2 :: Rotate1 -> Boundaries -> Side0
-rotate2 s0@(Rotate1 xx0) bs = undefined
---
+  f4 b0 b1 = f (remove bs0 b0) (remove bs1 b1) (extend m (b1,b0)) (insert ks b1) (insert vs b0)
+-- return whether polytopes are equivalent
+equivalent2 :: Polytope -> Polytope -> Bool
+equivalent2 p0 p1 = undefined
+-- replace region by same except reversed wrt cage boundaries
 migrate1 :: Migrate0 -> Region -> Side0
-migrate1 s0@(Migrate0 xx0) r = undefined
---
-migrate2 :: Migrate1 -> Regions -> Side0
-migrate2 s0@(Migrate1 xx0) rs = undefined
--- map result of setConnect to regions of the cospace
---  given section space find original space vertices Before and After
---  interpret the original space vertices as cospace boundaries
--- choose boundary, find subspace by it, and rotate space by it,
---  find supersection with those and boundary hole
--- find superspace of original space and supersection,
---  find section by boundary hole
--- use that section as start space for setConnect of function
---  function returns migrations of given space
--- to find migrations, find migratable region sets
--- a region set is migratable if its hive in the section
---  is the boundaries of a vertex in the original space
--- a hive of a set of regions is the union of their cages
-cospace1 :: Cospace0 -> Region -> Dualj0
-cospace1 s0@(Cospace0 st0 dt0 ht0 bs0 rs0 ss0 os0 qm0) r = Dualj0 (setMap g (setConnect f (Side0 st5))) where
- b0 = choose bs0
- Duali0 di1 = subspace1 (Subspace0 dt0 ss0) b0
- Side0 st2 = rotate1 (Rotate0 st0 ht0 bs0 ss0 os0) b0
- b1 = hole bs0
- Side0 st3 = supersection1 (duali0_supersection0 (Duali0 di1)) (side0_supersection1 (Side0 st2)) b1
- Dual0 dt4 = superspace1 (Superspace0 dt0 bs0 ss0) (side0_superspace0 (Side0 st3))
- Side0 st5 = section1 (dual0_section0 (Dual0 dt4)) b1
+migrate1 s0@(Migrate0 st0 bs0 rs0 ss0 bm0) r = Side0 (fromSet2 f bs0 rs0) where
+ (inside,outside) = choose2 ss0
+ m = mapFromList [(inside,outside),(outside,inside)]
+ bs = sub bm0 r
+ f b r = let s = sub2 st0 b r in if member bs b then sub m s else s
+-- replace regions by same except reversed wrt cage boundaries
+migrate2 :: Migrate0 -> Regions -> Side0
+migrate2 s0 rs = setFoldlBackElse f side0_migrate0 migrate0_side0 rs s0 where
+ f r s0 = migrate1 s0 r
+-- TODO instead find subspace of cospace of boundaries in range of given map
+cospace1 :: Cospace0 -> Map Vertex Boundary -> Dual0
+cospace1 s0@(Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
+ Dual0 (fromSet2 f6 ss rs) where
+ -- choose boundary, find section by it, and rotate space by it,
+ chosen = choose bs0; extra = hole bs0
+ subspace = duali0_supersection2 (subspace1 (Subspace0 dt0 ss0) chosen)
+ section = side0b_supersection3 ((section1 (Section0 st0 bs0 ss0 at0) chosen), chosen)
+ Supersection3 st1 dt1 bs1 rs1 ss1 rm1 b1 = section
+ parallel = single (Supersection4 dt1 ss1 extra)
+ -- find supersection of section wrt chosen and rotate wrt hole in subspace
+ super = side0_section0 (supersection2 subspace section parallel)
+ -- use section by hole as start space for setConnect by migrations
+ sections = setConnect f (section1 super extra)
+ -- to find migrations, find migratable region sets
  -- f takes section in s0 to migrated sections
  f :: Side0 -> Set Side0
  f (Side0 st1) = let
-  (Cospace1 dt1 bs1 rs1 ss1 xx1) = side0_cospace1 (Side0 st1)
+  (Cospace3 st1 dt1 bs1 rs1 ss1 bm1) = side0_cospace3 (Side0 st1)
   rs = take (Take0 dt1 bs1 ss1) (Take1 dt0 bs0 rs0 ss0) rs1
   vs = unions (setMap (sub qm0) rs)
-  rz = setOptMap (f1 (Cospace2 xx1)) vs in
-  setMap (migrate2 (Migrate1 xx1)) rz
+  rz = setOptMap (g (Cospace4 dt1 bs1 rs1 ss1 bm1)) vs
+  in setMap (migrate2 (Migrate0 st1 bs1 rs1 ss1 bm1)) rz
+ -- a section-region-set is migratable if its block is the boundaries of a vertex
+ -- a block of a set of regions is the union of their cages
+ -- if take of inside of subspace in s1 is block in s1, return it
  -- Vertex from s0 to Regions in s1
- -- if take of inside of subspace in s1 is hive in s1, return it
- f1 :: Cospace2 -> Vertex -> Maybe Regions
- f1 (Cospace2 xx1) v = undefined
--- g takes section in s0 to two sets of connected vertices
- g :: Side0 -> Set Boundaries
- g (Side0 st) = undefined
+ g :: Cospace4 -> Vertex -> Maybe Regions
+ g (Cospace4 dt1 bs1 rs1 ss1 bm1) v = let
+  -- find boundaries through vertex in s0
+  bs = sub vi0 v
+  -- find subspace in s1 by boundaries through vertex
+  Cospace5 dt2 bs2 ss2 is2 = duali0_cospace5 (subspace2 (Subspace0 dt1 ss1) bs)
+  -- take inside of subspace to s1 to potential result
+  rslt = take (Take0 dt2 bs2 ss2) (Take1 dt1 bs1 rs1 ss1) is2
+  -- find union of cages of potential result
+  cond = unions (setMap (sub bm1) rslt)
+  -- if union is boundaries then just taken else nothing
+  in if bs == cond then Just rslt else Nothing
+ -- h returns coboundaries separated by section
+ h :: Side0 -> Set Boundaries
+ h (Side0 st1) = let
+  -- take the regions in the given section to s0
+  Cospace6 dt1 bs1 rs1 ss1 = side0_cospace6 (Side0 st1)
+  figure = take (Take0 dt1 bs1 ss1) (Take1 dt0 bs0 rs0 ss0) rs1
+  -- find the complement of the regions in s0
+  ground = differ rs0 figure
+  -- find one connected region set
+  above = connect (Blot0 rm0) ground (maybeChoose ground)
+  -- find other connected region set
+  below = differ ground above
+  -- apply qm0 to each to get two vertex sets
+  verts0 = unions (setMap (sub qm0) above)
+  verts1 = unions (setMap (sub qm0) below)
+  -- apply m to each for two boundary sets
+  bounds0 = setMap (sub m) verts0
+  bounds1 = setMap (sub m) verts1
+  -- returns doubleton of the two sets
+  in union (single bounds0) (single bounds1)
+ bz = (setMap h sections)
+ bs = unions (unions bz)
+ ss = holes setEmpty (setSize (choose bz))
+ (inside,outside) = choose2 ss
+ only = union (single bs) (single setEmpty)
+ internal = remove bz only
+ cage = fromSet f1 internal
+ f1 :: Set Boundaries -> Boundaries
+ f1 a = setFilter (f2 a) bs
+ f2 :: Set Boundaries -> Boundary -> Bool
+ f2 a b = member bz (setMap (f3 b) a)
+ f3 :: Boundary -> Boundaries -> Boundaries
+ f3 b bs = insertRemove bs b
+ center = choose internal
+ connected = setConnect f4 (center,choose2 center)
+ f4 :: (Set Boundaries,(Boundaries,Boundaries)) -> Set (Set Boundaries,(Boundaries,Boundaries))
+ f4 (bz,(is,os)) = if member internal bz then setMap (f5 bz is os) (sub cage bz) else setEmpty
+ f5 :: Set Boundaries -> Boundaries -> Boundaries -> Boundary -> (Set Boundaries,(Boundaries,Boundaries))
+ f5 bz is os b = (setMap (f3 b) bz,(insertRemove is b,insertRemove os b))
+ rs = holes setEmpty (setSize connected)
+ regions = relate rs connected
+ f6 :: Sidedness -> Region -> Boundaries
+ f6 s r = let (bz,(is,os)) = (sub regions r) in if s == inside then is else os
+-- cospace2 finds section space of space s0 from r in the cospace s1
+-- this is the surspace of the regions that have corners in both vertex sets mapped from dual in cospace
+cospace2 :: Cospace1 -> Cospace2 -> Map Boundary Vertex -> Region -> Side0
+cospace2 (Cospace1 st0 bs0 rs0 qm0) (Cospace2 dt1 ss1) m r =
+ surspace2 (Surspace1 st0 bs0) rs where
+ (inside,outside) = choose2 ss1
+ i = setMap (sub m) (sub2 dt1 inside r)
+ o = setMap (sub m) (sub2 dt1 outside r)
+ rs = setFilter f rs0
+ f r = let a = intersect c i; b = intersect c o; c = sub qm0 r in
+  ((setSize a) /= 0) && ((setSize b) /= 0)
+--
+spaces1 :: Spaces0 -> Boundary -> Set Side0
+spaces1 s0 b = setMap f rs1 where
+ f r = supersection1 sup0 (side0_supersection1 (cospace2 co1 co2 b2v r)) b
+ dt1 = cospace1 (spaces0_cospace0 s0) v2b
+ s1 = dual0_spaces1 dt1
+ sup0 = spaces0_supersection0 s0
+ co1 = spaces0_cospace1 s0
+ co2 = spaces1_cospace2 s1
+ vs1 = spaces1_vs s1
+ rs1 = spaces1_rs s1
+ v2b = relate vs1 (holes setEmpty (setSize vs1))
+ b2v = inverse v2b
+--
+spaces2 :: Int -> Int -> Set Side0
+spaces2 dn bn = setFoldlBackElse f g h extra (single spaces0) where
+ f b s = unions (setMap (f0 b) s)
+ f0 b s = spaces1 s b
+ g s = setMap side0_spaces0 s
+ h s = setMap spaces0_side0 s
+ extra = holes bs0 (bn-dn+1)
+ rep0 = simplex1 (base1 2) dn
+ spaces0 = side0_spaces0 rep0
+ bs0 = spaces0_bs spaces0
+--
+rotate1 :: Rotate0 -> Boundary -> Side0
+rotate1 (Rotate0 st0 bs0 ss0 ht0 os0) b = Side0 st where
+ st = fromSet2 (sub2 st0) bs0 (intersect os0 (sub2 ht0 (choose ss0) b))
+--
+rotate2 :: Rotate0 -> Boundaries -> Side0
+rotate2 s0 bs = setFoldlBackElse f side0_rotate0 rotate0_side0 bs s0 where
+ f :: Boundary -> Rotate0 -> Side0
+ f b s0 = rotate1 s0 b
+-- polytope1 classifies regions as polytope
+-- for each significant vertex, for each significant region, add direction from region's cage
+polytope1 :: Polytope0 -> Regions -> Polytope
+polytope1 s rs = setMap f (signifyv arg0 rs) where
+ f :: Vertex -> [Set Direction]
+ f v = g (signifyb arg1 rs v) (signifyr arg1 rs v)
+ g :: Boundaries -> Regions -> [Set Direction]
+ g bs rs = h (duali0_polytope2 (subspace2 arg2 bs)) bs rs
+ h :: Polytope2 -> Boundaries -> Regions -> [Set Direction]
+ h s1 bs rs = i (j (polytope2_st s1) bs) (take arg3 (polytope2_take1 s1) rs) (polytope2_rs s1)
+ i :: (Region -> Direction) -> Regions -> Regions -> [Set Direction]
+ i i0 rs0 rs1 = [setMap i0 rs0, setMap i0 (differ rs1 rs0)]
+ j :: Side -> Boundaries -> Region -> Direction
+ j st bs r = fromSet (k st r) bs
+ k :: Side -> Region -> Boundary -> Sidedness
+ k st r b = sub2 st b r
+ arg0 = polytope0_signify0 s
+ arg1 = polytope0_signify1 s
+ arg2 = polytope0_subspace0 s
+ arg3 = polytope0_take0 s
+-- polytope2 returns space and embedding for polytope
+polytope2 :: Polytope1 -> Polytope -> (Dual0,Regions)
+polytope2 s dz = (s3, setConnect2 f include) where
+ f r = differ (sub rm r) exclude
+ rm = polytope1_rm s
+ s1 = setMap g dz
+ g :: [Directions] -> Dual0
+ g a = let
+  ds = unions (setFromList a)
+  ss = unions (setMap valsSet ds)
+  rs = setFromList [zero..(Region ((setSize ds)-1))] in
+  dual4_dual0 (Dual4 rs ss ds)
+ s2 = setMap dual0_superspace0 s1
+ s3 = superspace2 (forceInsert s2 (polytope1_superspace0 s))
+ ms = unions (unions (setMap setFromList dz))
+ bs = unions (setMap keysSet ms)
+ ss = unions (setMap valsSet ms)
+ arg0 = polytope1_section0 s
+ arg1 = polytope1_take0 s
+ arg2 = polytope1_ht s
+ clude = setMap2 h bs ss
+ h :: Boundary -> Sidedness -> (Regions,Regions)
+ h b s = let
+  (dt,rs) = polytope2 arg4 (i b s)
+  arg3 = section1 arg0 b
+  arg4 = side0_polytope1 arg3
+  arg5 = dual0_polytope3 dt
+  arg6 = polytope3_take1 arg5
+  arg7 = polytope3_rs arg5
+  incl = take arg1 arg6 rs
+  excl = take arg1 arg6 (differ arg7 rs)
+  half = sub2 arg2 s b in
+  (intersect incl half, intersect excl half)
+ i :: Boundary -> Sidedness -> Polytope
+ i b s = setFilter i0 (setMap (j b s) dz)
+ i0 :: [Directions] -> Bool
+ i0 m = (listSize m) /= 0
+ j :: Boundary -> Sidedness -> [Directions] -> [Directions]
+ j b s l = filter j0 (map (k b s) l)
+ j0 :: Directions -> Bool
+ j0 m = (setSize m) /= 0
+ k :: Boundary -> Sidedness -> Directions -> Directions
+ k b s m = setFilter k0 (setMap (k1 b s) (setFilter (k2 b s) m))
+ k0 :: Direction -> Bool
+ k0 m = (mapSize m) /= 0
+ k1 :: Boundary -> Sidedness -> Direction -> Direction
+ k1 b s m = restrict m (remove (keysSet m) b)
+ k2 :: Boundary -> Sidedness -> Direction -> Bool
+ k2 b s m = (maybeSub m b) == (Just s)
+ (incl,excl) = unzip (setToList clude)
+ (include,exclude) = (unions (setFromList incl), unions (setFromList excl))
 
 data Tag =
  SideTag |
  DualTag |
  DualiTag |
- DualjTag |
  HalfTag |
  HalfiTag |
- HalfjTag |
  BoundsTag |
  RegsTag |
  SidesTag |
@@ -1255,20 +1474,15 @@ data Tag =
  SignTag |
  InsideTag |
  OutsideTag |
- PartialTag |
- PartialiTag |
- PartialjTag |
- PartialkTag
+ HiveTag
  deriving (Show, Eq, Ord)
 
 data Rep =
  SideRep Side |
  DualRep Dual |
  DualiRep Duali |
- DualjRep Dualj |
  HalfRep Half |
  HalfiRep Halfi |
- HalfjRep Halfj |
  BoundsRep Bounds |
  RegsRep Regs |
  SidesRep Sides |
@@ -1284,13 +1498,9 @@ data Rep =
  VertsRep Verts |
  PencilRep Pencil |
  CornerRep Corner |
- SignRep Sign |
  InsideRep Inside |
  OutsideRep Outside |
- PartialRep Partial |
- PartialiRep Partiali |
- PartialjRep Partialj |
- PartialkRep Partialk
+ HiveRep Hive
  deriving (Show, Eq, Ord)
 
 data Space = Space (Map Tag Rep)
@@ -1299,10 +1509,8 @@ data Space = Space (Map Tag Rep)
 side0_rep (Side0 st) = SideRep st
 dual0_rep (Dual0 dt) = DualRep dt
 duali0_rep (Duali0 di) = DualiRep di
-dualj0_rep (Dualj0 dj) = DualjRep dj
 half0_rep (Half0 ht) = HalfRep ht
 halfi0_rep (Halfi0 hi) = HalfiRep hi
-halfj0_rep (Halfj0 hj) = HalfjRep hj
 bounds0_rep (Bounds0 bs) = BoundsRep bs
 regs0_rep (Regs0 rs) = RegsRep rs
 sides0_rep (Sides0 ss) = SidesRep ss
@@ -1320,11 +1528,7 @@ pencil0_rep (Pencil0 pm) = PencilRep pm
 corner0_rep (Corner0 qm) = CornerRep qm
 inside0_rep (Inside0 is) = InsideRep is
 outside0_rep (Outside0 os) = OutsideRep os
-partial0_rep (Partial0 pt) = PartialRep pt
-partiali0_rep (Partiali0 pi) = PartialiRep pi
-partialj0_rep (Partialj0 pj) = PartialjRep pj
-partialk0_rep (Partialk0 pk) = PartialkRep pk
-sign0_rep (Sign0 gt) = SignRep gt
+hive0_rep (Hive0 bz) = HiveRep bz
 
 reps_side0 [SideRep st] = Side0 st
 reps_side3 [DualRep dt, BoundsRep bs, RegsRep rs, SidesRep ss] = Side3 dt bs rs ss
@@ -1334,13 +1538,11 @@ reps_dual2 [SideRep st, BoundsRep bs, RegsRep rs, SidesRep ss] = Dual2 st bs rs 
 reps_dual3 [DualiRep di, SidesRep ss] = Dual3 di ss
 reps_duali0 [DualiRep di] = Duali0 di
 reps_duali1 [DualRep dt, SidesRep ss] = Duali1 dt ss
-reps_dualj1 [DualRep dt, RegsRep rs, SidesRep ss] = Dualj1 dt rs ss
 reps_half0 [HalfRep ht] = Half0 ht
 reps_half2 [SideRep st, BoundsRep bs, RegsRep rs, SidesRep ss] = Half2 st bs rs ss
 reps_half3 [HalfiRep hi, SidesRep ss] = Half3 hi ss
 reps_halfi0 [HalfiRep hi] = Halfi0 hi
 reps_halfi1 [HalfRep ht, SidesRep ss] = Halfi1 ht ss
-reps_halfj1 [HalfRep ht, BoundsRep bs, SidesRep ss] = Halfj1 ht bs ss
 reps_neighbor2 [DualRep dt, DualiRep di, BoundsRep bs, RegsRep rs, SidesRep ss] =
  Neighbor2 dt di bs rs ss
 reps_attached2 [SideRep st, BoundsRep bs, RegsRep rs, SidesRep ss, NeighborRep nt] =
@@ -1361,12 +1563,7 @@ reps_pencil1 [DualRep dt, DualiRep di, SidesRep ss, FlatRep am, VertiRep vi, Ver
 reps_corner1 [RegsRep rs, CageRep bm, VertRep vm] = Corner1 rs bm vm
 reps_inside1 [DualRep dt, DualiRep di, BoundsRep bs, RegsRep rs, SidesRep ss] = Inside1 dt di bs rs ss
 reps_outside1 [RegsRep rs, InsideRep is] = Outside1 rs is
-reps_partial1 [BoundsRep bs, NeighborRep nt, CageRep bm, OutsideRep os] = Partial1 bs nt bm os
-reps_partiali1 [OutsideRep os, PartialRep pt] = Partiali1 os pt
-reps_partialj1 [OutsideRep os, PartialRep pt] = Partialj1 os pt
-reps_partialk1 [OutsideRep os, PartialRep pt] = Partialk1 os pt
-reps_sign1 [BoundsRep bs, VertiRep vi, VertsRep vs, PencilRep pm, OutsideRep os,
- PartialiRep pi, PartialjRep pj] = Sign1 bs vi vs pm os pi pj
+reps_hive1 [CageRep bm, InsideRep is] = Hive1 bm is
 
 -- conversions is list of tuples of space to space converter, tags converted from, tags converted to
 conversions :: [([Rep] -> Rep, [Tag], Tag)]
@@ -1376,11 +1573,9 @@ conversions = [
  (dual0_rep.dual2_dual0.reps_dual2, [SideTag,BoundsTag,RegsTag,SidesTag], DualTag),
  (dual0_rep.dual3_dual0.reps_dual3, [DualiTag,SidesTag], DualTag),
  (duali0_rep.duali1_duali0.reps_duali1, [DualTag,SidesTag], DualiTag),
- (dualj0_rep.dualj1_dualj0.reps_dualj1, [DualTag, RegsTag, SidesTag], DualjTag),
  (half0_rep.half2_half0.reps_half2, [SideTag, BoundsTag, RegsTag, SidesTag], HalfTag),
  (half0_rep.half3_half0.reps_half3, [HalfiTag, SidesTag], HalfTag),
  (halfi0_rep.halfi1_halfi0.reps_halfi1, [HalfTag, SidesTag], HalfiTag),
- (halfj0_rep.halfj1_halfj0.reps_halfj1, [HalfTag, BoundsTag, SidesTag], HalfjTag),
  (bounds0_rep.side0_bounds0.reps_side0, [SideTag], BoundsTag),
  (bounds0_rep.dual0_bounds0.reps_dual0, [DualTag], BoundsTag),
  (bounds0_rep.duali0_bounds0.reps_duali0, [DualiTag], BoundsTag),
@@ -1415,12 +1610,7 @@ conversions = [
  (corner0_rep.corner1_corner0.reps_corner1, [RegsTag, CageTag, VertTag], CornerTag),
  (inside0_rep.inside1_inside0.reps_inside1, [DualTag, DualiTag, BoundsTag, RegsTag, SidesTag], InsideTag),
  (outside0_rep.outside1_outside0.reps_outside1, [RegsTag, InsideTag], OutsideTag),
- (partial0_rep.partial1_partial0.reps_partial1, [BoundsTag, NeighborTag, CageTag, OutsideTag], PartialTag),
- (partiali0_rep.partiali1_partiali0.reps_partiali1, [PartialTag], PartialiTag),
- (partialj0_rep.partialj1_partialj0.reps_partialj1, [PartialTag], PartialjTag),
- (partialk0_rep.partialk1_partialk0.reps_partialk1, [PartialTag], PartialkTag),
- (sign0_rep.sign1_sign0.reps_sign1, [BoundsTag, VertiTag, VertsTag, PencilTag, OutsideTag,
-  PartialiTag, PartialjTag], SignTag)]
+ (hive0_rep.hive1_hive0.reps_hive1, [CageTag, InsideTag], HiveTag)]
 
 -- convert augments space and gets reps as image of tags
 -- repeatedly so long as leftover tags is not empty
@@ -1453,37 +1643,12 @@ convert s t = (map (sub m) t, Space m) where
   j' = setFromList j
 
 reps_subspace0 [DualRep dt, SidesRep ss] = Subspace0 dt ss
-reps_surspace1 [SideRep st, BoundsRep bs] =  Surspace1 st bs
 reps_section0 [SideRep st, BoundsRep bs, SidesRep ss, AttachedRep at] = Section0 st bs ss at
-reps_subsection0 [SideRep st, DualRep dt, BoundsRep bs, SidesRep ss, AttachedRep at] =
- Subsection0 st dt bs ss at
-reps_subsection1 [DualRep dt, SidesRep ss] = Subsection1 dt ss
-reps_supersection0 [SideRep st, DualRep dt, BoundsRep bs, RegsRep rs, SidesRep ss, BlotRep rm] =
- Supersection0 st dt bs rs ss rm
-reps_supersection1 [DualRep dt, BoundsRep bs, RegsRep rs, SidesRep ss] = Supersection1 dt bs rs ss
-reps_supersection2 [SideRep st, DualRep dt, BoundsRep bs, RegsRep rs, SidesRep ss,
- AttachedRep at, BlotRep rm] = Supersection2 st dt bs rs ss at rm
-reps_supersection3 ([SideRep st, DualRep dt, BoundsRep bs, RegsRep rs, SidesRep ss,
- BlotRep rm], b) = Supersection3 st dt bs rs ss rm b
-reps_supersection4 ([DualRep dt, SidesRep ss], b) = Supersection4 dt ss b
 reps_superspace0 [DualRep dt, BoundsRep bs, SidesRep ss] = Superspace0 dt bs ss
-reps_equivalent0 [DualRep dt, BoundsRep bs, SidesRep ss] = Equivalent0 dt bs ss
-reps_signify2 [DualRep dt, DualiRep di, HalfRep ht, SidesRep ss, NeighborRep nt,
- FlatRep am, VertiRep vi, VertsRep vs, PencilRep pm] = Signify2 dt di ht ss nt am vi vs pm
 
 subspace0_tag = [DualTag, SidesTag]
-surspace1_tag = [SideTag, BoundsTag]
 section0_tag = [SideTag, BoundsTag, SidesTag, AttachedTag]
-subsection0_tag = [SideTag, DualTag, BoundsTag, SidesTag, AttachedTag]
-subsection1_tag = [DualTag, SidesTag]
-supersection0_tag = [SideTag, DualTag, BoundsTag, RegsTag, SidesTag, BlotTag]
-supersection1_tag = [DualTag, BoundsTag, RegsTag, SidesTag]
-supersection2_tag = [SideTag, DualTag, BoundsTag, RegsTag, SidesTag, AttachedTag, BlotTag]
-supersection3_tag = [SideTag, DualTag, BoundsTag, RegsTag, SidesTag, BlotTag]
-supersection4_tag = [DualTag, SidesTag]
 superspace0_tag = [DualTag, BoundsTag, SidesTag]
-equivalent0_tag = [DualTag, BoundsTag, SidesTag]
-signify2_tag = [DualTag, DualiTag, HalfTag, SidesTag, NeighborTag, FlatTag, VertiTag, VertsTag, PencilTag]
 
 st_space :: Side -> Space
 st_space st = Space (mapFromList [(SideTag, SideRep st)])
@@ -1505,6 +1670,12 @@ side (Space m) b r = bang (maybeOptFind [
  f2 :: Rep -> Rep -> Sidedness
  f2 (HalfRep ht) (SidesRep ss) = side2_s (Side2 ht ss) b r
 
+rename :: Space -> Space -> [Region] -> ([Region],Space,Space)
+rename s0 s1 a = (setToList rs,s0',s1') where
+ rs = take (Take0 dt0 bs0 ss0) (Take1 dt1 bs1 rs1 ss1) (setFromList a)
+ ([DualRep dt0, BoundsRep bs0, SidesRep ss0], s0') = convert s0 [DualTag,BoundsTag,SidesTag]
+ ([DualRep dt1, BoundsRep bs1, RegsRep rs1, SidesRep ss1], s1') = convert s1 [DualTag,BoundsTag,RegsTag,SidesTag]
+
 space_bs :: Space -> (Boundaries,Space)
 space_bs s = (bs,s) where
  ([BoundsRep bs], s) = convert s [BoundsTag]
@@ -1517,6 +1688,9 @@ space_ss s = (ss,s) where
 space_st :: Space -> (Side,Space)
 space_st s = (st,s) where
  ([SideRep st], s) = convert s [SideTag]
+space_bz :: Space -> (Hive,Space)
+space_bz s = (bz,s) where
+ ([HiveRep bz], s) = convert s [HiveTag]
 
 empty :: Space
 empty = dt_space dt where
@@ -1529,96 +1703,39 @@ system n = dt_space dt where
  Dual0 dt = system1 (base1 2) n
 simplex :: Int -> Space
 simplex n = st_space st where
- Side0 st = order1 (base1 2) n
+ Side0 st = simplex1 (base1 2) n
 
 subspace :: Space -> [Boundary] -> (Space,Space)
 subspace s bs = (di_space di, s1) where
  (s0,s1) = convert s subspace0_tag
  Duali0 di = subspace2 (reps_subspace0 s0) (setFromList bs)
-{-
-surspace :: Space -> [Region] -> (Space,Space)
-surspace s rs = (st_space st, s1) where
- (s0,s1) = convert s surspace1_tag
- Side0 st = surspace2 (reps_surspace1 s0) (setFromList rs)
--}
-section :: Space -> [Boundary] -> (Space,Space)
-section s bs = (st_space st, s1) where
- (s0,s1) = convert s section0_tag
- Side0 st = section2 (reps_section0 s0) (setFromList bs)
-{-
-subsection :: Space -> [Space] -> (Space,Space,[Space])
-subsection s0 s1 = (st_space st, b0, b1) where
- (a0,b0) = convert s0 subsection0_tag
- (a1,b1) = unzip (map f s1)
- f s = convert s subsection1_tag
- Side0 st = subsection2 (reps_subsection0 a0) (setFromList (map reps_subsection1 a1))
-supersection :: Space -> [Space] -> [Boundary] -> (Space,Space,[Space])
-supersection s0 [] [] = (s0,s0,[])
-supersection s0 [s1] [b] = (st_space st, b0, [b1]) where
- (a0,b0) = convert s0 supersection0_tag
- (a1,b1) = convert s1 supersection1_tag
- Side0 st = supersection1 (reps_supersection0 a0) (reps_supersection1 a1) b
-supersection s0 (s1:s2) (b:bs) = (st_space st, b0, b1:b2) where
- (a0,b0) = convert s0 supersection2_tag
- (a1,b1) = convert s1 supersection3_tag
- (a2,b2) = unzip (map f s2)
- f s = convert s supersection4_tag
- Side0 st = supersection2 (reps_supersection2 a0) (reps_supersection3 (a1,b))
-  (setFromList (map reps_supersection4 (zip a2 bs)))
--}
 superspace :: [Space] -> (Space,[Space])
 superspace s1 = (dt_space dt, b1) where
  (a1,b1) = unzip (map f s1)
  f s = convert s superspace0_tag
  Dual0 dt = superspace2 (setFromList (map reps_superspace0 a1))
-polytope :: Space -> Regions -> ([Space], Space)
-polytope s rs = (a7, b) where
- (a0,b) = convert s signify2_tag
- a1@(Signify2 dt di ht ss nt am vi vs pm) = reps_signify2 a0
- a2 = signify a1 rs
- a3 = setToList (valsSet a2)
- a4 = Subspace0 dt ss
- a5 = map (subspace2 a4) a3
- a6 = map f a5 where f (Duali0 di) = di
- a7 = map di_space a6
-equivalent :: [Space] -> [Space] -> (Maybe [Space],[Space],[Space])
-equivalent s0 s1 = (s, b0, b1) where
- (a0,b0) = unzip (map f s0)
- (a1,b1) = unzip (map f s1)
- f s = convert s equivalent0_tag
- s = g (equivalent2 (setFromList (map reps_equivalent0 a0)) (setFromList (map reps_equivalent0 a1)))
- g Nothing = Nothing
- g (Just s) = Just (map h (setToList s))
- h (Duali0 di) = di_space di
-equal :: [Space] -> [Space] -> (Bool,[Space],[Space])
-equal s0 s1 = (setFromList a0 == setFromList a1, b0, b1) where
- (a0,b0) = unzip (map f s0)
- (a1,b1) = unzip (map f s1)
- f a = let ([DualjRep dj], b) = convert a [DualjTag] in (dj,b)
-compare :: [Space] -> [Space] -> (Bool,[Space],[Space],[Space])
-compare s0 s1 = f (equivalent s0 s1) where
- f (Nothing, a0, a1) = (False,a0,a1,a0)
- f (Just a2, a0, a1) = let
-  (e, b0, b2) = equal a0 a2 in
-  (e, b0, a1, b2)
+equivalent :: [[Space]] -> [[Space]] -> ([[Space]],[[Space]],[[Space]])
+equivalent = undefined
+polytope :: Space -> [Region] -> (Space,[Region],Space)
+polytope = undefined
+spaces :: Int -> Int -> [Space]
+spaces dn bn = map f (setToList (spaces2 dn bn)) where
+ f (Side0 st) = st_space st
+overlaps :: Int -> [Space]
+overlaps = undefined
+construct :: Space -> [[Boundary]] -> [[(Boundary,Sidedness)]] -> (Space,Space)
+construct = undefined
 
 {- TODO
-dimension :: Space -> (Int,Space) -- dimension as number of boundaries in vertex pencil
-size :: Space -> (Int,Space) -- number of regions
-length :: Space -> (Int,Space) -- number of boundaries
-test :: Space -> (Maybe Int,Space) -- whether number of regions is sublinear linear superlinear
-construct :: Space -> [[Boundary]] -> [[(Boundary,Sidedness)]] -> (Space,Space)
-spaces :: Int -> Int -> [Space] -- all spaces of given boundaries and dimension
-overlaps :: Int -> [Space] -- all overlaps of given dimension
 sample :: Space -> Int -> Hostile -- planes for given space of given dimension
 classify :: Hostile -> Space -- sidednesses of regions wrt planes
 metric :: [Space -> Hostile-> Int] -> Space -> Hostile -> Int -> (Space, Hostile)
-display :: Space -> [Regions] -> Hostile -> Friendly
-pierce :: Space -> [Regions] -> Hostile -> Click -> ([Regions], [Facet], [Poke])
+display :: Space -> [[Region]] -> Hostile -> Friendly
+pierce :: Space -> [[Region]] -> Hostile -> Click -> ([[Region]], [Facet], [Poke])
 transform :: Poke -> Scratch -> Mode -> Matrix
 apply :: Friendly -> Matrix -> Friendly
-select :: Space -> [Regions] -> Hostile -> (Space, [Regions], Hostile)
-add :: Space -> [Regions] -> Facet -> Friendly -> ([Regions], Friendly)
-subtract :: Space -> [Regions] -> Facet -> Friendly -> ([Regions], Friendly)
-refine :: Space -> [Regions] -> Facet -> Poke -> Hostile -> (Space, [Regions], Hostile)
+select :: Space -> [[Region]] -> Hostile -> (Space, [[Region]], Hostile)
+add :: Space -> [[Region]] -> Facet -> Friendly -> ([[Region]], Friendly)
+subtract :: Space -> [[Region]] -> Facet -> Friendly -> ([[Region]], Friendly)
+refine :: Space -> [[Region]] -> Facet -> Poke -> Hostile -> (Space, [[Region]], Hostile)
 -}
