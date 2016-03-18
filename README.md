@@ -1,5 +1,3 @@
-# sidegeo
-sidedness geometry
 Can polytopes be represented without resort to vectors? A polytope as a graph of facets fails to capture convexity, so a different representation is required. See http://www.sidegeo.blogspot.com/ for my understanding of the relevant math. In particular, note that a polytope can be embedded in a finite space, and any finite space with a property I call "linear" can be converted to numeric planes. These operations implemented here can form the kernel of applications for graphically exploring 2 or 3 dimensional objects, and for symbolically exploring spaces of more dimensions than 3.
 
 The following data and functions are exported.
@@ -14,7 +12,7 @@ Function regs takes Space and returns list of Region in the space.
 
 Fucntion sides takes Space and returns list of Sidedness in the space, typically just two sides.
 
-Function color takes Space and returns the colors of the regions in the space. Polytopes are embedded in the space by giving the regions in the polytope the same color.
+Function color takes Space, Region, and returns the Color of the region in the space. Polytopes are embedded in the space by giving the regions in the polytope the same color.
 
 Function rename takes two different Space, list of Region from the first space, and returns list of Region on same sides of boundaries in the second Space. Only shared boundaries determine the result.
 
