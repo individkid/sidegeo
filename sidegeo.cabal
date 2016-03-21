@@ -27,28 +27,46 @@ cabal-version:       >=1.10
 library
   default-language:    Haskell2010
   ghc-options:         -Wall
-  build-depends:       base >=4.7 && <4.8,
+  build-depends:       base >=4.7 && <5,
                        containers,
                        hmatrix
   hs-source-dirs:      src
-  exposed-modules:     Space.hs
-  other-modules:       Implicit.hs,
-                       Explicit.hs,
-                       Imply.hs,
-                       Lambda.hs,
-                       Types.hs
+  exposed-modules:     SideGeo.Space
+  other-modules:       SideGeo.Lambda,
+                       SideGeo.Types,
+                       SideGeo.Imply1,
+                       SideGeo.Deduce,
+                       SideGeo.Induce,
+                       SideGeo.Imply2,
+                       SideGeo.Kernel,
+                       SideGeo.Imply3,
+                       SideGeo.Convert,
+                       SideGeo.Imply4
+
+-- executable imply
+--   default-language:    Haskell2010
+--   ghc-options:         -Wall
+--   build-depends:       base >=4.7 && <5
+--   hs-source-dirs:      src
+--   main-is:             Imply/Main.hs
+--   other-modules:       Imply.Imply
 
 executable sidegeo
   default-language:    Haskell2010
   ghc-options:         -Wall
-  build-depends:       base >=4.7 && <4.8,
+  build-depends:       base >=4.7 && <5,
                        containers,
                        hmatrix
   hs-source-dirs:      src
-  main-is:             Main.hs
-  other-modules:       Space.hs,
-                       Implicit.hs,
-                       Explicit.hs,
-                       Imply.hs,
-                       Lambda.hs,
-                       Types.hs
+  main-is:             SideGeo/Main.hs
+  other-modules:       SideGeo.Lambda,
+                       SideGeo.Types,
+                       SideGeo.Imply1,
+                       SideGeo.Deduce,
+                       SideGeo.Induce,
+                       SideGeo.Imply2,
+                       SideGeo.Kernel,
+                       SideGeo.Imply3,
+                       SideGeo.Convert,
+                       SideGeo.Imply4,
+                       SideGeo.Space
