@@ -1,6 +1,6 @@
 module SideGeo.Types where
 
-import SideGeo.Lambda
+import SideGeo.Container
 
 -- undefined
 data Boundary = Boundary Int deriving (Show, Eq, Ord) -- b

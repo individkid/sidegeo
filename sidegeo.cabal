@@ -32,13 +32,16 @@ library
                        hmatrix
   hs-source-dirs:      src
   exposed-modules:     SideGeo.Space
-  other-modules:       SideGeo.Lambda,
+  other-modules:       SideGeo.Container,
+                       SideGeo.Lambda,
                        SideGeo.Types,
                        SideGeo.Imply1,
                        SideGeo.Deduce,
                        SideGeo.Induce,
                        SideGeo.Imply2,
+                       SideGeo.Equivalent,
                        SideGeo.Kernel,
+                       SideGeo.Polytope,
                        SideGeo.Imply3,
                        SideGeo.Convert,
                        SideGeo.Imply4
@@ -59,13 +62,16 @@ executable sidegeo
                        hmatrix
   hs-source-dirs:      src
   main-is:             SideGeo/Main.hs
-  other-modules:       SideGeo.Lambda,
+  other-modules:       SideGeo.Container,
+                       SideGeo.Lambda,
                        SideGeo.Types,
                        SideGeo.Imply1,
                        SideGeo.Deduce,
                        SideGeo.Induce,
                        SideGeo.Imply2,
+                       SideGeo.Equivalent,
                        SideGeo.Kernel,
+                       SideGeo.Polytope,
                        SideGeo.Imply3,
                        SideGeo.Convert,
                        SideGeo.Imply4,

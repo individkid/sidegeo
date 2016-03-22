@@ -1,5 +1,6 @@
 module SideGeo.Induce where
 
+import SideGeo.Container
 import SideGeo.Lambda
 import SideGeo.Types
 import SideGeo.Imply1
@@ -209,4 +210,3 @@ tope0_topes0 (Tope0 tm) = Topes0 (valsSet tm) where
 topez0_topes0 :: Topez0 -> Topes0
 topez0_topes0 (Topez0 tz) = Topes0 (unions (setMap keysSet tz)) where
  -- nothing
-

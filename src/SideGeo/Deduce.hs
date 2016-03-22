@@ -29,4 +29,3 @@ retake (Take0 dt0 bs0 ss0) (Take1 dt1 bs1 rs1 ss1) rs0 = unions (setMap f rs0) w
  bs = intersect bs0 bs1
  f r0 = setFilter (g r0) rs1
  g r0 r1 = (intersect bs (sub2 dt0 s r0)) == (intersect bs (sub2 dt1 s r1))
-
