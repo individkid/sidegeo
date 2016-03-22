@@ -1,6 +1,5 @@
 module SideGeo.Imply4 where
 
-import SideGeo.Container
 import SideGeo.Imply1
 import SideGeo.Imply2
 import SideGeo.Imply3
