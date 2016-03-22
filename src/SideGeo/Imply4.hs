@@ -1,11 +1,15 @@
 module SideGeo.Imply4 where
 
+import SideGeo.Container
+import SideGeo.Imply1
+import SideGeo.Imply2
+import SideGeo.Imply3
 import SideGeo.Convert
 
-st_space st = mapFromList [(SideTag, SideRep st)]
-dt_space dt = mapFromList [(DualTag, DualRep dt)]
-di_space di = mapFromList [(DualiTag, DualiRep di)]
-tz_space tz = mapFromList [(TopezTag, TopezRep tz)]
+st_space st = space SideTag (SideRep st)
+dt_space dt = space DualTag (DualRep dt)
+di_space di = space DualiTag (DualiRep di)
+tz_space tz = space TopezTag (TopezRep tz)
 side0_space (Side0 st) = st_space st
 dual0_space (Dual0 dt) = dt_space dt
 duali0_space (Duali0 di) = di_space di

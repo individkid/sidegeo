@@ -1,8 +1,8 @@
 module SideGeo.Imply3 where
 
-import SideGeo.Lambda
 import SideGeo.Types
 import SideGeo.Imply1
+import SideGeo.Induce
 
 data Tag =
  SideTag |
@@ -144,8 +144,8 @@ reps_tope0 [TopeRep tm] = Tope0 tm
 reps_tope1 [RegsRep rs] = Tope1 rs
 
 -- conversions is list of tuples of space to space converter, tags converted from, tags converted to
-conversions :: Map Tag [([Rep] -> Rep, [Tag])]
-conversions = mapFromList [
+conversions :: [(Tag, [([Rep] -> Rep, [Tag])])]
+conversions = [
  (SideTag, [
   (side0_rep.side3_side0.reps_side3,
    [DualTag,BoundsTag,RegsTag,SidesTag]),

@@ -1,6 +1,13 @@
 module SideGeo.Kernel where
 
+import SideGeo.Container
+import SideGeo.Lambda
+import SideGeo.Types
+import SideGeo.Imply1
+import SideGeo.Induce
+import SideGeo.Deduce
 import SideGeo.Imply2
+import SideGeo.Equivalent
 
 linear :: Int -> Int -> Int
 linear 0 n = 1
@@ -18,134 +25,6 @@ ratio m n = p/q where
  z = m^n
  p = fromIntegral (x*y)
  q = fromIntegral z
-
--- nontrivial deducers
--- to find typographic minimum, call equispace on space with itself, and find minimum after rename
-equispace :: Duals0 -> Duals0 -> Symmetries
-equispace (Duals0 ds0) (Duals0 ds1) = f bs0 bs1 mapEmpty setEmpty setEmpty where
- bs0 = unions (setMap keysSet ds0)
- ss0 = unions (setMap valsSet ds0)
- bs1 = unions (setMap keysSet ds1)
- ss1 = unions (setMap valsSet ds1)
- sml = setToList (setMaps ss0 ss1)
- f :: Boundaries -> Boundaries -> Map Boundary (Boundary, Map Sidedness Sidedness) ->
-  Boundaries -> Boundaries -> Set (Map Boundary (Boundary, Map Sidedness Sidedness))
- f bs0 bs1 m ks vs
-  | ds2 /= ds4 = setEmpty
-  | (setSize bs1) == 0 = single m
-  | otherwise = listFold1 union [g b0 b1 sm | b0 <- bl0, b1 <- bl1, sm <- sml] where
-  bl0 = setToList bs0
-  bl1 = setToList bs1
-  ds2 = setMap (h vs) ds0
-  ds3 = setMap (h ks) ds1
-  ds4 = setMap (mapMap i) ds3
-  g :: Boundary -> Boundary -> Map Sidedness Sidedness -> Set (Map Boundary (Boundary, Map Sidedness Sidedness))
-  g b0 b1 sm = f (remove bs0 b0) (remove bs1 b1) (extend m (b1,(b0,sm))) (insert ks b1) (insert vs b0)
-  h :: Boundaries -> Map Boundary Sidedness -> Map Boundary Sidedness
-  h bs sm = restrict sm bs
-  i :: (Boundary,Sidedness) -> (Boundary,Sidedness)
-  i (b0,s0) = let (b1,sm) = sub m b0 in (b1, sub sm s0)
--- return whether polytopes are equivalent
--- to find typographic minimum, call equitope on polytope with itself, and find minimum after rename
-equitope :: Topez0 -> Topez0 -> Symmetries
-equitope (Topez0 p0) (Topez0 p1) = f bs0 bs1 mapEmpty setEmpty setEmpty where
- bs0 = unions (setMap keysSet (unions (unions (setMap valsSet p0))))
- ss0 = unions (setMap valsSet (unions (unions (setMap valsSet p0))))
- bs1 = unions (setMap keysSet (unions (unions (setMap valsSet p1))))
- ss1 = unions (setMap valsSet (unions (unions (setMap valsSet p1))))
- sml = setToList (setMaps ss0 ss1)
- f :: Boundaries -> Boundaries -> Map Boundary (Boundary, Map Sidedness Sidedness) ->
-  Boundaries -> Boundaries -> Set (Map Boundary (Boundary, Map Sidedness Sidedness))
- f bs0 bs1 m ks vs
-  | p3 /= p6 = setEmpty
-  | (setSize bs1) == 0 = single m
-  | otherwise = listFold1 union [g b0 b1 sm | b0 <- bl0, b1 <- bl1, sm <- sml] where
-  bl0 = setToList bs0
-  bl1 = setToList bs1
-  p2 :: Set (Map Color (Set (Map Boundary Sidedness)))
-  p2 = setMap (valsMap (setMap (h vs))) p0
-  p3 = setMap (valsMap (setFilter mapNonempty)) p2
-  p4 = setMap (valsMap (setMap (h ks))) p1
-  p5 = setMap (valsMap (setFilter mapNonempty)) p4
-  p6 = setMap (valsMap (setMap (mapMap i))) p5
-  g :: Boundary -> Boundary -> Map Sidedness Sidedness -> Set (Map Boundary (Boundary, Map Sidedness Sidedness))
-  g b0 b1 sm = f (remove bs0 b0) (remove bs1 b1) (extend m (b1,(b0,sm))) (insert ks b1) (insert vs b0)
-  h bs sm = restrict sm bs
-  i (b0,s0) = let (b1,sm) = sub m b0 in (b1, sub sm s0)
-
--- nontrivial converters
--- polytope classifies regions as polytope
-polytope :: Polytope0 -> Topez0
-polytope s = Topez0 (valsSet gr) where
- (Signr0 gr) = polytope0_signr0 s
--- embed returns space and embedding for polytope
--- the Polytope1 argument is for recursion
--- at top level, pass in empty space for Polytope1
-embed :: Polytope1 -> (Dual0,Topei0)
-embed s = if (setSize tz) == 0 then
- (empty1 (polytope1_sides0 s), Topei0 mapEmpty) else
- (s5, Topei0 (fromSet f0 ts)) where
- ts :: Colors
- ts = polytope1_ts s
- tz :: Set (Map Color (Set (Map Boundary Sidedness)))
- tz = polytope1_tz s
- f0 :: Color -> Regions
- f0 c = setConnect2 (f (sub exclude c)) (sub include c)
- f :: Regions -> Region -> Regions
- f rs r = differ (sub rm r) rs
- s1 = setMap g tz
- g :: Map Color (Set (Map Boundary Sidedness)) -> Dual0
- g a = let
-  ms = unions (valsSet a)
-  ss = unions (setMap valsSet ms)
-  rs = setFromList [zero..(Region ((setSize ms)-1))] in
-  vertex rs ss ms
- -- surspace of indicated regions from vertex pencil
- vertex :: Regions -> Sides -> Directions -> Dual0
- vertex rs ss ds = Dual0 (fromSet2 f ss rs) where
-  t = fromKeysVals rs ds
-  f s r = let m = (sub t r) in setFilter (g m s) (keysSet m)
-  g m s b = (sub m b) == s
- s2 = setMap dual0_superspace0 s1
- s3 = polytope1_superspace0 s
- s4 = forceInsert s2 s3
- s5 = superspace2 s4
- s6 = dual0_polytope4 s5
- ms :: Set (Map Boundary Sidedness)
- ms = unions (unions (setMap valsSet tz))
- bs = unions (setMap keysSet ms)
- ss = unions (setMap valsSet ms)
- rm = polytope4_rm s6
- a0 = polytope4_section0 s6
- a1 = polytope4_take0 s6
- a2 = polytope4_at s6
- (include,exclude) = (setFold2 extends incl mapEmpty, setFold2 extends excl mapEmpty)
- (incl,excl) = setUnzip (setMap2 h bs ss)
- h :: Boundary -> Sidedness -> (Map Color Regions, Map Color Regions)
- h b s = let
-  a3 = section1 a0 b
-  a4 = side0_tz_polytope1 a3 (i b s)
-  (dt, Topei0 ti) = embed a4 -- embedding in side of boundary
-  a5 = dual0_polytope3 dt
-  a6 = polytope3_take1 a5
-  a7 = polytope3_rs a5
-  incl = valsMap (retake a1 a6) ti
-  excl = valsMap ((retake a1 a6) . (differ a7)) ti
-  ude = sub2 a2 s b in
-  (valsMap (intersect ude) incl , valsMap (intersect ude) excl)
- i :: Boundary -> Sidedness -> Set (Map Color (Set (Map Boundary Sidedness)))
- i b s = setMap (j b s) tz
- j :: Boundary -> Sidedness -> Map Color (Set (Map Boundary Sidedness)) ->
-  Map Color (Set (Map Boundary Sidedness))
- j b s m = valsMap (k b s) m
- k :: Boundary -> Sidedness -> Set (Map Boundary Sidedness) -> Set (Map Boundary Sidedness)
- k b s m = setFilter k0 (setMap (k1 b s) (setFilter (k2 b s) m))
- k0 :: Map Boundary Sidedness -> Bool
- k0 m = (mapSize m) /= 0
- k1 :: Boundary -> Sidedness -> Map Boundary Sidedness -> Map Boundary Sidedness
- k1 b s m = restrict m (remove (keysSet m) b)
- k2 :: Boundary -> Sidedness -> Map Boundary Sidedness -> Bool
- k2 b s m = (maybeSub m b) == (Just s)
 
 -- trivial constructors
 base1 :: Int -> Sides0
@@ -442,48 +321,6 @@ spaces2 dn bn = setFoldBackElse2 f g h extra (single spaces0) where
  rep0 = simplex1 (base1 2) dn
  spaces0 = side0_spaces0 rep0
  bs0 = spaces0_bs spaces0
-
--- all overlaps embedded in space
-overlaps1 :: Overlaps0 -> Color -> Color -> Set Topez0
-overlaps1 s0 c0 c1 = valsSet (fromSet f rz) where
- f :: Regions -> Topez0
- f rs = setFold2 (g p) (equitope p p) p where
-  p = polytope s1
-  tm = fromSet f0 rs
-  (Topei0 ti) = tope0_topei0 (Tope0 tm)
-  (Topes0 ts) = tope0_topes0 (Tope0 tm)
-  s1 = Polytope0 gr
-  (Signs0 gs) = signs1_signs0 (ovelaps0_tm_signs1 s0 tm)
-  (Signb0 gb) = signb2_signb0 (overlaps0_gs_tm_signb2 s0 gs tm)
-  (Signr0 gr) = signr2_signr0 (overlaps0_gs_gb_ti_ts_signr2 s0 gs gb ti ts)
- f0 :: Region -> Color
- f0 r = if member rs r then c1 else c0
- g :: Topez0 -> Map Boundary (Boundary, Map Sidedness Sidedness) -> Topez0 -> Topez0
- g (Topez0 p) m (Topez0 p0) = let
-  p1 = setMap (valsMap (setMap (mapMap (h m)))) p in
-  if p0 < p1 then Topez0 p0 else Topez0 p1
- h :: Map Boundary (Boundary, Map Sidedness Sidedness) -> (Boundary,Sidedness) -> (Boundary,Sidedness)
- h m (b,s) = let (b',s') = sub m b in (b', sub s' s)
- s2 = overlaps0_subspace0 s0
- s3 = overlaps0_take1 s0
- bs = overlaps0_bs s0
- rs = overlaps0_rs s0
- bz = setSets bs (single (quot (setSize bs) 2))
- rz = setMap i bz
- i :: Boundaries -> Regions
- i bs0 = let
-  bs1 = differ bs bs0
-  o0 = duali0_overlaps1 (subspace2 s2 bs0)
-  o1 = duali0_overlaps1 (subspace2 s2 bs1)
-  rs0 = retake (overlaps1_take0 o0) s3 (overlaps1_is o0)
-  rs1 = retake (overlaps1_take0 o1) s3 (overlaps1_is o1) in
-  union rs0 rs1
--- all overlaps of given dimension
-overlaps2 :: Int -> Color -> Color -> Set Topez0
-overlaps2 dn c0 c1 = unions (setMap (f c0 c1) b) where
- f c0 c1 s = overlaps1 s c0 c1
- a = spaces2 dn (dn + 1)
- b = setMap side0_overlaps0 a
 
 -- extend planes and coplanes by boundary
 -- sample1 :: space -> subspace -> cosubspace ->

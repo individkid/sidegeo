@@ -4,7 +4,15 @@ module SideGeo.Space (
  empty,order,system,simplex,
  subspace,superspace,spaces,overlaps) where
 
+import SideGeo.Container
+import SideGeo.Lambda
+import SideGeo.Types
+import SideGeo.Imply1
+import SideGeo.Deduce
 import SideGeo.Kernel
+import SideGeo.Polytope
+import SideGeo.Imply3
+import SideGeo.Convert
 import SideGeo.Imply4
 
 side :: Space -> Boundary -> Region -> (Sidedness,Space)
