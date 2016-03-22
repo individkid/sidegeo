@@ -10,8 +10,8 @@ import SideGeo.Imply2
 import SideGeo.Equivalent
 
 linear :: Int -> Int -> Int
-linear 0 n = 1
-linear m 0 = 1
+linear 0 _ = 1
+linear _ 0 = 1
 linear m n = (linear (m-1) n) + (linear (m-1) (n-1))
 
 factorial :: Int -> Int
@@ -31,7 +31,7 @@ base1 :: Int -> Sides0
 base1 n = Sides0 (setFromList [zero..(Sidedness (n-1))])
 empty1 :: Sides0 -> Dual0
 empty1 (Sides0 ss) = Dual0 (fromSet2 f ss rs) where
- f s r = setEmpty
+ f _ _ = setEmpty
  rs = single zero
 order1 :: Sides0 -> Int -> Side0
 order1 (Sides0 ss) bn = Side0 (fromSet2 f bs rs) where
@@ -64,7 +64,7 @@ subspace2 (Subspace0 dt ss) bs = Duali0 (fromSet f ss) where
 -- surspace is section of given regions
 surspace1 :: Surspace0 -> Region -> Side0
 surspace1 (Surspace0 st bs rs) r = Side0 (fromSet2 f bs rs0) where
- f b r = sub2 st b r
+ f b' r' = sub2 st b' r'
  rs0 = remove rs r
 surspace2 :: Surspace1 -> Regions -> Side0
 surspace2 (Surspace1 st bs) rs = Side0 (fromSet2 f bs rs) where
@@ -74,10 +74,10 @@ surspace2 (Surspace1 st bs) rs = Side0 (fromSet2 f bs rs) where
 section1 :: Section0 -> Boundary -> Side0
 section1 (Section0 st bs ss at) b = Side0 (fromSet f (remove bs b)) where
  rs = sub2 at (choose ss) b
- f b = fromSet (sub2 st b) rs
+ f b' = fromSet (sub2 st b') rs
 section2 :: Section0 -> Boundaries -> Side0
 section2 s bs = setFoldBackElse2 f side0_section0 section0_side0 bs s where
- f b s = section1 s b
+ f b' s' = section1 s' b'
 -- choose boundary and find subspaces and section
 -- recurse on subspaces to find subspace of result
 -- recurse on section and subspace of result for section in result
@@ -115,35 +115,34 @@ supersection1 (Supersection0 st0 dt0 bs0 rs0 ss0 rm0) (Supersection1 dt1 bs1 rs1
  ground0 = connect (Blot0 rm0) ground (maybeChoose ground)
  boundaries = insert bs0 b0
  regions = inserts rs0 figure1
- map = fromKeysVals figure1 figure0
+ relate = fromKeysVals figure1 figure0
  f b r
   | b == b0 && (member ground0 r || member figure0 r) = inside
   | b == b0 = outside
-  | member figure1 r = sub2 st0 b (sub map r)
+  | member figure1 r = sub2 st0 b (sub relate r)
   | otherwise = sub2 st0 b r
 -- supersection (universe for supersection, and universe for subsection)
 --              (universe for supersection, and arg for subsection)
 --          Set (arg for supersection, and arg for subsection)
 supersection2 :: Supersection2 -> Supersection3 -> Set Supersection4 -> Side0
 supersection2 s0 s1 s2
- | (setSize s2) == 0 = rslt
+ | (setSize s2) == 0 = s5
  | otherwise = let
- sub0 = supersection2_subsection0 s0
- sub1 = supersection3_subsection1 s1
- sup0 = supersection3_supersection0 s1
- ((sup1,b1),sup2) = chooseRemove (setMap f s2)
- f s2 = let
-  (sub2,b2) = supersection4_subsection1_b s2
-  sup1 = side0_supersection1 (subsection1 sub0 sub1 sub2) in
-  (supersection1 sup0 sup1 b0, b2)
- s0' = side0_supersection2 rslt
- s1' = side0_b_supersection3 sup1 b1
- s2' = setMap g sup2
- g (s2,b2) = side0_b_supersection4 s2 b2 in
- supersection2 s0' s1' s2' where
- sup0 = supersection2_supersection0 s0
- (sup1,b0) = supersection3_supersection1_b s1
- rslt = supersection1 sup0 sup1 b0
+ s0sub0 = supersection2_subsection0 s0
+ s0sub1 = supersection3_subsection1 s1
+ ((s3,b3),s4) = chooseRemove (setMap f s2)
+ f s2' = let
+  (s2sub1,b2) = supersection4_subsection1_b s2'
+  s3sup1 = side0_supersection1 (subsection1 s0sub0 s0sub1 s2sub1) in
+  (supersection1 s0sup0 s3sup1 b3, b2)
+ s5sup2 = side0_supersection2 s5
+ s3sup3 = side0_b_supersection3 s3 b3
+ s4sup4 = setMap g s4
+ g (s4',b4') = side0_b_supersection4 s4' b4' in
+ supersection2 s5sup2 s3sup3 s4sup4 where
+ s0sup0 = supersection2_supersection0 s0
+ (s1sup1,b1) = supersection3_supersection1_b s1
+ s5 = supersection1 s0sup0 s1sup1 b1
 -- see http://www.sidegeo.blogspot.com/ for proof that result is linear if args are linear
 superspace1 :: Superspace0 -> Superspace0 -> Dual0
 superspace1 (Superspace0 dt0 bs0 ss0) (Superspace0 dt1 bs1 ss1)
@@ -152,15 +151,15 @@ superspace1 (Superspace0 dt0 bs0 ss0) (Superspace0 dt1 bs1 ss1)
  | otherwise = let
  bound0 = choose (removes bs0 shared)
  bounds0 = insert shared bound0
- sub0 = subspace2 (Subspace0 dt0 ss0) bounds0
- sect0 = section1 (duali0_section0 sub0) bound0
+ subs0 = subspace2 (Subspace0 dt0 ss0) bounds0
+ sect0 = section1 (duali0_section0 subs0) bound0
  bound1 = choose (removes bs1 shared)
  bounds1 = insert shared bound1
- sub1 = subspace2 (Subspace0 dt1 ss1) bounds1
- sect1 = section1 (duali0_section0 sub1) bound1
- sub2 = subspace2 (Subspace0 dt0 ss0) shared
- -- sub2 = subspace2 (Subspace0 dt1 ss1) shared -- bz equal?
- arg0 = duali0_supersection2 sub2
+ subs1 = subspace2 (Subspace0 dt1 ss1) bounds1
+ sect1 = section1 (duali0_section0 subs1) bound1
+ subs2 = subspace2 (Subspace0 dt0 ss0) shared
+ -- subs2 = subspace2 (Subspace0 dt1 ss1) shared -- bz equal?
+ arg0 = duali0_supersection2 subs2
  arg1 = side0_b_supersection3 sect0 bound0
  arg2 = single (side0_b_supersection4 sect1 bound1)
  sect2 = supersection2 arg0 arg1 arg2
@@ -169,33 +168,33 @@ superspace1 (Superspace0 dt0 bs0 ss0) (Superspace0 dt1 bs1 ss1)
  shared = intersect bs0 bs1
 superspace2 :: Set Superspace0 -> Dual0
 superspace2 a = setFoldBackElse1 superspace1 dual0_superspace0 f g a where
- f (Superspace0 dt bs ss) = Dual0 dt
+ f (Superspace0 dt _ _) = Dual0 dt
  g = Dual0 (fromSet2 h setEmpty setEmpty)
- h s b = setEmpty
+ h _ _ = setEmpty
 -- replace region by same except reversed wrt cage boundaries
 migrate1 :: Migrate0 -> Region -> Side0
-migrate1 s0@(Migrate0 st0 bs0 rs0 ss0 bm0) r = Side0 (fromSet2 f bs0 rs0) where
+migrate1 (Migrate0 st0 bs0 rs0 ss0 bm0) r = Side0 (fromSet2 f bs0 rs0) where
  (inside,outside) = choose2 ss0
  m = mapFromList [(inside,outside),(outside,inside)]
  bs = sub bm0 r
- f b r = let s = sub2 st0 b r in if member bs b then sub m s else s
+ f b' r' = let s = sub2 st0 b' r' in if member bs b' then sub m s else s
 -- replace regions by same except reversed wrt cage boundaries
 migrate2 :: Migrate0 -> Regions -> Side0
 migrate2 s0 rs = setFoldBackElse2 f side0_migrate0 migrate0_side0 rs s0 where
- f r s0 = migrate1 s0 r
+ f r' s0' = migrate1 s0' r'
 
 -- Find cospace by finding supersection of section by boundary with each section connected by migration.
 -- Migrate a section by finding region blocks to migrate with.
 -- Find region blocks by trying take from each region of each vertex space from sectioned space.
 -- A set of regions is a block if it's cage union is just the vertex boundaries.
 cospace1 :: Cospace0 -> Map Vertex Boundary -> Dual0
-cospace1 s0@(Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
+cospace1 (Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
  Dual0 (fromSet2 f6 ss rs) where
  -- choose boundary, find section and parallel by it
  chosen = choose bs0; extra = hole bs0
  subspace = duali0_supersection2 (subspace1 (Subspace0 dt0 ss0) chosen)
  section = side0_b_supersection3 (section1 (Section0 st0 bs0 ss0 at0) chosen) chosen
- Supersection3 st1 dt1 bs1 rs1 ss1 rm1 b1 = section
+ Supersection3 _ dt1 _ _ ss1 _ _ = section
  parallel = single (Supersection4 dt1 ss1 extra)
  -- find supersection of section and parallel
  super = side0_section0 (supersection2 subspace section parallel)
@@ -204,35 +203,35 @@ cospace1 s0@(Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
  -- to find migrations, find migratable region sets
  -- f takes section in s0 to migrated sections
  f :: Side0 -> Set Side0
- f (Side0 st1) = let
-  (Cospace3 st1 dt1 bs1 rs1 ss1 bm1) = side0_cospace3 (Side0 st1)
-  rs = retake (Take0 dt1 bs1 ss1) (Take1 dt0 bs0 rs0 ss0) rs1
-  vs = unions (setMap (sub qm0) rs)
-  rz = setOptMap (g (Cospace4 dt1 bs1 rs1 ss1 bm1)) vs
-  in setMap (migrate2 (Migrate0 st1 bs1 rs1 ss1 bm1)) rz
+ f (Side0 st1') = let
+  (Cospace3 _ dt1' bs1' rs1' ss1' bm1') = side0_cospace3 (Side0 st1')
+  rs' = retake (Take0 dt1' bs1' ss1') (Take1 dt0 bs0 rs0 ss0) rs1'
+  vs' = unions (setMap (sub qm0) rs')
+  rz' = setOptMap (g (Cospace4 dt1' bs1' rs1' ss1' bm1')) vs'
+  in setMap (migrate2 (Migrate0 st1' bs1' rs1' ss1' bm1')) rz'
  -- a section-region-set is migratable if its block is the boundaries of a vertex
  -- a block of a set of regions is the union of their cages
  -- if take of inside of subspace in s1 is block in s1, return it
  -- Vertex from s0 to Regions in s1
  g :: Cospace4 -> Vertex -> Maybe Regions
- g (Cospace4 dt1 bs1 rs1 ss1 bm1) v = let
+ g (Cospace4 dt1' bs1' rs1' ss1' bm1') v' = let
   -- find boundaries through vertex in s0
-  bs = sub vi0 v
+  bs' = sub vi0 v'
   -- find subspace in s1 by boundaries through vertex
-  Cospace5 dt2 bs2 ss2 is2 = duali0_cospace5 (subspace2 (Subspace0 dt1 ss1) bs)
+  Cospace5 dt2' bs2' ss2' is2' = duali0_cospace5 (subspace2 (Subspace0 dt1' ss1') bs')
   -- take inside of subspace to s1 to potential result
-  rslt = retake (Take0 dt2 bs2 ss2) (Take1 dt1 bs1 rs1 ss1) is2
+  rslt = retake (Take0 dt2' bs2' ss2') (Take1 dt1' bs1' rs1' ss1') is2'
   -- find union of cages of potential result
-  cond = unions (setMap (sub bm1) rslt)
+  cond = unions (setMap (sub bm1') rslt)
   -- if union is boundaries then just taken else nothing
-  in if bs == cond then Just rslt else Nothing
+  in if bs' == cond then Just rslt else Nothing
  -- now find coregions for sections
  -- h returns coboundaries separated by section
  h :: Side0 -> Set Boundaries
- h (Side0 st1) = let
+ h (Side0 st1') = let
   -- take the regions in the given section to s0
-  Cospace6 dt1 bs1 rs1 ss1 = side0_cospace6 (Side0 st1)
-  figure = retake (Take0 dt1 bs1 ss1) (Take1 dt0 bs0 rs0 ss0) rs1
+  Cospace6 dt1' bs1' rs1' ss1' = side0_cospace6 (Side0 st1')
+  figure = retake (Take0 dt1' bs1' ss1') (Take1 dt0 bs0 rs0 ss0) rs1'
   -- find the complement of the regions in s0
   ground = differ rs0 figure
   -- find one connected region set
@@ -250,7 +249,7 @@ cospace1 s0@(Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
  bz = (setMap h sections)
  bs = unions (unions bz)
  ss = holes setEmpty (setSize (choose bz))
- (inside,outside) = choose2 ss
+ (inside,_) = choose2 ss
  only = union (single bs) (single setEmpty)
  internal = remove bz only
  cage = fromSet f1 internal
@@ -259,17 +258,17 @@ cospace1 s0@(Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
  f2 :: Set Boundaries -> Boundary -> Bool
  f2 a b = member bz (setMap (f3 b) a)
  f3 :: Boundary -> Boundaries -> Boundaries
- f3 b bs = insertRemove bs b
+ f3 b' bs' = insertRemove bs' b'
  center = choose internal -- does not work if s0 is vertex space
  connected = setConnect f4 (center,choose2 center)
  f4 :: (Set Boundaries,(Boundaries,Boundaries)) -> Set (Set Boundaries,(Boundaries,Boundaries))
- f4 (bz,(is,os)) = if member internal bz then setMap (f5 bz is os) (sub cage bz) else setEmpty
+ f4 (bz',(is',os')) = if member internal bz' then setMap (f5 bz' is' os') (sub cage bz') else setEmpty
  f5 :: Set Boundaries -> Boundaries -> Boundaries -> Boundary -> (Set Boundaries,(Boundaries,Boundaries))
- f5 bz is os b = (setMap (f3 b) bz,(insertRemove is b,insertRemove os b))
+ f5 bz' is' os' b' = (setMap (f3 b') bz', (insertRemove is' b' ,insertRemove os' b'))
  rs = holes setEmpty (setSize connected)
  regions = fromKeysVals rs connected
  f6 :: Sidedness -> Region -> Boundaries
- f6 s r = let (bz,(is,os)) = (sub regions r) in if s == inside then is else os
+ f6 s' r' = let (_,(is',os')) = (sub regions r') in if s' == inside then is' else os'
 -- cospace2 finds section space of space s0 from r in the cospace s1
 -- this is the surspace of the regions that have corners in both vertex sets mapped from dual in cospace
 cospace2 :: Cospace1 -> Cospace2 -> Map Boundary Vertex -> Region -> Side0
@@ -279,7 +278,7 @@ cospace2 (Cospace1 st0 bs0 rs0 qm0) (Cospace2 dt1 ss1) m r =
  i = setMap (sub m) (sub2 dt1 inside r)
  o = setMap (sub m) (sub2 dt1 outside r)
  rs = setFilter f rs0
- f r = let a = intersect c i; b = intersect c o; c = sub qm0 r in
+ f r' = let a = intersect c i; b = intersect c o; c = sub qm0 r' in
   ((setSize a) /= 0) && ((setSize b) /= 0)
 
 -- all spaces with boundary added
@@ -296,7 +295,7 @@ spaces1 s0 b = setMap choose (valsSet (adverse (fromSet f s2))) where
  h :: Region -> Side0
  h r = supersection1 sup0 (side0_supersection1 (cospace2 co1 co2 b2v r)) b
  i :: Map Boundary (Boundary, Map Sidedness Sidedness) -> (Boundary,Sidedness) -> (Boundary,Sidedness)
- i m (b0,s0) = let (b1,sm) = sub m b0 in (b1, sub sm s0)
+ i m' (b',s') = let (b1,sm) = sub m' b' in (b1, sub sm s')
  dt1 = cospace1 (spaces0_cospace0 s0) v2b
  s1 = dual0_spaces1 dt1
  sup0 = spaces0_supersection0 s0
@@ -329,7 +328,7 @@ spaces2 dn bn = setFoldBackElse2 f g h extra (single spaces0) where
 -- (extended-subspace-planes, extended-subspace-vertices)
 sample1 :: Sample0 -> Sample1 -> Sample2 -> Map Boundary Vertex -> Map Vertex Boundary ->
  Int -> Boundary -> (Plane0,Coplane0)
-sample1 (Sample0 st0 ss0 vm0 pm0 ci0) (Sample1 bs1 vm1 vi1 vs1 cb1 cv1) (Sample2 di2 bm2) b2v v2b dn b0 =
+sample1 (Sample0 st0 ss0 vm0 pm0 ci0) (Sample1 bs1 vm1 vi1 cb1 cv1) (Sample2 di2 bm2) b2v v2b dn b0 =
  (Plane0 cb0, Coplane0 cv0) where
  s = choose ss0
  -- assume given boundary is from an inside coregion
@@ -345,10 +344,10 @@ sample1 (Sample0 st0 ss0 vm0 pm0 ci0) (Sample1 bs1 vm1 vi1 vs1 cb1 cv1) (Sample2
  f v1 = s == (sub2 st0 b0 (g v1))
  g v1 = choose (sub pm0 (sub vm0 (sub vi1 v1)))
  cv0 = setFold2 h (setMap i (setSets bs1 (single (dn-1)))) cv1
- h bs0 cv0 = extend cv0 ((sub vm1 bs0), (vecSolve dn ci0 (j bs0)))
+ h bs0' cv0' = extend cv0' ((sub vm1 bs0'), (vecSolve dn ci0 (j bs0')))
  i bs0 = insert bs0 b0
  j bs0 = setMap k bs0
- k b0 = (0, sub cb0 b0)
+ k b0' = (0, sub cb0 b0')
 -- In general sample, first find cospace of given.
 -- Choose outside coregion.
 -- Extend given by section determined by chosen coregion.

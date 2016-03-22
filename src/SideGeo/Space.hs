@@ -16,25 +16,25 @@ import SideGeo.Convert
 import SideGeo.Imply4
 
 side :: Space -> Boundary -> Region -> (Sidedness,Space)
-side s b r = (sub2 st b r, s) where
- ([SideRep st], s) = convert s [SideTag]
+side s' b' r' = (sub2 st b' r', s) where
+ ([SideRep st], s) = convert s' [SideTag]
 bounds :: Space -> ([Boundary],Space)
-bounds s = (setToList bs, s) where
- ([BoundsRep bs], s) = convert s [BoundsTag]
+bounds s' = (setToList bs, s) where
+ ([BoundsRep bs], s) = convert s' [BoundsTag]
 regs :: Space -> ([Region],Space)
-regs s = (setToList rs, s) where
- ([RegsRep rs], s) = convert s [RegsTag]
+regs s' = (setToList rs, s) where
+ ([RegsRep rs], s) = convert s' [RegsTag]
 sides :: Space -> ([Sidedness],Space)
-sides s = (setToList ss, s) where
- ([SidesRep ss], s) = convert s [SidesTag]
+sides s' = (setToList ss, s) where
+ ([SidesRep ss], s) = convert s' [SidesTag]
 color :: Space -> Region -> (Color,Space)
-color s r = (sub tm r, s) where
- ([TopeRep tm], s) = convert s [TopeTag]
+color s' r' = (sub tm r', s) where
+ ([TopeRep tm], s) = convert s' [TopeTag]
 rename :: Space -> Space -> [Region] -> ([Region],Space,Space)
-rename s0 s1 a = (setToList rs,s0',s1') where
- rs = retake (Take0 dt0 bs0 ss0) (Take1 dt1 bs1 rs1 ss1) (setFromList a)
- ([DualRep dt0, BoundsRep bs0, SidesRep ss0], s0') = convert s0 [DualTag,BoundsTag,SidesTag]
- ([DualRep dt1, BoundsRep bs1, RegsRep rs1, SidesRep ss1], s1') = convert s1 [DualTag,BoundsTag,RegsTag,SidesTag]
+rename s0' s1' a' = (setToList rs,s0,s1) where
+ rs = retake (Take0 dt0 bs0 ss0) (Take1 dt1 bs1 rs1 ss1) (setFromList a')
+ ([DualRep dt0, BoundsRep bs0, SidesRep ss0], s0) = convert s0' [DualTag,BoundsTag,SidesTag]
+ ([DualRep dt1, BoundsRep bs1, RegsRep rs1, SidesRep ss1], s1) = convert s1' [DualTag,BoundsTag,RegsTag,SidesTag]
 
 empty :: Space
 empty = dt_space dt where
@@ -71,7 +71,7 @@ superspace s0 f = (a4,s3) where
  a4 = extend a3 (TopeTag, TopeRep (fromSet g rs))
  g r = f (listMap (h r take0) list)
  h :: Region -> Take0 -> (Take1,Tope) -> Color
- h r take0 (take1,tm) = sub tm (choose (retake take0 take1 (single r)))
+ h r' take0' (take1',tm') = sub tm' (choose (retake take0' take1' (single r')))
 spaces :: Int -> Int -> [Space]
 spaces dn bn = listMap f (setToList (spaces2 dn bn)) where
  f (Side0 st) = let

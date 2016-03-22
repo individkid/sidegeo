@@ -16,12 +16,12 @@ equispace (Duals0 ds0) (Duals0 ds1) = f bs0 bs1 mapEmpty setEmpty setEmpty where
  sml = setToList (setMaps ss0 ss1)
  f :: Boundaries -> Boundaries -> Map Boundary (Boundary, Map Sidedness Sidedness) ->
   Boundaries -> Boundaries -> Set (Map Boundary (Boundary, Map Sidedness Sidedness))
- f bs0 bs1 m ks vs
+ f bs0' bs1' m ks vs
   | ds2 /= ds4 = setEmpty
   | (setSize bs1) == 0 = single m
   | otherwise = listFold1 union [g b0 b1 sm | b0 <- bl0, b1 <- bl1, sm <- sml] where
-  bl0 = setToList bs0
-  bl1 = setToList bs1
+  bl0 = setToList bs0'
+  bl1 = setToList bs1'
   ds2 = setMap (h vs) ds0
   ds3 = setMap (h ks) ds1
   ds4 = setMap (mapMap i) ds3
@@ -42,12 +42,12 @@ equitope (Topez0 p0) (Topez0 p1) = f bs0 bs1 mapEmpty setEmpty setEmpty where
  sml = setToList (setMaps ss0 ss1)
  f :: Boundaries -> Boundaries -> Map Boundary (Boundary, Map Sidedness Sidedness) ->
   Boundaries -> Boundaries -> Set (Map Boundary (Boundary, Map Sidedness Sidedness))
- f bs0 bs1 m ks vs
+ f bs0' bs1' m ks vs
   | p3 /= p6 = setEmpty
   | (setSize bs1) == 0 = single m
   | otherwise = listFold1 union [g b0 b1 sm | b0 <- bl0, b1 <- bl1, sm <- sml] where
-  bl0 = setToList bs0
-  bl1 = setToList bs1
+  bl0 = setToList bs0'
+  bl1 = setToList bs1'
   p2 :: Set (Map Color (Set (Map Boundary Sidedness)))
   p2 = setMap (valsMap (setMap (h vs))) p0
   p3 = setMap (valsMap (setFilter mapNonempty)) p2

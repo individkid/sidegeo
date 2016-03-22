@@ -65,7 +65,7 @@ data Overlaps1 = Overlaps1 Dual Bounds Sides Inside deriving (Show, Eq, Ord)
  -- dt bs ss is
 data Sample0 = Sample0 Side Sides Vert Pencil Basis deriving (Show, Eq, Ord)
  -- st ss vm pm ci
-data Sample1 = Sample1 Bounds Vert Verti Verts Plane Coplane deriving (Show, Eq, Ord)
+data Sample1 = Sample1 Bounds Vert Verti Plane Coplane deriving (Show, Eq, Ord)
  -- bs vm vi vs cb cv
 data Sample2 = Sample2 Duali Cage deriving (Show, Eq, Ord)
  -- di bm
@@ -153,55 +153,55 @@ polytope2_st :: Polytope2 -> Side
 polytope2_st (Polytope2 st _ _ _ _) = st where
  -- nothing
 polytope2_rs :: Polytope2 -> Regs
-polytope2_rs (Polytope2 st dt bs rs ss) = rs where
+polytope2_rs (Polytope2 _ _ _ rs _) = rs where
  -- nothing
 polytope2_take1 :: Polytope2 -> Take1
-polytope2_take1 (Polytope2 st dt bs rs ss) = Take1 dt bs rs ss where
+polytope2_take1 (Polytope2 _ dt bs rs ss) = Take1 dt bs rs ss where
  -- nothing
 polytope3_take1 :: Polytope3 -> Take1
 polytope3_take1 (Polytope3 dt bs rs ss) = Take1 dt bs rs ss where
  -- nothing
 polytope3_rs :: Polytope3 -> Regs
-polytope3_rs (Polytope3 dt bs rs ss) = rs where
+polytope3_rs (Polytope3 _ _ rs _) = rs where
  -- nothing
 polytope4_section0 :: Polytope4 -> Section0
-polytope4_section0 (Polytope4 st dt bs ss at rm) = Section0 st bs ss at where
+polytope4_section0 (Polytope4 st _ bs ss at _) = Section0 st bs ss at where
  -- nothing
 polytope4_take0 :: Polytope4 -> Take0
-polytope4_take0 (Polytope4 st dt bs ss at rm) = Take0 dt bs ss where
+polytope4_take0 (Polytope4 _ dt bs ss _ _) = Take0 dt bs ss where
  -- nothing
 polytope4_at :: Polytope4 -> Attached
-polytope4_at (Polytope4 st dt bs ss at rm) = at where
+polytope4_at (Polytope4 _ _ _ _ at _) = at where
  -- nothing
 polytope4_rm :: Polytope4 -> Blot
-polytope4_rm (Polytope4 st dt bs ss at rm) = rm where
+polytope4_rm (Polytope4 _ _ _ _ _ rm) = rm where
  -- nothing
 overlaps0_subspace0 :: Overlaps0 -> Subspace0
-overlaps0_subspace0 (Overlaps0 st dt di ht bs rs ss nt am vi vs pm) = Subspace0 dt ss where
+overlaps0_subspace0 (Overlaps0 _ dt _ _ _ _ ss _ _ _ _ _) = Subspace0 dt ss where
  -- nothing
 overlaps0_take1 :: Overlaps0 -> Take1
-overlaps0_take1 (Overlaps0 st dt di ht bs rs ss nt am vi vs pm) = Take1 dt bs rs ss where
+overlaps0_take1 (Overlaps0 _ dt _ _ bs rs ss _ _ _ _ _) = Take1 dt bs rs ss where
  -- nothing
 ovelaps0_tm_signs1 :: Overlaps0 -> Tope -> Signs1
-ovelaps0_tm_signs1 (Overlaps0 st dt di ht bs rs ss nt am vi vs pm) tm = Signs1 dt di ht ss am vi vs tm where
+ovelaps0_tm_signs1 (Overlaps0 _ dt di ht _ _ ss _ am vi vs _) tm = Signs1 dt di ht ss am vi vs tm where
  -- nothing
 overlaps0_gs_tm_signb2 :: Overlaps0 -> Signs -> Tope -> Signb2
-overlaps0_gs_tm_signb2 (Overlaps0 st dt di ht bs rs ss nt am vi vs pm) gs tm = Signb2 nt vi pm gs tm where
+overlaps0_gs_tm_signb2 (Overlaps0 _ _ _ _ _ _ _ nt _ vi _ pm) gs tm = Signb2 nt vi pm gs tm where
  -- nothing
 overlaps0_gs_gb_ti_ts_signr2 :: Overlaps0 -> Signs -> Signb -> Topei -> Topes -> Signr2
-overlaps0_gs_gb_ti_ts_signr2 (Overlaps0 st dt di ht bs rs ss nt am vi vs pm) gs gb ti ts = Signr2 st ss pm gs gb ti ts where
+overlaps0_gs_gb_ti_ts_signr2 (Overlaps0 st _ _ _ _ _ ss _ _ _ _ pm) gs gb ti ts = Signr2 st ss pm gs gb ti ts where
  -- nothing
 overlaps0_bs :: Overlaps0 -> Bounds
-overlaps0_bs (Overlaps0 st dt di ht bs rs ss nt am vi vs pm) = bs where
+overlaps0_bs (Overlaps0 _ _ _ _ bs _ _ _ _ _ _ _) = bs where
  -- nothing
 overlaps0_rs :: Overlaps0 -> Regs
-overlaps0_rs (Overlaps0 st dt di ht bs rs ss nt am vi vs pm) = rs where
+overlaps0_rs (Overlaps0 _ _ _ _ _ rs _ _ _ _ _ _) = rs where
  -- nothing
 overlaps1_take0 :: Overlaps1 -> Take0
-overlaps1_take0 (Overlaps1 dt bs ss is) = Take0 dt bs ss where
+overlaps1_take0 (Overlaps1 dt bs ss _) = Take0 dt bs ss where
  -- nothing
 overlaps1_is :: Overlaps1 -> Inside
-overlaps1_is (Overlaps1 dt bs ss is) = is where
+overlaps1_is (Overlaps1 _ _ _ is) = is where
  -- nothing
 
 -- converters
@@ -320,8 +320,6 @@ side0_spaces0 (Side0 st) = Spaces0 st dt bs rs ss at rm vi qm where
  (Vert0 vm) = vert1_vert0 (Vert1 dt di ht rs ss am bm)
  (Verti0 vi) = verti1_verti0 (Verti1 vm)
  (Corner0 qm) = corner1_corner0 (Corner1 rs bm vm)
- (Inside0 is) = inside1_inside0 (Inside1 dt di bs rs ss)
- (Outside0 os) = outside1_outside0 (Outside1 rs is)
 side0_tz_polytope1 :: Side0 -> Topez -> Polytope1
 side0_tz_polytope1 (Side0 st) tz = Polytope1 dt bs ss ts tz where
  (Bounds0 bs) = side0_bounds0 (Side0 st)
@@ -470,6 +468,5 @@ subsection1_side0 :: Subsection1 -> Side0
 subsection1_side0 (Subsection1 dt ss) = Side0 st where
  (Bounds0 bs) = dual0_bounds0 (Dual0 dt)
  (Regs0 rs) = dual0_regs0 (Dual0 dt)
- (Sides0 ss) = dual0_sides0 (Dual0 dt)
  (Side0 st) = side3_side0 (Side3 dt bs rs ss)
 

@@ -33,16 +33,16 @@ embed s = if (setSize tz) == 0 then
  s1 = setMap g tz
  g :: Map Color (Set (Map Boundary Sidedness)) -> Dual0
  g a = let
-  ms = unions (valsSet a)
-  ss = unions (setMap valsSet ms)
-  rs = setFromList [zero..(Region ((setSize ms)-1))] in
-  vertex rs ss ms
+  ms' = unions (valsSet a)
+  ss' = unions (setMap valsSet ms')
+  rs' = setFromList [zero..(Region ((setSize ms')-1))] in
+  g0 rs' ss' ms'
  -- surspace of indicated regions from vertex pencil
- vertex :: Regions -> Sides -> Directions -> Dual0
- vertex rs ss ds = Dual0 (fromSet2 f ss rs) where
-  t = fromKeysVals rs ds
-  f s r = let m = (sub t r) in setFilter (g m s) (keysSet m)
-  g m s b = (sub m b) == s
+ g0 :: Regions -> Sides -> Directions -> Dual0
+ g0 rs' ss' ds' = Dual0 (fromSet2 f' ss' rs') where
+  t' = fromKeysVals rs' ds'
+  f' s' r' = let m' = (sub t' r') in setFilter (g' m' s') (keysSet m')
+  g' m' s' b' = (sub m' b') == s'
  s2 = setMap dual0_superspace0 s1
  s3 = polytope1_superspace0 s
  s4 = forceInsert s2 s3
@@ -59,38 +59,38 @@ embed s = if (setSize tz) == 0 then
  (include,exclude) = (setFold2 extends incl mapEmpty, setFold2 extends excl mapEmpty)
  (incl,excl) = setUnzip (setMap2 h bs ss)
  h :: Boundary -> Sidedness -> (Map Color Regions, Map Color Regions)
- h b s = let
-  a3 = section1 a0 b
-  a4 = side0_tz_polytope1 a3 (i b s)
-  (dt, Topei0 ti) = embed a4 -- embedding in side of boundary
-  a5 = dual0_polytope3 dt
+ h b' s' = let
+  a3 = section1 a0 b'
+  a4 = side0_tz_polytope1 a3 (i b' s')
+  (dt', Topei0 ti') = embed a4 -- embedding in side of boundary
+  a5 = dual0_polytope3 dt'
   a6 = polytope3_take1 a5
   a7 = polytope3_rs a5
-  incl = valsMap (retake a1 a6) ti
-  excl = valsMap ((retake a1 a6) . (differ a7)) ti
-  ude = sub2 a2 s b in
-  (valsMap (intersect ude) incl , valsMap (intersect ude) excl)
+  incl' = valsMap (retake a1 a6) ti'
+  excl' = valsMap ((retake a1 a6) . (differ a7)) ti'
+  ude' = sub2 a2 s' b' in
+  (valsMap (intersect ude') incl' , valsMap (intersect ude') excl')
  i :: Boundary -> Sidedness -> Set (Map Color (Set (Map Boundary Sidedness)))
- i b s = setMap (j b s) tz
+ i b' s' = setMap (j b' s') tz
  j :: Boundary -> Sidedness -> Map Color (Set (Map Boundary Sidedness)) ->
   Map Color (Set (Map Boundary Sidedness))
- j b s m = valsMap (k b s) m
+ j b' s' m' = valsMap (k b' s') m'
  k :: Boundary -> Sidedness -> Set (Map Boundary Sidedness) -> Set (Map Boundary Sidedness)
- k b s m = setFilter k0 (setMap (k1 b s) (setFilter (k2 b s) m))
+ k b' s' m' = setFilter k0 (setMap (k1 b') (setFilter (k2 b' s') m'))
  k0 :: Map Boundary Sidedness -> Bool
- k0 m = (mapSize m) /= 0
- k1 :: Boundary -> Sidedness -> Map Boundary Sidedness -> Map Boundary Sidedness
- k1 b s m = restrict m (remove (keysSet m) b)
+ k0 m' = (mapSize m') /= 0
+ k1 :: Boundary -> Map Boundary Sidedness -> Map Boundary Sidedness
+ k1 b' m' = restrict m' (remove (keysSet m') b')
  k2 :: Boundary -> Sidedness -> Map Boundary Sidedness -> Bool
- k2 b s m = (maybeSub m b) == (Just s)
+ k2 b' s' m' = (maybeSub m' b') == (Just s')
 
 -- all overlaps embedded in space
 overlaps1 :: Overlaps0 -> Color -> Color -> Set Topez0
 overlaps1 s0 c0 c1 = valsSet (fromSet f rz) where
  f :: Regions -> Topez0
- f rs = setFold2 (g p) (equitope p p) p where
+ f rs' = setFold2 (g p) (equitope p p) p where
   p = polytope s1
-  tm = fromSet f0 rs
+  tm = fromSet f0 rs'
   (Topei0 ti) = tope0_topei0 (Tope0 tm)
   (Topes0 ts) = tope0_topes0 (Tope0 tm)
   s1 = Polytope0 gr
@@ -122,6 +122,6 @@ overlaps1 s0 c0 c1 = valsSet (fromSet f rz) where
 -- all overlaps of given dimension
 overlaps2 :: Int -> Color -> Color -> Set Topez0
 overlaps2 dn c0 c1 = unions (setMap (f c0 c1) b) where
- f c0 c1 s = overlaps1 s c0 c1
+ f c0' c1' s' = overlaps1 s' c0' c1'
  a = spaces2 dn (dn + 1)
  b = setMap side0_overlaps0 a
