@@ -9,4 +9,4 @@ import Text.Regex
 -- get manual converters:
 -- ^([a-z]+[0-9])((_[a-z][a-z]?)*)(_[a-z]+[0-9]?)((_[a-z][a-z]?)*)
 -- get required converters:
--- ([a-z]+[0-9])((_[a-z][a-z]?)*)(_[a-z]+[0-9?])((_[a-z][a-z]?)*)
+-- ^.+([a-z]+[0-9])((_[a-z][a-z]?)*)(_[a-z]+[0-9?])((_[a-z][a-z]?)*)

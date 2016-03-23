@@ -4,8 +4,8 @@ import SideGeo.Container
 import SideGeo.Lambda
 import SideGeo.Types
 import SideGeo.Implicit1
-import SideGeo.Induce
 import SideGeo.Deduce
+import SideGeo.Induce
 import SideGeo.Implicit2
 import SideGeo.Equivalent
 
