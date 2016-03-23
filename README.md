@@ -1,6 +1,6 @@
 Can polytopes be represented without resort to vectors? A polytope as a graph of facets fails to capture convexity, so a different representation is required. See http://www.sidegeo.blogspot.com/ for my understanding of the relevant math. In particular, note that a polytope can be embedded in a finite space, and any finite space with a property I call "linear" can be converted to numeric planes. These operations implemented here can form the kernel of applications for graphically exploring 2 or 3 dimensional objects, and for symbolically exploring spaces of more dimensions than 3.
 
-The following data and functions are exported.
+The following data and functions are exported. Type Space is an accumulation of representations. Functions that Space arguments return the Space arguments augmented with representations necessary for producing the desired results. To optimize calls to the functions, use the latest augmented Space.
 
 Data types Boundary, Region, Sidedness, Color, and Space are opaque.
 
