@@ -183,9 +183,12 @@ migrate2 :: Migrate0 -> Regions -> Side0
 migrate2 s0 rs = setFoldBackElse2 f side0_migrate0 migrate0_side0 rs s0 where
  f r' s0' = migrate1 s0' r'
 
--- Find cospace by finding supersection of section by boundary with each section connected by migration.
+-- Find cospace by finding supersection
+--  of section by boundary
+--  with each section connected by migration.
 -- Migrate a section by finding region blocks to migrate with.
--- Find region blocks by trying take from each region of each vertex space from sectioned space.
+-- Find region blocks by trying take
+--  from each region of each vertex space from sectioned space.
 -- A set of regions is a block if it's cage union is just the vertex boundaries.
 cospace1 :: Cospace0 -> Map Vertex Boundary -> Dual0
 cospace1 (Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
@@ -261,16 +264,20 @@ cospace1 (Cospace0 st0 dt0 bs0 rs0 ss0 at0 rm0 vi0 qm0) m =
  f3 b' bs' = insertRemove bs' b'
  center = choose internal -- does not work if s0 is vertex space
  connected = setConnect f4 (center,choose2 center)
- f4 :: (Set Boundaries,(Boundaries,Boundaries)) -> Set (Set Boundaries,(Boundaries,Boundaries))
- f4 (bz',(is',os')) = if member internal bz' then setMap (f5 bz' is' os') (sub cage bz') else setEmpty
- f5 :: Set Boundaries -> Boundaries -> Boundaries -> Boundary -> (Set Boundaries,(Boundaries,Boundaries))
+ f4 :: (Set Boundaries, (Boundaries, Boundaries)) ->
+  Set (Set Boundaries, (Boundaries, Boundaries))
+ f4 (bz',(is',os')) = if member internal bz' then
+  setMap (f5 bz' is' os') (sub cage bz') else setEmpty
+ f5 :: Set Boundaries -> Boundaries -> Boundaries -> Boundary ->
+  (Set Boundaries, (Boundaries, Boundaries))
  f5 bz' is' os' b' = (setMap (f3 b') bz', (insertRemove is' b' ,insertRemove os' b'))
  rs = holes setEmpty (setSize connected)
  regions = fromKeysVals rs connected
  f6 :: Sidedness -> Region -> Boundaries
  f6 s' r' = let (_,(is',os')) = (sub regions r') in if s' == inside then is' else os'
 -- cospace2 finds section space of space s0 from r in the cospace s1
--- this is the surspace of the regions that have corners in both vertex sets mapped from dual in cospace
+-- this is the surspace of the regions
+-- that have corners in both vertex sets mapped from dual in cospace
 cospace2 :: Cospace1 -> Cospace2 -> Map Boundary Vertex -> Region -> Side0
 cospace2 (Cospace1 st0 bs0 rs0 qm0) (Cospace2 dt1 ss1) m r =
  surspace2 (Surspace1 st0 bs0) rs where
@@ -328,7 +335,10 @@ spaces2 dn bn = setFoldBackElse2 f g h extra (single spaces0) where
 -- (extended-subspace-planes, extended-subspace-vertices)
 sample1 :: Sample0 -> Sample1 -> Sample2 -> Map Boundary Vertex -> Map Vertex Boundary ->
  Int -> Boundary -> (Plane0,Coplane0)
-sample1 (Sample0 st0 ss0 vm0 pm0 ci0) (Sample1 bs1 vm1 vi1 cb1 cv1) (Sample2 di2 bm2) b2v v2b dn b0 =
+sample1
+ (Sample0 st0 ss0 vm0 pm0 ci0)
+ (Sample1 bs1 vm1 vi1 cb1 cv1)
+ (Sample2 di2 bm2) b2v v2b dn b0 =
  (Plane0 cb0, Coplane0 cv0) where
  s = choose ss0
  -- assume given boundary is from an inside coregion
