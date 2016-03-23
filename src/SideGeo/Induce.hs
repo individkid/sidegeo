@@ -3,7 +3,7 @@ module SideGeo.Induce where
 import SideGeo.Container
 import SideGeo.Lambda
 import SideGeo.Types
-import SideGeo.Imply1
+import SideGeo.Implicit1
 import SideGeo.Deduce
 
 -- inducers

@@ -1,7 +1,7 @@
-module SideGeo.Imply2 where
+module SideGeo.Implicit2 where
 
 import SideGeo.Types
-import SideGeo.Imply1
+import SideGeo.Implicit1
 import SideGeo.Induce
 
 -- parameters for constructors

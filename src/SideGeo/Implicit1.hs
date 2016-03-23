@@ -1,4 +1,4 @@
-module SideGeo.Imply1 where
+module SideGeo.Implicit1 where
 
 import SideGeo.Types
 

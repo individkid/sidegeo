@@ -1,7 +1,7 @@
-module SideGeo.Imply3 where
+module SideGeo.Implicit3 where
 
 import SideGeo.Types
-import SideGeo.Imply1
+import SideGeo.Implicit1
 import SideGeo.Induce
 
 data Tag =

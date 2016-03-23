@@ -35,16 +35,16 @@ library
   other-modules:       SideGeo.Container,
                        SideGeo.Lambda,
                        SideGeo.Types,
-                       SideGeo.Imply1,
+                       SideGeo.Implicit1,
                        SideGeo.Deduce,
                        SideGeo.Induce,
-                       SideGeo.Imply2,
+                       SideGeo.Implicit2,
                        SideGeo.Equivalent,
                        SideGeo.Kernel,
                        SideGeo.Polytope,
-                       SideGeo.Imply3,
+                       SideGeo.Implicit3,
                        SideGeo.Convert,
-                       SideGeo.Imply4
+                       SideGeo.Implicit4
 
 -- executable imply
 --   default-language:    Haskell2010
@@ -65,14 +65,14 @@ executable sidegeo
   other-modules:       SideGeo.Container,
                        SideGeo.Lambda,
                        SideGeo.Types,
-                       SideGeo.Imply1,
+                       SideGeo.Implicit1,
                        SideGeo.Deduce,
                        SideGeo.Induce,
-                       SideGeo.Imply2,
+                       SideGeo.Implicit2,
                        SideGeo.Equivalent,
                        SideGeo.Kernel,
                        SideGeo.Polytope,
-                       SideGeo.Imply3,
+                       SideGeo.Implicit3,
                        SideGeo.Convert,
-                       SideGeo.Imply4,
+                       SideGeo.Implicit4,
                        SideGeo.Space

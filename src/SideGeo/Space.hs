@@ -7,13 +7,13 @@ module SideGeo.Space (
 import SideGeo.Container
 import SideGeo.Lambda
 import SideGeo.Types
-import SideGeo.Imply1
+import SideGeo.Implicit1
 import SideGeo.Deduce
 import SideGeo.Kernel
 import SideGeo.Polytope
-import SideGeo.Imply3
+import SideGeo.Implicit3
 import SideGeo.Convert
-import SideGeo.Imply4
+import SideGeo.Implicit4
 
 side :: Space -> Boundary -> Region -> (Sidedness,Space)
 side s' b' r' = (sub2 st b' r', s) where

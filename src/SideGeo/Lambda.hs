@@ -10,10 +10,6 @@ bang :: Maybe a -> String -> a
 bang Nothing b = error b
 bang (Just a) _ = a
 
-strip :: Maybe (Maybe a) -> Maybe a
-strip Nothing = Nothing
-strip (Just a) = a
-
 listMap :: (a -> b) -> [a] -> [b]
 listMap = Data.List.map
 
@@ -49,9 +45,6 @@ listFromSize2 f n m = listFromSize (f0 m) n where
 
 setSize :: Ord a => Set a -> Int
 setSize = Data.Set.size
-
-setNonempty :: Ord a => Set a -> Bool
-setNonempty a = (setSize a) /= 0
 
 member :: Ord a => Set a -> a -> Bool
 member a b = Data.Set.member b a

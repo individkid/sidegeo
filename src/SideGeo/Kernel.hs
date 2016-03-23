@@ -3,10 +3,10 @@ module SideGeo.Kernel where
 import SideGeo.Container
 import SideGeo.Lambda
 import SideGeo.Types
-import SideGeo.Imply1
+import SideGeo.Implicit1
 import SideGeo.Induce
 import SideGeo.Deduce
-import SideGeo.Imply2
+import SideGeo.Implicit2
 import SideGeo.Equivalent
 
 linear :: Int -> Int -> Int
@@ -289,12 +289,12 @@ spaces1 s0 b = setMap choose (valsSet (adverse (fromSet f s2))) where
   (Duals0 ds) = ds0
   ds0 = duals1_duals0 (side0_duals1 st)
   m = equispace ds0 ds0
- g :: Duals -> Map Boundary (Boundary, Map Sidedness Sidedness) -> Duals -> Duals
+ g :: Duals -> Symmetry -> Duals -> Duals
  g ds m ds0 = let ds1 = setMap (mapMap (i m)) ds in if ds0 < ds1 then ds0 else ds1
  s2 = setMap h rs1
  h :: Region -> Side0
  h r = supersection1 sup0 (side0_supersection1 (cospace2 co1 co2 b2v r)) b
- i :: Map Boundary (Boundary, Map Sidedness Sidedness) -> (Boundary,Sidedness) -> (Boundary,Sidedness)
+ i :: Symmetry -> (Boundary,Sidedness) -> (Boundary,Sidedness)
  i m' (b',s') = let (b1,sm) = sub m' b' in (b1, sub sm s')
  dt1 = cospace1 (spaces0_cospace0 s0) v2b
  s1 = dual0_spaces1 dt1

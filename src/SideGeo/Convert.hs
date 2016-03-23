@@ -2,7 +2,7 @@ module SideGeo.Convert where
 
 import SideGeo.Container
 import SideGeo.Lambda
-import SideGeo.Imply3
+import SideGeo.Implicit3
 
 type Space = Map Tag Rep
 

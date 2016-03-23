@@ -1,9 +1,9 @@
-module SideGeo.Imply4 where
+module SideGeo.Implicit4 where
 
 import SideGeo.Types
-import SideGeo.Imply1
-import SideGeo.Imply2
-import SideGeo.Imply3
+import SideGeo.Implicit1
+import SideGeo.Implicit2
+import SideGeo.Implicit3
 import SideGeo.Convert
 
 st_space :: Side -> Space

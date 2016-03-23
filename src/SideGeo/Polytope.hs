@@ -3,10 +3,10 @@ module SideGeo.Polytope where
 import SideGeo.Container
 import SideGeo.Lambda
 import SideGeo.Types
-import SideGeo.Imply1
+import SideGeo.Implicit1
 import SideGeo.Induce
 import SideGeo.Deduce
-import SideGeo.Imply2
+import SideGeo.Implicit2
 import SideGeo.Equivalent
 import SideGeo.Kernel
 
@@ -24,14 +24,14 @@ embed s = if (setSize tz) == 0 then
  (s5, Topei0 (fromSet f0 ts)) where
  ts :: Colors
  ts = polytope1_ts s
- tz :: Set (Map Color (Set (Map Boundary Sidedness)))
+ tz :: Polytope
  tz = polytope1_tz s
  f0 :: Color -> Regions
  f0 c = setConnect2 (f (sub exclude c)) (sub include c)
  f :: Regions -> Region -> Regions
  f rs r = differ (sub rm r) rs
  s1 = setMap g tz
- g :: Map Color (Set (Map Boundary Sidedness)) -> Dual0
+ g :: Rainbow -> Dual0
  g a = let
   ms' = unions (valsSet a)
   ss' = unions (setMap valsSet ms')
@@ -48,7 +48,7 @@ embed s = if (setSize tz) == 0 then
  s4 = forceInsert s2 s3
  s5 = superspace2 s4
  s6 = dual0_polytope4 s5
- ms :: Set (Map Boundary Sidedness)
+ ms :: Directions
  ms = unions (unions (setMap valsSet tz))
  bs = unions (setMap keysSet ms)
  ss = unions (setMap valsSet ms)
@@ -70,18 +70,17 @@ embed s = if (setSize tz) == 0 then
   excl' = valsMap ((retake a1 a6) . (differ a7)) ti'
   ude' = sub2 a2 s' b' in
   (valsMap (intersect ude') incl' , valsMap (intersect ude') excl')
- i :: Boundary -> Sidedness -> Set (Map Color (Set (Map Boundary Sidedness)))
+ i :: Boundary -> Sidedness -> Polytope
  i b' s' = setMap (j b' s') tz
- j :: Boundary -> Sidedness -> Map Color (Set (Map Boundary Sidedness)) ->
-  Map Color (Set (Map Boundary Sidedness))
+ j :: Boundary -> Sidedness -> Rainbow -> Rainbow
  j b' s' m' = valsMap (k b' s') m'
- k :: Boundary -> Sidedness -> Set (Map Boundary Sidedness) -> Set (Map Boundary Sidedness)
+ k :: Boundary -> Sidedness -> Directions -> Directions
  k b' s' m' = setFilter k0 (setMap (k1 b') (setFilter (k2 b' s') m'))
- k0 :: Map Boundary Sidedness -> Bool
+ k0 :: Direction -> Bool
  k0 m' = (mapSize m') /= 0
- k1 :: Boundary -> Map Boundary Sidedness -> Map Boundary Sidedness
+ k1 :: Boundary -> Direction -> Direction
  k1 b' m' = restrict m' (remove (keysSet m') b')
- k2 :: Boundary -> Sidedness -> Map Boundary Sidedness -> Bool
+ k2 :: Boundary -> Sidedness -> Direction -> Bool
  k2 b' s' m' = (maybeSub m' b') == (Just s')
 
 -- all overlaps embedded in space
@@ -99,11 +98,11 @@ overlaps1 s0 c0 c1 = valsSet (fromSet f rz) where
   (Signr0 gr) = signr2_signr0 (overlaps0_gs_gb_ti_ts_signr2 s0 gs gb ti ts)
  f0 :: Region -> Color
  f0 r = if member rs r then c1 else c0
- g :: Topez0 -> Map Boundary (Boundary, Map Sidedness Sidedness) -> Topez0 -> Topez0
+ g :: Topez0 -> Symmetry -> Topez0 -> Topez0
  g (Topez0 p) m (Topez0 p0) = let
   p1 = setMap (valsMap (setMap (mapMap (h m)))) p in
   if p0 < p1 then Topez0 p0 else Topez0 p1
- h :: Map Boundary (Boundary, Map Sidedness Sidedness) -> (Boundary,Sidedness) -> (Boundary,Sidedness)
+ h :: Symmetry -> (Boundary,Sidedness) -> (Boundary,Sidedness)
  h m (b,s) = let (b',s') = sub m b in (b', sub s' s)
  s2 = overlaps0_subspace0 s0
  s3 = overlaps0_take1 s0

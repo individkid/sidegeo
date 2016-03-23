@@ -2,7 +2,7 @@ module SideGeo.Deduce where
 
 import SideGeo.Lambda
 import SideGeo.Types
-import SideGeo.Imply1
+import SideGeo.Implicit1
 
 -- deducers
 polyant :: Half0 -> Direction -> Regions
