@@ -46,13 +46,16 @@ library
                        SideGeo.Convert,
                        SideGeo.Implicit4
 
--- executable imply
---   default-language:    Haskell2010
---   ghc-options:         -Wall
---   build-depends:       base >=4.7 && <5
---   hs-source-dirs:      src
---   main-is:             Imply/Main.hs
---   other-modules:       Imply.Imply
+executable implicit
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+  build-depends:       base >=4.7 && <5,
+                       text,
+                       regex-posix,
+                       hood
+  hs-source-dirs:      src
+  main-is:             Implicit/Main.hs
+  other-modules:       Implicit.Implicit
 
 executable sidegeo
   default-language:    Haskell2010

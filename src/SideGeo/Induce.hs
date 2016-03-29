@@ -7,54 +7,54 @@ import SideGeo.Implicit1
 import SideGeo.Deduce
 
 -- inducers
-side1_s :: Side1 -> Boundary -> Region -> Sidedness
-side1_s (Side1 dt ss) b r = setFind f ss where
+side1__s :: Side1 -> Boundary -> Region -> Sidedness
+side1__s (Side1 dt ss) b r = setFind f ss where
  f s = member (sub2 dt s r) b
-side2_s :: Side2 -> Boundary -> Region -> Sidedness
-side2_s (Side2 ht ss) b r = setFind f ss where
+side2__s :: Side2 -> Boundary -> Region -> Sidedness
+side2__s (Side2 ht ss) b r = setFind f ss where
  f s = member (sub2 ht s b) r
-dual1_bs :: Dual1 -> Sidedness -> Region -> Boundaries
-dual1_bs (Dual1 st bs _) s r = setFilter f bs where
+dual1__bs :: Dual1 -> Sidedness -> Region -> Boundaries
+dual1__bs (Dual1 st bs _) s r = setFilter f bs where
  f b = (sub2 st b r) == s
-half1_rs :: Half1 -> Sidedness -> Boundary -> Regions
-half1_rs (Half1 st rs _) s b = setFilter f rs where
+half1__rs :: Half1 -> Sidedness -> Boundary -> Regions
+half1__rs (Half1 st rs _) s b = setFilter f rs where
  f r = (sub2 st b r) == s
-neighbor1_r :: Neighbor1 -> Boundary -> Region -> Maybe Region
-neighbor1_r (Neighbor1 dt di ss) b r = maybeSub2 di s (insertRemove (sub2 dt s r) b) where
+neighbor1__r :: Neighbor1 -> Boundary -> Region -> Maybe Region
+neighbor1__r (Neighbor1 dt di ss) b r = maybeSub2 di s (insertRemove (sub2 dt s r) b) where
  s = choose ss
-attached1_rs :: Attached1 -> Sidedness -> Boundary -> Regions
-attached1_rs (Attached1 st rs nt) s b = setFilter f rs where
+attached1__rs :: Attached1 -> Sidedness -> Boundary -> Regions
+attached1__rs (Attached1 st rs nt) s b = setFilter f rs where
  f r = (maybeSub2 nt b r) /= Nothing && (sub2 st b r) == s
-flat1_rs :: Flat1 -> Boundary -> Regions
-flat1_rs (Flat1 ss at) b = unions (setMap f ss) where
+flat1__rs :: Flat1 -> Boundary -> Regions
+flat1__rs (Flat1 ss at) b = unions (setMap f ss) where
  f s = sub2 at s b
-shell1_bs :: Shell1 -> Sidedness -> Region -> Boundaries
-shell1_bs (Shell1 st bs nt) s r = setFilter f bs where
+shell1__bs :: Shell1 -> Sidedness -> Region -> Boundaries
+shell1__bs (Shell1 st bs nt) s r = setFilter f bs where
  f b = (maybeSub2 nt b r) /= Nothing && (sub2 st b r) == s
-cage1_bs :: Cage1 -> Region -> Boundaries
-cage1_bs (Cage1 ss bt) r = unions (setMap f ss) where
+cage1__bs :: Cage1 -> Region -> Boundaries
+cage1__bs (Cage1 ss bt) r = unions (setMap f ss) where
  f s = sub2 bt s r
-disk1_rs :: Disk1 -> Sidedness -> Region -> Regions
-disk1_rs (Disk1 nt bt) s r = setMap f (sub2 bt s r) where
+disk1__rs :: Disk1 -> Sidedness -> Region -> Regions
+disk1__rs (Disk1 nt bt) s r = setMap f (sub2 bt s r) where
  f b = sub2 nt b r
-blot1_rs :: Blot1 -> Region -> Regions
-blot1_rs (Blot1 ss rt) r = unions (setMap f ss) where
+blot1__rs :: Blot1 -> Region -> Regions
+blot1__rs (Blot1 ss rt) r = unions (setMap f ss) where
  f s = sub2 rt s r
-signs1_gs :: Signs1 -> Vertices
-signs1_gs (Signs1 dt di ht ss am vi vs tm) = setFilter f vs where
+signs1__gs :: Signs1 -> Vertices
+signs1__gs (Signs1 dt di ht ss am vi vs tm) = setFilter f vs where
  f v = let bs = sub vi v in setAll g (setSets bs (single ((setSize bs)-1)))
  g bs = setAny h (setMaps bs ss)
  h m = let p = polycil p0 m; q = (image tm p) in (setSize q) == 1
  p0 = Polycil0 dt di ht ss am
-signb1_gb :: Signb1 -> Vertex -> Boundaries
-signb1_gb (Signb1 nt vi pm tm) v = setFilter f (sub vi v) where
+signb1__gb :: Signb1 -> Vertex -> Boundaries
+signb1__gb (Signb1 nt vi pm tm) v = setFilter f (sub vi v) where
  p = sub pm v
  f b = setAny (g b) p
  g b r = h r (maybeSub2 nt b r)
  h _ Nothing = False
  h r0 (Just r1) = (sub tm r0) /= (sub tm r1)
-signr1_gr :: Signr1 -> Vertex -> Rainbow
-signr1_gr (Signr1 st ss pm gb ti ts) v = fromSet f ts where
+signr1__gr :: Signr1 -> Vertex -> Rainbow
+signr1__gr (Signr1 st ss pm gb ti ts) v = fromSet f ts where
  bs = sub gb v -- significant boundaries
  rs = sub pm v -- pencil regions
  ms = setMaps bs ss -- significant directions
@@ -69,13 +69,13 @@ signr1_gr (Signr1 st ss pm gb ti ts) v = fromSet f ts where
 
 -- generators
 side3_side0 :: Side3 -> Side0
-side3_side0 (Side3 dt bs rs ss) = Side0 (fromSet2 (side1_s st1) bs rs) where
+side3_side0 (Side3 dt bs rs ss) = Side0 (fromSet2 (side1__s st1) bs rs) where
  st1 = Side1 dt ss
 side4_side0 :: Side4 -> Side0
-side4_side0 (Side4 ht bs rs ss) = Side0 (fromSet2 (side2_s st2) bs rs) where
+side4_side0 (Side4 ht bs rs ss) = Side0 (fromSet2 (side2__s st2) bs rs) where
  st2 = Side2 ht ss
 dual2_dual0 :: Dual2 -> Dual0
-dual2_dual0 (Dual2 st bs rs ss) = Dual0 (fromSet2 (dual1_bs dt1) ss rs) where
+dual2_dual0 (Dual2 st bs rs ss) = Dual0 (fromSet2 (dual1__bs dt1) ss rs) where
  dt1 = Dual1 st bs ss
 dual3_dual0 :: Dual3 -> Dual0
 dual3_dual0 (Dual3 di ss) = Dual0 (fromSet f ss) where
@@ -87,7 +87,7 @@ duals1_duals0 :: Duals1 -> Duals0
 duals1_duals0 (Duals1 st bs rs) = Duals0 (setMap f rs) where
  f r = fromSet (g r) bs; g r b = sub2 st b r
 half2_half0 :: Half2 -> Half0
-half2_half0 (Half2 st bs rs ss) = Half0 (fromSet2 (half1_rs ht1) ss bs) where
+half2_half0 (Half2 st bs rs ss) = Half0 (fromSet2 (half1__rs ht1) ss bs) where
  ht1 = Half1 st rs ss
 half3_half0 :: Half3 -> Half0
 half3_half0 (Half3 hi ss) = Half0 (fromSet f ss) where
@@ -141,25 +141,25 @@ halfi0_sides0 :: Halfi0 -> Sides0
 halfi0_sides0 (Halfi0 hi) = Sides0 (keysSet hi) where
  -- nothing
 neighbor2_neighbor0 :: Neighbor2 -> Neighbor0
-neighbor2_neighbor0 (Neighbor2 dt di bs rs ss) = Neighbor0 (fromOptSet2 (neighbor1_r nt1) bs rs) where
+neighbor2_neighbor0 (Neighbor2 dt di bs rs ss) = Neighbor0 (fromOptSet2 (neighbor1__r nt1) bs rs) where
  nt1 = Neighbor1 dt di ss
 attached2_attached0 :: Attached2 -> Attached0
-attached2_attached0 (Attached2 st bs rs ss nt) = Attached0 (fromSet2 (attached1_rs at1) ss bs) where
+attached2_attached0 (Attached2 st bs rs ss nt) = Attached0 (fromSet2 (attached1__rs at1) ss bs) where
  at1 = Attached1 st rs nt
 flat2_flat0 :: Flat2 -> Flat0
-flat2_flat0 (Flat2 bs ss at) = Flat0 (fromSet (flat1_rs am1) bs) where
+flat2_flat0 (Flat2 bs ss at) = Flat0 (fromSet (flat1__rs am1) bs) where
  am1 = Flat1 ss at
 shell2_shell0 :: Shell2 -> Shell0
-shell2_shell0 (Shell2 st bs rs ss nt) = Shell0 (fromSet2 (shell1_bs bt1) ss rs) where
+shell2_shell0 (Shell2 st bs rs ss nt) = Shell0 (fromSet2 (shell1__bs bt1) ss rs) where
  bt1 = Shell1 st bs nt
 cage2_cage0 :: Cage2 -> Cage0
-cage2_cage0 (Cage2 rs ss bt) = Cage0 (fromSet (cage1_bs bm1) rs) where
+cage2_cage0 (Cage2 rs ss bt) = Cage0 (fromSet (cage1__bs bm1) rs) where
  bm1 = Cage1 ss bt
 disk2_disk0 :: Disk2 -> Disk0
-disk2_disk0 (Disk2 rs ss nt bt) = Disk0 (fromSet2 (disk1_rs rt1) ss rs) where
+disk2_disk0 (Disk2 rs ss nt bt) = Disk0 (fromSet2 (disk1__rs rt1) ss rs) where
  rt1 = Disk1 nt bt
 blot2_blot0 :: Blot2 -> Blot0
-blot2_blot0 (Blot2 rs ss rt) = Blot0 (fromSet (blot1_rs rm1) rs) where
+blot2_blot0 (Blot2 rs ss rt) = Blot0 (fromSet (blot1__rs rm1) rs) where
  rm1 = Blot1 ss rt
 vert1_vert0 :: Vert1 -> Vert0
 vert1_vert0 (Vert1 dt di ht rs ss am bm) = Vert0 (valsMap Vertex (fromKeys s)) where
@@ -190,13 +190,13 @@ outside1_outside0 :: Outside1 -> Outside0
 outside1_outside0 (Outside1 rs is) = Outside0 (differ rs is) where
  -- nothing
 signs1_signs0 :: Signs1 -> Signs0
-signs1_signs0 (Signs1 dt di ht ss am vi vs tm) = Signs0 (signs1_gs s) where
+signs1_signs0 (Signs1 dt di ht ss am vi vs tm) = Signs0 (signs1__gs s) where
  s = Signs1 dt di ht ss am vi vs tm
 signb2_signb0 :: Signb2 -> Signb0
-signb2_signb0 (Signb2 nt vi pm gs tm) = Signb0 (fromSet (signb1_gb s) gs) where
+signb2_signb0 (Signb2 nt vi pm gs tm) = Signb0 (fromSet (signb1__gb s) gs) where
  s = Signb1 nt vi pm tm
 signr2_signr0 :: Signr2 -> Signr0
-signr2_signr0 (Signr2 st ss pm gs gb ti ts) = Signr0 (fromSet (signr1_gr s) gs) where
+signr2_signr0 (Signr2 st ss pm gs gb ti ts) = Signr0 (fromSet (signr1__gr s) gs) where
  s = Signr1 st ss pm gb ti ts
 tope1_tope0 :: Tope1 -> Tope0
 tope1_tope0 (Tope1 rs) = Tope0 (fromSet f rs) where

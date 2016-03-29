@@ -19,7 +19,7 @@ equispace (Duals0 ds0) (Duals0 ds1) =
  f :: Boundaries -> Boundaries -> Symmetry -> Boundaries -> Boundaries -> Symmetries
  f bs0' bs1' m ks vs
   | ds2 /= ds4 = setEmpty
-  | (setSize bs1) == 0 = single m
+  | (setSize bs1') == 0 = single m
   | otherwise = listFold1 union [g b0 b1 sm | b0 <- bl0, b1 <- bl1, sm <- sml] where
   bl0 = setToList bs0'
   bl1 = setToList bs1'
@@ -28,7 +28,7 @@ equispace (Duals0 ds0) (Duals0 ds1) =
   ds4 = setMap (mapMap i) ds3
   g :: Boundary -> Boundary -> Reflection -> Symmetries
   g b0 b1 sm = f
-   (remove bs0 b0) (remove bs1 b1)
+   (remove bs0' b0) (remove bs1' b1)
    (extend m (b1,(b0,sm)))
    (insert ks b1) (insert vs b0)
   h :: Boundaries -> Direction -> Direction
