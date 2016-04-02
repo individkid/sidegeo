@@ -23,7 +23,7 @@ connect :: Blot0 -> Regions -> Maybe Region -> Regions
 connect (Blot0 _) _ Nothing = setEmpty
 connect (Blot0 rm) rs (Just r) = setConnect f r where
  f r' = intersect (sub rm r') rs
-retake :: Take0 -> Take1 -> Regions -> Regions -- take Regions from Take0 to Take1
+retake :: Take0 -> Take1 -> Regions -> Regions -- take Regions from take0 to take1
 retake (Take0 dt0 bs0 ss0) (Take1 dt1 bs1 rs1 ss1) rs0 = unions (setMap f rs0) where
  s = choose (intersect ss0 ss1)
  bs = intersect bs0 bs1

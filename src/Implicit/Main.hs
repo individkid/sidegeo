@@ -2,15 +2,8 @@ module Main where
 
 import Implicit.Implicit
 
-allconv :: [(String,[String])]
-allconv = [("st",["dt","bs","rs","ss"]),("st",["ht","bs","rs","ss"]),
-           ("dt",["st","bs","rs","ss"]),("ht",["st","bs","rs","ss"]),
-           ("bs",["st"]),("bs",["dt"]),("bs",["ht"]),
-           ("rs",["st"]),("rs",["dt"]),("rs",["ht"]),
-           ("ss",["st"]),("ss",["dt"]),("ss",["ht"])]
-
 allarg :: [String]
-allarg = ["st","dt","ht","xt","bs","rs","ss"]
+allarg = ["st","dt","ht","bs","rs","ss"]
 
 choice :: [(String,[String])]
 choice = [("st",["dt","bs","rs","ss"]),
@@ -21,22 +14,49 @@ choice = [("st",["dt","bs","rs","ss"]),
           ("ss",["ht"])]
 
 main :: IO ()
-main = putStr ("\n"++(show (plan allarg choice ["ht"] allarg choice ["st"] []))++"\n\n")
-
-{-
-main :: IO ()
 main = do
- contents <- getContents
- putStr "named"
- putStr (show (concat (map named (lines contents))))
+ -- putStr ("\n"++(show (plan allarg choice ["ht"] allarg choice ["st"] []))++"\n\n")
+ -- container <- (readFile "src/SideGeo/Container.hs")
+ -- lambda <- (readFile "src/SideGeo/Lambda.hs")
+ types <- (readFile "src/SideGeo/Types.hs")
+ deduce <- (readFile "src/SideGeo/Deduce.hs")
+ induce <- (readFile "src/SideGeo/Induce.hs")
+ -- equivalent <- (readFile "src/SideGeo/Equivalent.hs")
+ kernel <- (readFile "src/SideGeo/Kernel.hs")
+ polytope <- (readFile "src/SideGeo/Polytope.hs")
+ -- convert <- (readFile "src/SideGeo/Convert.hs")
+ -- space <- (readFile "src/SideGeo/Space.hs")
+
  putStr "\n"
- putStr "explicit"
- putStr (show (concat (map explicit (lines contents))))
+ putStr "named Types.hs\n"
+ putStr (show (concat (map named (lines types))))
  putStr "\n"
- putStr "manual"
- putStr (show (concat (map manual (lines contents))))
+
  putStr "\n"
- putStr "required"
- putStr (show (concat (map required (lines contents))))
+ putStr "explicit Deduce.hs\n"
+ putStr (show (concat (map explicit (lines deduce))))
  putStr "\n"
--}
+ putStr "explicit Induce.hs\n"
+ putStr (show (concat (map explicit (lines induce))))
+ putStr "\n"
+ putStr "explicit Kernel.hs\n"
+ putStr (show (concat (map explicit (lines kernel))))
+ putStr "\n"
+ putStr "explicit Polytope.hs\n"
+ putStr (show (concat (map explicit (lines polytope))))
+ putStr "\n"
+
+ putStr "\n"
+ putStr "manual Induce.hs\n"
+ putStr (show (concat (map manual (lines induce))))
+ putStr "\n"
+
+ putStr "\n"
+ putStr "required Kernel.hs\n"
+ putStr (show (concat (map required (lines kernel))))
+ putStr "\n"
+ putStr "required Polytope.hs\n"
+ putStr (show (concat (map required (lines polytope))))
+ putStr "\n"
+
+ putStr "\n"
