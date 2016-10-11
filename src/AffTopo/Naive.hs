@@ -8,6 +8,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Numeric.LinearAlgebra.HMatrix (Matrix)
 import qualified Numeric.LinearAlgebra.HMatrix as Matrix
+import System.Random as Random
 
 type Boundary = Int
 type Region = Int
@@ -21,21 +22,26 @@ type Point = Matrix Double
 type Planes = Matrix Double
 type Coeffs = Matrix Double
 type Index = Int
-type Dimension = Int
-type Complexity = Int
-type Linearity = Int
+type Dimension = Int -- assume three
+type Area = Int
+type Volume = Int
 
 -- planes or points are columns in matrix
 -- coefficients of an equation are a row
 
+setUnions :: Ord a => Set (Set a) -> Set a
+setUnions a = Set.unions (Set.toList a)
+
 powerSet :: Ord a => Set a -> Set (Set a)
-powerSet a = undefined
+powerSet a = Set.unions (map (\b -> subSets b a) [0 .. (Set.size a)])
 
 subSets :: Ord a => Int -> Set a -> Set (Set a)
-subSets n a = undefined
+subSets n a
+ | n == 0 = Set.signleton (Set.empty)
+ | otherwise = setUnions (Set.map (\b -> Set.map (\c -> Set.insert c b) (Set.difference a b)) (subSets (n - 1) a))
 
 -- return all linear spaces of given dimension and boundaries.
-allSpaces :: Dimension -> Complexity -> Set Space
+allSpaces :: Dimension -> Area -> Set Space
 allSpaces n m =
  -- start with space of m random planes of dimension n
  f 0 (minEquivSpace (spaceFromPlanes (randomPlanes n m)) Set.empty Set.empty where
@@ -56,8 +62,8 @@ allSpaces n m =
  h todo done = let s = Set.elemAt 0 todo in f 0 s (Set.delete s todo) done
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: Dimension -> Complexity -> Planes
-randomPlanes n m = undefined
+randomPlanes :: Dimension -> Area -> Planes
+randomPlanes n m = map f (randoms)
 
 intersectionOfPlanes :: Planes -> Point
 intersectionOfPlanes w = undefined
@@ -90,7 +96,7 @@ spaceFromPlanes p
  f i = let
  tupl = Set.toList i
  cols = filter (\j -> elem j tupl) headIdxs
- subS = foldl (\s j -> subSpace j s) headSpace i
+ subS = foldl (\s j -> subSpace j s) headSpace tupl
  subP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs cols))
  indP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs tupl))
  intP = intersectionOfPlanes (indP Matrix.||| tailPlane)
@@ -111,16 +117,52 @@ spaceFromPlanes p
 regionOfPoint :: Point -> Planes -> Space -> Region
 retionOfPoint = undefined
 
+-- return list of region permutations, given sorted halfspace lists, and args as described
+minEquiv :: [[Halfspace]] -> [[Halfspace]] -> Region -> [Region] -> [Region] -> ([[Halfspace]], [[Region]])
+-- p is incomplete space to add r to. q corresponds to p. s is regions in q.
+-- r goes in same positions in p that some region from s is in q. t is regions in reverse order used.
+minEquiv p _ _ [] t = (p, (reverse t))
+minEquiv p q r s t = let
+ -- find spaces with just one added
+ added = map (\a -> f0 p q r a) s
+ -- find position regions with just one removed
+ removed = filter (\a -> f3 q a) s
+ -- find min with just one added
+ minAdded = minimum added
+ -- list those with just one added that is min
+ recurseArgs = filter (\(a,(b,c)) -> b == minAdded) (zip s (zip added removed))
+ -- recurse on each that is minimum
+ recursed = map (\(a,(b,c)) -> minEquiv b c (r+1) (delete a s) (a:t)) recurseArgs
+ -- find minimum recursion
+ result = minimum (fst (unzip recursed))
+ -- find recursions with minimum
+ results = filter (\(a,b) -> a == result) recursed
+ -- concat permutations of minima
+ in (result, concat (snd (unzip results))) where
+ -- add r to p in positions of s in q
+ f0 :: [[Halfspace]] -> [[Halfspace]] -> Region -> Region -> [[Halfspace]]
+ f0 p q r s = sort (map (f1 r s) (zip p q))
+ -- add r to p in position of s in q
+ f1 Region -> Region -> ([Halfspace],[Halfspace]) -> [Halfspace]
+ f1 r s (p,q) = sort (map (f2 r s) (zip p q))
+ -- add r to p if s in q
+ f2 Region -> Region -> (Halfspace,Halfspace) -> Halfspace
+ f2 r s (p,q)
+  | Set.member s q = Set.insert r p
+  | otherwise = p
+ -- remove s from q
+ f3 :: [[Halfspace]] -> Region -> [[Halfspace]]
+ f3 q s = map (filter (\a->a!=s)) q
+
+-- call minEquiv with halspaces from given space
+-- convert region lists to region maps
+-- lfigure out each boundary map from its region map
+minEquivSpaces :: Space -> Set (Space, Map Boundary Boundary, Map Region Region)
+minEquivSpaces s = undefined
+
 -- return space with regions permuted such that result is smallest possible
 minEquivSpace :: Space -> Space
 minEquivSpace s = undefined
--- start with all regions and unpermuted given space
--- recurse to choose each from remaining regions
--- if space with chosen next is possibly not more, recurse with chosen next in permutatiion
-
--- return space with regions permuted such that result is smallest possible
-minEquivSpaceWithMaps :: Space -> (Space, Map Boundary Boundary, Map Region Region)
-minEquivSpaceWithMaps s = undefined
 
 -- return whether local opposite of given region is empty and all of its neighbor regions are non-empty
 canMigrate :: Region -> Space -> Bool
@@ -171,7 +213,7 @@ isLinear :: Space -> Bool
 isLinear s = undefined
 
 -- return how many regions a space of given dimension and boundaries has
-defineLinear :: Dimension -> Complexity -> Linearity
+defineLinear :: Dimension -> Area -> Volume
 defineLinear n m
  | (n == 0) || (m == 0) = 1
  | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
