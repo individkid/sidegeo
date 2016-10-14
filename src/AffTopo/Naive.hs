@@ -2,68 +2,78 @@ module AffTopo.Naive where
 
 -- naive in the sense of just one representation
 
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.list
 import Numeric.LinearAlgebra.HMatrix (Matrix)
 import qualified Numeric.LinearAlgebra.HMatrix as Matrix
 import System.Random as Random
 
-type Boundary = Int
-type Region = Int
+type Boundary = Int -- index into Space
+type Region = Int -- arbitrary identifier
 type Sidedness = Int -- index into FullSpace
-type HalfSpace = Set Region
-type FullSpace = Set HalfSpace -- unordered pair
-type RegionMap = Map Boundary Sidedness
-type Space = Map Boundary FullSpace
-type Plane = Matrix Double
-type Point = Matrix Double
-type Planes = Matrix Double
-type Coeffs = Matrix Double
-type Index = Int
-type Dimension = Int -- assume three
-type Area = Int
-type Volume = Int
+type HalfSpace = [Region] -- assume proper set
+type FullSpace = [HalfSpace] -- assume disjoint covering pair
+type Sidednesses = [Sidedness] -- represents region
+type Space = [FullSpace] -- assume equal covers
+type Plane = Matrix Double -- single column of distances above base
+type Point = Matrix Double -- single column of coordinates
+type Planes = Matrix Double -- multiple columns of parallel distances
+type Coeffs = Matrix Double -- each row is a linear equation
+type Index = Int -- row or column
+type Dimensions = Int -- more than zero
+type HyperAreas = Int -- lengths/points in 2/1 dimensions
+type HyperVolumes = Int -- areas/lengths in 2/1 dimensions
 
--- planes or points are columns in matrix
--- coefficients of an equation are a row
+sortNub :: Ord a => [a] -> [a]
+sortNub a = f (sort a) where
+ f :: Ord a => [a] -> [a]
+ f (h0:(h1:t)) | h0 == h1 = h1:t
+ f a = a
 
-setUnions :: Ord a => Set (Set a) -> Set a
-setUnions a = Set.unions (Set.toList a)
+member :: Eq a => a -> [a] -> Bool
+member a b = (find a b) \= Nothing
 
-powerSet :: Ord a => Set a -> Set (Set a)
-powerSet a = Set.unions (map (\b -> subSets b a) [0 .. (Set.size a)])
+insert :: Eq a => a -> [a] -> [a]
+insert a b = sortNub (a:b)
 
-subSets :: Ord a => Int -> Set a -> Set (Set a)
-subSets n a
+choose :: [a] -> a
+choose (h:t) = h
+
+delete :: Eq a => a -> [a] -> [a]
+delete a b = filter (\c -> c \= a) b
+
+subLists :: Ord a => Int -> Set a -> Set (Set a)
+subLists n a
  | n == 0 = Set.signleton (Set.empty)
- | otherwise = setUnions (Set.map (\b -> Set.map (\c -> Set.insert c b) (Set.difference a b)) (subSets (n - 1) a))
+ | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subLists (n - 1) a))
+
+sortSpace :: Space -> Space
+sortSpace s = undefined
 
 -- return all linear spaces of given dimension and boundaries.
-allSpaces :: Dimension -> Area -> Set Space
-allSpaces n m =
- -- start with space of m random planes of dimension n
- f 0 (minEquivSpace (spaceFromPlanes (randomPlanes n m)) Set.empty Set.empty where
- -- migrate all possible from current space, and go on to next todo
- f :: Region -> Space -> Set Space -> Set Space -> Set Space
- f r s todo done
-  | canMigrate r s = g (r+1) s (minEquivSpace (migrateSpace r s)) todo done
-  | r < (Set.size (coverOfSpace s)) = f (r+1) s todo done
-  | not (Set.null todo) = h todo (Set.insert s done)
-  | otherwise = (Set.insert s done)
- -- if migration not already done or todo, recurse with migration added to todo
- g :: Region -> Space -> Space -> Set Space -> Set Space -> Set Space
- g r s t todo done
-  | (s == t) || (Set.member t todo) || (Set.member t done) = f r s todo done
-  | otherwise = f r s (Set.insert t todo) done
- -- recurse with choice removed from todo
- h :: Set Space -> Set Space -> Set Space
- h todo done = let s = Set.elemAt 0 todo in f 0 s (Set.delete s todo) done
+allSpaces :: Dimensions -> HyperAreas -> [Space]
+allSpaces n m = allSpacesF 0 (minEquiv (spaceFromPlanes (randomPlanes n m)) [] []
+
+-- migrate all possible from current space, and go on to next todo
+allSpacesF :: Region -> Space -> [Space] -> [Space] -> [Space]
+allSpacesF r s todo done
+ | canMigrate r s = allSpacesG (r+1) s (minEquiv (migrateSpace r s)) todo done
+ | r < (length (coverOfSpace s)) = allSpacesF (r+1) s todo done
+ | not (null todo) = allSpacesH todo (insert s done)
+ | otherwise = (insert s done)
+
+-- if migration not already done or todo, recurse with migration added to todo
+allSpacesG :: Region -> Space -> Space -> [Space] -> [Space] -> [Space]
+allSpacesG r s t todo done
+ | (s == t) || (member t todo) || (member t done) = allSpacesF r s todo done
+ | otherwise = allSpacesF r s (t:todo) done
+
+-- recurse with choice removed from todo
+allSpacesH :: [Space] -> [Space] -> [Space]
+allSpacesH (s:todo) done = f 0 s todo done
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: Dimension -> Area -> Planes
-randomPlanes n m = map f (randoms)
+randomPlanes :: Dimensions -> HyperAreas -> Planes
+randomPlanes n m = undefined
 
 intersectionOfPlanes :: Planes -> Point
 intersectionOfPlanes w = undefined
@@ -72,7 +82,7 @@ isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = undefined
 
 -- return planes with sidednesses as specified by given dimension and space
-planesFromSpace :: Dimension -> Space -> Planes
+planesFromSpace :: Dimensions -> Space -> Planes
 planesFromSpace n s = undefined
 -- recurse with one fewer boundary
 -- find vertices, interpret as coplanes
@@ -83,27 +93,17 @@ planesFromSpace n s = undefined
 -- return space with sidednesses determined by given planes
 spaceFromPlanes :: Planes -> Space
 spaceFromPlanes p
- | numPlanes == 0 = Map.empty
+ | numPlanes == 0 = []
  | otherwise = let
  -- recurse with one fewer plane
  headSpace :: Space
  headSpace = spaceFromPlanes headPlanes
  -- find (n-1)-tuples of recursed planes
- colTuples :: Set (Set Index)
- colTuples = subSets planeDims (Set.fromList headIdxs)
- -- find sub-regions of super-region containing indicated intersection point
- f :: Set Index -> Set Region
- f i = let
- tupl = Set.toList i
- cols = filter (\j -> elem j tupl) headIdxs
- subS = foldl (\s j -> subSpace j s) headSpace tupl
- subP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs cols))
- indP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs tupl))
- intP = intersectionOfPlanes (indP Matrix.||| tailPlane)
- in subRegions (Set.singleton (regionOfPoint point subP subS)) subS headSpace 
+ colTuples :: [[Index]]
+ colTuples = subLists planeDims headIdxs
  -- find union of sub-regions of super-regions containing intersections
- headRegs :: Set Region
- headRegs = Set.unions (Set.toList (Set.map f colTuples))
+ headRegs :: [Region]
+ headRegs = sortNub (concat (map f colTuples))
  -- return space with found regions divided by new boundary
  in divideSpace headRegs headSpace where
  numPlanes = Matrix.cols p
@@ -113,20 +113,32 @@ spaceFromPlanes p
  spaceDims = Matrix.rows p
  planeDims = spaceDims - 1
 
+ -- find sub-regions of super-region containing indicated intersection point
+spaceFromPlanesF :: [Index] -> [Region]
+spaceFromPlanesF tupl = let
+ cols = filter (\j -> elem j tupl) headIdxs
+ subS = foldl (\s j -> subSpace j s) headSpace tupl
+ subP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs cols))
+ indP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs tupl))
+ intP = intersectionOfPlanes (indP Matrix.||| tailPlane)
+ in sort (subRegions [regionOfPoint point subP subS] subS headSpace)
+
 -- return region of point, assuming planes and space are homeomorphic
 regionOfPoint :: Point -> Planes -> Space -> Region
 retionOfPoint = undefined
 
 -- return list of region permutations, given sorted halfspace lists, and args as described
-minEquiv :: [[Halfspace]] -> [[Halfspace]] -> Region -> [Region] -> [Region] -> ([[Halfspace]], [[Region]])
+minEquivWithPerms :: Space -> Space -> Region -> [Region] -> [Region] -> (Space, [[Region]])
 -- p is incomplete space to add r to. q corresponds to p. s is regions in q.
 -- r goes in same positions in p that some region from s is in q. t is regions in reverse order used.
-minEquiv p _ _ [] t = (p, (reverse t))
-minEquiv p q r s t = let
+minEquivWithPerms p _ _ [] t = (p, [reverse t])
+minEquivWithPerms p q r s t = let
  -- find spaces with just one added
- added = map (\a -> f0 p q r a) s
+ added :: [Space]
+ added = map (\a -> minEquivWithPermsF0 p q r a) s
  -- find position regions with just one removed
- removed = filter (\a -> f3 q a) s
+ removed :: [Space]
+ removed = map (\a -> minEquivWithPermsF3 q a) s
  -- find min with just one added
  minAdded = minimum added
  -- list those with just one added that is min
@@ -138,31 +150,29 @@ minEquiv p q r s t = let
  -- find recursions with minimum
  results = filter (\(a,b) -> a == result) recursed
  -- concat permutations of minima
- in (result, concat (snd (unzip results))) where
- -- add r to p in positions of s in q
- f0 :: [[Halfspace]] -> [[Halfspace]] -> Region -> Region -> [[Halfspace]]
- f0 p q r s = sort (map (f1 r s) (zip p q))
- -- add r to p in position of s in q
- f1 Region -> Region -> ([Halfspace],[Halfspace]) -> [Halfspace]
- f1 r s (p,q) = sort (map (f2 r s) (zip p q))
- -- add r to p if s in q
- f2 Region -> Region -> (Halfspace,Halfspace) -> Halfspace
- f2 r s (p,q)
-  | Set.member s q = Set.insert r p
-  | otherwise = p
- -- remove s from q
- f3 :: [[Halfspace]] -> Region -> [[Halfspace]]
- f3 q s = map (filter (\a->a!=s)) q
+ in (result, concat (snd (unzip results)))
 
--- call minEquiv with halspaces from given space
--- convert region lists to region maps
--- lfigure out each boundary map from its region map
-minEquivSpaces :: Space -> Set (Space, Map Boundary Boundary, Map Region Region)
-minEquivSpaces s = undefined
+-- add r to p in positions of s in q
+minEquivWithPermsF0 :: Space -> Space -> Region -> Region -> Space
+minEquivWithPermsF0 p q r s = sort (map (minEquivWithPermsF1 r s) (zip p q))
+
+-- add r to p in position of s in q
+minEquivWithPermsF1 Region -> Region -> ([Halfspace],[Halfspace]) -> [Halfspace]
+minEquivWithPermsF1 r s (p,q) = sort (map (minEquivWithPermsF2 r s) (zip p q))
+
+-- add r to p if s in q
+minEquivWithPermsF2 Region -> Region -> (Halfspace,Halfspace) -> Halfspace
+minEquivWithPermsF2 r s (p,q)
+ | member s q = insert r p
+ | otherwise = p
+
+-- remove s from q
+minEquivWithPermsF3 :: Space -> Region -> Space
+minEquivWithPermsF3 q s = map (filter (\a -> a !=s )) q
 
 -- return space with regions permuted such that result is smallest possible
-minEquivSpace :: Space -> Space
-minEquivSpace s = undefined
+minEquiv :: Space -> Space
+minEquiv s = undefined
 
 -- return whether local opposite of given region is empty and all of its neighbor regions are non-empty
 canMigrate :: Region -> Space -> Bool
@@ -173,39 +183,39 @@ migrateSpace :: Region -> Space -> Space
 migrateSpace r s = undefined
 
 -- return per boundary side of region
-sidesFromRegion :: Region -> Space -> RegionMap
-sidesFromRegion r s = undefined
+sidesOfRegion :: Region -> Space -> Sidednesses
+sidesOfRegion r s = undefined
 
 -- return region from boundary to pair index map
-regionFromSides :: RegionMap -> Space -> Region
-regionFromSides r s = undefined
+regionOfSides :: Sidednesses -> Space -> Region
+regionOfSides r s = undefined
 
 -- return whether region with given side map exists in space
-regionWithSidesExists :: RegionMap -> Space -> Bool
-regionWithSidesExists r s = undefined
+regionOfSidesExists :: Sidednesses -> Space -> Bool
+regionOfSidesExists r s = undefined
 
 -- return boundary to side map with given boundaries reversed
-oppositeOfRegion :: RegionMap -> Set Boundary -> RegionMap
+oppositeOfRegion :: Sidednesses -> [Boundary] -> Sidednesses
 oppositeOfRegion r s = undefined
 
 -- return boundaries that given region has neighbors wrt
-localOfRegion :: Region -> Space -> Set Boundary
+localOfRegion :: Region -> Space -> [Boundary]
 localOfRegion r s = undefined
 
 -- return all boundaries in space
-globalOfSpace :: Space -> Set Boundary
+globalOfSpace :: Space -> [Boundary]
 globalOfSpace s = undefined
 
 -- return all regions in space
-coverOfSpace :: Space -> Set Region
+coverOfSpace :: Space -> [Region]
 coverOfSpace s = undefined
 
 -- return boundaries attached to region
-attachedBoundaries :: Region -> Space -> Set Boundary
+attachedBoundaries :: Region -> Space -> [Boundary]
 attachedBoundaries r s = undefined
 
 -- return vertices attached to region
-attachedVertices :: Region -> Space -> Set (Set Boundary)
+attachedVertices :: Region -> Space -> [[Boundary]]
 attachedVertices r s = undefined
 
 -- return whether all subspaces have correct number of regions
@@ -213,7 +223,7 @@ isLinear :: Space -> Bool
 isLinear s = undefined
 
 -- return how many regions a space of given dimension and boundaries has
-defineLinear :: Dimension -> Area -> Volume
+defineLinear :: Dimensions -> HyperAreas -> HyperVolumes
 defineLinear n m
  | (n == 0) || (m == 0) = 1
  | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
@@ -227,29 +237,29 @@ sectionSpace :: Boundary -> Space -> Space
 sectionSpace m s = undefined
 
 -- return regions attached to indicated boundary
-attachedRegions :: Boundary -> Space -> Set Region
+attachedRegions :: Boundary -> Space -> [Region]
 attachedRegions m s = undefined
 
 -- return neighbor region of given region wrt given boundary
 neighborRegion :: Boundary -> Region -> Space -> Region
-neighborRegion m r s = regionFromSides (oppositeOfRegion (sidesFromRegion r s) (Set.singleton m)) s
+neighborRegion m r s = regionOfSides (oppositeOfRegion (sidesOfRegion r s) [m]) s
 
 -- return whether neighbor region exists
 neighborRegionExists :: Boundary -> Region -> Space -> Bool
 neighborRegionExists m r s = undefined
 
 -- return space with given regions divided by new boundary
-divideSpace :: Set Region -> Space -> Space
+divideSpace :: [Region] -> Space -> Space
 divideSpace r s = undefined
 
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that contain any of the given regions in first space
-superRegions :: Set Region -> Space -> Space -> Set Region
+superRegions :: [Region] -> Space -> Space -> [Region]
 superRegions r s = undefined
 
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that are contained by any of the given regions in first space
-subRegions :: Set Region -> Space -> Space -> Set Region
+subRegions :: [Region] -> Space -> Space -> [Region]
 subRegions r s = undefined
 
 -- return superspace with given spaces as subspaces
