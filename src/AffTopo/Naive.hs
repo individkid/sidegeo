@@ -3,9 +3,8 @@ module AffTopo.Naive where
 -- naive in the sense of just one representation
 
 import Data.list
-import Numeric.LinearAlgebra.HMatrix (Matrix)
-import qualified Numeric.LinearAlgebra.HMatrix as Matrix
-import System.Random as Random
+import qualified Numeric.LinearAlgebra.Data as Matrix
+import qualified System.Random as Random
 
 type Boundary = Int -- index into Space
 type Region = Int -- arbitrary identifier
@@ -20,8 +19,8 @@ type Planes = Matrix Double -- multiple columns of parallel distances
 type Coeffs = Matrix Double -- each row is a linear equation
 type Index = Int -- row or column
 type Dimensions = Int -- more than zero
-type HyperAreas = Int -- lengths/points in 2/1 dimensions
-type HyperVolumes = Int -- areas/lengths in 2/1 dimensions
+type HypAreas = Int -- lengths/points in 2/1 dimensions
+type HypVolumes = Int -- areas/lengths in 2/1 dimensions
 
 sortNub :: Ord a => [a] -> [a]
 sortNub a = f (sort a) where
@@ -41,16 +40,13 @@ choose (h:t) = h
 delete :: Eq a => a -> [a] -> [a]
 delete a b = filter (\c -> c \= a) b
 
-subLists :: Ord a => Int -> Set a -> Set (Set a)
+subLists :: Ord a => Int -> [a] -> [[a]]
 subLists n a
- | n == 0 = Set.signleton (Set.empty)
+ | n == 0 = [[]]
  | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subLists (n - 1) a))
 
-sortSpace :: Space -> Space
-sortSpace s = undefined
-
 -- return all linear spaces of given dimension and boundaries.
-allSpaces :: Dimensions -> HyperAreas -> [Space]
+allSpaces :: Dimensions -> HypAreas -> [Space]
 allSpaces n m = allSpacesF 0 (minEquiv (spaceFromPlanes (randomPlanes n m)) [] []
 
 -- migrate all possible from current space, and go on to next todo
@@ -72,14 +68,35 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = f 0 s todo done
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: Dimensions -> HyperAreas -> Planes
+randomPlanes :: Dimensions -> HypAreas -> Planes
 randomPlanes n m = undefined
 
-intersectionOfPlanes :: Planes -> Point
-intersectionOfPlanes w = undefined
+-- assume first rows are distances above points in base plane
+-- assume last row is distances above origin
+-- each column specifies points that a plane passes through
+intersectPlanes :: Planes -> Maybe Point
+intersectPlanes w = let
+ dim = rows w
+ square = Matrix.matrix dim [intersectPlanesF w dim a b | a <- [0..dim-1], b <- [0..dim-1]]
+ rhs = Matrix.matrix 1 [intersectPlanesG w dim a | a <- [0..dim-1]]
+ in Matrix.linearSolve square rhs
+
+intersectPlanesF :: Planes -> Int -> Int -> Int -> Double
+intersectPlanesF w d a b
+ | b == d = -1.0
+ | otherwise = (Matrix.atIndex w (b,a)) - (Matrix.atIndex w (d,a))
+
+intersectPlanesG :: Planes -> Int -> Int -> Double
+intersectPlanesG w d a = negate (Matrix.atIndex w (d,a))
 
 isAbovePlane :: Point -> Plane -> Bool
-isAbovePlane v w = undefined
+isAbovePlane v w = let
+ dim = rows w
+ planeV = Matrix.flatten (w Matrix.?? (Matrix.DropLast 1, Matrix.All))
+ pointV = Matrix.flatten (v Matrix.?? (Matrix.DropLast 1, Matrix.All))
+ planeS = Matrix.atIndex w (dim,0)
+ pointS = Matrix.atIndex v (dim,0)
+ in pointS > ((dot planeV pointV) + planeS)
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Dimensions -> Space -> Planes
@@ -103,7 +120,7 @@ spaceFromPlanes p
  colTuples = subLists planeDims headIdxs
  -- find union of sub-regions of super-regions containing intersections
  headRegs :: [Region]
- headRegs = sortNub (concat (map f colTuples))
+ headRegs = sortNub (concat (map (spaceFromPlanesF headSpace headPlanes tailPlane headIdxs) colTuples))
  -- return space with found regions divided by new boundary
  in divideSpace headRegs headSpace where
  numPlanes = Matrix.cols p
@@ -114,13 +131,13 @@ spaceFromPlanes p
  planeDims = spaceDims - 1
 
  -- find sub-regions of super-region containing indicated intersection point
-spaceFromPlanesF :: [Index] -> [Region]
-spaceFromPlanesF tupl = let
+spaceFromPlanesF :: Space -> Matrix -> Matrix -> [Index] -> [Index] -> [Region]
+spaceFromPlanesF headSpace headPlanes tailPlane headIdxs tupl = let
  cols = filter (\j -> elem j tupl) headIdxs
  subS = foldl (\s j -> subSpace j s) headSpace tupl
  subP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs cols))
  indP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs tupl))
- intP = intersectionOfPlanes (indP Matrix.||| tailPlane)
+ intP = intersectPlanes (indP Matrix.||| tailPlane)
  in sort (subRegions [regionOfPoint point subP subS] subS headSpace)
 
 -- return region of point, assuming planes and space are homeomorphic
@@ -223,7 +240,7 @@ isLinear :: Space -> Bool
 isLinear s = undefined
 
 -- return how many regions a space of given dimension and boundaries has
-defineLinear :: Dimensions -> HyperAreas -> HyperVolumes
+defineLinear :: Dimensions -> HypAreas -> HypVolumes
 defineLinear n m
  | (n == 0) || (m == 0) = 1
  | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
