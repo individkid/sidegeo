@@ -3,7 +3,7 @@ module AffTopo.Naive where
 -- naive in the sense of just one representation
 
 import Data.list
-import qualified Numeric.LinearAlgebra.Data as Matrix
+import qualified Numeric.LinearAlgebra as Matrix
 import qualified System.Random as Random
 
 type Boundary = Int -- index into Space
@@ -11,22 +11,21 @@ type Region = Int -- arbitrary identifier
 type Sidedness = Int -- index into FullSpace
 type HalfSpace = [Region] -- assume proper set
 type FullSpace = [HalfSpace] -- assume disjoint covering pair
-type Sidednesses = [Sidedness] -- represents region
 type Space = [FullSpace] -- assume equal covers
 type Plane = Matrix Double -- single column of distances above base
 type Point = Matrix Double -- single column of coordinates
 type Planes = Matrix Double -- multiple columns of parallel distances
-type Coeffs = Matrix Double -- each row is a linear equation
 type Index = Int -- row or column
 type Dimensions = Int -- more than zero
 type HypAreas = Int -- lengths/points in 2/1 dimensions
 type HypVolumes = Int -- areas/lengths in 2/1 dimensions
 
 sortNub :: Ord a => [a] -> [a]
-sortNub a = f (sort a) where
- f :: Ord a => [a] -> [a]
- f (h0:(h1:t)) | h0 == h1 = h1:t
- f a = a
+sortNub a = f (sort a)
+
+sortNubF :: Ord a => [a] -> [a]
+sortNubF (h0:(h1:t)) | h0 == h1 = h1:t
+sortNubF a = a
 
 member :: Eq a => a -> [a] -> Bool
 member a b = (find a b) \= Nothing
@@ -37,23 +36,27 @@ insert a b = sortNub (a:b)
 choose :: [a] -> a
 choose (h:t) = h
 
-delete :: Eq a => a -> [a] -> [a]
-delete a b = filter (\c -> c \= a) b
+remove :: Eq a => a -> [a] -> [a]
+remove a b = filter (\c -> c \= a) b
+
+replace :: Int -> a -> [a] -> [a]
+replace a b c = (take a c) ++ (b : (drop (a+1) c))
 
 subLists :: Ord a => Int -> [a] -> [[a]]
 subLists n a
  | n == 0 = [[]]
+ | null a = [[]]
  | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subLists (n - 1) a))
 
 -- return all linear spaces of given dimension and boundaries.
-allSpaces :: Dimensions -> HypAreas -> [Space]
-allSpaces n m = allSpacesF 0 (minEquiv (spaceFromPlanes (randomPlanes n m)) [] []
+allSpaces :: RandomGen g => g -> Dimensions -> HypAreas -> [Space]
+allSpaces g n m = allSpacesF 0 (minEquiv (spaceFromPlanes (randomPlanes g n m)) [] []
 
 -- migrate all possible from current space, and go on to next todo
 allSpacesF :: Region -> Space -> [Space] -> [Space] -> [Space]
 allSpacesF r s todo done
  | canMigrate r s = allSpacesG (r+1) s (minEquiv (migrateSpace r s)) todo done
- | r < (length (coverOfSpace s)) = allSpacesF (r+1) s todo done
+ | r < (length (regionsOfSpace s)) = allSpacesF (r+1) s todo done
  | not (null todo) = allSpacesH todo (insert s done)
  | otherwise = (insert s done)
 
@@ -68,8 +71,9 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = f 0 s todo done
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: Dimensions -> HypAreas -> Planes
-randomPlanes n m = undefined
+randomPlanes :: RandomGen g => g -> Dimensions -> HypAreas -> Planes
+-- TODO: tweak until all vertices are in -1.0 to 1.0 hypsquare on/in base
+randomPlanes g n m = Matrix.matrix m (take (n*m) (Random.randomRs (0.0,1.0) g))
 
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
@@ -104,7 +108,7 @@ planesFromSpace n s = undefined
 -- recurse with one fewer boundary
 -- find vertices, interpret as coplanes
 -- add simplex containing all covertices
--- find coregion corresponding to regions divided by boundary to add
+-- find inside coregion corresponding to regions divided by boundary to add
 -- find average of corners of coregion, interpret as plane to add
 
 -- return space with sidednesses determined by given planes
@@ -142,7 +146,20 @@ spaceFromPlanesF headSpace headPlanes tailPlane headIdxs tupl = let
 
 -- return region of point, assuming planes and space are homeomorphic
 regionOfPoint :: Point -> Planes -> Space -> Region
-retionOfPoint = undefined
+regionOfPoint v w s = let
+ dim = rows w
+ num = cols w
+ planes = Matrix.toColumns w
+ -- for each boundary/plane, choose n others to find vertex
+ vertices = map (regionOfPointF w) [0..num-1]
+ -- find sides of vertex wrt boundaries/planes
+ sidesV = map (\(v,w) -> isAbovePlane v w) (zip vertices planes)
+ -- find sides of point wrt planes
+ sidesP = map (\w -> isAbovePlane v w)
+ -- use transitivity to complete sides of point wrt boundaries
+ sidesR = map (\(a,b) -> a == b)
+ -- return regionOfSides
+ in regionOfSides sidesR s
 
 -- return list of region permutations, given sorted halfspace lists, and args as described
 minEquivWithPerms :: Space -> Space -> Region -> [Region] -> [Region] -> (Space, [[Region]])
@@ -161,7 +178,7 @@ minEquivWithPerms p q r s t = let
  -- list those with just one added that is min
  recurseArgs = filter (\(a,(b,c)) -> b == minAdded) (zip s (zip added removed))
  -- recurse on each that is minimum
- recursed = map (\(a,(b,c)) -> minEquiv b c (r+1) (delete a s) (a:t)) recurseArgs
+ recursed = map (\(a,(b,c)) -> minEquivWithPerms b c (r+1) (remove a s) (a:t)) recurseArgs
  -- find minimum recursion
  result = minimum (fst (unzip recursed))
  -- find recursions with minimum
@@ -189,51 +206,63 @@ minEquivWithPermsF3 q s = map (filter (\a -> a !=s )) q
 
 -- return space with regions permuted such that result is smallest possible
 minEquiv :: Space -> Space
-minEquiv s = undefined
+minEquiv s = minEquivWithPerms [] s 0 (regionsOfSpace s) []
 
 -- return whether local opposite of given region is empty and all of its neighbor regions are non-empty
 canMigrate :: Region -> Space -> Bool
-canMigrate r s = undefined
+canMigrate r s = let
+ boundaries = attachedBoundaries r s
+ sides = sidesOfRegion r s
+ opposite = oppositeOfRegion sides boundaries
+ empty = not (regionOfSidesExists opposite s)
+ neighbors = map (\a -> oppositeOfRegion opposite [a]) boundaries
+ exists = map (\a -> regionOfSidesExists a s) neighbors
+ in foldl (\a b -> a && b) empty exists
 
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
 migrateSpace r s = undefined
 
 -- return per boundary side of region
-sidesOfRegion :: Region -> Space -> Sidednesses
+sidesOfRegion :: Region -> Space -> [Sidedness]
 sidesOfRegion r s = undefined
 
 -- return region from boundary to pair index map
-regionOfSides :: Sidednesses -> Space -> Region
+regionOfSides :: [Sidedness] -> Space -> Region
 regionOfSides r s = undefined
 
 -- return whether region with given side map exists in space
-regionOfSidesExists :: Sidednesses -> Space -> Bool
+regionOfSidesExists :: [Sidedness] -> Space -> Bool
 regionOfSidesExists r s = undefined
 
--- return boundary to side map with given boundaries reversed
-oppositeOfRegion :: Sidednesses -> [Boundary] -> Sidednesses
-oppositeOfRegion r s = undefined
-
--- return boundaries that given region has neighbors wrt
-localOfRegion :: Region -> Space -> [Boundary]
-localOfRegion r s = undefined
-
 -- return all boundaries in space
-globalOfSpace :: Space -> [Boundary]
-globalOfSpace s = undefined
+boundariesOfSpace :: Space -> [Boundary]
+boundariesOfSpace s = [0..((length s)-1)]
 
 -- return all regions in space
-coverOfSpace :: Space -> [Region]
-coverOfSpace s = undefined
+regionsOfSpace :: Space -> [Region]
+regionsOfSpace s = sortNub (concat (concat s))
 
 -- return boundaries attached to region
 attachedBoundaries :: Region -> Space -> [Boundary]
-attachedBoundaries r s = undefined
+attachedBoundaries r s = filter (attachedBoundariesF (sidesOfRegion r s) s) (boundariesOfSpace s)
+
+attachedBoundariesF :: [Sidedness] -> Boundary -> Bool
+attachedBoundariesF r s b = regionOfSideExists (oppositeOfRegion r [b]) s
 
 -- return vertices attached to region
-attachedVertices :: Region -> Space -> [[Boundary]]
-attachedVertices r s = undefined
+attachedVertices :: Region -> Space -> Dimension -> [[Boundary]]
+attachedVertices r s d = filter (attachedVerticesF (sidesOfRegion r s) s) (subLists d (boundariesOfSpace s))
+
+attachedVerticesF :: [Sidedness] -> [Boundary] -> Bool
+attachedVerticesF r s b = regionOfSideExists (oppositeOfRegion r b) s
+
+-- return regions in corners of boundaries
+attachedRegions :: [Boundary] -> Space -> [Region]
+attachedRegions b s = filter (attachedRegionsF b s) (regionsOfSpace s)
+
+attachedRegionsF :: [Boundary] -> Space -> Region -> Bool
+attachedRegionsF b s r = regionOfSidesExists (oppositeOfRegion (sidesOfRegion r s) b) s
 
 -- return whether all subspaces have correct number of regions
 isLinear :: Space -> Bool
@@ -253,17 +282,17 @@ subSpace m s = undefined
 sectionSpace :: Boundary -> Space -> Space
 sectionSpace m s = undefined
 
--- return regions attached to indicated boundary
-attachedRegions :: Boundary -> Space -> [Region]
-attachedRegions m s = undefined
-
 -- return neighbor region of given region wrt given boundary
 neighborRegion :: Boundary -> Region -> Space -> Region
 neighborRegion m r s = regionOfSides (oppositeOfRegion (sidesOfRegion r s) [m]) s
 
 -- return whether neighbor region exists
 neighborRegionExists :: Boundary -> Region -> Space -> Bool
-neighborRegionExists m r s = undefined
+neighborRegionExists m r s = regionOfSidesExists (oppositeOfRegion (sidesOfRegion r s) [m]) s
+
+-- return sidedness with boundaries reversed
+oppositeOfRegion :: [Sidedness] -> [Boundary] -> [Sidedness]
+oppositeOfRegion a b = foldl (\a b -> replace b (not (a !! b)) a) a b
 
 -- return space with given regions divided by new boundary
 divideSpace :: [Region] -> Space -> Space
