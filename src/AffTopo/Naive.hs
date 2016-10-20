@@ -8,13 +8,12 @@ import qualified System.Random as Random
 
 type Boundary = Int -- index into Space
 type Region = Int -- arbitrary identifier
-type Sidedness = Int -- index into FullSpace
+type Sidedness = Bool -- index into FullSpace
 type HalfSpace = [Region] -- assume proper set
 type FullSpace = [HalfSpace] -- assume disjoint covering pair
 type Space = [FullSpace] -- assume equal covers
-type Plane = Matrix Double -- single column of distances above base
-type Point = Matrix Double -- single column of coordinates
-type Planes = Matrix Double -- multiple columns of parallel distances
+type Plane = Matrix.Vector Double -- single column of distances above base
+type Point = Matrix.Vector Double -- single column of coordinates
 
 sortNub :: Ord a => [a] -> [a]
 sortNub a = f (sort a)
@@ -25,10 +24,6 @@ sortNubF a = a
 
 member :: Eq a => a -> [a] -> Bool
 member a b = (find a b) \= Nothing
-
-cast :: Bool -> Sidedness
-cast False = 0
-cast True = 1
 
 insert :: Ord a => a -> [a] -> [a]
 insert a b = sortNub (a:b)
@@ -43,6 +38,7 @@ remove a b = filter (\c -> c \= a) b
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) ++ (b : (drop (a+1) c))
 
+-- TODO: change to infix like ++ and \\
 intersect :: Ord a => [a] -> [a] -> [a]
 intersect a b = intersectF (sortNub a) (sortNub b)
 
@@ -52,11 +48,17 @@ intersectF (a:s) (b:t)
  | a > b = b:(intersectF (a:s) t)
  | a == b = a:(intersectF s t)
 
-subLists :: Ord a => Int -> [a] -> [[a]]
-subLists n a
+subsets :: Ord a => Int -> [a] -> [[a]]
+subsets n a
  | n == 0 = [[]]
  | null a = []
- | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subLists (n - 1) a))
+ | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
+
+subset :: Ord a => [Int] -> [a] -> [a]
+subset p a = undefined
+
+generate :: Ord a => (a -> [a]) -> a -> [a]
+generate f a = undefined
 
 -- return all linear spaces of given dimension and boundaries.
 allSpaces :: RandomGen g => g -> Int -> Int -> [Space]
@@ -81,41 +83,41 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF 0 s todo done
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: RandomGen g => g -> Int -> Int -> Planes
+randomPlanes :: RandomGen g => g -> Int -> Int -> [Plane]
 -- TODO: tweak until all vertices are in -1.0 to 1.0 hypsquare on/in base
 -- TODO: tweak coincidences found by trying all n+1 tuples
-randomPlanes g n m = Matrix.matrix m (take (n*m) (Random.randomRs (0.0,1.0) g))
+randomPlanes g n m = take m [(take n (Random.randomRs (0.0,1.0) g))..]
 
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
 -- each column specifies points that a plane passes through
-intersectPlanes :: Planes -> Maybe Point
+intersectPlanes :: [Plane] -> Maybe Point
 intersectPlanes w = let
  dim = rows w
  square = Matrix.matrix dim [intersectPlanesF w dim a b | a <- [0..dim-1], b <- [0..dim-1]]
  rhs = Matrix.matrix 1 [intersectPlanesG w dim a | a <- [0..dim-1]]
- --- TODO: return Nothing if not every dim+1 tuple solves to same point
- in Matrix.linearSolve square rhs
+ -- TODO: return Nothing if not every dim-tuple solves to same point
+ in Matrix.toColumns (Matrix.linearSolve square rhs)
 
-intersectPlanesF :: Planes -> Int -> Int -> Int -> Double
+intersectPlanesF :: [Plane] -> Int -> Int -> Int -> Double
 intersectPlanesF w d a b
  | b == d = -1.0
- | otherwise = (Matrix.atIndex w (b,a)) - (Matrix.atInt w (d,a))
+ | otherwise = (Matrix.atIndex (w !! a) b) - (Matrix.atIndex (w !! a) d)
 
-intersectPlanesG :: Planes -> Int -> Int -> Double
-intersectPlanesG w d a = negate (Matrix.atInt w (d,a))
+intersectPlanesG :: [Plane] -> Int -> Int -> Double
+intersectPlanesG w d a = negate (Matrix.atIndex (w !! a) d)
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
  dim = rows w
- planeV = Matrix.flatten (w Matrix.?? (Matrix.DropLast 1, Matrix.All))
- pointV = Matrix.flatten (v Matrix.?? (Matrix.DropLast 1, Matrix.All))
- planeS = Matrix.atIndex w (dim,0)
- pointS = Matrix.atIndex v (dim,0)
- in pointS > ((dot planeV pointV) + planeS)
+ planeV = Matrix.subVector 0 (dim-1) w
+ pointV = Matrix.subVector 0 (dim-1) v
+ planeS = Matrix.atIndex w (dim-1)
+ pointS = Matrix.atIndex v (dim-1)
+ in pointS > ((Matrix.dot planeV pointV) + planeS)
 
 -- return space with sidednesses determined by given planes
-spaceFromPlanes :: Planes -> Space
+spaceFromPlanes :: [Plane] -> Space
 spaceFromPlanes p
  | numPlanes == 0 = []
  | otherwise = let
@@ -124,47 +126,46 @@ spaceFromPlanes p
  headSpace = spaceFromPlanes headPlanes
  -- find (n-1)-tuples of recursed planes
  colTuples :: [[Int]]
- colTuples = subLists planeDims headIdxs
+ colTuples = subsets planeDims headIdxs
  -- find union of sub-regions of super-regions containing intersections
  headRegs :: [Region]
  headRegs = sortNub (concat (map (spaceFromPlanesF headSpace headPlanes tailPlane headIdxs) colTuples))
  -- return space with found regions divided by new boundary
  in divideSpace headRegs headSpace where
- numPlanes = Matrix.cols p
- headPlanes = p Matrix.?? (Matrix.All, Matrix.DropLast 1)
- tailPlane = p Matrix.?? (Matrix.All, Matrix.Drop (numPlanes - 1))
+ numPlanes = length p
+ headPlanes = p take (numPlanes - 1)
+ tailPlane = p drop (numPlanes - 1)
  headIdxs = [0 .. (numPlanes - 2)]
- spaceDims = Matrix.rows p
+ spaceDims = size tailPlane
  planeDims = spaceDims - 1
 
  -- find sub-regions of super-region containing indicated intersection point
-spaceFromPlanesF :: Space -> Matrix -> Matrix -> [Int] -> [Int] -> [Region]
+spaceFromPlanesF :: Space -> [Plane] -> Plane -> [Int] -> [Int] -> [Region]
 spaceFromPlanesF headSpace headPlanes tailPlane headIdxs tupl = let
  cols = filter (\j -> elem j tupl) headIdxs
  subS = foldl (\s j -> subSpace j s) headSpace tupl
- subP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs cols))
- indP = headPlanes Matrix.?? (Matrix.All, Matrix.Pos (Matrix.idxs tupl))
- intP = intersectPlanes (indP Matrix.||| tailPlane)
+ subP = subset cols headPlanes
+ indP = subset tupl headPlanes
+ intP = intersectPlanes (indP ++ tailPlane)
  in sort (takeRegions [regionOfPoint point subP subS] subS headSpace)
 
 -- return region of point, assuming planes and space are homeomorphic
-regionOfPoint :: Point -> Planes -> Space -> Region
+regionOfPoint :: Point -> [Plane] -> Space -> Region
 regionOfPoint v w s = let
- dim = rows w
- num = cols w
- planes = Matrix.toColumns w
+ dim = Matrix.size v
+ num = length w
  -- for each boundary/plane, choose n others to find vertex
  vertices :: [Point]
  vertices = map (regionOfPointF w) [0..num-1]
  -- find sides of vertex wrt boundaries/planes
  sidesV :: [Bool]
- sidesV = map (\(v,w) -> isAbovePlane v w) (zip vertices planes)
+ sidesV = map (\(v,w) -> isAbovePlane v w) (zip vertices p)
  -- find sides of point wrt planes
  sidesP :: [Bool]
- sidesP = map (\w -> isAbovePlane v w)
+ sidesP = map (\w -> isAbovePlane v w) w
  -- use transitivity to complete sides of point wrt boundaries
  sidesR :: [Sidedness]
- sidesR = map (\(a,b) -> cast (a == b))
+ sidesR = map (\(a,b) -> a == b) (zip sidesV sidesP)
  -- return regionOfSides
  in regionOfSides sidesR s
 
@@ -238,7 +239,7 @@ migrateSpaceF b r (a,s)
 
 -- return per boundary side of region
 sidesOfRegion :: Region -> Space -> [Sidedness]
-sidesOfRegion r s = map (\a -> cast (member r (a !! 1))) s
+sidesOfRegion r s = map (\a -> member r (a !! 1)) s
 
 -- return region from boundary to pair Int map
 regionOfSides :: [Sidedness] -> Space -> Region
@@ -249,7 +250,7 @@ regionOfSidesExists :: [Sidedness] -> Space -> Bool
 regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 
 regionOfSidesF :: [Sidedness] -> Space -> [Region]
-regionOfSidesF r s = foldl (\a b -> intersect a ((s !! b) !! (r !! b))) (regionsOfSpace s) [0..(length r)-1]
+regionOfSidesF r s = foldl (\a (r,s) -> intersect a (s !! r)) (regionsOfSpace s) (zip r s)
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
@@ -268,7 +269,7 @@ attachedBoundariesF r s b = regionOfSideExists (oppositeOfSides [b] r) s
 
 -- return vertices attached to region
 attachedVertices :: Region -> Space -> Dimension -> [[Boundary]]
-attachedVertices r s d = filter (attachedVerticesF (sidesOfRegion r s) s) (subLists d (boundariesOfSpace s))
+attachedVertices r s d = filter (attachedVerticesF (sidesOfRegion r s) s) (subsets d (boundariesOfSpace s))
 
 attachedVerticesF :: [Sidedness] -> [Boundary] -> Bool
 attachedVerticesF r s b = regionOfSideExists (oppositeOfSides b r) s
@@ -303,7 +304,7 @@ isLinear :: Int -> Space -> Bool
 isLinear n s = let
  boundaries = [0..(length s)-1]
  sizes = boundaries
- subsets = foldl (\a b -> a ++ (subLists b boundaries)) [] sizes
+ subsets = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
  in foldl (\a b -> a && (isLinearF n s b)) True subsets
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
@@ -327,7 +328,7 @@ takeRegions r s t p = undefined
  -- add each permutation of sidednesses for boundaries not in first space, and add region to result
 
 -- return planes with sidednesses as specified by given dimension and space
-planesFromSpace :: Int -> Space -> Planes
+planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s = undefined
 -- recurse with one fewer boundary
 -- find vertices, interpret as coplanes
