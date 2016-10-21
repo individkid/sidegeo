@@ -38,15 +38,42 @@ remove a b = filter (\c -> c \= a) b
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) ++ (b : (drop (a+1) c))
 
--- TODO: change to infix like ++ and \\
-intersect :: Ord a => [a] -> [a] -> [a]
-intersect a b = intersectF (sortNub a) (sortNub b)
+-- ++ and \\ are from Data.List
+(++) :: Ord a => [a] -> [a] -> [a]
+a ++ b = intersectF (sortNub a) (sortNub b)
+
+unionF :: Ord a => [a] -> [a] -> [a]
+unionF (a:s) (b:t)
+ | a < b = a:(unionF s (b:t))
+ | a == b = a:(unionF s t)
+ | a > b = b:(unionF (a:s) t)
+
+(\\) :: Ord a => [a] -> [a] -> [a]
+a \\ b = intersectF (sortNub a) (sortNub b)
+
+differenceF :: Ord a => [a] -> [a] -> [a]
+differenceF (a:s) (b:t)
+ | a < b = a:(differenceF s (b:t))
+ | a == b = (differenceF s t)
+ | a > b = (differenceF (a:s) t)
+
+(+\) :: Ord a => [a] -> [a] -> [a]
+a +\ b = intersectF (sortNub a) (sortNub b)
 
 intersectF :: Ord a => [a] -> [a] -> [a]
 intersectF (a:s) (b:t)
- | a < b = a:(intersectF s (b:t))
- | a > b = b:(intersectF (a:s) t)
+ | a < b = (intersectF s (b:t))
  | a == b = a:(intersectF s t)
+ | a > b = (intersectF (a:s) t)
+
+(\+) :: Ord a => [a] -> [a] -> [a]
+a \+ b = symdiffF (sortNub a) (sortNub b)
+
+symdiffF :: Ord a => [a] -> [a] -> [a]
+symdiffF (a:s) (b:t)
+ | a < b = a:(symdiffF s (b:t))
+ | a == b = (symdiffF s t)
+ | a > b = b:(symdiffF (a:s) t)
 
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets n a
@@ -55,7 +82,7 @@ subsets n a
  | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
 
 subset :: Ord a => [Int] -> [a] -> [a]
-subset p a = undefined
+subset p a = sortNub (foldl (\b p -> (a !! p) : b) [] p)
 
 generate :: Ord a => (a -> [a]) -> a -> [a]
 generate f a = undefined
@@ -86,7 +113,7 @@ allSpacesH (s:todo) done = allSpacesF 0 s todo done
 randomPlanes :: RandomGen g => g -> Int -> Int -> [Plane]
 -- TODO: tweak until all vertices are in -1.0 to 1.0 hypsquare on/in base
 -- TODO: tweak coincidences found by trying all n+1 tuples
-randomPlanes g n m = take m [(take n (Random.randomRs (0.0,1.0) g))..]
+randomPlanes g n m = take m [(take n (Random.randomRs (-1.0,1.0) g))..]
 
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
@@ -250,7 +277,7 @@ regionOfSidesExists :: [Sidedness] -> Space -> Bool
 regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 
 regionOfSidesF :: [Sidedness] -> Space -> [Region]
-regionOfSidesF r s = foldl (\a (r,s) -> intersect a (s !! r)) (regionsOfSpace s) (zip r s)
+regionOfSidesF r s = foldl (\a (r,s) -> a +\ (s !! r)) (regionsOfSpace s) (zip r s)
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
@@ -262,32 +289,23 @@ regionsOfSpace s = sortNub (concat (concat s))
 
 -- return boundaries attached to region
 attachedBoundaries :: Region -> Space -> [Boundary]
-attachedBoundaries r s = filter (attachedBoundariesF (sidesOfRegion r s) s) (boundariesOfSpace s)
-
-attachedBoundariesF :: [Sidedness] -> Boundary -> Bool
-attachedBoundariesF r s b = regionOfSideExists (oppositeOfSides [b] r) s
+attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r) (boundariesOfSpace s)
 
 -- return vertices attached to region
 attachedVertices :: Region -> Space -> Dimension -> [[Boundary]]
-attachedVertices r s d = filter (attachedVerticesF (sidesOfRegion r s) s) (subsets d (boundariesOfSpace s))
-
-attachedVerticesF :: [Sidedness] -> [Boundary] -> Bool
-attachedVerticesF r s b = regionOfSideExists (oppositeOfSides b r) s
+attachedVertices r s d = filter (\b -> oppositeOfRegionExists b r) (subsets d (boundariesOfSpace s))
 
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
-attachedRegions b s = filter (attachedRegionsF b s) (regionsOfSpace s)
-
-attachedRegionsF :: [Boundary] -> Space -> Region -> Bool
-attachedRegionsF b s r = regionOfSidesExists (oppositeOfSides b (sidesOfRegion r s)) s
+attachedRegions b s = filter (\r -> oppositeOfRegionExists b r) (regionsOfSpace s)
 
 -- return neighbor region of given region wrt given boundary
-oppositeOfRegion :: Boundary -> Region -> Space -> Region
-oppositeOfRegion m r s = regionOfSides (oppositeOfSides [m] (sidesOfRegion r s)) s
+oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
+oppositeOfRegion b r s = regionOfSides (oppositeOfSides b (sidesOfRegion r s)) s
 
 -- return whether neighbor region exists
-oppositeOfRegionExists :: Boundary -> Region -> Space -> Bool
-oppositeOfRegionExists m r s = regionOfSidesExists (oppositeOfSides [m] (sidesOfRegion r s)) s
+oppositeOfRegionExists :: [Boundary] -> Region -> Space -> Bool
+oppositeOfRegionExists b r s = regionOfSidesExists (oppositeOfSides b (sidesOfRegion r s)) s
 
 -- return sidedness with boundaries reversed
 oppositeOfSides :: [Boundary] -> [Sidedness] -> [Sidedness]
