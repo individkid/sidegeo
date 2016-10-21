@@ -15,6 +15,14 @@ type Space = [FullSpace] -- assume equal covers
 type Plane = Matrix.Vector Double -- single column of distances above base
 type Point = Matrix.Vector Double -- single column of coordinates
 
+cast :: Bool -> Int
+cast False = 0
+cast True = 1
+
+uncast :: Int -> Bool
+uncast 0 = False
+uncast 1 = True
+
 sortNub :: Ord a => [a] -> [a]
 sortNub a = f (sort a)
 
@@ -85,7 +93,14 @@ subset :: Ord a => [Int] -> [a] -> [a]
 subset p a = sortNub (foldl (\b p -> (a !! p) : b) [] p)
 
 generate :: Ord a => (a -> [a]) -> a -> [a]
-generate f a = undefined
+generate f a = generateF f a [] []
+
+generateF :: Ord a => (a -> [a]) -> a -> [a] -> [a] -> [a]
+generateF f a todo done
+ | ((length newTodo) == 0) = newDone
+ | otherwise = generateF f (head newTodo) (tail newTodo) newDone where
+ newTodo = ((f a) \\ (todo ++ done)) ++ todo
+ newDone = [a] ++ done
 
 -- return all linear spaces of given dimension and boundaries.
 allSpaces :: RandomGen g => g -> Int -> Int -> [Space]
@@ -336,14 +351,27 @@ isLinearF d s b = let
 
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space
-takeRegions :: [Region] -> Space -> Space -> [(Int,Int)] -> [Region]
-takeRegions r s t p = undefined
- -- find boundaries in first space that are not in second
- -- find boundaries in second space thate are not in first
- -- find permutation for boundaries in both spaces
- -- for each given region, find sidednesses, remove sidednesses for boundaries not in second space
- -- permute sidednesses for boundaries in both spaces
- -- add each permutation of sidednesses for boundaries not in first space, and add region to result
+takeRegions :: [Boundary] -> Space -> [Boundary] -> Space -> [Region] -> [Region]
+takeRegions p s q t r = let
+ -- for each given region, find sides in first space
+ firstSides = map (\r -> sidesOfRegion r s) r
+ -- for each boundary in second space, find corresponding boundary in first space or Nothing
+ secondToFirst = map (\q -> elemIndex q p) q
+ -- for each given region, for each boundary in second space, find sidedness or Nothing by composition
+ secondSides = map (\r -> map (\b -> fmap (\b -> r !! b) b) secondToFirst) firstSides
+ -- for each boundary in second space, count number of Nothing
+ count = foldl (\a b -> a + (cast (b == Nothing))) 0 secondToFirst
+ -- find sidedness permutations of same length as indices
+ permutes = map (\a -> map (\b -> uncast ((a >> b) & 1)) [0..count-1]) [0..(1<<count)-1]
+ -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
+ fixedSides = map (\(a,b) -> takeRegionsF a b) [(a,b) | a -> secondSides, b -> permutes]
+ -- map sides to regions
+ in map (\r -> regionOfSides r t) fixedSides
+
+takeRegionsF :: [Maybe Sidedness] -> [Sidednesss] -> [Sidedness]
+takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
+takeRegionsF (Nothing:b) (c:d) = c:(takeRegionsF b d)
+takeRegionsF [] [] = []
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
@@ -367,5 +395,5 @@ sectionSpace :: Boundary -> Space -> Space
 sectionSpace m s = undefined
 
 -- return superspace with given spaces as subspaces
-superSpace :: Space -> Space -> [(Int,Int)] -> Space
-superSpace s t p = undefined
+superSpace :: [Boundary] -> Space -> [Boundary] -> Space -> [Boundary] -> Space
+superSpace p s q t r = undefined
