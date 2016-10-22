@@ -36,9 +36,9 @@ member a b = (find a b) \= Nothing
 insert :: Ord a => a -> [a] -> [a]
 insert a b = sortNub (a:b)
 
-choose :: [a] -> a
-choose [] = error "cannot choose from null"
-choose (h:t) = h
+choose :: [a] -> Maybe a
+choose [] = Nothing
+choose (h:t) = Just h
 
 remove :: Eq a => a -> [a] -> [a]
 remove a b = filter (\c -> c \= a) b
@@ -46,9 +46,12 @@ remove a b = filter (\c -> c \= a) b
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) ++ (b : (drop (a+1) c))
 
+holes :: Ord a => Int -> [a] -> [a]
+holes n a = take n ([0..(length a)+n-1] \\ a)
+
 -- ++ and \\ are from Data.List
 (++) :: Ord a => [a] -> [a] -> [a]
-a ++ b = intersectF (sortNub a) (sortNub b)
+a ++ b = unionF (sortNub a) (sortNub b)
 
 unionF :: Ord a => [a] -> [a] -> [a]
 unionF (a:s) (b:t)
@@ -57,7 +60,7 @@ unionF (a:s) (b:t)
  | a > b = b:(unionF (a:s) t)
 
 (\\) :: Ord a => [a] -> [a] -> [a]
-a \\ b = intersectF (sortNub a) (sortNub b)
+a \\ b =differenceF (sortNub a) (sortNub b)
 
 differenceF :: Ord a => [a] -> [a] -> [a]
 differenceF (a:s) (b:t)
@@ -83,15 +86,18 @@ symdiffF (a:s) (b:t)
  | a == b = (symdiffF s t)
  | a > b = b:(symdiffF (a:s) t)
 
+-- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets n a
  | n == 0 = [[]]
  | null a = []
  | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
 
+-- those indexed by list of indices
 subset :: Ord a => [Int] -> [a] -> [a]
 subset p a = sortNub (foldl (\b p -> (a !! p) : b) [] p)
 
+-- all connected by given function to given start
 generate :: Ord a => (a -> [a]) -> a -> [a]
 generate f a = generateF f a [] []
 
@@ -256,7 +262,11 @@ minEquivWithPermsF3 q s = map (filter (\a -> a !=s )) q
 
 -- return space with regions permuted such that result is smallest possible
 minEquiv :: Space -> Space
-minEquiv s = minEquivWithPerms [] s 0 (regionsOfSpace s) []
+minEquiv s = minEquivWithPerms [] (sortSpace s) 0 (regionsOfSpace s) []
+
+-- return sorted equivalent
+sortSpace :: Space -> Space
+sortSpace s = sort (map sort (map (map sort) s))
 
 -- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
 canMigrate :: Region -> Space -> Bool
@@ -285,7 +295,7 @@ sidesOfRegion r s = map (\a -> member r (a !! 1)) s
 
 -- return region from boundary to pair Int map
 regionOfSides :: [Sidedness] -> Space -> Region
-regionOfSides r s = choose (regionOfSidesF r s)
+regionOfSides r s = (regionOfSidesF r s) !! 0
 
 -- return whether region with given side map exists in space
 regionOfSidesExists :: [Sidedness] -> Space -> Bool
@@ -306,9 +316,9 @@ regionsOfSpace s = sortNub (concat (concat s))
 attachedBoundaries :: Region -> Space -> [Boundary]
 attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r) (boundariesOfSpace s)
 
--- return vertices attached to region
-attachedVertices :: Region -> Space -> Dimension -> [[Boundary]]
-attachedVertices r s d = filter (\b -> oppositeOfRegionExists b r) (subsets d (boundariesOfSpace s))
+-- return facets attached to region
+attachedFacets Region -> Space -> Dimension -> [[Boundary]]
+attachedFacets r s d = filter (\b -> oppositeOfRegionExists b r) (subsets d (boundariesOfSpace s))
 
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
@@ -321,6 +331,18 @@ oppositeOfRegion b r s = regionOfSides (oppositeOfSides b (sidesOfRegion r s)) s
 -- return whether neighbor region exists
 oppositeOfRegionExists :: [Boundary] -> Region -> Space -> Bool
 oppositeOfRegionExists b r s = regionOfSidesExists (oppositeOfSides b (sidesOfRegion r s)) s
+
+-- return shell of regions around given region
+neighborsOfRegion :: Region -> Space -> [Region]
+neighborsOfRegion r s = map (\b -> oppositeOfRegion [b] r s) (attachedBoundaries r s)
+
+-- return corresponding outside region
+complementOfRegion :: Region -> Space -> Region
+complementOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
+
+-- return whether the region is an outside region
+complementOfRegionExists :: Region -> Space -> Bool
+complementOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
 -- return sidedness with boundaries reversed
 oppositeOfSides :: [Boundary] -> [Sidedness] -> [Sidedness]
@@ -373,6 +395,24 @@ takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
 takeRegionsF (Nothing:b) (c:d) = c:(takeRegionsF b d)
 takeRegionsF [] [] = []
 
+-- return space with given regions divided by new boundary
+divideSpace :: [Region] -> Space -> Space
+divideSpace r s = let
+ regions = regionsOfSpace s
+ complement = regions \\ r
+ halfspace = divideSpaceF (choose complement) complement 
+ duplicates = holes (length r) regions
+ mapping = zip r duplicates
+ withDups = map (map (divideSpaceG mapping)) s
+ in withDups ++ [(halfspace ++ duplicate),(regions \\ halfspace)]
+
+divideSpaceF :: Maybe Region -> [Region] -> Space -> [Region]
+divideSpaceF (Just r) c s = generate (\a -> c +\ (neighborsOfRegion a s)) r
+divideSpaceF Nothing _ _ = []
+
+divideSpaceG :: [(Region,Region)] -> [Region] -> [Region]
+divideSpaceG m r = r ++ (image ((domain m) +\ r) m)
+
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s = undefined
@@ -381,10 +421,6 @@ planesFromSpace n s = undefined
 -- add simplex containing all covertices
 -- find inside coregion corresponding to regions divided by boundary to add
 -- find average of corners of coregion, interpret as plane to add
-
--- return space with given regions divided by new boundary
-divideSpace :: [Region] -> Space -> Space
-divideSpace r s = undefined
 
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
