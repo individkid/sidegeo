@@ -36,9 +36,9 @@ member a b = (find a b) \= Nothing
 insert :: Ord a => a -> [a] -> [a]
 insert a b = sortNub (a:b)
 
-choose :: [a] -> Maybe a
-choose [] = Nothing
-choose (h:t) = Just h
+choose :: RandomGen g => g -> [a] -> Maybe a
+choose g [] = (Nothing, g)
+choose g a = let (i,h) = Random.randomR (0,(length a)-1) g in (Just (a !! i), h)
 
 remove :: Eq a => a -> [a] -> [a]
 remove a b = filter (\c -> c \= a) b
@@ -48,6 +48,18 @@ replace a b c = (take a c) ++ (b : (drop (a+1) c))
 
 holes :: Ord a => Int -> [a] -> [a]
 holes n a = take n ([0..(length a)+n-1] \\ a)
+
+image :: Ord a => Ord b => [a] -> [(a,b)] -> [b]
+image a m = map (\(x,y) -> y) (filter (\(x,y) -> member x a) m)
+
+inverse :: Ord a => Ord b => [b] -> [(a,b)] -> [a]
+inverse b m = map (\(x,y) -> x) (filter (\(x,y) -> member y b) m)
+
+domain :: Ord a => Ord b => [(a,b)] -> [a]
+domain m = map (\(x,y) -> x) m
+
+range :: Ord a => Ord b => [(a,b)] -> [b]
+range m = map (\(x,y) -> y) m
 
 -- ++ and \\ are from Data.List
 (++) :: Ord a => [a] -> [a] -> [a]
@@ -108,9 +120,14 @@ generateF f a todo done
  newTodo = ((f a) \\ (todo ++ done)) ++ todo
  newDone = [a] ++ done
 
+catalyze :: (a -> (b,a)) -> a -> Int -> ([b], a)
+catalyze f a n = foldl (\(b,c) _ -> let (d,e) = f c in (d:b,e)) ([],a) [0..n-1]
+
 -- return all linear spaces of given dimension and boundaries.
-allSpaces :: RandomGen g => g -> Int -> Int -> [Space]
-allSpaces g n m = allSpacesF 0 (minEquiv (spaceFromPlanes (randomPlanes g n m)) [] []
+allSpaces :: RandomGen g => g -> Int -> Int -> ([Space], g)
+allSpaces g n m = let
+ (p,h) = randomPlanes g n m
+ in (allSpacesF 0 (minEquiv (spaceFromPlanes p [] [], h)
 
 -- migrate all possible from current space, and go on to next todo
 allSpacesF :: Region -> Space -> [Space] -> [Space] -> [Space]
@@ -131,10 +148,12 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF 0 s todo done
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: RandomGen g => g -> Int -> Int -> [Plane]
+randomPlanes :: RandomGen g => g -> Int -> Int -> ([Plane], g)
 -- TODO: tweak until all vertices are in -1.0 to 1.0 hypsquare on/in base
 -- TODO: tweak coincidences found by trying all n+1 tuples
-randomPlanes g n m = take m [(take n (Random.randomRs (-1.0,1.0) g))..]
+randomPlanes g n m = let
+ (a,b) = catalyze (\g -> Random.randomR (-1.0,1.0) g) g (n*m)
+ in (Matrix.toColumns (Matrix.matrix m a), b)
 
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
@@ -376,16 +395,22 @@ isLinearF d s b = let
 takeRegions :: [Boundary] -> Space -> [Boundary] -> Space -> [Region] -> [Region]
 takeRegions p s q t r = let
  -- for each given region, find sides in first space
+ firstSides :: [[Sidedness]]
  firstSides = map (\r -> sidesOfRegion r s) r
  -- for each boundary in second space, find corresponding boundary in first space or Nothing
+ secondToFirst :: [Maybe Int]
  secondToFirst = map (\q -> elemIndex q p) q
  -- for each given region, for each boundary in second space, find sidedness or Nothing by composition
+ secondSides :: [Maybe [Sidedness]]
  secondSides = map (\r -> map (\b -> fmap (\b -> r !! b) b) secondToFirst) firstSides
  -- for each boundary in second space, count number of Nothing
+ count :: Int
  count = foldl (\a b -> a + (cast (b == Nothing))) 0 secondToFirst
  -- find sidedness permutations of same length as indices
+ permutes :: [[Sidedness]]
  permutes = map (\a -> map (\b -> uncast ((a >> b) & 1)) [0..count-1]) [0..(1<<count)-1]
  -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
+ fixedSides :: [[Sidedness]]
  fixedSides = map (\(a,b) -> takeRegionsF a b) [(a,b) | a -> secondSides, b -> permutes]
  -- map sides to regions
  in map (\r -> regionOfSides r t) fixedSides
@@ -400,15 +425,16 @@ divideSpace :: [Region] -> Space -> Space
 divideSpace r s = let
  regions = regionsOfSpace s
  complement = regions \\ r
- halfspace = divideSpaceF (choose complement) complement 
+ halfspace = divideSpaceF complement 
  duplicates = holes (length r) regions
  mapping = zip r duplicates
  withDups = map (map (divideSpaceG mapping)) s
  in withDups ++ [(halfspace ++ duplicate),(regions \\ halfspace)]
 
-divideSpaceF :: Maybe Region -> [Region] -> Space -> [Region]
-divideSpaceF (Just r) c s = generate (\a -> c +\ (neighborsOfRegion a s)) r
-divideSpaceF Nothing _ _ = []
+divideSpaceF :: [Region] -> Space -> [Region]
+divideSpaceF c s
+ | (length c) > 0 = generate (\a -> c +\ (neighborsOfRegion a s)) (head c)
+ | otherwise = []
 
 divideSpaceG :: [(Region,Region)] -> [Region] -> [Region]
 divideSpaceG m r = r ++ (image ((domain m) +\ r) m)
