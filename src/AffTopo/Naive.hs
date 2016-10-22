@@ -12,6 +12,7 @@ type Sidedness = Bool -- index into FullSpace
 type HalfSpace = [Region] -- assume proper set
 type FullSpace = [HalfSpace] -- assume disjoint covering pair
 type Space = [FullSpace] -- assume equal covers
+type SubSpace = [(Boundary,FullSpace)]
 type Plane = Matrix.Vector Double -- single column of distances above base
 type Point = Matrix.Vector Double -- single column of coordinates
 
@@ -36,15 +37,15 @@ member a b = (find a b) \= Nothing
 insert :: Ord a => a -> [a] -> [a]
 insert a b = sortNub (a:b)
 
-choose :: RandomGen g => g -> [a] -> Maybe a
-choose g [] = (Nothing, g)
-choose g a = let (i,h) = Random.randomR (0,(length a)-1) g in (Just (a !! i), h)
-
 remove :: Eq a => a -> [a] -> [a]
 remove a b = filter (\c -> c \= a) b
 
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) ++ (b : (drop (a+1) c))
+
+choose :: RandomGen g => g -> [a] -> (Maybe a, g)
+choose g [] = (Nothing, g)
+choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in (Just (a !! b), h)
 
 holes :: Ord a => Int -> [a] -> [a]
 holes n a = take n ([0..(length a)+n-1] \\ a)
@@ -90,13 +91,13 @@ intersectF (a:s) (b:t)
  | a > b = (intersectF (a:s) t)
 
 (\+) :: Ord a => [a] -> [a] -> [a]
-a \+ b = symdiffF (sortNub a) (sortNub b)
+a \+ b = symmetricF (sortNub a) (sortNub b)
 
-symdiffF :: Ord a => [a] -> [a] -> [a]
-symdiffF (a:s) (b:t)
- | a < b = a:(symdiffF s (b:t))
- | a == b = (symdiffF s t)
- | a > b = b:(symdiffF (a:s) t)
+symmetricF :: Ord a => [a] -> [a] -> [a]
+symmetricF (a:s) (b:t)
+ | a < b = a:(symmetricF s (b:t))
+ | a == b = (symmetricF s t)
+ | a > b = b:(symmetricF (a:s) t)
 
 -- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
@@ -120,8 +121,8 @@ generateF f a todo done
  newTodo = ((f a) \\ (todo ++ done)) ++ todo
  newDone = [a] ++ done
 
-catalyze :: (a -> (b,a)) -> a -> Int -> ([b], a)
-catalyze f a n = foldl (\(b,c) _ -> let (d,e) = f c in (d:b,e)) ([],a) [0..n-1]
+catalyze :: (g -> (a,g)) -> g -> Int -> ([a],g)
+catalyze f g n = foldl (\(a,h) _ -> let (b,i) = f h in (b:a,i)) ([],g) [0..n-1]
 
 -- return all linear spaces of given dimension and boundaries.
 allSpaces :: RandomGen g => g -> Int -> Int -> ([Space], g)
@@ -149,10 +150,10 @@ allSpacesH (s:todo) done = allSpacesF 0 s todo done
 
 -- return given number of planes in given number of dimensions
 randomPlanes :: RandomGen g => g -> Int -> Int -> ([Plane], g)
--- TODO: tweak until all vertices are in -1.0 to 1.0 hypsquare on/in base
+-- TODO: tweak until all vertices are in -1.0 to 1.0 hypcube
 -- TODO: tweak coincidences found by trying all n+1 tuples
 randomPlanes g n m = let
- (a,b) = catalyze (\g -> Random.randomR (-1.0,1.0) g) g (n*m)
+ (a,b) = catalyze (\g -> Random.randomR (-100.0,100.0) g) g (n*m)
  in (Matrix.toColumns (Matrix.matrix m a), b)
 
 -- assume first rows are distances above points in base plane
@@ -392,14 +393,16 @@ isLinearF d s b = let
 
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space
-takeRegions :: [Boundary] -> Space -> [Boundary] -> Space -> [Region] -> [Region]
-takeRegions p s q t r = let
+takeRegions :: SubSpace -> SubSpace -> [Region] -> [Region]
+takeRegions s t r = let
+ (firstBoundaries,firstSpace) = unzip s
+ (secondBoundaries,secondSpace) = unzip t
  -- for each given region, find sides in first space
  firstSides :: [[Sidedness]]
- firstSides = map (\r -> sidesOfRegion r s) r
+ firstSides = map (\r -> sidesOfRegion r firstSpace) r
  -- for each boundary in second space, find corresponding boundary in first space or Nothing
  secondToFirst :: [Maybe Int]
- secondToFirst = map (\q -> elemIndex q p) q
+ secondToFirst = map (\a -> elemIndex a firstBoundaries) secondBoundaries
  -- for each given region, for each boundary in second space, find sidedness or Nothing by composition
  secondSides :: [Maybe [Sidedness]]
  secondSides = map (\r -> map (\b -> fmap (\b -> r !! b) b) secondToFirst) firstSides
@@ -413,7 +416,7 @@ takeRegions p s q t r = let
  fixedSides :: [[Sidedness]]
  fixedSides = map (\(a,b) -> takeRegionsF a b) [(a,b) | a -> secondSides, b -> permutes]
  -- map sides to regions
- in map (\r -> regionOfSides r t) fixedSides
+ in map (\r -> regionOfSides r secondSpace) fixedSides
 
 takeRegionsF :: [Maybe Sidedness] -> [Sidednesss] -> [Sidedness]
 takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
@@ -457,5 +460,5 @@ sectionSpace :: Boundary -> Space -> Space
 sectionSpace m s = undefined
 
 -- return superspace with given spaces as subspaces
-superSpace :: [Boundary] -> Space -> [Boundary] -> Space -> [Boundary] -> Space
+superSpace :: SubSpace -> SubSpace -> [Boundary] -> Space
 superSpace p s q t r = undefined
