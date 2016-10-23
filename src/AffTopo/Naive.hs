@@ -24,6 +24,17 @@ uncast :: Int -> Bool
 uncast 0 = False
 uncast 1 = True
 
+-- all sublists of given size
+subsets :: Ord a => Int -> [a] -> [[a]]
+subsets n a
+ | n == 0 = [[]]
+ | null a = []
+ | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
+
+-- those indexed by list of indices
+subset :: Ord a => [Int] -> [a] -> [a]
+subset p a = sortNub (foldl (\b p -> (a !! p) : b) [] p)
+
 sortNub :: Ord a => [a] -> [a]
 sortNub a = f (sort a)
 
@@ -43,12 +54,18 @@ remove a b = filter (\c -> c \= a) b
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) ++ (b : (drop (a+1) c))
 
-choose :: RandomGen g => g -> [a] -> (Maybe a, g)
-choose g [] = (Nothing, g)
-choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in (Just (a !! b), h)
+choose :: RandomGen g => g -> [a] -> Maybe (a, g)
+choose g [] = Nothing
+choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in Just ((a !! b), h)
 
 holes :: Ord a => Int -> [a] -> [a]
-holes n a = take n ([0..(length a)+n-1] \\ a)
+holes n a = take n ((indices (length a)+n) \\ a)
+
+indices :: Int -> [Int]
+indices n = [0..n-1]
+
+enumerate :: [a] -> [(Int,a)]
+enumerate a = zip (indices (length a)) a
 
 image :: Ord a => Ord b => [a] -> [(a,b)] -> [b]
 image a m = map (\(x,y) -> y) (filter (\(x,y) -> member x a) m)
@@ -99,17 +116,6 @@ symmetricF (a:s) (b:t)
  | a == b = (symmetricF s t)
  | a > b = b:(symmetricF (a:s) t)
 
--- all sublists of given size
-subsets :: Ord a => Int -> [a] -> [[a]]
-subsets n a
- | n == 0 = [[]]
- | null a = []
- | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
-
--- those indexed by list of indices
-subset :: Ord a => [Int] -> [a] -> [a]
-subset p a = sortNub (foldl (\b p -> (a !! p) : b) [] p)
-
 -- all connected by given function to given start
 generate :: Ord a => (a -> [a]) -> a -> [a]
 generate f a = generateF f a [] []
@@ -123,7 +129,7 @@ generateF f a todo done
 
 -- given number of firsts found by calling function on second
 catalyze :: (g -> (a,g)) -> g -> Int -> ([a],g)
-catalyze f g n = foldl (\(a,h) _ -> let (b,i) = f h in (b:a,i)) ([],g) [0..n-1]
+catalyze f g n = foldl (\(a,h) _ -> let (b,i) = f h in (b:a,i)) ([],g) (indices n)
 
 -- call function for new result until it returns Nothing
 tweak :: [(a -> Maybe a)] -> a -> Maybe a
@@ -169,14 +175,14 @@ randomPlanes g n m = let
 
 -- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
 randomPlanesF :: RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a) (subsets n [0..m-1]))
+randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a) (subsets n (indices m)))
 
 randomPlanesF0 :: RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesF0 g n a b = let
- c = fromJust (choose b)
+ (c,h) = fromJust (choose g b)
  d = Matrix.toList (a !! c)
  e = (d !! (n-1)) / 2.0
- in (replace c (Matrix.fromList (map (\x -> x - e) d)) a, g)
+ in (replace c (Matrix.fromList (map (\x -> x - e) d)) a, h)
 
 randomPlanesF1 :: Int -> [Planes] -> [Int] -> Bool
 randomPlanesF1 n a b = let
@@ -185,12 +191,13 @@ randomPlanesF1 n a b = let
 
 -- rerandomize some plane from some n tuple that does not intersect in Just
 randomPlanesG :: RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a) (subsets n [0..m-1]))
+randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a) (subsets n (indices m)))
 
 randomPlanesG0 :: RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesG0 g n a b = let
- (c,h) = catalyze (\g -> Random.randomR (-100.0,100.0) g) g n
- in (replace (fromJust (choose b)) (Matrix.fromList c) a, h)
+ (c,h) = fromJust (choose h b)
+ (d,i) = catalyze (\g -> Random.randomR (-100.0,100.0) g) g n
+ in (replace c (Matrix.fromList d) a, i)
 
 randomPlanesG1 :: Int -> [Planes] -> [Int] -> Bool
 randomPlanesG1 n a b = let
@@ -199,7 +206,7 @@ randomPlanesG1 n a b = let
 
 -- rerandomize some plane from some n+1 tuple that does intersect to Just
 randomPlanesH :: RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesH n m (a,g) = fmap (randomPlanesH0 g n a) (find (randomPlanesH1 n a) (subsets (n+1) [0..m-1]))
+randomPlanesH n m (a,g) = fmap (randomPlanesH0 g n a) (find (randomPlanesH1 n a) (subsets (n+1) (indices m)))
 
 randomPlanesH0 :: RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesH0 = randomPlangsG0
@@ -216,7 +223,7 @@ intersectPlanes :: Int -> [Plane] -> Maybe Point
 intersectPlanes n w = let
  first = intersectPlanesH n w
  -- return Nothing if not every n-tuple solves to same point
- points = map (\a -> intersectPlanesH n (subset a w)) (subsets [0..(length w)-1])
+ points = map (\a -> intersectPlanesH n (subset a w)) (subsets (indices (length w)))
  same = all (\a -> maybe (\b -> (dot first b) < 0.001) a False) points
  in if same then first else Nothing
 
@@ -230,17 +237,17 @@ intersectPlanesG w n a = negate (Matrix.atIndex (w !! a) d)
 
 intersectPlanesH :: Int -> [Plane] -> Maybe Point
 intersectPlanesH n w = let
- square = Matrix.matrix n [intersectPlanesF w n a b | a <- [0..n-1], b <- [0..n-1]]
- rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- [0..n-1]]
+ square = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
+ rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
  in Matrix.toColumns (Matrix.linearSolve square rhs)
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
- dim = rows w
- planeV = Matrix.subVector 0 (dim-1) w
- pointV = Matrix.subVector 0 (dim-1) v
+ dim = Matrix.size w
  planeS = Matrix.atIndex w (dim-1)
  pointS = Matrix.atIndex v (dim-1)
+ planeV = Matrix.fromList (map (\x -> x - planeS) (Matrix.toList (Matrix.subVector 0 (dim-1) w)))
+ pointV = Matrix.subVector 0 (dim-1) v
  in pointS > ((Matrix.dot planeV pointV) + planeS)
 
 -- return space with sidednesses determined by given planes
@@ -259,10 +266,10 @@ spaceFromPlanes n p
  headRegs = sortNub (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
  -- return space with found regions divided by new boundary
  in divideSpace headRegs headSpace where
- numPlanes = length p
- headPlanes = p take (numPlanes - 1)
- tailPlane = p drop (numPlanes - 1)
- headIdxs = [0 .. (numPlanes - 2)]
+ numPlanes = (length p) -1
+ headPlanes = p take numPlanes
+ tailPlane = p drop numPlanes 
+ headIdxs = (indices numPlanes)
  spaceDims = size tailPlane
  planeDims = spaceDims - 1
 
@@ -283,10 +290,10 @@ regionOfPoint v w s = let
  num = length w
  -- for each boundary/plane, choose n others to find vertex
  vertices :: [Point]
- vertices = map (regionOfPointF w) [0..num-1]
+ vertices = map (regionOfPointF w) (indices num)
  -- find sides of vertex wrt boundaries/planes
  sidesV :: [Bool]
- sidesV = map (\(v,w) -> isAbovePlane v w) (zip vertices p)
+ sidesV = map (\(v,w) -> isAbovePlane v w) (zip vertices w)
  -- find sides of point wrt planes
  sidesP :: [Bool]
  sidesP = map (\w -> isAbovePlane v w) w
@@ -360,7 +367,7 @@ canMigrate r s = let
 
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
-migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (zip [0..(length s)-1] s)
+migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
 
 migrateSpaceF :: [Boundary] -> Region -> (Boundary,Fullspace) -> FullSpace
 migrateSpaceF b r (a,s)
@@ -385,7 +392,7 @@ regionOfSidesF r s = foldl (\a (r,s) -> a +\ (s !! r)) (regionsOfSpace s) (zip r
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
-boundariesOfSpace s = [0..((length s)-1)]
+boundariesOfSpace s = indices (length s)
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -436,7 +443,7 @@ defineLinear n m
 -- return whether all subspaces have correct number of regions
 isLinear :: Int -> Space -> Bool
 isLinear n s = let
- boundaries = [0..(length s)-1]
+ boundaries = boundariesOfSpace s
  sizes = boundaries
  subsets = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
  in foldl (\a b -> a && (isLinearF n s b)) True subsets
@@ -444,7 +451,7 @@ isLinear n s = let
 isLinearF :: Int -> Space -> [Boundary] -> Bool
 isLinearF d s b = let
  subset = sortNub b
- fixed = map (\(a,b) -> b - a) (zip [0..(length subset)-1] subset)
+ fixed = map (\(a,b) -> b - a) (enumerate subset)
  subspace = foldl (\a b -> subSpace b a) s fixed
  regions = regionsOfSpace subspace
  boundaries = boundariesOfSpace subspace
@@ -470,7 +477,7 @@ takeRegions s t r = let
  count = foldl (\a b -> a + (cast (b == Nothing))) 0 secondToFirst
  -- find sidedness permutations of same length as indices
  permutes :: [[Sidedness]]
- permutes = map (\a -> map (\b -> uncast ((a >> b) & 1)) [0..count-1]) [0..(1<<count)-1]
+ permutes = map (\a -> map (\b -> uncast ((a >> b) & 1)) (indices count)) (indices (1<<count))
  -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
  fixedSides :: [[Sidedness]]
  fixedSides = map (\(a,b) -> takeRegionsF a b) [(a,b) | a -> secondSides, b -> permutes]
