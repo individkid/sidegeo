@@ -3,7 +3,7 @@
 
 name:                sidegeo
 version:             0.1.0.0
-synopsis:            sidedness geometry
+synopsis:            sidedness geometry aka affine topology
 description:         This was inspired by a desire to model all tetrahedron
                      overlaps. For that I needed to describe the convexity
                      of polytopes. More fundamentally, I needed to represent
@@ -29,53 +29,7 @@ library
   ghc-options:         -Wall
   build-depends:       base >=4.7 && <5,
                        containers,
-                       hmatrix
+                       hmatrix,
+                       random
   hs-source-dirs:      src
-  exposed-modules:     SideGeo.Space
-  other-modules:       SideGeo.Container,
-                       SideGeo.Lambda,
-                       SideGeo.Types,
-                       SideGeo.Implicit1,
-                       SideGeo.Deduce,
-                       SideGeo.Induce,
-                       SideGeo.Implicit2,
-                       SideGeo.Equivalent,
-                       SideGeo.Kernel,
-                       SideGeo.Polytope,
-                       SideGeo.Implicit3,
-                       SideGeo.Convert,
-                       SideGeo.Implicit4
-
-executable implicit
-  default-language:    Haskell2010
-  ghc-options:         -Wall
-  build-depends:       base >=4.7 && <5,
-                       text,
-                       regex-posix,
-                       hood
-  hs-source-dirs:      src
-  main-is:             Implicit/Main.hs
-  other-modules:       Implicit.Implicit
-
-executable sidegeo
-  default-language:    Haskell2010
-  ghc-options:         -Wall
-  build-depends:       base >=4.7 && <5,
-                       containers,
-                       hmatrix
-  hs-source-dirs:      src
-  main-is:             SideGeo/Main.hs
-  other-modules:       SideGeo.Container,
-                       SideGeo.Lambda,
-                       SideGeo.Types,
-                       SideGeo.Implicit1,
-                       SideGeo.Deduce,
-                       SideGeo.Induce,
-                       SideGeo.Implicit2,
-                       SideGeo.Equivalent,
-                       SideGeo.Kernel,
-                       SideGeo.Polytope,
-                       SideGeo.Implicit3,
-                       SideGeo.Convert,
-                       SideGeo.Implicit4,
-                       SideGeo.Space
+  exposed-modules:     AffTopo.Naive
