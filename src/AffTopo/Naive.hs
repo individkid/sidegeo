@@ -1,3 +1,4 @@
+
 module AffTopo.Naive where
 
 -- naive in the sense of just one representation
@@ -19,13 +20,17 @@ type SubSpace = [(Boundary,FullSpace)]
 type Plane = Matrix.Vector Double -- single column of distances above base
 type Point = Matrix.Vector Double -- single column of coordinates
 
-boolToInt :: Bool -> Int
-boolToInt False = 0
-boolToInt True = 1
+boolToSidedness :: Bool -> Sidedness
+boolToSidedness a = a
 
-intToBool :: Int -> Bool
-intToBool 0 = False
-intToBool 1 = True
+sidednessToBool :: Sidedness -> Bool
+sidednessToBool a = a
+
+sidednessToInt :: Sidedness -> Int
+sidednessToInt a = if a then 1 else 0
+
+intToSidedness :: Int -> Sidedness
+intToSidedness a = a == 1
 
 boundaryToInt :: Boundary -> Int
 boundaryToInt a = a
@@ -291,12 +296,13 @@ spaceFromPlanes n p
  -- find sub-regions of super-region containing indicated intersection point
 spaceFromPlanesF :: Int -> Space -> [Plane] -> Plane -> [Int] -> [Int] -> [Region]
 spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
+ headBounds = boundariesOfSpace headSpace
  cols = filter (\j -> elem j tupl) headIdxs
- subS = foldl (\s j -> subSpace j s) headSpace tupl
+ (subB,subS) = foldl (\(b,s) j -> (remove j b, subSpace j s)) (headBounds,headSpace) tupl
  subP = subset cols headPlanes
  indP = subset tupl headPlanes
- intP = intersectPlanes n (indP ++ [tailPlane])
- in sort (takeRegions subS headSpace [regionOfPoint intP subP subS])
+ intP = fromJust (intersectPlanes n (indP ++ [tailPlane]))
+ in sort (takeRegions (zip subB subS) (zip headBounds headSpace) [regionOfPoint intP subP subS])
 
 -- return region of point, assuming planes and space are homeomorphic
 regionOfPoint :: Point -> [Plane] -> Space -> Region
@@ -307,12 +313,14 @@ regionOfPoint v w s = let
  planes = indices num
  -- find n others for each boundary
  tuplesI :: [[Int]]
- tuplesI = map (\b -> fromMaybe [] (choose (subsets (remove b planes)))) planes
+ tuplesI = map (\b -> take dim (remove b planes)) planes
  tuplesB :: [[Boundary]]
  tuplesB = map (map intToBoundary) tuplesI
  -- for each plane, find reference point not on plane
+ zero :: Point
+ zero = Matrix.fromList (replicate dim 0.0)
  vertices :: [Point]
- vertices = map (\b -> fromMaybe (replicate dim 0.0) (intersectPlanes dim (subset b w))) tuplesI
+ vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subset b w))) tuplesI
  -- find sides of reference points wrt planes
  sidesV :: [Bool]
  sidesV = map (\(v,w) -> isAbovePlane v w) (zip vertices w)
@@ -321,7 +329,7 @@ regionOfPoint v w s = let
  sidesP = map (\w -> isAbovePlane v w) w
  -- find sides of n-tuples wrt boundaries
  sidesS :: [Bool]
- sidesS = map (\(a,b) -> vertexWrtBoundary (intToBoundary b) a s) (enumerate tuplesB)
+ sidesS = map (\(a,b) -> vertexWrtBoundary a (map intToBoundary b) s) (enumerate tuplesB)
  -- use transitivity to complete sides of point wrt boundaries
  sidesR :: [Sidedness]
  sidesR = map (\(a,b) -> a == b) (zip sidesV sidesP)
@@ -375,11 +383,11 @@ minEquivWithPermsF2 r s (p,q)
 
 -- remove s from q
 minEquivWithPermsF3 :: Space -> Region -> Space
-minEquivWithPermsF3 q s = map (filter (\a -> a /=s )) q
+minEquivWithPermsF3 q s = map (map (filter (\a -> a /= s))) q
 
 -- return space with regions permuted such that result is smallest possible
 minEquiv :: Space -> Space
-minEquiv s = minEquivWithPerms [] (sortSpace s) 0 (regionsOfSpace s) []
+minEquiv s = fst (minEquivWithPerms [] (sortSpace s) 0 (regionsOfSpace s) [])
 
 -- return sorted equivalent
 sortSpace :: Space -> Space
@@ -419,7 +427,7 @@ regionOfSidesExists :: [Sidedness] -> Space -> Bool
 regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 
 regionOfSidesF :: [Sidedness] -> Space -> [Region]
-regionOfSidesF r s = foldl (\a (r,s) -> a +\ (s !! r)) (regionsOfSpace s) (zip r s)
+regionOfSidesF r s = foldl (\a (r,s) -> a +\ (s !! (sidednessToInt r))) (regionsOfSpace s) (zip r s)
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
@@ -431,15 +439,15 @@ regionsOfSpace s = sortNub (concat (concat s))
 
 -- return boundaries attached to region
 attachedBoundaries :: Region -> Space -> [Boundary]
-attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r) (boundariesOfSpace s)
+attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r s) (boundariesOfSpace s)
 
 -- return facets attached to region
 attachedFacets :: Int -> Region -> Space -> [[Boundary]]
-attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r) (subsets n (boundariesOfSpace s))
+attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (boundariesOfSpace s))
 
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
-attachedRegions b s = filter (\r -> oppositeOfRegionExists b r) (regionsOfSpace s)
+attachedRegions b s = filter (\r -> oppositeOfRegionExists b r s) (regionsOfSpace s)
 
 -- return neighbor region of given region wrt given boundary
 oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
@@ -476,8 +484,8 @@ isLinear :: Int -> Space -> Bool
 isLinear n s = let
  boundaries = boundariesOfSpace s
  sizes = boundaries
- subsets = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
- in foldl (\a b -> a && (isLinearF n s b)) True subsets
+ subs = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
+ in foldl (\a b -> a && (isLinearF n s b)) True subs
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
 isLinearF d s b = let
@@ -505,10 +513,10 @@ takeRegions s t r = let
  secondSides = map (\r -> map (\b -> fmap (\b -> r !! b) b) secondToFirst) firstSides
  -- for each boundary in second space, count number of Nothing
  count :: Int
- count = foldl (\a b -> a + (boolToInt (b == Nothing))) 0 secondToFirst
+ count = foldl (\a b -> if b == Nothing then a+1 else a) 0 secondToFirst
  -- find sidedness permutations of same length as indices
  permutes :: [[Sidedness]]
- permutes = map (\a -> map (\b -> intToBool (mod (shift a (negate b)) .&. 1)) (indices count)) (indices (shift 1 count))
+ permutes = map (\a -> map (\b -> sidednessToBool (mod (shift a (negate b)) .&. 1)) (indices count)) (indices (shift 1 count))
  -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
  fixedSides :: [[Sidedness]]
  fixedSides = map (\(a,b) -> takeRegionsF a b) [(a,b) | a <- secondSides, b <- permutes]
