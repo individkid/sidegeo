@@ -75,6 +75,9 @@ insert a b = sortNub (a:b)
 remove :: Eq a => a -> [a] -> [a]
 remove a b = filter (\c -> c /= a) b
 
+unplace :: Int -> [a] -> [a]
+unplace a b = (take a b) Prelude.++ (drop (a+1) b)
+
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) Prelude.++ (b : (drop (a+1) c))
 
@@ -156,7 +159,7 @@ generateF :: Ord a => (a -> [a]) -> a -> [a] -> [a] -> [a]
 generateF f a todo done
  | ((length newTodo) == 0) = newDone
  | otherwise = generateF f (head newTodo) (tail newTodo) newDone where
- newTodo = ((f a) \\ (todo ++ done)) ++ todo
+ newTodo = remove a (((f a) \\ done) ++ todo)
  newDone = [a] ++ done
 
 -- given number of firsts found by calling function on second
@@ -171,22 +174,25 @@ catalyzeF f g a = let (b,h) = f g in (b:a,h)
 
 -- call function for new result until it returns Nothing
 chainJust :: [(a -> Maybe a)] -> a -> Maybe a
-chainJust (f:g) a = chainJustF g Nothing (f a)
+chainJust (f:g) a = chainJustF g a Nothing (f a)
 chainJust [] _ = Nothing
 
-chainJustF :: [(a -> Maybe a)] -> Maybe a -> Maybe a -> Maybe a
-chainJustF (f:g) _ (Just b) = chainJustF g (Just b) (f b)
-chainJustF [] _ (Just b) = Just b
-chainJustF _ a Nothing = a
+chainJustF :: [(a -> Maybe a)] -> a -> Maybe a -> Maybe a -> Maybe a
+chainJustF (f:g) _ _ (Just c) = chainJustF g c (Just c) (f c)
+chainJustF (_:_) _ b Nothing = b
+chainJustF [] _ _ (Just c) = Just c
+chainJustF [] _ b Nothing = b
 
+-- call each funcion returning last Just
 turnJust :: [(a -> Maybe a)] -> a -> Maybe a
-turnJust (f:g) a = turnJustF g a (f a)
+turnJust (f:g) a = turnJustF g a Nothing (f a)
 turnJust [] _ = Nothing
 
-turnJustF :: [(a -> Maybe a)] -> a -> Maybe a -> Maybe a
-turnJustF (f:g) a Nothing = turnJustF g a (f a)
-turnJustF (f:g) _ (Just b) = turnJustF g b (f b)
-turnJustF [] _ b = b
+turnJustF :: [(a -> Maybe a)] -> a -> Maybe a -> Maybe a -> Maybe a
+turnJustF (f:g) _ _ (Just c) = turnJustF g c (Just c) (f c)
+turnJustF (f:g) a b Nothing = turnJustF g a b (f a)
+turnJustF [] _ _ (Just c) = Just c
+turnJustF [] _ b Nothing = b
 
 -- return all linear spaces of given dimension and boundaries.
 allSpaces :: Random.RandomGen g => g -> Int -> Int -> ([Space], g)
@@ -534,7 +540,7 @@ takeRegions s t r = let
  firstSides :: [[Sidedness]]
  firstSides = map (\x -> sidesOfRegion x firstSpace) r
  -- for each boundary in second space, find corresponding boundary in first space or Nothing
- secondToFirst :: [Maybe Int]
+ secondToFirst :: [Maybe Boundary]
  secondToFirst = map (\x -> elemIndex x firstBoundaries) secondBoundaries
  -- for each given region, for each boundary in second space, find sidedness or Nothing by composition
  secondSides :: [[Maybe Sidedness]]
@@ -580,6 +586,24 @@ divideSpaceF c s
 divideSpaceG :: [(Region,Region)] -> [Region] -> [Region]
 divideSpaceG m r = r ++ (image ((domain m) +\ r) m)
 
+-- return space of same dimension with given boundary removed
+subSpace :: Boundary -> Space -> Space
+subSpace b s = let
+ attached = attachedRegions [b] s
+ regions = filter (\r -> (member r attached) && (regionWrtBoundary b r s)) (regionsOfSpace s)
+ in map (map (\x -> x \\ regions)) (unplace b s)
+
+-- return space of one less dimension homeomorphic to regions attached to given boundary
+sectionSpace :: Boundary -> Space -> Space
+sectionSpace b s = let
+ attached = attachedRegions [b] s
+ regions = filter (\r -> (member r attached) && (regionWrtBoundary b r s)) (regionsOfSpace s)
+ in map (map (\x -> x +\ regions)) (unplace b s)
+
+-- return superspace with given spaces as subspaces
+superSpace :: SubSpace -> SubSpace -> SubSpace
+superSpace s t = undefined
+
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s = undefined
@@ -588,15 +612,3 @@ planesFromSpace n s = undefined
 -- add simplex containing all covertices
 -- find inside coregion corresponding to regions divided by boundary to add
 -- find average of corners of coregion, interpret as plane to add
-
--- return space of same dimension with given boundary removed
-subSpace :: Boundary -> Space -> Space
-subSpace m s = undefined
-
--- return space of one less dimension homeomorphic to regions attached to given boundary
-sectionSpace :: Boundary -> Space -> Space
-sectionSpace m s = undefined
-
--- return superspace with given spaces as subspaces
-superSpace :: SubSpace -> SubSpace -> SubSpace
-superSpace s t = undefined
