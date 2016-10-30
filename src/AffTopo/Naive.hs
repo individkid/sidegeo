@@ -601,8 +601,75 @@ sectionSpace b s = let
  in map (map (\x -> x +\ regions)) (unplace b s)
 
 -- return superspace with given spaces as subspaces
-superSpace :: SubSpace -> SubSpace -> SubSpace
-superSpace s t = undefined
+superSpace :: Random.RandomGen g => g -> Int -> SubSpace -> SubSpace -> (SubSpace, g)
+superSpace g n s t
+ | n == 0 = (map (\x -> (x,[[0],[]])) (sBounds ++ tBounds), g)
+ | (length (tBounds \\ sBounds)) == 0 = (s,g)
+ | (length (sBounds \\ tBounds)) == 0 = (t,g)
+ | (length sBounds) + (length tBounds) <= n = let
+  -- every possible region
+  boundaries = sBounds ++ tBounds
+  regions = indices (shift 1 (length boundaries))
+  in (map (\x -> (x,[superSpaceI x regions 0, superSpaceI x regions 1])) boundaries, g)
+ | (length (sBounds +\ tBounds)) == 0 = let
+  -- choose boundary to remove
+  -- recurse with one fewer boundary
+  -- recurse with boundary restored
+  (bound,h) = fromJust (choose g sBounds)
+  (space,i) = superSpace h n (superSpaceF bound s) t
+  in superSpace i n s space
+ | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
+  -- choose shared boundary for sections
+  -- recurse to find subspace (wrt chosen) of supersection
+  -- find subspace (wrt left unshared) of full supersection
+  -- recurse to find full supersection
+  -- take regions to space with right unshared to find those divided by left unshared
+  sBound = head (sBounds \\ tBounds)
+  (bound,h) = fromJust (choose g (sBounds +\ tBounds))
+  tSect = superSpaceG bound t -- missing bound and sBound
+  section = superSpaceG sBound s -- missing sBound and tBound
+  (sSect,i) = superSpace h (n-1) tSect section -- missing sBound
+  regions = takeRegions sSect t (regionsOfSpace (range sSect))
+  in ((superSpaceH sBound regions t), i)
+ | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
+ | otherwise = let
+  -- 0 1 2 3 5 7 + 0 1 2 4 =
+  -- 0 1 2 3 5 7 + (0 1 2 3 5 + 0 1 2 4) =
+  -- 0 1 2 3 5 7 + (0 1 2 3 5 + (0 1 2 3 + 0 1 2 4))
+  -- or
+  -- 0 1 2 3 5 7 + 0 1 2 4 6 8 =
+  -- 0 1 2 3 5 7 + (0 1 2 3 5 + 0 1 2 4 6 8) =
+  -- 0 1 2 3 5 7 + (0 1 2 3 5 + (0 1 2 3 + 0 1 2 4 6 8))
+  (b,h) = fromJust (choose g (sBounds \\ tBounds))
+  sub = superSpaceF b s
+  (sup,i) = superSpace h n sub t
+  in superSpace i n s sup where
+  sBounds = domain s
+  tBounds = domain t
+
+-- subspace with boundary map
+superSpaceF :: Boundary -> SubSpace -> SubSpace
+superSpaceF b s = let
+ (bounds,space) = unzip s
+ index = fromJust (elemIndex b bounds)
+ in zip (unplace index bounds) (subSpace (intToBoundary index) space)
+
+-- section space with boundary map
+superSpaceG :: Boundary -> SubSpace -> SubSpace
+superSpaceG b s = let
+ (bounds,space) = unzip s
+ index = fromJust (elemIndex b bounds)
+ in zip (unplace index bounds) (sectionSpace (intToBoundary index) space)
+
+-- divide space with boundary map
+superSpaceH :: Boundary -> [Region] -> SubSpace -> SubSpace
+superSpaceH b r s = let
+ (bounds,space) = unzip s
+ in zip (bounds Prelude.++ [b]) (divideSpace r space)
+
+-- regions indicated by bits of boundary
+superSpaceI :: Int -> [Int] -> Int -> [Region]
+superSpaceI b r s = map intToRegion (filter (\y -> ((shift y (negate b)) .&. 1) == s) r)
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
