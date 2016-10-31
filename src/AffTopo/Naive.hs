@@ -17,7 +17,7 @@ type Sidedness = Bool -- index into FullSpace
 type HalfSpace = [Region] -- assume proper set
 type FullSpace = [HalfSpace] -- assume disjoint covering pair
 type Space = [FullSpace] -- assume equal covers
-type SubSpace = [(Boundary,FullSpace)]
+type SubSpace = [(Boundary,FullSpace)] -- assume one-to-one
 type Plane = Matrix.Vector Double -- single column of distances above base
 type Point = Matrix.Vector Double -- single column of coordinates
 
@@ -197,8 +197,11 @@ turnJustF [] _ b Nothing = b
 -- return all linear spaces of given dimension and boundaries.
 allSpaces :: Random.RandomGen g => g -> Int -> Int -> ([Space], g)
 allSpaces g n m = let
- (p,h) = randomPlanes g n m
- q = minEquiv (spaceFromPlanes n p)
+ boundaries = map intToBoundary (indices m)
+ fullspace = [[0],[1]]
+ emptyspace = []
+ (p,h) = foldl (\(x,y) z -> superSpace y n x [(z,fullspace)]) (emptyspace,g) boundaries
+ q = minEquiv (range p)
  in (allSpacesF (regionsOfSpace q) q [] [], h)
 
 -- migrate all possible from current space, and go on to next todo
@@ -218,157 +221,6 @@ allSpacesG r s t todo done
 allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
-
--- return given number of planes in given number of dimensions
-randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
-randomPlanes g n m = let
- (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n*m)
- b = Matrix.toColumns (Matrix.matrix m a)
- tweaks = [randomPlanesF n m, randomPlanesG n m, randomPlanesH n m]
- in fromMaybe (b,h) (chainJust (repeat (turnJust tweaks)) (b,h))
-
--- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
-randomPlanesF :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a) (subSets n (indices m)))
-
-randomPlanesF0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
-randomPlanesF0 g n a b = let
- (c,h) = fromJust (choose g b)
- d = Matrix.toList (a !! c)
- e = (d !! (n-1)) / 2.0
- in (replace c (Matrix.fromList (map (\x -> x - e) d)) a, h)
-
-randomPlanesF1 :: Int -> [Plane] -> [Int] -> Bool
-randomPlanesF1 n a b = let
- e = intersectPlanes n (subSet b a)
- in maybe False (\c -> all (\d -> d > -1.0 && d < 1.0) (Matrix.toList c)) e
-
--- rerandomize some plane from some n tuple that does not intersect in Just
-randomPlanesG :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a) (subSets n (indices m)))
-
-randomPlanesG0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
-randomPlanesG0 g n a b = let
- (c,h) = fromJust (choose g b)
- (d,i) = catalyze (\j -> Random.randomR (-100.0,100.0) j) h n
- in (replace c (Matrix.fromList d) a, i)
-
-randomPlanesG1 :: Int -> [Plane] -> [Int] -> Bool
-randomPlanesG1 n a b = let
- e = intersectPlanes n (subSet b a)
- in e == Nothing
-
--- rerandomize some plane from some n+1 tuple that does intersect to Just
-randomPlanesH :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesH n m (a,g) = fmap (randomPlanesH0 g n a) (find (randomPlanesH1 n a) (subSets (n+1) (indices m)))
-
-randomPlanesH0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
-randomPlanesH0 = randomPlanesG0
-
-randomPlanesH1 :: Int -> [Plane] -> [Int] -> Bool
-randomPlanesH1 n a b = let
- e = intersectPlanes n (subSet b a)
- in e /= Nothing
-
--- assume first rows are distances above points in base plane
--- assume last row is distances above origin
--- each column specifies points that a plane passes through
-intersectPlanes :: Int -> [Plane] -> Maybe Point
-intersectPlanes n w = let
- first =  intersectPlanesH n w
- -- return Nothing if not every n-tuple solves to same point
- points = map (\a -> intersectPlanesH n (subSet a w)) (subSets n (indices (length w)))
- same = maybe False (\c -> all (\a -> maybe False (\b -> (Matrix.dot c b) < 0.001) a) points) first
- in if same then first else Nothing
-
-intersectPlanesF :: [Plane] -> Int -> Int -> Int -> Double
-intersectPlanesF w n a b
- | b == n = -1.0
- | otherwise = (Matrix.atIndex (w !! a) b) - (Matrix.atIndex (w !! a) n)
-
-intersectPlanesG :: [Plane] -> Int -> Int -> Double
-intersectPlanesG w n a = negate (Matrix.atIndex (w !! a) n)
-
-intersectPlanesH :: Int -> [Plane] -> Maybe Point
-intersectPlanesH n w = let
- square = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
- rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
- in fmap Matrix.flatten (Matrix.linearSolve square rhs)
-
-isAbovePlane :: Point -> Plane -> Bool
-isAbovePlane v w = let
- dim = Matrix.size w
- planeS = Matrix.atIndex w (dim-1)
- pointS = Matrix.atIndex v (dim-1)
- planeV = Matrix.fromList (map (\x -> x - planeS) (Matrix.toList (Matrix.subVector 0 (dim-1) w)))
- pointV = Matrix.subVector 0 (dim-1) v
- in pointS > ((Matrix.dot planeV pointV) + planeS)
-
--- return space with sidednesses determined by given planes
-spaceFromPlanes :: Int -> [Plane] -> Space
-spaceFromPlanes n p
- | numPlanes == 0 = []
- | otherwise = let
- -- recurse with one fewer plane
- headSpace :: Space
- headSpace = spaceFromPlanes n headPlanes
- -- find (n-1)-tuples of recursed planes
- colTuples :: [[Int]]
- colTuples = subSets planeDims headIdxs
- -- find union of sub-regions of super-regions containing intersections
- headRegs :: [Region]
- headRegs = sortNub (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
- -- return space with found regions divided by new boundary
- in divideSpace headRegs headSpace where
- numPlanes = (length p) - 1
- headPlanes = take numPlanes p
- tailPlane = p !! numPlanes
- headIdxs = indices numPlanes
- spaceDims = Matrix.size tailPlane
- planeDims = spaceDims - 1
-
- -- find sub-regions of super-region containing indicated intersection point
-spaceFromPlanesF :: Int -> Space -> [Plane] -> Plane -> [Int] -> [Int] -> [Region]
-spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
- headBounds = boundariesOfSpace headSpace
- cols = filter (\j -> elem j tupl) headIdxs
- (subB,subS) = foldl (\(b,s) j -> (remove j b, subSpace j s)) (headBounds,headSpace) tupl
- subP = subSet cols headPlanes
- indP = subSet tupl headPlanes
- intP = fromJust (intersectPlanes n (indP ++ [tailPlane]))
- in sort (takeRegions (zip subB subS) (zip headBounds headSpace) [regionOfPoint intP subP subS])
-
--- return region of point, assuming planes and space are homeomorphic
-regionOfPoint :: Point -> [Plane] -> Space -> Region
-regionOfPoint v w s = let
- dim = Matrix.size v
- num = length w
- planes :: [Int]
- planes = indices num
- -- find n others for each boundary
- tuplesI :: [[Int]]
- tuplesI = map (\b -> take dim (remove b planes)) planes
- tuplesB :: [[Boundary]]
- tuplesB = map (map intToBoundary) tuplesI
- -- for each plane, find reference point not on plane
- zero :: Point
- zero = Matrix.fromList (replicate dim 0.0)
- vertices :: [Point]
- vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subSet b w))) tuplesI
- -- find sides of reference points wrt planes
- sidesV :: [Bool]
- sidesV = map (\(x,y) -> isAbovePlane x y) (zip vertices w)
- -- find sides of point wrt planes
- sidesP :: [Bool]
- sidesP = map (\x -> isAbovePlane v x) w
- -- find sides of n-tuples wrt boundaries
- sidesS :: [Bool]
- sidesS = map (\(a,b) -> vertexWrtBoundary a (map intToBoundary b) s) (enumerate tuplesB)
- -- use transitivity to complete sides of point wrt boundaries
- sidesR :: [Sidedness]
- sidesR = map (\(a,(b,c)) -> a == (b == c)) (zip sidesV (zip sidesP sidesS))
- -- return regionOfSides
- in regionOfSides sidesR s
 
 regionWrtBoundary :: Boundary -> Region -> Space -> Sidedness
 regionWrtBoundary b r s = intToSidedness (fromJust (findIndex (\a -> member r a) (s !! b)))
@@ -606,18 +458,38 @@ superSpace g n s t
  | n == 0 = (map (\x -> (x,[[0],[]])) (sBounds ++ tBounds), g)
  | (length (tBounds \\ sBounds)) == 0 = (s,g)
  | (length (sBounds \\ tBounds)) == 0 = (t,g)
- | (length sBounds) + (length tBounds) <= n = let
+ | (length (sBounds ++ tBounds)) <= n = let
   -- every possible region
   boundaries = sBounds ++ tBounds
   regions = indices (shift 1 (length boundaries))
-  in (map (\x -> (x,[superSpaceI x regions 0, superSpaceI x regions 1])) boundaries, g)
+  in (map (\x -> (x, [superSpaceI x regions 0, superSpaceI x regions 1])) boundaries, g)
+ | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) > 1) && ((length tBounds) == 1) = superSpace g n t s
+ | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = let
+  -- choose boundary to imitate
+  -- find section by chosen
+  -- recurse to add singleton boundary to chosen section
+  -- find halfspaces wrt added boundary, and take from section to space
+  -- find halfspaces wrt chosen
+  -- find union of intersections of corresponding halfspaces
+  -- divide by this linear subset of regions attached to boundary to imitate
+  sBound = head sBounds
+  (bound,h) = fromJust (choose g tBounds)
+  section = superSpaceG bound t
+  (supersect,i) = superSpace h (n-1) [(bound,[[0],[1]])] section
+  secthalves = head (image [bound] supersect)
+  sectregions = map (takeRegions section t) secthalves
+  halfspaces = head (image [bound] t)
+  regions = ((sectregions !! 1) +\ (halfspaces !! 1)) ++ ((sectregions !! 0) +\ (halfspaces !! 0))
+  in (superSpaceH sBound regions t, i)
  | (length (sBounds +\ tBounds)) == 0 = let
   -- choose boundary to remove
   -- recurse with one fewer boundary
-  -- recurse with boundary restored
+  -- recurse to restore boundary
   (bound,h) = fromJust (choose g sBounds)
-  (space,i) = superSpace h n (superSpaceF bound s) t
-  in superSpace i n s space
+  subspace = superSpaceF bound s
+  (space,i) = superSpace h n subspace t
+  singlespace = [(bound,[[0],[1]])]
+  in superSpace i n space singlespace
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
   -- choose shared boundary for sections
   -- recurse to find subspace (wrt chosen) of supersection
@@ -670,6 +542,157 @@ superSpaceH b r s = let
 -- regions indicated by bits of boundary
 superSpaceI :: Int -> [Int] -> Int -> [Region]
 superSpaceI b r s = map intToRegion (filter (\y -> ((shift y (negate b)) .&. 1) == s) r)
+
+-- return given number of planes in given number of dimensions
+randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
+randomPlanes g n m = let
+ (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n*m)
+ b = Matrix.toColumns (Matrix.matrix m a)
+ tweaks = [randomPlanesF n m, randomPlanesG n m, randomPlanesH n m]
+ in fromMaybe (b,h) (chainJust (repeat (turnJust tweaks)) (b,h))
+
+-- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
+randomPlanesF :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
+randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a) (subSets n (indices m)))
+
+randomPlanesF0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
+randomPlanesF0 g n a b = let
+ (c,h) = fromJust (choose g b)
+ d = Matrix.toList (a !! c)
+ e = (d !! (n-1)) / 2.0
+ in (replace c (Matrix.fromList (map (\x -> x - e) d)) a, h)
+
+randomPlanesF1 :: Int -> [Plane] -> [Int] -> Bool
+randomPlanesF1 n a b = let
+ e = intersectPlanes n (subSet b a)
+ in maybe False (\c -> all (\d -> d > -1.0 && d < 1.0) (Matrix.toList c)) e
+
+-- rerandomize some plane from some n tuple that does not intersect in Just
+randomPlanesG :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
+randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a) (subSets n (indices m)))
+
+randomPlanesG0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
+randomPlanesG0 g n a b = let
+ (c,h) = fromJust (choose g b)
+ (d,i) = catalyze (\j -> Random.randomR (-100.0,100.0) j) h n
+ in (replace c (Matrix.fromList d) a, i)
+
+randomPlanesG1 :: Int -> [Plane] -> [Int] -> Bool
+randomPlanesG1 n a b = let
+ e = intersectPlanes n (subSet b a)
+ in e == Nothing
+
+-- rerandomize some plane from some n+1 tuple that does intersect to Just
+randomPlanesH :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
+randomPlanesH n m (a,g) = fmap (randomPlanesH0 g n a) (find (randomPlanesH1 n a) (subSets (n+1) (indices m)))
+
+randomPlanesH0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
+randomPlanesH0 = randomPlanesG0
+
+randomPlanesH1 :: Int -> [Plane] -> [Int] -> Bool
+randomPlanesH1 n a b = let
+ e = intersectPlanes n (subSet b a)
+ in e /= Nothing
+
+-- assume first rows are distances above points in base plane
+-- assume last row is distances above origin
+-- each column specifies points that a plane passes through
+intersectPlanes :: Int -> [Plane] -> Maybe Point
+intersectPlanes n w = let
+ first =  intersectPlanesH n w
+ -- return Nothing if not every n-tuple solves to same point
+ points = map (\a -> intersectPlanesH n (subSet a w)) (subSets n (indices (length w)))
+ same = maybe False (\c -> all (\a -> maybe False (\b -> (Matrix.dot c b) < 0.001) a) points) first
+ in if same then first else Nothing
+
+intersectPlanesF :: [Plane] -> Int -> Int -> Int -> Double
+intersectPlanesF w n a b
+ | b == n = -1.0
+ | otherwise = (Matrix.atIndex (w !! a) b) - (Matrix.atIndex (w !! a) n)
+
+intersectPlanesG :: [Plane] -> Int -> Int -> Double
+intersectPlanesG w n a = negate (Matrix.atIndex (w !! a) n)
+
+intersectPlanesH :: Int -> [Plane] -> Maybe Point
+intersectPlanesH n w = let
+ square = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
+ rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
+ in fmap Matrix.flatten (Matrix.linearSolve square rhs)
+
+isAbovePlane :: Point -> Plane -> Bool
+isAbovePlane v w = let
+ dim = Matrix.size w
+ planeS = Matrix.atIndex w (dim-1)
+ pointS = Matrix.atIndex v (dim-1)
+ planeV = Matrix.fromList (map (\x -> x - planeS) (Matrix.toList (Matrix.subVector 0 (dim-1) w)))
+ pointV = Matrix.subVector 0 (dim-1) v
+ in pointS > ((Matrix.dot planeV pointV) + planeS)
+
+-- return space with sidednesses determined by given planes
+spaceFromPlanes :: Int -> [Plane] -> Space
+spaceFromPlanes n p
+ | numPlanes == 0 = []
+ | otherwise = let
+ -- recurse with one fewer plane
+ headSpace :: Space
+ headSpace = spaceFromPlanes n headPlanes
+ -- find (n-1)-tuples of recursed planes
+ colTuples :: [[Int]]
+ colTuples = subSets planeDims headIdxs
+ -- find union of sub-regions of super-regions containing intersections
+ headRegs :: [Region]
+ headRegs = sortNub (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
+ -- return space with found regions divided by new boundary
+ in divideSpace headRegs headSpace where
+ numPlanes = (length p) - 1
+ headPlanes = take numPlanes p
+ tailPlane = p !! numPlanes
+ headIdxs = indices numPlanes
+ spaceDims = Matrix.size tailPlane
+ planeDims = spaceDims - 1
+
+ -- find sub-regions of super-region containing indicated intersection point
+spaceFromPlanesF :: Int -> Space -> [Plane] -> Plane -> [Int] -> [Int] -> [Region]
+spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
+ headBounds = boundariesOfSpace headSpace
+ cols = filter (\j -> elem j tupl) headIdxs
+ (subB,subS) = foldl (\(b,s) j -> (remove j b, subSpace j s)) (headBounds,headSpace) tupl
+ subP = subSet cols headPlanes
+ indP = subSet tupl headPlanes
+ intP = fromJust (intersectPlanes n (indP ++ [tailPlane]))
+ in sort (takeRegions (zip subB subS) (zip headBounds headSpace) [regionOfPoint intP subP subS])
+
+-- return region of point, assuming planes and space are homeomorphic
+regionOfPoint :: Point -> [Plane] -> Space -> Region
+regionOfPoint v w s = let
+ dim = Matrix.size v
+ num = length w
+ planes :: [Int]
+ planes = indices num
+ -- find n others for each boundary
+ tuplesI :: [[Int]]
+ tuplesI = map (\b -> take dim (remove b planes)) planes
+ tuplesB :: [[Boundary]]
+ tuplesB = map (map intToBoundary) tuplesI
+ -- for each plane, find reference point not on plane
+ zero :: Point
+ zero = Matrix.fromList (replicate dim 0.0)
+ vertices :: [Point]
+ vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subSet b w))) tuplesI
+ -- find sides of reference points wrt planes
+ sidesV :: [Bool]
+ sidesV = map (\(x,y) -> isAbovePlane x y) (zip vertices w)
+ -- find sides of point wrt planes
+ sidesP :: [Bool]
+ sidesP = map (\x -> isAbovePlane v x) w
+ -- find sides of n-tuples wrt boundaries
+ sidesS :: [Bool]
+ sidesS = map (\(a,b) -> vertexWrtBoundary a (map intToBoundary b) s) (enumerate tuplesB)
+ -- use transitivity to complete sides of point wrt boundaries
+ sidesR :: [Sidedness]
+ sidesR = map (\(a,(b,c)) -> a == (b == c)) (zip sidesV (zip sidesP sidesS))
+ -- return regionOfSides
+ in regionOfSides sidesR s
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
