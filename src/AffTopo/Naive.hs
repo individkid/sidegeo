@@ -14,7 +14,7 @@ import qualified System.Random as Random
 type Boundary = Int -- index into Space
 type Region = Int -- arbitrary identifier
 type Sidedness = Bool -- index into FullSpace
-type HalfSpace = [Region] -- assume proper set
+type HalfSpace = [Region] -- assume welldef set
 type FullSpace = [HalfSpace] -- assume disjoint covering pair
 type Space = [FullSpace] -- assume equal covers
 type SubSpace = [(Boundary,FullSpace)] -- assume one-to-one
@@ -46,31 +46,31 @@ intToRegion :: Int -> Region
 intToRegion a = a
 
 -- all sublists of given size
-subSets :: Ord a => Int -> [a] -> [[a]]
-subSets n a
+subsets :: Ord a => Int -> [a] -> [[a]]
+subsets n a
  | n == 0 = [[]]
  | null a = []
- | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subSets (n - 1) a))
+ | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
 
 -- those indexed by list of indices
-subSet :: [Int] -> [a] -> [a]
-subSet p a = foldl (\b q -> (a !! q) : b) [] p
+subset :: [Int] -> [a] -> [a]
+subset p a = foldl (\b q -> (a !! q) : b) [] p
 
-sortNub :: Ord a => [a] -> [a]
-sortNub a = sortNubF (sort a)
+welldef :: Ord a => [a] -> [a]
+welldef a = welldefF (sort a)
 
-sortNubF :: Ord a => [a] -> [a]
-sortNubF (a:(b:c))
- | a == b = b:(sortNubF c)
- | otherwise = a:(sortNubF (b:c))
-sortNubF (a:b) = a:(sortNubF b)
-sortNubF [] = []
+welldefF :: Ord a => [a] -> [a]
+welldefF (a:(b:c))
+ | a == b = b:(welldefF c)
+ | otherwise = a:(welldefF (b:c))
+welldefF (a:b) = a:(welldefF b)
+welldefF [] = []
 
 member :: Eq a => a -> [a] -> Bool
 member a b = (find (\c -> a == c) b) /= Nothing
 
 insert :: Ord a => a -> [a] -> [a]
-insert a b = sortNub (a:b)
+insert a b = welldef (a:b)
 
 remove :: Eq a => a -> [a] -> [a]
 remove a b = filter (\c -> c /= a) b
@@ -108,7 +108,7 @@ range m = map (\(_,y) -> y) m
 
 -- ++ and \\ are from Data.List
 (++) :: Ord a => [a] -> [a] -> [a]
-a ++ b = unionF (sortNub a) (sortNub b)
+a ++ b = unionF (welldef a) (welldef b)
 
 unionF :: Ord a => [a] -> [a] -> [a]
 unionF (a:s) (b:t)
@@ -119,7 +119,7 @@ unionF (a:s) [] = (a:s)
 unionF [] b = b
 
 (\\) :: Ord a => [a] -> [a] -> [a]
-a \\ b =differenceF (sortNub a) (sortNub b)
+a \\ b =differenceF (welldef a) (welldef b)
 
 differenceF :: Ord a => [a] -> [a] -> [a]
 differenceF (a:s) (b:t)
@@ -130,7 +130,7 @@ differenceF (a:s) [] = (a:s)
 differenceF [] b = b
 
 (+\) :: Ord a => [a] -> [a] -> [a]
-a +\ b = intersectF (sortNub a) (sortNub b)
+a +\ b = intersectF (welldef a) (welldef b)
 
 intersectF :: Ord a => [a] -> [a] -> [a]
 intersectF (a:s) (b:t)
@@ -141,7 +141,7 @@ intersectF (a:s) [] = (a:s)
 intersectF [] b = b
 
 (\+) :: Ord a => [a] -> [a] -> [a]
-a \+ b = symmetricF (sortNub a) (sortNub b)
+a \+ b = symmetricF (welldef a) (welldef b)
 
 symmetricF :: Ord a => [a] -> [a] -> [a]
 symmetricF (a:s) (b:t)
@@ -157,17 +157,14 @@ generate f a = generateF f a [] []
 
 generateF :: Ord a => (a -> [a]) -> a -> [a] -> [a] -> [a]
 generateF f a todo done
- | ((length newTodo) == 0) = newDone
+ | (length newTodo) == 0 = newDone
  | otherwise = generateF f (head newTodo) (tail newTodo) newDone where
  newTodo = remove a (((f a) \\ done) ++ todo)
  newDone = [a] ++ done
 
 -- given number of firsts found by calling function on second
 catalyze :: (g -> (a,g)) -> g -> Int -> ([a],g)
-catalyze f g n = let
- inds :: [Int]
- inds = indices n
- in foldl (\(a,h) _ -> catalyzeF f h a) ([],g) inds
+catalyze f g n = foldl (\(a,h) _ -> catalyzeF f h a) ([],g) ((indices n)::[Int])
 
 catalyzeF :: (g -> (a,g)) -> g -> [a] -> ([a],g)
 catalyzeF f g a = let (b,h) = f g in (b:a,h)
@@ -236,10 +233,10 @@ minEquivWithPerms p _ _ [] t = (p, [reverse t])
 minEquivWithPerms p q r s t = let
  -- find spaces with just one added
  added :: [Space]
- added = map (\a -> minEquivWithPermsF0 p q r a) s
+ added = map (\a -> minEquivWithPermsF p q r a) s
  -- find position regions with just one removed
  removed :: [Space]
- removed = map (\a -> minEquivWithPermsF3 q a) s
+ removed = map (\a -> minEquivWithPermsI q a) s
  -- find min with just one added
  minAdded = minimum added
  -- list those with just one added that is min
@@ -254,22 +251,22 @@ minEquivWithPerms p q r s t = let
  in (result, concat (snd (unzip results)))
 
 -- add r to p in positions of s in q
-minEquivWithPermsF0 :: Space -> Space -> Region -> Region -> Space
-minEquivWithPermsF0 p q r s = sort (map (minEquivWithPermsF1 r s) (zip p q))
+minEquivWithPermsF :: Space -> Space -> Region -> Region -> Space
+minEquivWithPermsF p q r s = sort (map (minEquivWithPermsG r s) (zip p q))
 
 -- add r to p in position of s in q
-minEquivWithPermsF1 :: Region -> Region -> ([HalfSpace],[HalfSpace]) -> [HalfSpace]
-minEquivWithPermsF1 r s (p,q) = sort (map (minEquivWithPermsF2 r s) (zip p q))
+minEquivWithPermsG :: Region -> Region -> ([HalfSpace],[HalfSpace]) -> [HalfSpace]
+minEquivWithPermsG r s (p,q) = sort (map (minEquivWithPermsH r s) (zip p q))
 
 -- add r to p if s in q
-minEquivWithPermsF2 :: Region -> Region -> (HalfSpace,HalfSpace) -> HalfSpace
-minEquivWithPermsF2 r s (p,q)
+minEquivWithPermsH :: Region -> Region -> (HalfSpace,HalfSpace) -> HalfSpace
+minEquivWithPermsH r s (p,q)
  | member s q = insert r p
  | otherwise = p
 
 -- remove s from q
-minEquivWithPermsF3 :: Space -> Region -> Space
-minEquivWithPermsF3 q s = map (map (filter (\a -> a /= s))) q
+minEquivWithPermsI :: Space -> Region -> Space
+minEquivWithPermsI q s = map (map (filter (\a -> a /= s))) q
 
 -- return space with regions permuted such that result is smallest possible
 minEquiv :: Space -> Space
@@ -321,7 +318,7 @@ boundariesOfSpace s = indices (length s)
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
-regionsOfSpace s = sortNub (concat (concat s))
+regionsOfSpace s = welldef (concat (concat s))
 
 -- return boundaries attached to region
 attachedBoundaries :: Region -> Space -> [Boundary]
@@ -329,7 +326,7 @@ attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r s) (boundari
 
 -- return facets attached to region
 attachedFacets :: Int -> Region -> Space -> [[Boundary]]
-attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subSets n (boundariesOfSpace s))
+attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (boundariesOfSpace s))
 
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
@@ -370,17 +367,16 @@ isLinear :: Int -> Space -> Bool
 isLinear n s = let
  boundaries = boundariesOfSpace s
  sizes = boundaries
- subs = foldl (\a b -> a ++ (subSets b boundaries)) [] sizes
+ subs = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
  in foldl (\a b -> a && (isLinearF n s b)) True subs
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
-isLinearF d s b = let
- subset = sortNub b
- fixed = map (\(x,y) -> y - x) (enumerate subset)
+isLinearF n s b = let
+ fixed = map (\(x,y) -> y - x) (enumerate (welldef b))
  subspace = foldl (\x y -> subSpace y x) s fixed
  regions = regionsOfSpace subspace
  boundaries = boundariesOfSpace subspace
- in (defineLinear d (length boundaries)) == (length regions)
+ in (defineLinear n (length boundaries)) == (length regions)
 
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space
@@ -389,25 +385,28 @@ takeRegions s t r = let
  (firstBoundaries,firstSpace) = unzip s
  (secondBoundaries,secondSpace) = unzip t
  -- for each given region, find sides in first space
- firstSides :: [[Sidedness]]
+ firstSides :: [[Sidedness]] -- given of SRegion -> SBoundary -> Sidedness
  firstSides = map (\x -> sidesOfRegion x firstSpace) r
- -- for each boundary in second space, find corresponding boundary in first space or Nothing
- secondToFirst :: [Maybe Boundary]
+ -- for each boundary in first space, find corresponding boundary in second space or Nothing
+ secondToFirst :: [Maybe Boundary] -- TBoundary -> Maybe SBoundary
  secondToFirst = map (\x -> elemIndex x firstBoundaries) secondBoundaries
- -- for each given region, for each boundary in second space, find sidedness or Nothing by composition
- secondSides :: [[Maybe Sidedness]]
+ -- for each given region, for each boundary in second space, find sidedness or Nothing in first space
+ secondSides :: [[Maybe Sidedness]] -- given of SRegion -> TBoundary -> Maybe Sidedness
  secondSides = map (\x -> map (\y -> fmap (\z -> x !! z) y) secondToFirst) firstSides
  -- for each boundary in second space, count number of Nothing
  count :: Int
  count = foldl (\x y -> if y == Nothing then x+1 else x) 0 secondToFirst
  -- find sidedness permutations of same length as indices
- permutes :: [[Sidedness]]
+ permutes :: [[Sidedness]] -- every possible -> count of TBoundary -> Sidedness
  permutes = map (\x -> map (\y -> intToSidedness ((shift x (negate y)) .&. 1)) (indices count)) (indices (shift 1 count))
  -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
- fixedSides :: [[Sidedness]]
+ fixedSides :: [[Sidedness]] -- given of SRegion -> TBoundary -> Sidedness
  fixedSides = map (\(x,y) -> takeRegionsF x y) [(x,y) | x <- secondSides, y <- permutes]
+ -- ignore empty regions
+ extantSides :: [[Sidedness]] -- given of SRegion -> TBoundary -> Sidedness
+ extantSides = filter (\x -> regionOfSidesExists x secondSpace) fixedSides
  -- map sides to regions
- in map (\x -> regionOfSides x secondSpace) fixedSides
+ in map (\x -> regionOfSides x secondSpace) extantSides
 
 takeRegionsF :: [Maybe Sidedness] -> [Sidedness] -> [Sidedness]
 takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
@@ -418,38 +417,34 @@ takeRegionsF [] (_:_) = error "too many permutations"
 
 -- return space with given regions divided by new boundary
 divideSpace :: [Region] -> Space -> Space
-divideSpace r s = let
- figure = regionsOfSpace s
- ground = figure \\ r
- halfspace = divideSpaceF ground s
- duplicates = holes (length r) figure
- mapping = zip r duplicates
- withDups :: Space
- withDups = map (map (divideSpaceG mapping)) s
- newBoundary :: [HalfSpace]
+divideSpace figure space = let
+ whole = regionsOfSpace space
+ ground = whole \\ figure
+ halfspace = divideSpaceF ground space
+ duplicates = holes (length figure) whole
+ mapping = zip figure duplicates
+ withDups = map (map (divideSpaceG mapping figure)) space
  newBoundary = [(halfspace ++ duplicates),(figure \\ halfspace)]
- in withDups ++ [newBoundary]
+ in withDups Prelude.++ [newBoundary]
 
 divideSpaceF :: [Region] -> Space -> [Region]
-divideSpaceF c s
- | (length c) > 0 = generate (\a -> c +\ (neighborsOfRegion a s)) (head c)
+divideSpaceF r s
+ | (length r) > 0 = generate (\a -> r +\ (neighborsOfRegion a s)) (head r)
  | otherwise = []
 
-divideSpaceG :: [(Region,Region)] -> [Region] -> [Region]
-divideSpaceG m r = r ++ (image ((domain m) +\ r) m)
+divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
+divideSpaceG m a b = b ++ (image (a +\ b) m)
 
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
 subSpace b s = let
- attached = attachedRegions [b] s
- regions = filter (\r -> (member r attached) && (regionWrtBoundary b r s)) (regionsOfSpace s)
+ regions = filter (\r -> regionWrtBoundary b r s) (attachedRegions [b] s)
  in map (map (\x -> x \\ regions)) (unplace b s)
 
 -- return space of one less dimension homeomorphic to regions attached to given boundary
 sectionSpace :: Boundary -> Space -> Space
 sectionSpace b s = let
- attached = attachedRegions [b] s
- regions = filter (\r -> (member r attached) && (regionWrtBoundary b r s)) (regionsOfSpace s)
+ regions = filter (\r -> regionWrtBoundary b r s) (attachedRegions [b] s)
  in map (map (\x -> x +\ regions)) (unplace b s)
 
 -- return superspace with given spaces as subspaces
@@ -463,23 +458,18 @@ superSpace g n s t
   boundaries = sBounds ++ tBounds
   regions = indices (shift 1 (length boundaries))
   in (map (\x -> (x, [superSpaceI x regions 0, superSpaceI x regions 1])) boundaries, g)
- | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) > 1) && ((length tBounds) == 1) = superSpace g n t s
+ | ((length (sBounds +\ tBounds)) == 0) && ((length tBounds) == 1) = superSpace g n t s
  | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = let
-  -- choose boundary to imitate
+  -- choose boundary to immitate
   -- find section by chosen
   -- recurse to add singleton boundary to chosen section
-  -- find halfspaces wrt added boundary, and take from section to space
-  -- find halfspaces wrt chosen
-  -- find union of intersections of corresponding halfspaces
-  -- divide by this linear subset of regions attached to boundary to imitate
-  sBound = head sBounds
-  (bound,h) = fromJust (choose g tBounds)
-  section = superSpaceG bound t
-  (supersect,i) = superSpace h (n-1) [(bound,[[0],[1]])] section
-  secthalves = head (image [bound] supersect)
-  sectregions = map (takeRegions section t) secthalves
-  halfspaces = head (image [bound] t)
-  regions = ((sectregions !! 1) +\ (halfspaces !! 1)) ++ ((sectregions !! 0) +\ (halfspaces !! 0))
+  -- take from section for linear subset of regions attached to immitate
+  -- divide by this linear subset of regions
+  sBound = head sBounds -- boundary to add
+  (bound,h) = fromJust (choose g tBounds) -- boundary to immitate
+  section = superSpaceG bound t -- homeomorphic to immitated or added
+  (supersect,i) = superSpace h (n-1) [(bound,[[0],[1]])] section -- homeomorphic after restoring immitated
+  regions = takeRegions supersect t (regionsOfSpace (range supersect)) -- regions in t that are homeomorphic
   in (superSpaceH sBound regions t, i)
  | (length (sBounds +\ tBounds)) == 0 = let
   -- choose boundary to remove
@@ -496,15 +486,15 @@ superSpace g n s t
   -- find subspace (wrt left unshared) of full supersection
   -- recurse to find full supersection
   -- take regions to space with right unshared to find those divided by left unshared
-  sBound = head (sBounds \\ tBounds)
-  (bound,h) = fromJust (choose g (sBounds +\ tBounds))
+  sBound = head (sBounds \\ tBounds) -- left unshared
+  (bound,h) = fromJust (choose g (sBounds +\ tBounds)) -- shared
   tSect = superSpaceG bound t -- missing bound and sBound
   section = superSpaceG sBound s -- missing sBound and tBound
   (sSect,i) = superSpace h (n-1) tSect section -- missing sBound
   regions = takeRegions sSect t (regionsOfSpace (range sSect))
   in ((superSpaceH sBound regions t), i)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
- | otherwise = let
+ | otherwise = let -- s and t are not proper
   -- 0 1 2 3 5 7 + 0 1 2 4 =
   -- 0 1 2 3 5 7 + (0 1 2 3 5 + 0 1 2 4) =
   -- 0 1 2 3 5 7 + (0 1 2 3 5 + (0 1 2 3 + 0 1 2 4))
@@ -512,10 +502,10 @@ superSpace g n s t
   -- 0 1 2 3 5 7 + 0 1 2 4 6 8 =
   -- 0 1 2 3 5 7 + (0 1 2 3 5 + 0 1 2 4 6 8) =
   -- 0 1 2 3 5 7 + (0 1 2 3 5 + (0 1 2 3 + 0 1 2 4 6 8))
-  (b,h) = fromJust (choose g (sBounds \\ tBounds))
-  sub = superSpaceF b s
-  (sup,i) = superSpace h n sub t
-  in superSpace i n s sup where
+  (b,h) = fromJust (choose g (sBounds \\ tBounds)) -- choice is from more than one
+  sub = superSpaceF b s -- since choice was from more than one, sub and t are not proper
+  (sup,i) = superSpace h n sub t -- adds something to t because sub and t are not proper
+  in superSpace i n s sup where -- easier because sup contains t plus one other than b that t did not
   sBounds = domain s
   tBounds = domain t
 
@@ -553,7 +543,7 @@ randomPlanes g n m = let
 
 -- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
 randomPlanesF :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a) (subSets n (indices m)))
+randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a) (subsets n (indices m)))
 
 randomPlanesF0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesF0 g n a b = let
@@ -564,12 +554,12 @@ randomPlanesF0 g n a b = let
 
 randomPlanesF1 :: Int -> [Plane] -> [Int] -> Bool
 randomPlanesF1 n a b = let
- e = intersectPlanes n (subSet b a)
+ e = intersectPlanes n (subset b a)
  in maybe False (\c -> all (\d -> d > -1.0 && d < 1.0) (Matrix.toList c)) e
 
 -- rerandomize some plane from some n tuple that does not intersect in Just
 randomPlanesG :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a) (subSets n (indices m)))
+randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a) (subsets n (indices m)))
 
 randomPlanesG0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesG0 g n a b = let
@@ -579,19 +569,19 @@ randomPlanesG0 g n a b = let
 
 randomPlanesG1 :: Int -> [Plane] -> [Int] -> Bool
 randomPlanesG1 n a b = let
- e = intersectPlanes n (subSet b a)
+ e = intersectPlanes n (subset b a)
  in e == Nothing
 
 -- rerandomize some plane from some n+1 tuple that does intersect to Just
 randomPlanesH :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesH n m (a,g) = fmap (randomPlanesH0 g n a) (find (randomPlanesH1 n a) (subSets (n+1) (indices m)))
+randomPlanesH n m (a,g) = fmap (randomPlanesH0 g n a) (find (randomPlanesH1 n a) (subsets (n+1) (indices m)))
 
 randomPlanesH0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesH0 = randomPlanesG0
 
 randomPlanesH1 :: Int -> [Plane] -> [Int] -> Bool
 randomPlanesH1 n a b = let
- e = intersectPlanes n (subSet b a)
+ e = intersectPlanes n (subset b a)
  in e /= Nothing
 
 -- assume first rows are distances above points in base plane
@@ -601,7 +591,7 @@ intersectPlanes :: Int -> [Plane] -> Maybe Point
 intersectPlanes n w = let
  first =  intersectPlanesH n w
  -- return Nothing if not every n-tuple solves to same point
- points = map (\a -> intersectPlanesH n (subSet a w)) (subSets n (indices (length w)))
+ points = map (\a -> intersectPlanesH n (subset a w)) (subsets n (indices (length w)))
  same = maybe False (\c -> all (\a -> maybe False (\b -> (Matrix.dot c b) < 0.001) a) points) first
  in if same then first else Nothing
 
@@ -638,10 +628,10 @@ spaceFromPlanes n p
  headSpace = spaceFromPlanes n headPlanes
  -- find (n-1)-tuples of recursed planes
  colTuples :: [[Int]]
- colTuples = subSets planeDims headIdxs
+ colTuples = subsets planeDims headIdxs
  -- find union of sub-regions of super-regions containing intersections
  headRegs :: [Region]
- headRegs = sortNub (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
+ headRegs = welldef (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
  -- return space with found regions divided by new boundary
  in divideSpace headRegs headSpace where
  numPlanes = (length p) - 1
@@ -657,8 +647,8 @@ spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
  headBounds = boundariesOfSpace headSpace
  cols = filter (\j -> elem j tupl) headIdxs
  (subB,subS) = foldl (\(b,s) j -> (remove j b, subSpace j s)) (headBounds,headSpace) tupl
- subP = subSet cols headPlanes
- indP = subSet tupl headPlanes
+ subP = subset cols headPlanes
+ indP = subset tupl headPlanes
  intP = fromJust (intersectPlanes n (indP ++ [tailPlane]))
  in sort (takeRegions (zip subB subS) (zip headBounds headSpace) [regionOfPoint intP subP subS])
 
@@ -678,7 +668,7 @@ regionOfPoint v w s = let
  zero :: Point
  zero = Matrix.fromList (replicate dim 0.0)
  vertices :: [Point]
- vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subSet b w))) tuplesI
+ vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subset b w))) tuplesI
  -- find sides of reference points wrt planes
  sidesV :: [Bool]
  sidesV = map (\(x,y) -> isAbovePlane x y) (zip vertices w)
