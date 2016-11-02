@@ -219,12 +219,6 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
 
-regionWrtBoundary :: Boundary -> Region -> Space -> Sidedness
-regionWrtBoundary b r s = intToSidedness (fromJust (findIndex (\a -> member r a) (s !! b)))
-
-vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Sidedness
-vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfRegionExists r a s) (regionsOfSpace s))) s
-
 minEquiv :: Space -> Space
 minEquiv posit = let
  todo = regionsOfSpace posit
@@ -240,7 +234,7 @@ minEquivWithPerms posit = let
  results = foldl minEquivPrefix [([],posit,todo,[])] regions
  (result,_,_,_) = head results
  dones = map (\(_,_,_,z) -> z) results
- in (result,dones)
+ in (sortSpace result, dones)
 
 -- members of listed tuples are unsorted minimum sofar, positions of regions, position regions todo, inorder regions done
 minEquivPrefix :: [(Space, Space, [Region], [Region])] -> Region -> [(Space, Space, [Region], [Region])]
@@ -260,10 +254,9 @@ minEquivPrefixF sofar posit todo done toadd = map (minEquivPrefixG sofar posit t
 minEquivPrefixG :: Space -> Space -> [Region] -> [Region] -> Region -> Region -> (Space, Space, [Region], [Region])
 minEquivPrefixG sofar posit todo done toadd torem = let
  newSofar = minEquivPrefixH sofar posit toadd torem
- newPosit = minEquivPrefixK posit torem
  newTodo = remove torem todo
  newDone = torem:done
- in (newSofar, newPosit, newTodo, newDone)
+ in (newSofar, posit, newTodo, newDone)
 
 -- add toadd to sofar in positions of torem in posit
 minEquivPrefixH :: Space -> Space -> Region -> Region -> Space
@@ -278,10 +271,6 @@ minEquivPrefixJ :: Region -> Region -> (HalfSpace,HalfSpace) -> HalfSpace
 minEquivPrefixJ toadd torem (sofar,posit)
  | member torem posit = insert toadd sofar
  | otherwise = sofar
-
--- remove torem from posit
-minEquivPrefixK :: Space -> Region -> Space
-minEquivPrefixK posit torem = map (map (filter (\a -> a /= torem))) posit
 
 -- return sorted equivalent
 sortSpace :: Space -> Space
@@ -315,6 +304,14 @@ boundariesOfSpace s = map intToBoundary (indices (length s))
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
 regionsOfSpace s = welldef (concat (concat s))
+
+-- side of region with regard to boundary
+regionWrtBoundary :: Boundary -> Region -> Space -> Sidedness
+regionWrtBoundary b r s = intToSidedness (fromJust (findIndex (\a -> member r a) (s !! b)))
+
+-- side of vertex identified by n boundaries
+vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Sidedness
+vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfRegionExists r a s) (regionsOfSpace s))) s
 
 -- return per boundary side of region
 sidesOfRegion :: Region -> Space -> [Sidedness]
