@@ -226,28 +226,30 @@ vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Sidedness
 vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfRegionExists r a s) (regionsOfSpace s))) s
 
 minEquiv :: Space -> Space
-minEquiv s = let
- posit = sortSpace s
+minEquiv posit = let
  todo = regionsOfSpace posit
  regions = map intToRegion (indices (length todo))
- in fst (foldl minEquivPrefix ([],[(posit,todo,[])]) regions)
+ results = foldl minEquivPrefix [([],posit,todo,[])] regions
+ (result,_,_,_) = head results
+ in sortSpace result
 
 minEquivWithPerms :: Space -> (Space,[[Region]])
-minEquivWithPerms s = let
- posit = sortSpace s
+minEquivWithPerms posit = let
  todo = regionsOfSpace posit
  regions = map intToRegion (indices (length todo))
- (result,results) = foldl minEquivPrefix ([],[(posit,todo,[])]) regions
- dones = map (\(_,_,z) -> z) results
+ results = foldl minEquivPrefix [([],posit,todo,[])] regions
+ (result,_,_,_) = head results
+ dones = map (\(_,_,_,z) -> z) results
  in (result,dones)
 
--- car is minimum so far, cdar are positional remainders, cddar are listed remainders, cdddar are in order usages
-minEquivPrefix :: (Space, [(Space, [Region], [Region])]) -> Region -> (Space, [(Space, [Region], [Region])])
-minEquivPrefix (p,q) r = let
- branches = concat (map (\(x,y,z) -> minEquivPrefixF p x y z r) q)
- result = minimum (map (\(s,_,_,_) -> s) branches)
- results = filter (\(s,_,_,_) -> s == result) branches
- in (result, (map (\(_,x,y,z) -> (x,y,z)) results))
+-- members of listed tuples are unsorted minimum sofar, positions of regions, position regions todo, inorder regions done
+minEquivPrefix :: [(Space, Space, [Region], [Region])] -> Region -> [(Space, Space, [Region], [Region])]
+minEquivPrefix a b = let
+ branches = concat (map (\(w,x,y,z) -> minEquivPrefixF w x y z b) a)
+ comparable = map (\(w,x,y,z) -> (sortSpace w, (w, x, y, z))) branches
+ result = minimum (map fst comparable)
+ results = filter (\(s,_) -> s == result) comparable
+ in map snd results
 
 -- given minimum sofar, positional todo, listed todo, inorder done, region to add to given minimum
 -- return new possible minimum for each listed todo
@@ -265,11 +267,11 @@ minEquivPrefixG sofar posit todo done toadd torem = let
 
 -- add toadd to sofar in positions of torem in posit
 minEquivPrefixH :: Space -> Space -> Region -> Region -> Space
-minEquivPrefixH sofar posit toadd torem = sort (map (minEquivPrefixI toadd torem) (zip sofar posit))
+minEquivPrefixH sofar posit toadd torem = map (minEquivPrefixI toadd torem) (zip sofar posit)
 
 -- add toadd to sofar in position of torem in posit
 minEquivPrefixI :: Region -> Region -> ([HalfSpace],[HalfSpace]) -> [HalfSpace]
-minEquivPrefixI toadd torem (sofar,posit) = sort (map (minEquivPrefixJ toadd torem) (zip sofar posit))
+minEquivPrefixI toadd torem (sofar,posit) = map (minEquivPrefixJ toadd torem) (zip sofar posit)
 
 -- add toadd to sofar if torem in posit
 minEquivPrefixJ :: Region -> Region -> (HalfSpace,HalfSpace) -> HalfSpace
