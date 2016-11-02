@@ -106,7 +106,7 @@ domain m = map (\(x,_) -> x) m
 range :: [(a,b)] -> [b]
 range m = map (\(_,y) -> y) m
 
--- ++ and \\ are from Data.List
+-- ++ and \\ are as in Data.List except welldef
 (++) :: Ord a => [a] -> [a] -> [a]
 a ++ b = unionF (welldef a) (welldef b)
 
@@ -225,52 +225,61 @@ regionWrtBoundary b r s = intToSidedness (fromJust (findIndex (\a -> member r a)
 vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Sidedness
 vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfRegionExists r a s) (regionsOfSpace s))) s
 
--- return list of region permutations, given sorted halfspace lists, and args as described
-minEquivWithPerms :: Space -> Space -> Region -> [Region] -> [Region] -> (Space, [[Region]])
--- p is incomplete space to add r to. q corresponds to p. s is regions in q.
--- r goes in same positions in p that some region from s is in q. t is regions in reverse order used.
-minEquivWithPerms p _ _ [] t = (p, [reverse t])
-minEquivWithPerms p q r s t = let
- -- find spaces with just one added
- added :: [Space]
- added = map (\a -> minEquivWithPermsF p q r a) s
- -- find position regions with just one removed
- removed :: [Space]
- removed = map (\a -> minEquivWithPermsI q a) s
- -- find min with just one added
- minAdded = minimum added
- -- list those with just one added that is min
- recurseArgs = filter (\(_,(a,_)) -> a == minAdded) (zip s (zip added removed))
- -- recurse on each that is minimum
- recursed = map (\(a,(b,c)) -> minEquivWithPerms b c (r+1) (remove a s) (a:t)) recurseArgs
- -- find minimum recursion
- result = minimum (fst (unzip recursed))
- -- find recursions with minimum
- results = filter (\(a,_) -> a == result) recursed
- -- concat permutations of minima
- in (result, concat (snd (unzip results)))
-
--- add r to p in positions of s in q
-minEquivWithPermsF :: Space -> Space -> Region -> Region -> Space
-minEquivWithPermsF p q r s = sort (map (minEquivWithPermsG r s) (zip p q))
-
--- add r to p in position of s in q
-minEquivWithPermsG :: Region -> Region -> ([HalfSpace],[HalfSpace]) -> [HalfSpace]
-minEquivWithPermsG r s (p,q) = sort (map (minEquivWithPermsH r s) (zip p q))
-
--- add r to p if s in q
-minEquivWithPermsH :: Region -> Region -> (HalfSpace,HalfSpace) -> HalfSpace
-minEquivWithPermsH r s (p,q)
- | member s q = insert r p
- | otherwise = p
-
--- remove s from q
-minEquivWithPermsI :: Space -> Region -> Space
-minEquivWithPermsI q s = map (map (filter (\a -> a /= s))) q
-
--- return space with regions permuted such that result is smallest possible
 minEquiv :: Space -> Space
-minEquiv s = fst (minEquivWithPerms [] (sortSpace s) 0 (regionsOfSpace s) [])
+minEquiv s = let
+ posit = sortSpace s
+ todo = regionsOfSpace posit
+ regions = map intToRegion (indices (length todo))
+ in fst (foldl minEquivPrefix ([],[(posit,todo,[])]) regions)
+
+minEquivWithPerms :: Space -> (Space,[[Region]])
+minEquivWithPerms s = let
+ posit = sortSpace s
+ todo = regionsOfSpace posit
+ regions = map intToRegion (indices (length todo))
+ (result,results) = foldl minEquivPrefix ([],[(posit,todo,[])]) regions
+ dones = map (\(_,_,z) -> z) results
+ in (result,dones)
+
+-- car is minimum so far, cdar are positional remainders, cddar are listed remainders, cdddar are in order usages
+minEquivPrefix :: (Space, [(Space, [Region], [Region])]) -> Region -> (Space, [(Space, [Region], [Region])])
+minEquivPrefix (p,q) r = let
+ branches = concat (map (\(x,y,z) -> minEquivPrefixF p x y z r) q)
+ result = minimum (map (\(s,_,_,_) -> s) branches)
+ results = filter (\(s,_,_,_) -> s == result) branches
+ in (result, (map (\(_,x,y,z) -> (x,y,z)) results))
+
+-- given minimum sofar, positional todo, listed todo, inorder done, region to add to given minimum
+-- return new possible minimum for each listed todo
+minEquivPrefixF :: Space -> Space -> [Region] -> [Region] -> Region -> [(Space, Space, [Region], [Region])]
+minEquivPrefixF sofar posit todo done toadd = map (minEquivPrefixG sofar posit todo done toadd) todo
+
+-- return new possible minimum using given from todo
+minEquivPrefixG :: Space -> Space -> [Region] -> [Region] -> Region -> Region -> (Space, Space, [Region], [Region])
+minEquivPrefixG sofar posit todo done toadd torem = let
+ newSofar = minEquivPrefixH sofar posit toadd torem
+ newPosit = minEquivPrefixK posit torem
+ newTodo = remove torem todo
+ newDone = torem:done
+ in (newSofar, newPosit, newTodo, newDone)
+
+-- add toadd to sofar in positions of torem in posit
+minEquivPrefixH :: Space -> Space -> Region -> Region -> Space
+minEquivPrefixH sofar posit toadd torem = sort (map (minEquivPrefixI toadd torem) (zip sofar posit))
+
+-- add toadd to sofar in position of torem in posit
+minEquivPrefixI :: Region -> Region -> ([HalfSpace],[HalfSpace]) -> [HalfSpace]
+minEquivPrefixI toadd torem (sofar,posit) = sort (map (minEquivPrefixJ toadd torem) (zip sofar posit))
+
+-- add toadd to sofar if torem in posit
+minEquivPrefixJ :: Region -> Region -> (HalfSpace,HalfSpace) -> HalfSpace
+minEquivPrefixJ toadd torem (sofar,posit)
+ | member torem posit = insert toadd sofar
+ | otherwise = sofar
+
+-- remove torem from posit
+minEquivPrefixK :: Space -> Region -> Space
+minEquivPrefixK posit torem = map (map (filter (\a -> a /= torem))) posit
 
 -- return sorted equivalent
 sortSpace :: Space -> Space
@@ -297,6 +306,14 @@ migrateSpaceF b r (a,s)
  | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
  | otherwise = s
 
+-- return all boundaries in space
+boundariesOfSpace :: Space -> [Boundary]
+boundariesOfSpace s = map intToBoundary (indices (length s))
+
+-- return all regions in space
+regionsOfSpace :: Space -> [Region]
+regionsOfSpace s = welldef (concat (concat s))
+
 -- return per boundary side of region
 sidesOfRegion :: Region -> Space -> [Sidedness]
 sidesOfRegion r s = map (\a -> member r (a !! 1)) s
@@ -312,27 +329,11 @@ regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 regionOfSidesF :: [Sidedness] -> Space -> [Region]
 regionOfSidesF r s = foldl (\a (b,c) -> a +\ (c !! (sidednessToInt b))) (regionsOfSpace s) (zip r s)
 
--- return all boundaries in space
-boundariesOfSpace :: Space -> [Boundary]
-boundariesOfSpace s = indices (length s)
+-- return sidedness with boundaries reversed
+oppositeOfSides :: [Boundary] -> [Sidedness] -> [Sidedness]
+oppositeOfSides b r = foldl (\x y -> replace y (not (x !! y)) x) r b
 
--- return all regions in space
-regionsOfSpace :: Space -> [Region]
-regionsOfSpace s = welldef (concat (concat s))
-
--- return boundaries attached to region
-attachedBoundaries :: Region -> Space -> [Boundary]
-attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r s) (boundariesOfSpace s)
-
--- return facets attached to region
-attachedFacets :: Int -> Region -> Space -> [[Boundary]]
-attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (boundariesOfSpace s))
-
--- return regions in corners of boundaries
-attachedRegions :: [Boundary] -> Space -> [Region]
-attachedRegions b s = filter (\r -> oppositeOfRegionExists b r s) (regionsOfSpace s)
-
--- return neighbor region of given region wrt given boundary
+-- return neighbor region of given region wrt given boundaries
 oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
 oppositeOfRegion b r s = regionOfSides (oppositeOfSides b (sidesOfRegion r s)) s
 
@@ -341,20 +342,28 @@ oppositeOfRegionExists :: [Boundary] -> Region -> Space -> Bool
 oppositeOfRegionExists b r s = regionOfSidesExists (oppositeOfSides b (sidesOfRegion r s)) s
 
 -- return shell of regions around given region
-neighborsOfRegion :: Region -> Space -> [Region]
-neighborsOfRegion r s = map (\b -> oppositeOfRegion [b] r s) (attachedBoundaries r s)
+oppositesOfRegion :: Region -> Space -> [Region]
+oppositesOfRegion r s = map (\b -> oppositeOfRegion [b] r s) (attachedBoundaries r s)
+
+-- return boundaries attached to region
+attachedBoundaries :: Region -> Space -> [Boundary]
+attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r s) (boundariesOfSpace s)
+
+-- return facets attached to region
+attachedFacets :: Int -> Region -> Space -> [[Boundary]]
+attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (attachedBoundaries r s))
+
+-- return regions in corners of boundaries
+attachedRegions :: [Boundary] -> Space -> [Region]
+attachedRegions b s = filter (\r -> oppositeOfRegionExists b r s) (regionsOfSpace s)
 
 -- return corresponding outside region
-complementOfRegion :: Region -> Space -> Region
-complementOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
+outsideOfRegion :: Region -> Space -> Region
+outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 
 -- return whether the region is an outside region
-complementOfRegionExists :: Region -> Space -> Bool
-complementOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
-
--- return sidedness with boundaries reversed
-oppositeOfSides :: [Boundary] -> [Sidedness] -> [Sidedness]
-oppositeOfSides b r = foldl (\x y -> replace y (not (x !! y)) x) r b
+outsideOfRegionExists :: Region -> Space -> Bool
+outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
@@ -387,7 +396,7 @@ takeRegions s t r = let
  -- for each given region, find sides in first space
  firstSides :: [[Sidedness]] -- given of SRegion -> SBoundary -> Sidedness
  firstSides = map (\x -> sidesOfRegion x firstSpace) r
- -- for each boundary in first space, find corresponding boundary in second space or Nothing
+ -- for each boundary in second space, find corresponding boundary in first space or Nothing
  secondToFirst :: [Maybe Boundary] -- TBoundary -> Maybe SBoundary
  secondToFirst = map (\x -> elemIndex x firstBoundaries) secondBoundaries
  -- for each given region, for each boundary in second space, find sidedness or Nothing in first space
@@ -424,12 +433,12 @@ divideSpace figure space = let
  duplicates = holes (length figure) whole
  mapping = zip figure duplicates
  withDups = map (map (divideSpaceG mapping figure)) space
- newBoundary = [(halfspace ++ duplicates),(figure \\ halfspace)]
+ newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
  in withDups Prelude.++ [newBoundary]
 
 divideSpaceF :: [Region] -> Space -> [Region]
 divideSpaceF r s
- | (length r) > 0 = generate (\a -> r +\ (neighborsOfRegion a s)) (head r)
+ | (length r) > 0 = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
  | otherwise = []
 
 divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
@@ -618,6 +627,38 @@ isAbovePlane v w = let
  pointV = Matrix.subVector 0 (dim-1) v
  in pointS > ((Matrix.dot planeV pointV) + planeS)
 
+-- return region of point, assuming planes and space are homeomorphic
+regionOfPoint :: Point -> [Plane] -> Space -> Region
+regionOfPoint v w s = let
+ dim = Matrix.size v
+ num = length w
+ planes :: [Int]
+ planes = indices num
+ -- find n others for each boundary
+ tuplesI :: [[Int]]
+ tuplesI = map (\b -> take dim (remove b planes)) planes
+ tuplesB :: [[Boundary]]
+ tuplesB = map (map intToBoundary) tuplesI
+ -- for each plane, find reference point not on plane
+ zero :: Point
+ zero = Matrix.fromList (replicate dim 0.0)
+ vertices :: [Point]
+ vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subset b w))) tuplesI
+ -- find sides of reference points wrt planes
+ sidesV :: [Bool]
+ sidesV = map (\(x,y) -> isAbovePlane x y) (zip vertices w)
+ -- find sides of point wrt planes
+ sidesP :: [Bool]
+ sidesP = map (\x -> isAbovePlane v x) w
+ -- find sides of n-tuples wrt boundaries
+ sidesS :: [Bool]
+ sidesS = map (\(a,b) -> vertexWrtBoundary a (map intToBoundary b) s) (enumerate tuplesB)
+ -- use transitivity to complete sides of point wrt boundaries
+ sidesR :: [Sidedness]
+ sidesR = map (\(a,(b,c)) -> a == (b == c)) (zip sidesV (zip sidesP sidesS))
+ -- return regionOfSides
+ in regionOfSides sidesR s
+
 -- return space with sidednesses determined by given planes
 spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n p
@@ -651,38 +692,6 @@ spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
  indP = subset tupl headPlanes
  intP = fromJust (intersectPlanes n (indP ++ [tailPlane]))
  in sort (takeRegions (zip subB subS) (zip headBounds headSpace) [regionOfPoint intP subP subS])
-
--- return region of point, assuming planes and space are homeomorphic
-regionOfPoint :: Point -> [Plane] -> Space -> Region
-regionOfPoint v w s = let
- dim = Matrix.size v
- num = length w
- planes :: [Int]
- planes = indices num
- -- find n others for each boundary
- tuplesI :: [[Int]]
- tuplesI = map (\b -> take dim (remove b planes)) planes
- tuplesB :: [[Boundary]]
- tuplesB = map (map intToBoundary) tuplesI
- -- for each plane, find reference point not on plane
- zero :: Point
- zero = Matrix.fromList (replicate dim 0.0)
- vertices :: [Point]
- vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subset b w))) tuplesI
- -- find sides of reference points wrt planes
- sidesV :: [Bool]
- sidesV = map (\(x,y) -> isAbovePlane x y) (zip vertices w)
- -- find sides of point wrt planes
- sidesP :: [Bool]
- sidesP = map (\x -> isAbovePlane v x) w
- -- find sides of n-tuples wrt boundaries
- sidesS :: [Bool]
- sidesS = map (\(a,b) -> vertexWrtBoundary a (map intToBoundary b) s) (enumerate tuplesB)
- -- use transitivity to complete sides of point wrt boundaries
- sidesR :: [Sidedness]
- sidesR = map (\(a,(b,c)) -> a == (b == c)) (zip sidesV (zip sidesP sidesS))
- -- return regionOfSides
- in regionOfSides sidesR s
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
