@@ -635,15 +635,11 @@ regionOfPoint v w s = let
  planes :: [Int]
  planes = indices num
  -- find n others for each boundary
- tuplesI :: [[Int]]
- tuplesI = map (\b -> take dim (remove b planes)) planes
- tuplesB :: [[Boundary]]
- tuplesB = map (map intToBoundary) tuplesI
+ tuples :: [[Int]]
+ tuples = map (\b -> take dim (remove b planes)) planes
  -- for each plane, find reference point not on plane
- zero :: Point
- zero = Matrix.fromList (replicate dim 0.0)
  vertices :: [Point]
- vertices = map (\b -> fromMaybe zero (intersectPlanes dim (subset b w))) tuplesI
+ vertices = map (\b -> fromJust (intersectPlanes dim (subset b w))) tuples
  -- find sides of reference points wrt planes
  sidesV :: [Bool]
  sidesV = map (\(x,y) -> isAbovePlane x y) (zip vertices w)
@@ -652,10 +648,10 @@ regionOfPoint v w s = let
  sidesP = map (\x -> isAbovePlane v x) w
  -- find sides of n-tuples wrt boundaries
  sidesS :: [Bool]
- sidesS = map (\(a,b) -> vertexWrtBoundary a (map intToBoundary b) s) (enumerate tuplesB)
+ sidesS = map (\(a,b) -> vertexWrtBoundary (intToBoundary a) (map intToBoundary b) s) (enumerate tuples)
  -- use transitivity to complete sides of point wrt boundaries
  sidesR :: [Sidedness]
- sidesR = map (\(a,(b,c)) -> a == (b == c)) (zip sidesV (zip sidesP sidesS))
+ sidesR = map (\(a,(b,c)) -> boolToSidedness (a == (b == c))) (zip sidesV (zip sidesP sidesS))
  -- return regionOfSides
  in regionOfSides sidesR s
 
