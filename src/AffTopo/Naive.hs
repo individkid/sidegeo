@@ -257,7 +257,7 @@ minEquivPrefixF sofar posit todo done toadd = map (minEquivPrefixG sofar posit t
 -- return new possible minimum using given from todo
 minEquivPrefixG :: Space -> Space -> [Region] -> [Region] -> Region -> Region -> (Space, Space, [Region], [Region])
 minEquivPrefixG sofar posit todo done toadd torem = let
- newSofar = minEquivPrefixH sofar posit toadd torem
+ newSofar = sort (minEquivPrefixH sofar posit toadd torem)
  newPosit = minEquivPrefixK posit torem
  newTodo = remove torem todo
  newDone = torem:done
