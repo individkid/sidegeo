@@ -698,39 +698,29 @@ planesFromSpace n s = let
  -- find vertices, interpret as coplanes
  tuples = subsets n (indices (length space))
  coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) tuples
- cotuples = subsets n (indices (length coplanes))
- copoints = map (\x -> fromJust (intersectPlanes n (subset x coplanes))) cotuples
- -- add simplex containing all covertices
- simplex :: [Plane]
- simplex = planesFromSpaceF n copoints
- coplanesplus = coplanes Prelude.++ simplex
  -- convert coplanes to cospace with up-down sidedeness
- cospaceplus = spaceFromPlanes n coplanesplus
- -- find inside coregion that separates coboundaries like given space boundary separates vertices
+ cospace = spaceFromPlanes n coplanes
+ -- find coregion that separates coboundaries like given space boundary separates vertices
  bound = intToBoundary ((length s) - 1)
  vertices = map (map intToBoundary) tuples
  separate :: [[[Boundary]]] -- Sidedness -> VertexSet -> Tuple -> Boundary
- separate = planesFromSpaceG bound vertices s
+ separate = planesFromSpaceF bound vertices s
  coseparate :: [[Boundary]] -- Sidedness -> CoBoundarySet -> CoBoundary
  coseparate = map (map (\x -> fromJust (elemIndex x vertices))) separate
  coseparaterev = reverse coseparate
  coseparates :: [[[Boundary]]] -- CoRegion -> CoSidedness -> CoBoundarySet -> CoBoundary
- coseparates = planesFromSpaceH cospaceplus
+ coseparates = planesFromSpaceG cospace
  coregion = intToRegion (fromJust (findIndex (\x -> (x == coseparate) || (x == coseparaterev)) coseparates))
- -- find average of corners of coregion, interpret as plane to add
- corners = attachedFacets n coregion cospaceplus
- points = map (\x -> fromJust (intersectPlanes n (subset x coplanesplus))) corners
- zero = Matrix.fromList (replicate n 0.0)
- point = Matrix.scale (1.0 / (fromIntegral (length points))) (foldl (\x y -> Matrix.add x y) zero points)
+ -- find point in coregion, interpret it as plane
+ outin = outsideOfRegionExists coregion cospace
+ outpoint = planesFromSpaceI n coregion cospace coplanes
+ inpoint = planesFromSpaceH n coregion cospace coplanes
+ point = if outin then outpoint else inpoint
  in planes Prelude.++ [point]
 
--- double size of simplex until base is below, and sides are above, all given points
-planesFromSpaceF :: Int -> [Point] -> [Plane]
-planesFromSpaceF n p = undefined
-
 -- return vertices on each side of given boundary
-planesFromSpaceG :: Boundary -> [[Boundary]] -> Space -> [[[Boundary]]]
-planesFromSpaceG b v s = let
+planesFromSpaceF :: Boundary -> [[Boundary]] -> Space -> [[[Boundary]]]
+planesFromSpaceF b v s = let
  test = (\x -> vertexWrtBoundary b x s)
  first = (\x y -> [insert y (x !! 0), x !! 1])
  second = (\x y -> [x !! 0, insert y (x !! 1)])
@@ -738,11 +728,23 @@ planesFromSpaceG b v s = let
  in foldl func [[],[]] v
 
 -- return per-region boundaries on each side of region
-planesFromSpaceH :: Space -> [[[Boundary]]]
-planesFromSpaceH s = let
+planesFromSpaceG :: Space -> [[[Boundary]]]
+planesFromSpaceG s = let
  bounds = boundariesOfSpace s
  test = (\x y -> regionWrtBoundary x y s)
  first = (\x y -> [insert y (x !! 0), x !! 1])
  second = (\x y -> [x !! 0, insert y (x !! 1)])
  func = (\x y z -> if (test z x) then (second y z) else (first y z))
  in map (\x -> foldl (func x) [[],[]] bounds) (regionsOfSpace s)
+
+-- return average of corners of coregeion
+planesFromSpaceH :: Int -> Region -> Space -> [Plane] -> Point
+planesFromSpaceH n coregion cospace coplanes = let
+ corners = attachedFacets n coregion cospace
+ points = map (\x -> fromJust (intersectPlanes n (subset x coplanes))) corners
+ zero = Matrix.fromList (replicate n 0.0)
+ in Matrix.scale (1.0 / (fromIntegral (length points))) (foldl (\x y -> Matrix.add x y) zero points)
+
+ -- find point some distance out on line from corner of coregion and corner of other outside
+planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point
+planesFromSpaceI = undefined
