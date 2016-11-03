@@ -700,7 +700,7 @@ planesFromSpace n s
  tuples = subsets n (indices (length space))
  coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) tuples
  -- convert coplanes to cospace with up-down sidedeness
- cospace = spaceFromPlanes n coplanes -- does this work with coincidences?
+ cospace = spaceFromPlanes n coplanes
  -- find coregion that separates coboundaries like given space boundary separates vertices
  bound = intToBoundary ((length s) - 1)
  vertices = map (map intToBoundary) tuples
