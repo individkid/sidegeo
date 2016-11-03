@@ -690,8 +690,9 @@ spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
-planesFromSpace _ [] = []
-planesFromSpace n s = let
+planesFromSpace n s
+ | (length s) <= n = error "try randomPlanes"
+ | otherwise = let
  -- recurse with one fewer boundary
  space = subSpace (intToBoundary ((length s) - 1)) s
  planes = planesFromSpace n space
@@ -699,7 +700,7 @@ planesFromSpace n s = let
  tuples = subsets n (indices (length space))
  coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) tuples
  -- convert coplanes to cospace with up-down sidedeness
- cospace = spaceFromPlanes n coplanes
+ cospace = spaceFromPlanes n coplanes -- does this work with coincidences?
  -- find coregion that separates coboundaries like given space boundary separates vertices
  bound = intToBoundary ((length s) - 1)
  vertices = map (map intToBoundary) tuples
@@ -747,4 +748,12 @@ planesFromSpaceH n coregion cospace coplanes = let
 
  -- find point some distance out on line from corner of coregion and corner of other outside
 planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point
-planesFromSpaceI = undefined
+planesFromSpaceI n r s p = let
+ corner = head (attachedFacets n r s)
+ outside = outsideOfRegion r s
+ other = head (attachedFacets n outside s)
+ arrow = fromJust (intersectPlanes n (subset corner p))
+ feather = fromJust (intersectPlanes n (subset other p))
+ diff = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
+ factor = 0.1 / (sqrt (Matrix.dot diff diff))
+ in Matrix.add arrow (Matrix.scale factor diff)
