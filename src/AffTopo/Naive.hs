@@ -342,43 +342,6 @@ minEquivPrefixJ toadd torem (sofar,posit)
 sortSpace :: Space -> Space
 sortSpace s = sort (map sort (map (map sort) s))
 
--- assume given spaces are subspaces in a superspace
--- return regions in second space that overlap any of the given regions in the first space
-takeRegions :: SubSpace -> SubSpace -> [Region] -> [Region]
-takeRegions s t r = let
- (firstBoundaries,firstSpace) = unzip s
- (secondBoundaries,secondSpace) = unzip t
- -- for each given region, find sides in first space
- firstSides :: [[Sidedness]] -- given of SRegion -> SBoundary -> Sidedness
- firstSides = map (\x -> sidesOfRegion x firstSpace) r
- -- for each boundary in second space, find corresponding boundary in first space or Nothing
- secondToFirst :: [Maybe Boundary] -- TBoundary -> Maybe SBoundary
- secondToFirst = map (\x -> elemIndex x firstBoundaries) secondBoundaries
- -- for each given region, for each boundary in second space, find sidedness or Nothing in first space
- secondSides :: [[Maybe Sidedness]] -- given of SRegion -> TBoundary -> Maybe Sidedness
- secondSides = map (\x -> map (\y -> fmap (\z -> x !! z) y) secondToFirst) firstSides
- -- for each boundary in second space, count number of Nothing
- count :: Int
- count = foldl (\x y -> if y == Nothing then x+1 else x) 0 secondToFirst
- -- find sidedness permutations of same length as indices
- permutes :: [[Sidedness]] -- every possible -> count of TBoundary -> Sidedness
- permutes = map (\x -> map (\y -> intToSidedness (x .&. (shift 1 y))) (indices count)) (indices (shift 1 count))
- -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
- fixedSides :: [[Sidedness]] -- given of SRegion -> TBoundary -> Sidedness
- fixedSides = map (\(x,y) -> takeRegionsF x y) [(x,y) | x <- secondSides, y <- permutes]
- -- ignore empty regions
- extantSides :: [[Sidedness]] -- given of SRegion -> TBoundary -> Sidedness
- extantSides = filter (\x -> regionOfSidesExists x secondSpace) fixedSides
- -- map sides to regions
- in map (\x -> regionOfSides x secondSpace) extantSides
-
-takeRegionsF :: [Maybe Sidedness] -> [Sidedness] -> [Sidedness]
-takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
-takeRegionsF (Nothing:b) (c:d) = c:(takeRegionsF b d)
-takeRegionsF [] [] = []
-takeRegionsF (Nothing:_) [] = error "not enough permutations"
-takeRegionsF [] (_:_) = error "too many permutations"
-
 -- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
 canMigrate :: Region -> Space -> Bool
 canMigrate r s = let
@@ -431,6 +394,43 @@ sectionSpace :: Boundary -> Space -> Space
 sectionSpace b s = let
  regions = filter (\r -> regionWrtBoundary b r s) (attachedRegions [b] s)
  in map (map (\x -> x +\ regions)) (unplace b s)
+
+-- assume given spaces are subspaces in a superspace
+-- return regions in second space that overlap any of the given regions in the first space
+takeRegions :: SubSpace -> SubSpace -> [Region] -> [Region]
+takeRegions s t r = let
+ (firstBoundaries,firstSpace) = unzip s
+ (secondBoundaries,secondSpace) = unzip t
+ -- for each given region, find sides in first space
+ firstSides :: [[Sidedness]] -- given of SRegion -> SBoundary -> Sidedness
+ firstSides = map (\x -> sidesOfRegion x firstSpace) r
+ -- for each boundary in second space, find corresponding boundary in first space or Nothing
+ secondToFirst :: [Maybe Boundary] -- TBoundary -> Maybe SBoundary
+ secondToFirst = map (\x -> elemIndex x firstBoundaries) secondBoundaries
+ -- for each given region, for each boundary in second space, find sidedness or Nothing in first space
+ secondSides :: [[Maybe Sidedness]] -- given of SRegion -> TBoundary -> Maybe Sidedness
+ secondSides = map (\x -> map (\y -> fmap (\z -> x !! z) y) secondToFirst) firstSides
+ -- for each boundary in second space, count number of Nothing
+ count :: Int
+ count = foldl (\x y -> if y == Nothing then x+1 else x) 0 secondToFirst
+ -- find sidedness permutations of same length as indices
+ permutes :: [[Sidedness]] -- every possible -> count of TBoundary -> Sidedness
+ permutes = map (\x -> map (\y -> intToSidedness (x .&. (shift 1 y))) (indices count)) (indices (shift 1 count))
+ -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
+ fixedSides :: [[Sidedness]] -- given of SRegion -> TBoundary -> Sidedness
+ fixedSides = map (\(x,y) -> takeRegionsF x y) [(x,y) | x <- secondSides, y <- permutes]
+ -- ignore empty regions
+ extantSides :: [[Sidedness]] -- given of SRegion -> TBoundary -> Sidedness
+ extantSides = filter (\x -> regionOfSidesExists x secondSpace) fixedSides
+ -- map sides to regions
+ in map (\x -> regionOfSides x secondSpace) extantSides
+
+takeRegionsF :: [Maybe Sidedness] -> [Sidedness] -> [Sidedness]
+takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
+takeRegionsF (Nothing:b) (c:d) = c:(takeRegionsF b d)
+takeRegionsF [] [] = []
+takeRegionsF (Nothing:_) [] = error "not enough permutations"
+takeRegionsF [] (_:_) = error "too many permutations"
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => g -> Int -> SubSpace -> SubSpace -> (SubSpace, g)
