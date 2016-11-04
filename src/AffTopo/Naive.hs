@@ -691,7 +691,7 @@ spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s
- | (length s) <= n = error "try randomPlanes"
+ | (length s) <= n = take (length s) (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
  -- recurse with one fewer boundary
  space = subSpace (intToBoundary ((length s) - 1)) s
