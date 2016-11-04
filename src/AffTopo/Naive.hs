@@ -169,26 +169,13 @@ catalyzeF :: (g -> (a,g)) -> g -> [a] -> ([a],g)
 catalyzeF f g a = let (b,h) = f g in (b:a,h)
 
 -- call function for new result until it returns Nothing
-chainJust :: [(a -> Maybe a)] -> a -> Maybe a
-chainJust (f:g) a = chainJustF g a Nothing (f a)
-chainJust [] _ = Nothing
+foldMaybe :: (a -> b -> Maybe a) -> a -> [b] -> Maybe a
+foldMaybe f a (b:c) = foldMaybeF f Nothing (f a b) c
+foldMaybe _ _ [] = Nothing
 
-chainJustF :: [(a -> Maybe a)] -> a -> Maybe a -> Maybe a -> Maybe a
-chainJustF (f:g) _ _ (Just c) = chainJustF g c (Just c) (f c)
-chainJustF (_:_) _ b Nothing = b
-chainJustF [] _ _ (Just c) = Just c
-chainJustF [] _ b Nothing = b
-
--- call each funcion returning last Just
-turnJust :: [(a -> Maybe a)] -> a -> Maybe a
-turnJust (f:g) a = turnJustF g a Nothing (f a)
-turnJust [] _ = Nothing
-
-turnJustF :: [(a -> Maybe a)] -> a -> Maybe a -> Maybe a -> Maybe a
-turnJustF (f:g) _ _ (Just c) = turnJustF g c (Just c) (f c)
-turnJustF (f:g) a b Nothing = turnJustF g a b (f a)
-turnJustF [] _ _ (Just c) = Just c
-turnJustF [] _ b Nothing = b
+foldMaybeF :: (a -> b -> Maybe a) -> Maybe a -> Maybe a -> [b] -> Maybe a
+foldMaybeF f _ (Just b) (c:d) = foldMaybeF f (Just b) (f b c) d
+foldMaybeF _ a _ _ = a
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
@@ -546,7 +533,8 @@ randomPlanes g n m = let
  (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n*m)
  b = Matrix.toColumns (Matrix.matrix m a)
  tweaks = [randomPlanesF n m, randomPlanesG n m, randomPlanesH n m]
- in fromMaybe (b,h) (chainJust (repeat (turnJust tweaks)) (b,h))
+ func x = foldMaybe (\y z -> z y) x tweaks
+ in until (isNothing . func) (fromJust . func) (b,h)
 
 -- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
 randomPlanesF :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
