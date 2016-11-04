@@ -746,14 +746,11 @@ planesFromSpaceH n coregion cospace coplanes = let
  zero = Matrix.fromList (replicate n 0.0)
  in Matrix.scale (1.0 / (fromIntegral (length points))) (foldl (\x y -> Matrix.add x y) zero points)
 
- -- find point some distance out on line from corner of coregion and corner of other outside
+ -- find point some distance out on line from coregion and other outside
 planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point
 planesFromSpaceI n r s p = let
- corner = head (attachedFacets n r s)
- outside = outsideOfRegion r s
- other = head (attachedFacets n outside s)
- arrow = fromJust (intersectPlanes n (subset corner p))
- feather = fromJust (intersectPlanes n (subset other p))
- diff = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
- factor = 0.1 / (sqrt (Matrix.dot diff diff))
- in Matrix.add arrow (Matrix.scale factor diff)
+ arrow = planesFromSpaceH n r s p
+ feather = planesFromSpaceH n (outsideOfRegion r s) s p
+ shaft = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
+ factor = 0.1 / (sqrt (Matrix.dot shaft shaft))
+ in Matrix.add arrow (Matrix.scale factor shaft)
