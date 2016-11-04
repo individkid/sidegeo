@@ -81,9 +81,8 @@ unplace a b = (take a b) Prelude.++ (drop (a+1) b)
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) Prelude.++ (b : (drop (a+1) c))
 
-choose :: Random.RandomGen g => g -> [a] -> Maybe (a, g)
-choose _ [] = Nothing
-choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in Just ((a !! b), h)
+choose :: Random.RandomGen g => g -> [a] -> (a, g)
+choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in ((a !! b), h)
 
 holes :: Ord a => Num a => Int -> [a] -> [a]
 holes n a = take n ((indices ((length a)+n)) \\ a)
@@ -474,7 +473,7 @@ superSpace g n s t
   -- take from section for linear subset of regions attached to immitate
   -- divide by this linear subset of regions
   sBound = head sBounds -- boundary to add
-  (bound,h) = fromJust (choose g tBounds) -- boundary to immitate
+  (bound,h) = choose g tBounds -- boundary to immitate
   section = superSpaceG bound t -- homeomorphic to immitated or added
   (supersect,i) = superSpace h (n-1) [(bound,[[0],[1]])] section -- homeomorphic after restoring immitated
   regions = takeRegions supersect t (regionsOfSpace (range supersect)) -- regions in t that are homeomorphic
@@ -483,7 +482,7 @@ superSpace g n s t
   -- choose boundary to remove
   -- recurse with one fewer boundary
   -- recurse to restore boundary
-  (bound,h) = fromJust (choose g sBounds)
+  (bound,h) = choose g sBounds
   subspace = superSpaceF bound s
   (space,i) = superSpace h n subspace t
   singlespace = [(bound,[[0],[1]])]
@@ -495,7 +494,7 @@ superSpace g n s t
   -- recurse to find full supersection
   -- take regions to space with right unshared to find those divided by left unshared
   sBound = head (sBounds \\ tBounds) -- left unshared
-  (bound,h) = fromJust (choose g (sBounds +\ tBounds)) -- shared
+  (bound,h) = choose g (sBounds +\ tBounds) -- shared
   tSect = superSpaceG bound t -- missing bound and sBound
   section = superSpaceG sBound s -- missing sBound and tBound
   (sSect,i) = superSpace h (n-1) tSect section -- missing sBound
@@ -510,7 +509,7 @@ superSpace g n s t
   -- 0 1 2 3 5 7 + 0 1 2 4 6 8 =
   -- 0 1 2 3 5 7 + (0 1 2 3 5 + 0 1 2 4 6 8) =
   -- 0 1 2 3 5 7 + (0 1 2 3 5 + (0 1 2 3 + 0 1 2 4 6 8))
-  (b,h) = fromJust (choose g (sBounds \\ tBounds)) -- choice is from more than one
+  (b,h) = choose g (sBounds \\ tBounds) -- choice is from more than one
   sub = superSpaceF b s -- since choice was from more than one, sub and t are not proper
   (sup,i) = superSpace h n sub t -- adds something to t because sub and t are not proper
   in superSpace i n s sup where -- easier because sup contains t plus one other than b that t did not
@@ -555,7 +554,7 @@ randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a)
 
 randomPlanesF0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesF0 g n a b = let
- (c,h) = fromJust (choose g b)
+ (c,h) = choose g b
  d = Matrix.toList (a !! c)
  e = (d !! (n-1)) / 2.0
  in (replace c (Matrix.fromList (map (\x -> x - e) d)) a, h)
@@ -571,7 +570,7 @@ randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a)
 
 randomPlanesG0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
 randomPlanesG0 g n a b = let
- (c,h) = fromJust (choose g b)
+ (c,h) = choose g b
  (d,i) = catalyze (\j -> Random.randomR (-100.0,100.0) j) h n
  in (replace c (Matrix.fromList d) a, i)
 
