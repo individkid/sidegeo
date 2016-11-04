@@ -190,6 +190,73 @@ turnJustF (f:g) a b Nothing = turnJustF g a b (f a)
 turnJustF [] _ _ (Just c) = Just c
 turnJustF [] _ b Nothing = b
 
+-- return all boundaries in space
+boundariesOfSpace :: Space -> [Boundary]
+boundariesOfSpace s = map intToBoundary (indices (length s))
+
+-- return all regions in space
+regionsOfSpace :: Space -> [Region]
+regionsOfSpace s = welldef (concat (concat s))
+
+-- side of region with regard to boundary
+regionWrtBoundary :: Boundary -> Region -> Space -> Sidedness
+regionWrtBoundary b r s = intToSidedness (fromJust (findIndex (\a -> member r a) (s !! b)))
+
+-- side of vertex identified by n boundaries
+vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Sidedness
+vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfRegionExists r a s) (regionsOfSpace s))) s
+
+-- return per boundary side of region
+sidesOfRegion :: Region -> Space -> [Sidedness]
+sidesOfRegion r s = map (\a -> member r (a !! 1)) s
+
+-- return region from per boundary side
+regionOfSides :: [Sidedness] -> Space -> Region
+regionOfSides r s = (regionOfSidesF r s) !! 0
+
+-- return whether region with given side map exists in space
+regionOfSidesExists :: [Sidedness] -> Space -> Bool
+regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
+
+regionOfSidesF :: [Sidedness] -> Space -> [Region]
+regionOfSidesF r s = foldl (\a (b,c) -> a +\ (c !! (sidednessToInt b))) (regionsOfSpace s) (zip r s)
+
+-- return sidedness with boundaries reversed
+oppositeOfSides :: [Boundary] -> [Sidedness] -> [Sidedness]
+oppositeOfSides b r = foldl (\x y -> replace y (not (x !! y)) x) r b
+
+-- return neighbor region of given region wrt given boundaries
+oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
+oppositeOfRegion b r s = regionOfSides (oppositeOfSides b (sidesOfRegion r s)) s
+
+-- return whether neighbor region exists
+oppositeOfRegionExists :: [Boundary] -> Region -> Space -> Bool
+oppositeOfRegionExists b r s = regionOfSidesExists (oppositeOfSides b (sidesOfRegion r s)) s
+
+-- return shell of regions around given region
+oppositesOfRegion :: Region -> Space -> [Region]
+oppositesOfRegion r s = map (\b -> oppositeOfRegion [b] r s) (attachedBoundaries r s)
+
+-- return boundaries attached to region
+attachedBoundaries :: Region -> Space -> [Boundary]
+attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r s) (boundariesOfSpace s)
+
+-- return facets attached to region
+attachedFacets :: Int -> Region -> Space -> [[Boundary]]
+attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (attachedBoundaries r s))
+
+-- return regions in corners of boundaries
+attachedRegions :: [Boundary] -> Space -> [Region]
+attachedRegions b s = filter (\r -> oppositeOfRegionExists b r s) (regionsOfSpace s)
+
+-- return corresponding outside region
+outsideOfRegion :: Region -> Space -> Region
+outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
+
+-- return whether the region is an outside region
+outsideOfRegionExists :: Region -> Space -> Bool
+outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
+
 -- return all linear spaces of given dimension and boundaries.
 allSpaces :: Random.RandomGen g => g -> Int -> Int -> ([Space], g)
 allSpaces g n m = let
@@ -275,116 +342,6 @@ minEquivPrefixJ toadd torem (sofar,posit)
 sortSpace :: Space -> Space
 sortSpace s = sort (map sort (map (map sort) s))
 
--- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
-canMigrate :: Region -> Space -> Bool
-canMigrate r s = let
- boundaries = attachedBoundaries r s
- sides = sidesOfRegion r s
- opposite = oppositeOfSides boundaries sides
- empty = not (regionOfSidesExists opposite s)
- neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
- exists = map (\a -> regionOfSidesExists a s) neighbors
- in foldl (\a b -> a && b) empty exists
-
--- return space with given region changed to its local opposite
-migrateSpace :: Region -> Space -> Space
-migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
-
-migrateSpaceF :: [Boundary] -> Region -> (Boundary,FullSpace) -> FullSpace
-migrateSpaceF b r (a,s)
- | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
- | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
- | otherwise = s
-
--- return all boundaries in space
-boundariesOfSpace :: Space -> [Boundary]
-boundariesOfSpace s = map intToBoundary (indices (length s))
-
--- return all regions in space
-regionsOfSpace :: Space -> [Region]
-regionsOfSpace s = welldef (concat (concat s))
-
--- side of region with regard to boundary
-regionWrtBoundary :: Boundary -> Region -> Space -> Sidedness
-regionWrtBoundary b r s = intToSidedness (fromJust (findIndex (\a -> member r a) (s !! b)))
-
--- side of vertex identified by n boundaries
-vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Sidedness
-vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfRegionExists r a s) (regionsOfSpace s))) s
-
--- return per boundary side of region
-sidesOfRegion :: Region -> Space -> [Sidedness]
-sidesOfRegion r s = map (\a -> member r (a !! 1)) s
-
--- return region from per boundary side
-regionOfSides :: [Sidedness] -> Space -> Region
-regionOfSides r s = (regionOfSidesF r s) !! 0
-
--- return whether region with given side map exists in space
-regionOfSidesExists :: [Sidedness] -> Space -> Bool
-regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
-
-regionOfSidesF :: [Sidedness] -> Space -> [Region]
-regionOfSidesF r s = foldl (\a (b,c) -> a +\ (c !! (sidednessToInt b))) (regionsOfSpace s) (zip r s)
-
--- return sidedness with boundaries reversed
-oppositeOfSides :: [Boundary] -> [Sidedness] -> [Sidedness]
-oppositeOfSides b r = foldl (\x y -> replace y (not (x !! y)) x) r b
-
--- return neighbor region of given region wrt given boundaries
-oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
-oppositeOfRegion b r s = regionOfSides (oppositeOfSides b (sidesOfRegion r s)) s
-
--- return whether neighbor region exists
-oppositeOfRegionExists :: [Boundary] -> Region -> Space -> Bool
-oppositeOfRegionExists b r s = regionOfSidesExists (oppositeOfSides b (sidesOfRegion r s)) s
-
--- return shell of regions around given region
-oppositesOfRegion :: Region -> Space -> [Region]
-oppositesOfRegion r s = map (\b -> oppositeOfRegion [b] r s) (attachedBoundaries r s)
-
--- return boundaries attached to region
-attachedBoundaries :: Region -> Space -> [Boundary]
-attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r s) (boundariesOfSpace s)
-
--- return facets attached to region
-attachedFacets :: Int -> Region -> Space -> [[Boundary]]
-attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (attachedBoundaries r s))
-
--- return regions in corners of boundaries
-attachedRegions :: [Boundary] -> Space -> [Region]
-attachedRegions b s = filter (\r -> oppositeOfRegionExists b r s) (regionsOfSpace s)
-
--- return corresponding outside region
-outsideOfRegion :: Region -> Space -> Region
-outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
-
--- return whether the region is an outside region
-outsideOfRegionExists :: Region -> Space -> Bool
-outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
-
--- return how many regions a space of given dimension and boundaries has
-defineLinear :: Int -> Int -> Int
-defineLinear n m
- | (n == 0) || (m == 0) = 1
- | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
-
--- return whether all subspaces have correct number of regions
-isLinear :: Int -> Space -> Bool
-isLinear n s = let
- boundaries = boundariesOfSpace s
- sizes = boundaries
- subs = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
- in foldl (\a b -> a && (isLinearF n s b)) True subs
-
-isLinearF :: Int -> Space -> [Boundary] -> Bool
-isLinearF n s b = let
- fixed = map (\(x,y) -> y - x) (enumerate (welldef b))
- subspace = foldl (\x y -> subSpace y x) s fixed
- regions = regionsOfSpace subspace
- boundaries = boundariesOfSpace subspace
- in (defineLinear n (length boundaries)) == (length regions)
-
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space
 takeRegions :: SubSpace -> SubSpace -> [Region] -> [Region]
@@ -421,6 +378,27 @@ takeRegionsF (Nothing:b) (c:d) = c:(takeRegionsF b d)
 takeRegionsF [] [] = []
 takeRegionsF (Nothing:_) [] = error "not enough permutations"
 takeRegionsF [] (_:_) = error "too many permutations"
+
+-- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
+canMigrate :: Region -> Space -> Bool
+canMigrate r s = let
+ boundaries = attachedBoundaries r s
+ sides = sidesOfRegion r s
+ opposite = oppositeOfSides boundaries sides
+ empty = not (regionOfSidesExists opposite s)
+ neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
+ exists = map (\a -> regionOfSidesExists a s) neighbors
+ in foldl (\a b -> a && b) empty exists
+
+-- return space with given region changed to its local opposite
+migrateSpace :: Region -> Space -> Space
+migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
+
+migrateSpaceF :: [Boundary] -> Region -> (Boundary,FullSpace) -> FullSpace
+migrateSpaceF b r (a,s)
+ | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
+ | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
+ | otherwise = s
 
 -- return space with given regions divided by new boundary
 divideSpace :: [Region] -> Space -> Space
@@ -539,6 +517,28 @@ superSpaceH b r s = let
 -- regions indicated by bits of boundary
 superSpaceI :: Int -> [Int] -> Int -> [Region]
 superSpaceI b r s = map intToRegion (filter (\y -> (y .&. (shift 1 b)) == s) r)
+
+-- return how many regions a space of given dimension and boundaries has
+defineLinear :: Int -> Int -> Int
+defineLinear n m
+ | (n == 0) || (m == 0) = 1
+ | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
+
+-- return whether all subspaces have correct number of regions
+isLinear :: Int -> Space -> Bool
+isLinear n s = let
+ boundaries = boundariesOfSpace s
+ sizes = boundaries
+ subs = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
+ in foldl (\a b -> a && (isLinearF n s b)) True subs
+
+isLinearF :: Int -> Space -> [Boundary] -> Bool
+isLinearF n s b = let
+ fixed = map (\(x,y) -> y - x) (enumerate (welldef b))
+ subspace = foldl (\x y -> subSpace y x) s fixed
+ regions = regionsOfSpace subspace
+ boundaries = boundariesOfSpace subspace
+ in (defineLinear n (length boundaries)) == (length regions)
 
 -- return given number of planes in given number of dimensions
 randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
