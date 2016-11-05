@@ -271,7 +271,7 @@ minEquivWithPerms posit = let
  regions = indices (length todo)
  results = foldl minEquivPrefix [([],posit,todo,[])] regions
  (result,_,_,_) = head results
- dones = map (\(_,_,_,z) -> z) results
+ dones = map (\(_,_,_,z) -> reverse z) results
  in (sortSpace result, dones)
 
 -- members of listed tuples are unsorted minimum sofar, positions of regions, position regions todo, inorder regions done
@@ -302,13 +302,11 @@ minEquivPrefixH sofar posit toadd torem = map (minEquivPrefixI toadd torem) (zip
 
 -- add toadd to sofar in position of torem in posit
 minEquivPrefixI :: Region -> Region -> ([HalfSpace],[HalfSpace]) -> [HalfSpace]
-minEquivPrefixI toadd torem (sofar,posit) = map (minEquivPrefixJ toadd torem) (zip sofar posit)
+minEquivPrefixI toadd torem (sofar, posit) = map (minEquivPrefixJ toadd torem) (zip sofar posit)
 
 -- add toadd to sofar if torem in posit
 minEquivPrefixJ :: Region -> Region -> (HalfSpace,HalfSpace) -> HalfSpace
-minEquivPrefixJ toadd torem (sofar,posit)
- | member torem posit = insert toadd sofar
- | otherwise = sofar
+minEquivPrefixJ toadd torem (sofar, posit) = if member torem posit then insert toadd sofar else sofar
 
 -- return sorted equivalent
 sortSpace :: Space -> Space
@@ -327,7 +325,7 @@ canMigrate r s = let
 
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
-migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (map (\(x,y) -> (x, y)) (enumerate s))
+migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
 
 migrateSpaceF :: [Boundary] -> Region -> (Boundary,FullSpace) -> FullSpace
 migrateSpaceF b r (a,s)
@@ -436,7 +434,7 @@ superSpace g n s t
   subspace = superSpaceF bound s
   (space,i) = superSpace h n subspace t
   singlespace = [(bound,[[0],[1]])]
-  in superSpace i n space singlespace
+  in superSpace i n singlespace space
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
   -- choose shared boundary for sections
   -- recurse to find subspace (wrt chosen) of supersection
@@ -446,9 +444,9 @@ superSpace g n s t
   sBound = head (sBounds \\ tBounds) -- left unshared
   (bound,h) = choose g (sBounds +\ tBounds) -- shared
   tSect = superSpaceG bound t -- missing bound and sBound
-  section = superSpaceG sBound s -- missing sBound and tBound
-  (sSect,i) = superSpace h (n-1) tSect section -- missing sBound
-  regions = takeRegions sSect t (regionsOfSpace (range sSect))
+  sSect = superSpaceG sBound s -- missing sBound and tBound
+  (section,i) = superSpace h (n-1) tSect sSect -- missing sBound
+  regions = takeRegions section t (regionsOfSpace (range section))
   in ((superSpaceH sBound regions t), i)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
  | otherwise = let -- s and t are not proper
@@ -493,6 +491,7 @@ superSpaceI b r s = filter (\y -> (y .&. (shift 1 b)) == s) r
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
 defineLinear n m
+ | (n < 0) || (m < 0) = error "negative space"
  | (n == 0) || (m == 0) = 1
  | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
 
@@ -500,7 +499,7 @@ defineLinear n m
 isLinear :: Int -> Space -> Bool
 isLinear n s = let
  boundaries = boundariesOfSpace s
- sizes = boundaries
+ sizes = indices (length boundaries)
  subs = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
  in foldl (\a b -> a && (isLinearF n s b)) True subs
 
