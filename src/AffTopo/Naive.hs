@@ -13,7 +13,7 @@ import qualified System.Random as Random
 
 type Boundary = Int -- index into Space
 type Region = Int -- arbitrary identifier
-type Sidedness = Bool -- index into FullSpace
+type Sidedness = Int -- index into FullSpace
 type HalfSpace = [Region] -- assume welldef set
 type FullSpace = [HalfSpace] -- assume disjoint covering pair
 type Space = [FullSpace] -- assume equal covers
@@ -21,29 +21,14 @@ type SubSpace = [(Boundary,FullSpace)] -- assume one-to-one
 type Plane = Matrix.Vector Double -- single column of distances above base
 type Point = Matrix.Vector Double -- single column of coordinates
 
-boolToSidedness :: Bool -> Sidedness
-boolToSidedness a = a
+intToBool :: Int -> Bool
+intToBool a = a > 0
 
-sidednessToBool :: Sidedness -> Bool
-sidednessToBool a = a
+boolToInt :: Bool -> Int
+boolToInt a = if a then 1 else 0
 
-sidednessToInt :: Sidedness -> Int
-sidednessToInt a = if a then 1 else 0
-
-intToSidedness :: Int -> Sidedness
-intToSidedness a = a /= 0
-
-boundaryToInt :: Boundary -> Int
-boundaryToInt a = a
-
-intToBoundary :: Int -> Boundary
-intToBoundary a = a
-
-regionToInt :: Region -> Int
-regionToInt a = a
-
-intToRegion :: Int -> Region
-intToRegion a = a
+notOfInt :: Int -> Int
+notOfInt a = if a > 0 then 0 else 1
 
 -- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
@@ -179,7 +164,7 @@ foldMaybeF _ a _ _ = a
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
-boundariesOfSpace s = map intToBoundary (indices (length s))
+boundariesOfSpace s = indices (length s)
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -187,7 +172,7 @@ regionsOfSpace s = welldef (concat (concat s))
 
 -- side of region with regard to boundary
 regionWrtBoundary :: Boundary -> Region -> Space -> Sidedness
-regionWrtBoundary b r s = intToSidedness (fromJust (findIndex (\a -> member r a) (s !! b)))
+regionWrtBoundary b r s = fromJust (findIndex (\a -> member r a) (s !! b))
 
 -- side of vertex identified by n boundaries
 vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Sidedness
@@ -195,7 +180,7 @@ vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfR
 
 -- return per boundary side of region
 sidesOfRegion :: Region -> Space -> [Sidedness]
-sidesOfRegion r s = map (\a -> member r (a !! 1)) s
+sidesOfRegion r s = map (\a -> boolToInt (member r (a !! 1))) s
 
 -- return region from per boundary side
 regionOfSides :: [Sidedness] -> Space -> Region
@@ -206,11 +191,11 @@ regionOfSidesExists :: [Sidedness] -> Space -> Bool
 regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 
 regionOfSidesF :: [Sidedness] -> Space -> [Region]
-regionOfSidesF r s = foldl (\a (b,c) -> a +\ (c !! (sidednessToInt b))) (regionsOfSpace s) (zip r s)
+regionOfSidesF r s = foldl (\a (b,c) -> a +\ (c !! b)) (regionsOfSpace s) (zip r s)
 
 -- return sidedness with boundaries reversed
 oppositeOfSides :: [Boundary] -> [Sidedness] -> [Sidedness]
-oppositeOfSides b r = foldl (\x y -> replace y (not (x !! y)) x) r b
+oppositeOfSides b r = foldl (\x y -> replace y (notOfInt (x !! y)) x) r b
 
 -- return neighbor region of given region wrt given boundaries
 oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
@@ -247,7 +232,7 @@ outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 -- return all linear spaces of given dimension and boundaries.
 allSpaces :: Random.RandomGen g => g -> Int -> Int -> ([Space], g)
 allSpaces g n m = let
- boundaries = map intToBoundary (indices m)
+ boundaries = indices m
  fullspace = [[0],[1]]
  emptyspace = []
  (p,h) = foldl (\(x,y) z -> superSpace y n x [(z,fullspace)]) (emptyspace,g) boundaries
@@ -275,7 +260,7 @@ allSpacesH [] done = done
 minEquiv :: Space -> Space
 minEquiv posit = let
  todo = regionsOfSpace posit
- regions = map intToRegion (indices (length todo))
+ regions = indices (length todo)
  results = foldl minEquivPrefix [([],posit,todo,[])] regions
  (result,_,_,_) = head results
  in sortSpace result
@@ -283,7 +268,7 @@ minEquiv posit = let
 minEquivWithPerms :: Space -> (Space,[[Region]])
 minEquivWithPerms posit = let
  todo = regionsOfSpace posit
- regions = map intToRegion (indices (length todo))
+ regions = indices (length todo)
  results = foldl minEquivPrefix [([],posit,todo,[])] regions
  (result,_,_,_) = head results
  dones = map (\(_,_,_,z) -> z) results
@@ -342,7 +327,7 @@ canMigrate r s = let
 
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
-migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
+migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (map (\(x,y) -> (x, y)) (enumerate s))
 
 migrateSpaceF :: [Boundary] -> Region -> (Boundary,FullSpace) -> FullSpace
 migrateSpaceF b r (a,s)
@@ -373,13 +358,13 @@ divideSpaceG m a b = b ++ (image (a +\ b) m)
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
 subSpace b s = let
- regions = filter (\r -> regionWrtBoundary b r s) (attachedRegions [b] s)
+ regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
  in map (map (\x -> x \\ regions)) (unplace b s)
 
 -- return space of one less dimension homeomorphic to regions attached to given boundary
 sectionSpace :: Boundary -> Space -> Space
 sectionSpace b s = let
- regions = filter (\r -> regionWrtBoundary b r s) (attachedRegions [b] s)
+ regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
  in map (map (\x -> x +\ regions)) (unplace b s)
 
 -- assume given spaces are subspaces in a superspace
@@ -402,7 +387,7 @@ takeRegions s t r = let
  count = foldl (\x y -> if y == Nothing then x+1 else x) 0 secondToFirst
  -- find sidedness permutations of same length as indices
  permutes :: [[Sidedness]] -- every possible -> count of TBoundary -> Sidedness
- permutes = map (\x -> map (\y -> intToSidedness (x .&. (shift 1 y))) (indices count)) (indices (shift 1 count))
+ permutes = map (\x -> map (\y -> x .&. (shift 1 y)) (indices count)) (indices (shift 1 count))
  -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
  fixedSides :: [[Sidedness]] -- given of SRegion -> TBoundary -> Sidedness
  fixedSides = map (\(x,y) -> takeRegionsF x y) [(x,y) | x <- secondSides, y <- permutes]
@@ -486,14 +471,14 @@ superSpaceF :: Boundary -> SubSpace -> SubSpace
 superSpaceF b s = let
  (bounds,space) = unzip s
  index = fromJust (elemIndex b bounds)
- in zip (unplace index bounds) (subSpace (intToBoundary index) space)
+ in zip (unplace index bounds) (subSpace index space)
 
 -- section space with boundary map
 superSpaceG :: Boundary -> SubSpace -> SubSpace
 superSpaceG b s = let
  (bounds,space) = unzip s
  index = fromJust (elemIndex b bounds)
- in zip (unplace index bounds) (sectionSpace (intToBoundary index) space)
+ in zip (unplace index bounds) (sectionSpace index space)
 
 -- divide space with boundary map
 superSpaceH :: Boundary -> [Region] -> SubSpace -> SubSpace
@@ -503,7 +488,7 @@ superSpaceH b r s = let
 
 -- regions indicated by bits of boundary
 superSpaceI :: Int -> [Int] -> Int -> [Region]
-superSpaceI b r s = map intToRegion (filter (\y -> (y .&. (shift 1 b)) == s) r)
+superSpaceI b r s = filter (\y -> (y .&. (shift 1 b)) == s) r
 
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
@@ -633,11 +618,11 @@ regionOfPoint v w s = let
  sidesP :: [Bool]
  sidesP = map (\x -> isAbovePlane v x) w
  -- find sides of n-tuples wrt boundaries
- sidesS :: [Bool]
- sidesS = map (\(a,b) -> vertexWrtBoundary (intToBoundary a) (map intToBoundary b) s) (enumerate tuples)
+ sidesS :: [Sidedness]
+ sidesS = map (\(a,b) -> vertexWrtBoundary a b s) (enumerate tuples)
  -- use transitivity to complete sides of point wrt boundaries
  sidesR :: [Sidedness]
- sidesR = map (\(a,(b,c)) -> boolToSidedness (a == (b == c))) (zip sidesV (zip sidesP sidesS))
+ sidesR = map (\(a,(b,c)) -> boolToInt (a == (b == (intToBool c)))) (zip sidesV (zip sidesP sidesS))
  -- return regionOfSides
  in regionOfSides sidesR s
 
@@ -681,16 +666,15 @@ planesFromSpace n s
  | (length s) <= n = take (length s) (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
  -- recurse with one fewer boundary
- space = subSpace (intToBoundary ((length s) - 1)) s
+ bound = (length s) - 1
+ space = subSpace bound s
  planes = planesFromSpace n space
  -- find vertices, interpret as coplanes
- tuples = subsets n (indices (length space))
- coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) tuples
+ vertices = subsets n (indices (length space))
+ coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) vertices
  -- convert coplanes to cospace with up-down sidedeness
  cospace = spaceFromPlanes n coplanes
  -- find coregion that separates coboundaries like given space boundary separates vertices
- bound = intToBoundary ((length s) - 1)
- vertices = map (map intToBoundary) tuples
  separate :: [[[Boundary]]] -- Sidedness -> VertexSet -> Tuple -> Boundary
  separate = planesFromSpaceF bound vertices s
  coseparate :: [[Boundary]] -- Sidedness -> CoBoundarySet -> CoBoundary
@@ -698,7 +682,7 @@ planesFromSpace n s
  coseparaterev = reverse coseparate
  coseparates :: [[[Boundary]]] -- CoRegion -> CoSidedness -> CoBoundarySet -> CoBoundary
  coseparates = planesFromSpaceG cospace
- coregion = intToRegion (fromJust (findIndex (\x -> (x == coseparate) || (x == coseparaterev)) coseparates))
+ coregion = fromJust (findIndex (\x -> (x == coseparate) || (x == coseparaterev)) coseparates)
  -- find point in coregion, interpret it as plane
  outin = outsideOfRegionExists coregion cospace
  outpoint = planesFromSpaceI n coregion cospace coplanes
@@ -709,7 +693,7 @@ planesFromSpace n s
 -- return vertices on each side of given boundary
 planesFromSpaceF :: Boundary -> [[Boundary]] -> Space -> [[[Boundary]]]
 planesFromSpaceF b v s = let
- test = (\x -> vertexWrtBoundary b x s)
+ test = (\x -> intToBool (vertexWrtBoundary b x s))
  first = (\x y -> [insert y (x !! 0), x !! 1])
  second = (\x y -> [x !! 0, insert y (x !! 1)])
  func = (\x y -> if (test y) then (second x y) else (first x y))
@@ -719,7 +703,7 @@ planesFromSpaceF b v s = let
 planesFromSpaceG :: Space -> [[[Boundary]]]
 planesFromSpaceG s = let
  bounds = boundariesOfSpace s
- test = (\x y -> regionWrtBoundary x y s)
+ test = (\x y -> intToBool (regionWrtBoundary x y s))
  first = (\x y -> [insert y (x !! 0), x !! 1])
  second = (\x y -> [x !! 0, insert y (x !! 1)])
  func = (\x y z -> if (test z x) then (second y z) else (first y z))
