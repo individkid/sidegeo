@@ -16,8 +16,6 @@
 
 module AffTopo.Naive where
 
--- naive in the sense of just one representation
-
 import Prelude hiding ((++))
 import qualified Prelude
 import Data.List hiding ((\\), (++), insert)
@@ -271,7 +269,7 @@ anySpace1 g n m = let
  (s,h) = foldl (\(x,y) z -> superSpace y n x [(z,fullspace)]) (emptyspace,g) boundaries
  in (range s, h)
 
--- return all linear spaces of given any space to start
+-- return all linear spaces given any space to start
 allSpaces :: Space -> [Space]
 allSpaces s = let
  space = minEquiv s
@@ -497,8 +495,8 @@ superSpace g n s t
   sub = superSpaceF b s -- since choice was from more than one, sub and t are not proper
   (sup,i) = superSpace h n sub t -- adds something to t because sub and t are not proper
   in superSpace i n s sup where -- easier because sup contains t plus one other than b that t did not
-  sBounds = domain s
-  tBounds = domain t
+ sBounds = domain s
+ tBounds = domain t
 
 -- subspace with boundary map
 superSpaceF :: Boundary -> Place -> Place
@@ -666,17 +664,17 @@ spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n p
  | numPlanes == 0 = []
  | otherwise = let
- -- recurse with one fewer plane
- headSpace :: Space
- headSpace = spaceFromPlanes n headPlanes
- -- find (n-1)-tuples of recursed planes
- colTuples :: [[Int]]
- colTuples = subsets planeDims headIdxs
- -- find union of sub-regions of super-regions containing intersections
- headRegs :: [Region]
- headRegs = welldef (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
- -- return space with found regions divided by new boundary
- in divideSpace headRegs headSpace where
+  -- recurse with one fewer plane
+  headSpace :: Space
+  headSpace = spaceFromPlanes n headPlanes
+  -- find (n-1)-tuples of recursed planes
+  colTuples :: [[Int]]
+  colTuples = subsets planeDims headIdxs
+  -- find union of sub-regions of super-regions containing intersections
+  headRegs :: [Region]
+  headRegs = welldef (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
+  -- return space with found regions divided by new boundary
+  in divideSpace headRegs headSpace where
  numPlanes = (length p) - 1
  headPlanes = take numPlanes p
  tailPlane = p !! numPlanes
@@ -700,30 +698,30 @@ planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s
  | (length s) <= n = take (length s) (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
- -- recurse with one fewer boundary
- bound = (length s) - 1
- space = subSpace bound s
- planes = planesFromSpace n space
- -- find vertices, interpret as coplanes
- vertices = subsets n (indices (length space))
- coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) vertices
- -- convert coplanes to cospace with up-down sidedeness
- cospace = spaceFromPlanes n coplanes
- -- find coregion that separates coboundaries like given space boundary separates vertices
- separate :: [[[Boundary]]] -- Side -> VertexSet -> Tuple -> Boundary
- separate = planesFromSpaceF bound vertices s
- coseparate :: [[Boundary]] -- Side -> CoBoundarySet -> CoBoundary
- coseparate = map (map (\x -> fromJust (elemIndex x vertices))) separate
- coseparaterev = reverse coseparate
- coseparates :: [[[Boundary]]] -- CoRegion -> CoSide -> CoBoundarySet -> CoBoundary
- coseparates = planesFromSpaceG cospace
- coregion = fromJust (findIndex (\x -> (x == coseparate) || (x == coseparaterev)) coseparates)
- -- find point in coregion, interpret it as plane
- outin = outsideOfRegionExists coregion cospace
- outpoint = planesFromSpaceI n coregion cospace coplanes
- inpoint = planesFromSpaceH n coregion cospace coplanes
- point = if outin then outpoint else inpoint
- in planes Prelude.++ [point]
+  -- recurse with one fewer boundary
+  bound = (length s) - 1
+  space = subSpace bound s
+  planes = planesFromSpace n space
+  -- find vertices, interpret as coplanes
+  vertices = subsets n (indices (length space))
+  coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) vertices
+  -- convert coplanes to cospace with up-down sidedeness
+  cospace = spaceFromPlanes n coplanes
+  -- find coregion that separates coboundaries like given space boundary separates vertices
+  separate :: [[[Boundary]]] -- Side -> VertexSet -> Tuple -> Boundary
+  separate = planesFromSpaceF bound vertices s
+  coseparate :: [[Boundary]] -- Side -> CoBoundarySet -> CoBoundary
+  coseparate = map (map (\x -> fromJust (elemIndex x vertices))) separate
+  coseparaterev = reverse coseparate
+  coseparates :: [[[Boundary]]] -- CoRegion -> CoSide -> CoBoundarySet -> CoBoundary
+  coseparates = planesFromSpaceG cospace
+  coregion = fromJust (findIndex (\x -> (x == coseparate) || (x == coseparaterev)) coseparates)
+  -- find point in coregion, interpret it as plane
+  outin = outsideOfRegionExists coregion cospace
+  outpoint = planesFromSpaceI n coregion cospace coplanes
+  inpoint = planesFromSpaceH n coregion cospace coplanes
+  point = if outin then outpoint else inpoint
+  in planes Prelude.++ [point]
 
 -- return vertices on each side of given boundary
 planesFromSpaceF :: Boundary -> [[Boundary]] -> Space -> [[[Boundary]]]
@@ -752,7 +750,7 @@ planesFromSpaceH n coregion cospace coplanes = let
  zero = Matrix.fromList (replicate n 0.0)
  in Matrix.scale (1.0 / (fromIntegral (length points))) (foldl (\x y -> Matrix.add x y) zero points)
 
- -- find point some distance out on line from coregion and other outside
+ -- find point some distance out on line to coregion from other outside
 planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point
 planesFromSpaceI n r s p = let
  arrow = planesFromSpaceH n r s p
