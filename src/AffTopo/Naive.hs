@@ -114,48 +114,37 @@ range m = map (\(_,y) -> y) m
 
 -- ++ and \\ are as in Data.List except welldef
 (++) :: Ord a => [a] -> [a] -> [a]
-a ++ b = unionF (welldef a) (welldef b)
-
-unionF :: Ord a => [a] -> [a] -> [a]
-unionF (a:s) (b:t)
- | a < b = a:(unionF s (b:t))
- | a == b = a:(unionF s t)
- | otherwise = b:(unionF (a:s) t)
-unionF (a:s) [] = (a:s)
-unionF [] b = b
+a ++ b = setF a b True True True
 
 (\\) :: Ord a => [a] -> [a] -> [a]
-a \\ b =differenceF (welldef a) (welldef b)
+a \\ b = setF a b True False False
 
-differenceF :: Ord a => [a] -> [a] -> [a]
-differenceF (a:s) (b:t)
- | a < b = a:(differenceF s (b:t))
- | a == b = (differenceF s t)
- | otherwise = (differenceF (a:s) t)
-differenceF (a:s) [] = (a:s)
-differenceF [] b = b
-
+-- intersection
 (+\) :: Ord a => [a] -> [a] -> [a]
-a +\ b = intersectF (welldef a) (welldef b)
+a +\ b = setF a b False True False
 
-intersectF :: Ord a => [a] -> [a] -> [a]
-intersectF (a:s) (b:t)
- | a < b = (intersectF s (b:t))
- | a == b = a:(intersectF s t)
- | otherwise = (intersectF (a:s) t)
-intersectF (a:s) [] = (a:s)
-intersectF [] b = b
-
+-- symmetric difference
 (\+) :: Ord a => [a] -> [a] -> [a]
-a \+ b = symmetricF (welldef a) (welldef b)
+a \+ b = setF a b True False True
 
-symmetricF :: Ord a => [a] -> [a] -> [a]
-symmetricF (a:s) (b:t)
- | a < b = a:(symmetricF s (b:t))
- | a == b = (symmetricF s t)
- | otherwise = b:(symmetricF (a:s) t)
-symmetricF (a:s) [] = (a:s)
-symmetricF [] b = b
+setF :: Ord a => [a] -> [a] -> Bool -> Bool -> Bool -> [a]
+setF a b c d e = setG (welldef a) (welldef b) c d e
+
+setG :: Ord a => [a] -> [a] -> Bool -> Bool -> Bool -> [a]
+setG a _ True True False = a
+setG _ b False True True = b
+setG _ _ False False False = []
+setG a b False False True = (b \\ a)
+setG (a:s) (b:t) c d e
+ | a < b = setH c a (setG s (b:t) c d e)
+ | a == b = setH d a (setG s t c d e)
+ | otherwise = setH e b (setG (a:s) t c d e)
+setG (a:s) [] _ _ _ = (a:s)
+setG [] b _ _ _ = b
+
+setH :: Bool -> a -> [a] -> [a]
+setH True a b = a:b
+setH False _ b = b
 
 -- all connected by given function to given start
 generate :: Ord a => (a -> [a]) -> a -> [a]
