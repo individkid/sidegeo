@@ -520,8 +520,8 @@ superSpaceH b r s = let
  in zip (bounds Prelude.++ [b]) (divideSpace r space)
 
 -- regions indicated by bits of boundary
-superSpaceI :: Int -> [Int] -> Int -> [Region]
-superSpaceI b r s = filter (\y -> (boolToInt (belongs y b)) == s) r
+superSpaceI :: Int -> [Pack] -> Int -> [Region]
+superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
