@@ -190,6 +190,7 @@ boundariesOfSpace s = indices (length s)
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
+regionsOfSpace [] = [0]
 regionsOfSpace s = welldef (concat (concat s))
 
 -- side of region with regard to boundary
