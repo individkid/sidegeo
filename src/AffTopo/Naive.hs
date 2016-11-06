@@ -35,7 +35,7 @@ type Space = [Full] -- assume equal covers
 type Place = [(Boundary,Full)] -- assume one-to-one
 type Plane = Matrix.Vector Double -- single column of distances above base
 type Point = Matrix.Vector Double -- single column of coordinates
-type Packed = Int -- bits indicate membership
+type Pack = Int -- bits indicate membership
 
 intToBool :: Int -> Bool
 intToBool a = a > 0
@@ -47,18 +47,17 @@ notOfInt :: Int -> Int
 notOfInt a = if a > 0 then 0 else 1
 
 -- all subsets of non-negative Int less than given
-power :: Int -> [Packed]
+power :: Int -> [Pack]
 power a = indices (shift 1 a)
 
 -- whether given Int is in given set
-belongs :: Int -> Packed -> Bool
+belongs :: Int -> Pack -> Bool
 belongs a b = testBit b a
 
 -- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets n a
  | n == 0 = [[]]
- | null a = []
  | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
 
 -- those indexed by list of indices
@@ -254,15 +253,30 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
--- return all linear spaces of given dimension and boundaries.
-allSpaces :: Random.RandomGen g => g -> Int -> Int -> ([Space], g)
-allSpaces g n m = let
+-- return space by converting random planes to space
+-- does this produces some spaces more often than others?
+anySpace0 :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
+anySpace0 g n m = let
+ (s,h) = randomPlanes g n m
+ in (spaceFromPlanes n s, h)
+
+-- return space by calling superSpace with singleton space
+-- with enough different seeds, would this produce all spaces?
+-- superSpace uses imitation for this; is there another way?
+anySpace1 :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
+anySpace1 g n m = let
  boundaries = indices m
  fullspace = [[0],[1]]
  emptyspace = []
- (p,h) = foldl (\(x,y) z -> superSpace y n x [(z,fullspace)]) (emptyspace,g) boundaries
- q = minEquiv (range p)
- in (allSpacesF (regionsOfSpace q) q [] [], h)
+ (s,h) = foldl (\(x,y) z -> superSpace y n x [(z,fullspace)]) (emptyspace,g) boundaries
+ in (range s, h)
+
+-- return all linear spaces of given any space to start
+allSpaces :: Space -> [Space]
+allSpaces s = let
+ space = minEquiv s
+ regions = regionsOfSpace space
+ in allSpacesF regions space [] []
 
 -- migrate all possible from current space, and go on to next todo
 allSpacesF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
@@ -275,7 +289,7 @@ allSpacesF [] s todo done = allSpacesH todo (insert s done)
 allSpacesG :: [Region] -> Space -> Space -> [Space] -> [Space] -> [Space]
 allSpacesG r s t todo done
  | (s == t) || (member t todo) || (member t done) = allSpacesF r s todo done
- | otherwise = allSpacesF r s (t:todo) done
+ | otherwise = allSpacesF r s (insert t todo) done
 
 -- recurse with choice removed from todo
 allSpacesH :: [Space] -> [Space] -> [Space]
@@ -326,7 +340,9 @@ minEquivPrefixI toadd torem (sofar, posit) = map (minEquivPrefixJ toadd torem) (
 
 -- add toadd to sofar if torem in posit
 minEquivPrefixJ :: Region -> Region -> (Half,Half) -> Half
-minEquivPrefixJ toadd torem (sofar, posit) = if member torem posit then insert toadd sofar else sofar
+minEquivPrefixJ toadd torem (sofar, posit)
+ | member torem posit = insert toadd sofar
+ | otherwise = sofar
 
 -- return sorted equivalent
 sortSpace :: Space -> Space
