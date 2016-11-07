@@ -515,8 +515,8 @@ superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 -- space of just one boundary
 superSpaceJ :: Int -> Boundary -> [(Boundary,Full)]
-superSpaceJ 0 b = [(bound,[[0],[]])]
-superSpaceJ _ b = [(bound,[[0],[1]])]
+superSpaceJ 0 b = [(b,[[0],[]])]
+superSpaceJ _ b = [(b,[[0],[1]])]
 
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
@@ -543,54 +543,70 @@ isLinearF n s b = let
 -- return given number of planes in given number of dimensions
 randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
 randomPlanes g n m = let
- (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n*m)
+ (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n * m)
  b = Matrix.toColumns (Matrix.matrix m a)
- tweaks = [randomPlanesF n m, randomPlanesG n m, randomPlanesH n m]
+ tweaks = [randomPlanesH0 n m, randomPlanesH1 n m, randomPlanesH2 n m]
  func x = foldMaybe (\y z -> z y) x tweaks
  in until (isNothing . func) (fromJust . func) (b,h)
 
+-- tweak some plane from tuple found by testing intersection of planes in tuple
+randomPlanesF :: Random.RandomGen g => ((Plane, g) -> (Plane, g)) -> (Maybe Point -> Bool) -> (Int -> Int) ->
+ Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
+randomPlanesF i j k n m (a,g) = let
+ b = find (\x -> j (intersectPlanes n (subset x a))) (subsets (k n) (indices m))
+ in fmap (randomPlanesG i (a,g)) b
+
+-- use function to replace choice from given tuple
+randomPlanesG :: Random.RandomGen g => ((Plane, g) -> (Plane, g)) -> ([Plane], g) -> [Int] -> ([Plane], g)
+randomPlanesG i (a,f) b = let
+ x = choose f b
+ (c,g) = x
+ (d,h) = i (a !! c, g)
+ in (replace c d a, h)
+
 -- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
-randomPlanesF :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesF n m (a,g) = fmap (randomPlanesF0 g n a) (find (randomPlanesF1 n a) (subsets n (indices m)))
+randomPlanesH0 :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
+randomPlanesH0 n m = randomPlanesF randomPlanesI0 randomPlanesJ0 randomPlanesK0 n m
 
-randomPlanesF0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
-randomPlanesF0 g n a b = let
- (c,h) = choose g b
- d = Matrix.toList (a !! c)
- e = (d !! (n-1)) / 2.0
- in (replace c (Matrix.fromList (map (\x -> x - e) d)) a, h)
+randomPlanesI0 :: Random.RandomGen g => (Plane, g) -> (Plane, g)
+randomPlanesI0 (a,g) = let
+ b = Matrix.toList a
+ c = (b !! ((length b)-1)) / 2.0
+ in (Matrix.fromList (map (\x -> x - c) b), g)
 
-randomPlanesF1 :: Int -> [Plane] -> [Int] -> Bool
-randomPlanesF1 n a b = let
- e = intersectPlanes n (subset b a)
- in maybe False (\c -> all (\d -> d > -1.0 && d < 1.0) (Matrix.toList c)) e
+randomPlanesJ0 :: Maybe Point -> Bool
+randomPlanesJ0 a = maybe False (\b -> any (\c -> c < -1.0 || c > 1.0) (Matrix.toList b)) a
+
+randomPlanesK0 :: Int -> Int
+randomPlanesK0 n = n
 
 -- rerandomize some plane from some n tuple that does not intersect in Just
-randomPlanesG :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesG n m (a,g) = fmap (randomPlanesG0 g n a) (find (randomPlanesG1 n a) (subsets n (indices m)))
+randomPlanesH1 :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
+randomPlanesH1 n m = randomPlanesF randomPlanesI1 randomPlanesJ1 randomPlanesK1 n m
 
-randomPlanesG0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
-randomPlanesG0 g n a b = let
- (c,h) = choose g b
- (d,i) = catalyze (\j -> Random.randomR (-100.0,100.0) j) h n
- in (replace c (Matrix.fromList d) a, i)
+randomPlanesI1 :: Random.RandomGen g => (Plane, g) -> (Plane, g)
+randomPlanesI1 (a,g) = let
+ (b,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (Matrix.size a)
+ in (Matrix.fromList b, h)
 
-randomPlanesG1 :: Int -> [Plane] -> [Int] -> Bool
-randomPlanesG1 n a b = let
- e = intersectPlanes n (subset b a)
- in e == Nothing
+randomPlanesJ1 :: Maybe Point -> Bool
+randomPlanesJ1 a = a == Nothing
+
+randomPlanesK1 :: Int -> Int
+randomPlanesK1 n = n
 
 -- rerandomize some plane from some n+1 tuple that does intersect to Just
-randomPlanesH :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
-randomPlanesH n m (a,g) = fmap (randomPlanesH0 g n a) (find (randomPlanesH1 n a) (subsets (n+1) (indices m)))
+randomPlanesH2 :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
+randomPlanesH2 n m = randomPlanesF randomPlanesI2 randomPlanesJ2 randomPlanesK2 n m
 
-randomPlanesH0 :: Random.RandomGen g => g -> Int -> [Plane] -> [Int] -> ([Plane], g)
-randomPlanesH0 = randomPlanesG0
+randomPlanesI2 :: Random.RandomGen g => (Plane, g) -> (Plane, g)
+randomPlanesI2 = randomPlanesI1
 
-randomPlanesH1 :: Int -> [Plane] -> [Int] -> Bool
-randomPlanesH1 n a b = let
- e = intersectPlanes n (subset b a)
- in e /= Nothing
+randomPlanesJ2 :: Maybe Point -> Bool
+randomPlanesJ2 a = a /= Nothing
+
+randomPlanesK2 :: Int -> Int
+randomPlanesK2 n = n + 1
 
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
