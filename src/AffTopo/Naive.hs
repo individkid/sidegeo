@@ -253,10 +253,7 @@ anySpace0 g n m = let
 -- superSpace uses imitation for this; is there another way?
 anySpace1 :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
 anySpace1 g n m = let
- boundaries = indices m
- fullspace = [[0],[1]]
- emptyspace = []
- (s,h) = foldl (\(x,y) z -> superSpace y n x [(z,fullspace)]) (emptyspace,g) boundaries
+ (s,h) = foldl (\(x,y) z -> superSpace y n x (singleSpace n z)) ([],g) (indices m)
  in (range s, h)
 
 -- return all linear spaces given any space to start
@@ -389,6 +386,11 @@ sectionSpace b s = let
  regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
  in map (map (\x -> x +\ regions)) (unplace b s)
 
+-- space of just one boundary
+singleSpace :: Int -> Boundary -> Place
+singleSpace 0 b = [(b,[[0],[]])]
+singleSpace _ b = [(b,[[0],[1]])]
+
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space
 takeRegions :: Place -> Place -> [Region] -> [Region]
@@ -447,7 +449,7 @@ superSpace g n s t
   sBound = head sBounds -- boundary to add
   (bound,h) = choose g tBounds -- boundary to immitate
   section = superSpaceG bound t -- homeomorphic to immitated or added
-  singlespace = superSpaceJ (n-1) bound
+  singlespace = singleSpace (n-1) bound
   (supersect,i) = superSpace h (n-1) singlespace section -- homeomorphic after restoring immitated
   regions = takeRegions supersect t (regionsOfSpace (range supersect)) -- regions in t that are homeomorphic
   in (superSpaceH sBound regions t, i)
@@ -458,7 +460,7 @@ superSpace g n s t
   (bound,h) = choose g sBounds
   subspace = superSpaceF bound s
   (space,i) = superSpace h n subspace t
-  singlespace = superSpaceJ n bound
+  singlespace = singleSpace n bound
   in superSpace i n singlespace space
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
   -- choose shared boundary for sections
@@ -512,11 +514,6 @@ superSpaceH b r s = let
 -- regions indicated by bits of boundary
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
 superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
-
--- space of just one boundary
-superSpaceJ :: Int -> Boundary -> [(Boundary,Full)]
-superSpaceJ 0 b = [(b,[[0],[]])]
-superSpaceJ _ b = [(b,[[0],[1]])]
 
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
