@@ -399,7 +399,7 @@ takeRegions s t r = let
  firstSides :: [[Side]] -- given of SRegion -> SBoundary -> Side
  firstSides = map (\x -> sidesOfRegion x firstSpace) r
  -- for each boundary in second space, find corresponding boundary in first space or Nothing
- secondToFirst :: [Maybe Boundary] -- TBoundary -> Maybe SBoundary
+ secondToFirst :: [Maybe Int] -- TBoundary -> Maybe SBoundary index
  secondToFirst = map (\x -> elemIndex x firstBoundaries) secondBoundaries
  -- for each given region, for each boundary in second space, find sidedness or Nothing in first space
  secondSides :: [[Maybe Side]] -- given of SRegion -> TBoundary -> Maybe Side
@@ -437,7 +437,7 @@ superSpace g n s t
   boundaries = sBounds ++ tBounds
   regions = power (length boundaries)
   in (map (\x -> (x, [superSpaceI x regions 0, superSpaceI x regions 1])) boundaries, g)
- | ((length (sBounds +\ tBounds)) == 0) && ((length tBounds) == 1) = superSpace g n t s
+ | ((length (sBounds +\ tBounds)) == 0) && ((length tBounds) == 1) && ((length sBounds) > 1) = superSpace g n t s
  | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = let
   -- choose boundary to immitate
   -- find section by chosen
@@ -447,7 +447,8 @@ superSpace g n s t
   sBound = head sBounds -- boundary to add
   (bound,h) = choose g tBounds -- boundary to immitate
   section = superSpaceG bound t -- homeomorphic to immitated or added
-  (supersect,i) = superSpace h (n-1) [(bound,[[0],[1]])] section -- homeomorphic after restoring immitated
+  singlespace = superSpaceJ (n-1) bound
+  (supersect,i) = superSpace h (n-1) singlespace section -- homeomorphic after restoring immitated
   regions = takeRegions supersect t (regionsOfSpace (range supersect)) -- regions in t that are homeomorphic
   in (superSpaceH sBound regions t, i)
  | (length (sBounds +\ tBounds)) == 0 = let
@@ -457,7 +458,7 @@ superSpace g n s t
   (bound,h) = choose g sBounds
   subspace = superSpaceF bound s
   (space,i) = superSpace h n subspace t
-  singlespace = [(bound,[[0],[1]])]
+  singlespace = superSpaceJ n bound
   in superSpace i n singlespace space
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
   -- choose shared boundary for sections
@@ -512,10 +513,14 @@ superSpaceH b r s = let
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
 superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
+-- space of just one boundary
+superSpaceJ :: Int -> Boundary -> [(Boundary,Full)]
+superSpaceJ 0 b = [(bound,[[0],[]])]
+superSpaceJ _ b = [(bound,[[0],[1]])]
+
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
 defineLinear n m
- | (n < 0) || (m < 0) = error "negative space"
  | (n == 0) || (m == 0) = 1
  | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
 
@@ -524,7 +529,7 @@ isLinear :: Int -> Space -> Bool
 isLinear n s = let
  boundaries = boundariesOfSpace s
  sizes = indices (length boundaries)
- subs = foldl (\a b -> a ++ (subsets b boundaries)) [] sizes
+ subs = foldl (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
  in foldl (\a b -> a && (isLinearF n s b)) True subs
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
