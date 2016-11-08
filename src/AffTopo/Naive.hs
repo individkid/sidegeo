@@ -618,12 +618,19 @@ intersectPlanes n w = let
 
 intersectPlanesF :: [Plane] -> Int -> Int -> Int -> Double
 intersectPlanesF w n a b
- | b == n = -1.0
- | otherwise = (Matrix.atIndex (w !! a) b) - (Matrix.atIndex (w !! a) n)
+ | b == index = -1.0
+ | otherwise = let
+  vector = w !! a
+  scalar = Matrix.atIndex vector b
+  origin = Matrix.atIndex vector index
+  in scalar - origin where
+ index = n - 1
 
 intersectPlanesG :: [Plane] -> Int -> Int -> Double
-intersectPlanesG w n a = negate (Matrix.atIndex (w !! a) n)
+intersectPlanesG w n a = negate (Matrix.atIndex (w !! a) (n - 1))
 
+-- plane is z0, z1, ... zm. equation for plane is z = zm + x*(z0-zm) + y*(z1-zm) + ...
+-- each row is z0-zm z1-zm ... -1 | -zm
 intersectPlanesH :: Int -> [Plane] -> Maybe Point
 intersectPlanesH n w = let
  square = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
