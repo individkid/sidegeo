@@ -419,7 +419,7 @@ takeRegions s t r = let
  extantSides :: [[Side]] -- given of SRegion -> TBoundary -> Side
  extantSides = filter (\x -> regionOfSidesExists x secondSpace) fixedSides
  -- map sides to regions
- in map (\x -> regionOfSides x secondSpace) extantSides
+ in welldef (map (\x -> regionOfSides x secondSpace) extantSides)
 
 takeRegionsF :: [Maybe Side] -> [Side] -> [Side]
 takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
@@ -649,10 +649,10 @@ isAbovePlane v w = let
 -- return space with sidednesses determined by given planes
 spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n w
- | num == 0 = []
- | n == 0 = replicate num [[0],[]]
- | otherwise = spaceFromPlanesF n num w where
- num = length w
+ | m == 0 = []
+ | n == 0 = replicate m [[0],[]]
+ | otherwise = spaceFromPlanesF n m w where
+ m = length w
 
 spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
 spaceFromPlanesF n m w
@@ -668,7 +668,7 @@ spaceFromPlanesF n m w
   perms = map (\x -> map (\y -> boolToInt (belongs y x)) unpacks) packs
   sides = concat (map (spaceFromPlanesG perms w) (zip vertices points))
   -- convert sides to regions to divide
-  divided = map (\x -> regionOfSides x space) sides
+  divided = welldef (map (\x -> regionOfSides x space) sides)
   -- return space with found regions divided by new boundary
   in divideSpace divided space where
  planes = take (m - 1) w
