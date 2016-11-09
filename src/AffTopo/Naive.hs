@@ -646,67 +646,45 @@ isAbovePlane v w = let
  pointV = Matrix.subVector 0 (dim-1) v
  in pointS > ((Matrix.dot planeV pointV) + planeS)
 
--- return region of point, assuming planes and space are homeomorphic
-regionOfPoint :: Point -> [Plane] -> Space -> Region
-regionOfPoint v w s = let
- dim = Matrix.size v
- num = length w
- planes :: [Int]
- planes = indices num
- -- find n others for each boundary
- tuples :: [[Int]]
- tuples = map (\b -> take dim (remove b planes)) planes
- -- for each plane, find reference point not on plane
- vertices :: [Point]
- vertices = map (\b -> fromJust (intersectPlanes dim (subset b w))) tuples
- -- find sides of reference points wrt planes
- sidesV :: [Bool]
- sidesV = map (\(x,y) -> isAbovePlane x y) (zip vertices w)
- -- find sides of point wrt planes
- sidesP :: [Bool]
- sidesP = map (\x -> isAbovePlane v x) w
- -- find sides of n-tuples wrt boundaries
- sidesS :: [Side]
- sidesS = map (\(a,b) -> vertexWrtBoundary a b s) (enumerate tuples)
- -- use transitivity to complete sides of point wrt boundaries
- sidesR :: [Side]
- sidesR = map (\(a,(b,c)) -> boolToInt (a == (b == (intToBool c)))) (zip sidesV (zip sidesP sidesS))
- -- return regionOfSides
- in regionOfSides sidesR s
-
 -- return space with sidednesses determined by given planes
 spaceFromPlanes :: Int -> [Plane] -> Space
-spaceFromPlanes n p
- | numPlanes == 0 = []
- | otherwise = let
-  -- recurse with one fewer plane
-  headSpace :: Space
-  headSpace = spaceFromPlanes n headPlanes
-  -- find (n-1)-tuples of recursed planes
-  colTuples :: [[Int]]
-  colTuples = subsets planeDims headIdxs
-  -- find union of sub-regions of super-regions containing intersections
-  headRegs :: [Region]
-  headRegs = welldef (concat (map (spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs) colTuples))
-  -- return space with found regions divided by new boundary
-  in divideSpace headRegs headSpace where
- numPlanes = (length p) - 1
- headPlanes = take numPlanes p
- tailPlane = p !! numPlanes
- headIdxs = indices numPlanes
- spaceDims = Matrix.size tailPlane
- planeDims = spaceDims - 1
+spaceFromPlanes n w
+ | num == 0 = []
+ | n == 0 = replicate num [[0],[]]
+ | otherwise = spaceFromPlanesF n num w where
+ num = length w
 
- -- find sub-regions of super-region containing indicated intersection point
-spaceFromPlanesF :: Int -> Space -> [Plane] -> Plane -> [Int] -> [Int] -> [Region]
-spaceFromPlanesF n headSpace headPlanes tailPlane headIdxs tupl = let
- headBounds = boundariesOfSpace headSpace
- cols = filter (\j -> elem j tupl) headIdxs
- (subB,subS) = foldl (\(b,s) j -> (remove j b, subSpace j s)) (headBounds,headSpace) tupl
- subP = subset cols headPlanes
- indP = subset tupl headPlanes
- intP = fromJust (intersectPlanes n (indP ++ [tailPlane]))
- in sort (takeRegions (zip subB subS) (zip headBounds headSpace) [regionOfPoint intP subP subS])
+spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
+spaceFromPlanesF n m w
+ | m <= n = divideSpace (regionsOfSpace space) space
+ | otherwise = let
+  -- find intersection points on plane to add
+  vertices = map welldef (subsets (n - 1) (indices (m - 1)))
+  tuples = map (\x -> (m - 1):x) vertices
+  points = map (\x -> fromJust (intersectPlanes n (subset x w))) tuples
+  -- convert intersection points to sides in each permutation of sides wrt intersection planes
+  packs = power (n - 1)
+  unpacks = indices (n - 1)
+  perms = map (\x -> map (\y -> boolToInt (belongs y x)) unpacks) packs
+  sides = concat (map (spaceFromPlanesG perms w) (zip vertices points))
+  -- convert sides to regions to divide
+  divided = map (\x -> regionOfSides x space) sides
+  -- return space with found regions divided by new boundary
+  in divideSpace divided space where
+ planes = take (m - 1) w
+ space = spaceFromPlanes n planes
+
+spaceFromPlanesG :: [[Side]] -> [Plane] -> ([Int], Point) -> [[Side]]
+spaceFromPlanesG s w (b, v) = map (spaceFromPlanesH v w 0 b) s
+
+spaceFromPlanesH :: Point -> [Plane] -> Int -> [Int] -> [Side] -> [Side]
+spaceFromPlanesH v (u:w) a (b:c) (s:t)
+ | a == b = s:(spaceFromPlanesH v (u:w) (a+1) c t)
+ | otherwise = (boolToInt (isAbovePlane v u)):(spaceFromPlanesH v w (a+1) (b:c) (s:t))
+spaceFromPlanesH _ [] _ _ (s:t) = s:t
+spaceFromPlanesH v (u:w) _ _ [] = (boolToInt (isAbovePlane v u)):(spaceFromPlanesH v w 0 [] [])
+spaceFromPlanesH _ [] _ _ [] = []
+spaceFromPlanesH _ _ _ _ _ = error "too many or few guards"
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
