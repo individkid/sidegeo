@@ -689,64 +689,47 @@ spaceFromPlanesH _ _ _ _ _ = error "too many or few guards"
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s
- | (length s) <= n = take (length s) (Matrix.toColumns (Matrix.ident n))
+ | n == 0 = replicate m (Matrix.vector [])
+ | m <= n = take m (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
   -- recurse with one fewer boundary
-  bound = (length s) - 1
+  bound = m - 1
   space = subSpace bound s
   planes = planesFromSpace n space
-  -- find vertices, interpret as coplanes
+  -- find vertices
   vertices = subsets n (indices (length space))
+  -- find sides of vertices wrt chosen boundary
+  sides = map (\x -> vertexWrtBoundary bound x s) vertices
+  mirror = map notOfInt sides
+  -- interpret vertices as coplanes
   coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) vertices
   -- convert coplanes to cospace with up-down sidedeness
-  cospace = spaceFromPlanes n coplanes
-  -- find coregion that separates coboundaries like given space boundary separates vertices
-  separate :: [[[Boundary]]] -- Side -> VertexSet -> Tuple -> Boundary
-  separate = planesFromSpaceF bound vertices s
-  coseparate :: [[Boundary]] -- Side -> CoBoundarySet -> CoBoundary
-  coseparate = map (map (\x -> fromJust (elemIndex x vertices))) separate
-  coseparaterev = reverse coseparate
-  coseparates :: [[[Boundary]]] -- CoRegion -> CoSide -> CoBoundarySet -> CoBoundary
-  coseparates = planesFromSpaceG cospace
-  coregion = fromJust (findIndex (\x -> (x == coseparate) || (x == coseparaterev)) coseparates)
-  -- find point in coregion, interpret it as plane
+  cospace = spaceFromPlanes n coplanes -- uses isAbovePlane for sidedness in cospace
+  -- find sidesOfRegion of each coregion
+  cosides = map (\x -> sidesOfRegion x cospace) (regionsOfSpace cospace)
+  -- find cosides that matches vertices wrt chosen boundary
+  matches = find (\x -> (x == sides) || (x == mirror)) cosides
+  coregion = regionOfSides (fromJust matches) cospace
+  -- find copoint in coregion
   outin = outsideOfRegionExists coregion cospace
-  outpoint = planesFromSpaceI n coregion cospace coplanes
   inpoint = planesFromSpaceH n coregion cospace coplanes
-  point = if outin then outpoint else inpoint
-  in planes Prelude.++ [point]
-
--- return vertices on each side of given boundary
-planesFromSpaceF :: Boundary -> [[Boundary]] -> Space -> [[[Boundary]]]
-planesFromSpaceF b v s = let
- test = (\x -> intToBool (vertexWrtBoundary b x s))
- first = (\x y -> [insert y (x !! 0), x !! 1])
- second = (\x y -> [x !! 0, insert y (x !! 1)])
- func = (\x y -> if (test y) then (second x y) else (first x y))
- in foldl func [[],[]] v
-
--- return per-region boundaries on each side of region
-planesFromSpaceG :: Space -> [[[Boundary]]]
-planesFromSpaceG s = let
- bounds = boundariesOfSpace s
- test = (\x y -> intToBool (regionWrtBoundary x y s))
- first = (\x y -> [insert y (x !! 0), x !! 1])
- second = (\x y -> [x !! 0, insert y (x !! 1)])
- func = (\x y z -> if (test z x) then (second y z) else (first y z))
- in map (\x -> foldl (func x) [[],[]] bounds) (regionsOfSpace s)
+  outpoint = planesFromSpaceI n coregion cospace coplanes inpoint
+  copoint = if outin then outpoint else inpoint
+  -- interpret copoint as plane to add
+  in planes Prelude.++ [copoint] where
+ m = length s
 
 -- return average of corners of coregeion
 planesFromSpaceH :: Int -> Region -> Space -> [Plane] -> Point
-planesFromSpaceH n coregion cospace coplanes = let
- corners = attachedFacets n coregion cospace
- points = map (\x -> fromJust (intersectPlanes n (subset x coplanes))) corners
+planesFromSpaceH n region space planes = let
+ corners = attachedFacets n region space
+ points = map (\x -> fromJust (intersectPlanes n (subset x planes))) corners
  zero = Matrix.fromList (replicate n 0.0)
  in Matrix.scale (1.0 / (fromIntegral (length points))) (foldl (\x y -> Matrix.add x y) zero points)
 
  -- find point some distance out on line to coregion from other outside
-planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point
-planesFromSpaceI n r s p = let
- arrow = planesFromSpaceH n r s p
+planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point -> Point
+planesFromSpaceI n r s p arrow = let
  feather = planesFromSpaceH n (outsideOfRegion r s) s p
  shaft = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
  factor = 0.1 / (sqrt (Matrix.dot shaft shaft))
