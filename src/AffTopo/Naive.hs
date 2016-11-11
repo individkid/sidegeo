@@ -36,13 +36,13 @@ type Point = Matrix.Vector Double -- single column of coordinates
 type Pack = Int -- bits indicate membership
 
 intToBool :: Int -> Bool
-intToBool a = a > 0
+intToBool a = a /= 0
 
 boolToInt :: Bool -> Int
 boolToInt a = if a then 1 else 0
 
 notOfInt :: Int -> Int
-notOfInt a = if a > 0 then 0 else 1
+notOfInt a = boolToInt (not (intToBool a))
 
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
@@ -54,9 +54,9 @@ belongs a b = testBit b a
 
 -- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
-subsets n a
- | n == 0 = [[]]
- | otherwise = concat (map (\b -> map (\c -> c:b) (a \\ b)) (subsets (n - 1) a))
+subsets 0 _ = [[]]
+subsets _ [] = []
+subsets n (a:b) = (map (a:) (subsets (n-1) b)) Prelude.++ (subsets n b)
 
 -- those indexed by list of indices
 subset :: [Int] -> [a] -> [a]
@@ -68,10 +68,9 @@ welldef a = welldefF (sort a)
 
 welldefF :: Ord a => [a] -> [a]
 welldefF (a:(b:c))
- | a == b = b:(welldefF c)
+ | a == b = welldefF (b:c)
  | otherwise = a:(welldefF (b:c))
-welldefF (a:b) = a:(welldefF b)
-welldefF [] = []
+welldefF a = a
 
 member :: Eq a => a -> [a] -> Bool
 member a b = (find (\c -> a == c) b) /= Nothing
@@ -139,8 +138,9 @@ setG (a:s) (b:t) c d e
  | a < b = setH c a (setG s (b:t) c d e)
  | a == b = setH d a (setG s t c d e)
  | otherwise = setH e b (setG (a:s) t c d e)
-setG (a:s) [] _ _ _ = (a:s)
-setG [] b _ _ _ = b
+setG (a:s) [] c d e = setH c a (setG s [] c d e)
+setG [] (b:t) c d e = setH e b (setG [] t c d e)
+setG [] [] _ _ _ = []
 
 setH :: Bool -> a -> [a] -> [a]
 setH True a b = a:b
