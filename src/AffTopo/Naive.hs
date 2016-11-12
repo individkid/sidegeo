@@ -237,7 +237,7 @@ attachedRegions b s = let
  place = enumerate s
  subplace = foldl (\x y -> superSpaceF y x) place b
  supers = map (\x -> takeRegions subplace place [x]) (regionsOfSpace (range subplace))
- in head (filter (\x -> all (\y -> oppositeOfRegionExists b y s) x) supers)
+ in concat (filter (\x -> all (\y -> oppositeOfRegionExists b y s) x) supers)
 
 -- return corresponding outside region
 outsideOfRegion :: Region -> Space -> Region
@@ -714,8 +714,8 @@ planesFromSpace n s
   -- find sidesOfRegion of each coregion
   cosides = map (\x -> sidesOfRegion x cospace) (regionsOfSpace cospace)
   -- find cosides that matches vertices wrt chosen boundary
-  matches = find (\x -> (x == sides) || (x == mirror)) cosides
-  coregion = regionOfSides (fromJust matches) cospace
+  [match] = filter (\x -> (x == sides) || (x == mirror)) cosides
+  coregion = regionOfSides match cospace
   -- find copoint in coregion
   outin = outsideOfRegionExists coregion cospace
   inpoint = planesFromSpaceH n coregion cospace coplanes
