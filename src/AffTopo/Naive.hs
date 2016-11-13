@@ -233,11 +233,8 @@ attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (a
 attachedRegions :: [Boundary] -> Space -> [Region]
 attachedRegions [] s = regionsOfSpace s
 attachedRegions [b] s = filter (\r -> oppositeOfRegionExists [b] r s) (regionsOfSpace s)
-attachedRegions b s = let
- place = enumerate s
- subplace = foldl (\x y -> superSpaceF y x) place b
- supers = map (\x -> takeRegions subplace place [x]) (regionsOfSpace (range subplace))
- in concat (filter (\x -> all (\y -> oppositeOfRegionExists b y s) x) supers)
+attachedRegions b s = filter (\r -> (length (b \\ (attachedBoundaries r s))) == 0)
+ (filter (\r -> oppositeOfRegionExists b r s) (regionsOfSpace s))
 
 -- return corresponding outside region
 outsideOfRegion :: Region -> Space -> Region

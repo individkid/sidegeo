@@ -22,7 +22,8 @@ main :: IO ()
 main = putStrLn (show [
   ("empty",empty),
   ("simplex",simplex),
-  ("antisection",antisection)])
+  ("antisection",antisection),
+  ("corners",corners)])
 
 empty :: Bool
 empty = (regionsOfSpace []) == [0]
@@ -30,13 +31,28 @@ empty = (regionsOfSpace []) == [0]
 simplex :: Bool
 simplex = isLinear 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
 
-antisection :: Bool
-antisection = let
- space = foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]]
+extendSpace :: Space -> [Space]
+extendSpace space = let
  func x = map (\y -> map (\z -> filter (\a -> member a x) z) y) space
  boundaries = boundariesOfSpace space
  regions = regionsOfSpace space
  num = defineLinear 1 (length boundaries)
  linears = filter (\x -> isLinear 1 (func x)) (subsets num regions)
- spaces = map (\x -> divideSpace x space) linears
+ in map (\x -> divideSpace x space) linears
+
+antisection :: Bool
+antisection = let
+ space = foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]]
+ spaces = extendSpace space
  in all (\x -> isLinear 2 x) spaces
+
+corners :: Bool
+corners = let
+ space = head (extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]]))
+ myAttachedRegions :: [Boundary] -> Space -> [Region]
+ myAttachedRegions b s = let
+  place = enumerate s
+  subplace = foldl (\x y -> superSpaceF y x) place b
+  supers = map (\x -> takeRegions subplace place [x]) (regionsOfSpace (range subplace))
+  in concat (filter (\x -> all (\y -> oppositeOfRegionExists b y s) x) supers)
+ in all (\b -> (myAttachedRegions b space) == (attachedRegions b space)) (subsets 2 (boundariesOfSpace space))
