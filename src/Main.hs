@@ -48,11 +48,12 @@ antisection = let
 
 corners :: Bool
 corners = let
- space = head (extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]]))
+ spaces = extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
  myAttachedRegions :: [Boundary] -> Space -> [Region]
  myAttachedRegions b s = let
   place = enumerate s
   subplace = foldl (\x y -> superSpaceF y x) place b
   supers = map (\x -> takeRegions subplace place [x]) (regionsOfSpace (range subplace))
   in concat (filter (\x -> all (\y -> oppositeOfRegionExists b y s) x) supers)
- in all (\b -> (myAttachedRegions b space) == (attachedRegions b space)) (subsets 2 (boundariesOfSpace space))
+ crosses = [(b,s) | s <- spaces, b <- (subsets 2 (boundariesOfSpace s))]
+ in all (\(b,s) -> (myAttachedRegions b s) == (attachedRegions b s)) crosses

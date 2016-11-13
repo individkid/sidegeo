@@ -173,6 +173,28 @@ foldMaybeF :: (a -> b -> Maybe a) -> Maybe a -> Maybe a -> [b] -> Maybe a
 foldMaybeF f _ (Just b) (c:d) = foldMaybeF f (Just b) (f b c) d
 foldMaybeF _ a _ _ = a
 
+-- return how many regions a space of given dimension and boundaries has
+defineLinear :: Int -> Int -> Int
+defineLinear n m
+ | (n == 0) || (m == 0) = 1
+ | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
+
+-- return whether all subspaces have correct number of regions
+isLinear :: Int -> Space -> Bool
+isLinear n s = let
+ boundaries = boundariesOfSpace s
+ sizes = indices (length boundaries)
+ subs = foldl (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
+ in foldl (\a b -> a && (isLinearF n s b)) True subs
+
+isLinearF :: Int -> Space -> [Boundary] -> Bool
+isLinearF n s b = let
+ fixed = map (\(x,y) -> y - x) (enumerate (welldef b))
+ subspace = foldl (\x y -> subSpace y x) s fixed
+ regions = regionsOfSpace subspace
+ boundaries = boundariesOfSpace subspace
+ in (defineLinear n (length boundaries)) == (length regions)
+
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
 boundariesOfSpace s = indices (length s)
@@ -244,94 +266,6 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
--- return space by converting random planes to space
--- does this produces some spaces more often than others?
-anySpace0 :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
-anySpace0 g n m = let
- (s,h) = randomPlanes g n m
- in (spaceFromPlanes n s, h)
-
--- return space by calling superSpace with singleton space
--- with enough different seeds, would this produce all spaces?
--- superSpace uses imitation for this; is there another way?
-anySpace1 :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
-anySpace1 g n m = let
- (s,h) = foldl (\(x,y) z -> superSpace y n x (singleSpace n z)) ([],g) (indices m)
- in (range s, h)
-
--- return all linear spaces given any space to start
-allSpaces :: Space -> [Space]
-allSpaces s = let
- space = minEquiv s
- regions = regionsOfSpace space
- in allSpacesF regions space [] []
-
--- migrate all possible from current space, and go on to next todo
-allSpacesF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
-allSpacesF (p:q) s todo done
- | canMigrate p s = allSpacesG q s (minEquiv (migrateSpace p s)) todo done
- | otherwise = allSpacesF q s todo done
-allSpacesF [] s todo done = allSpacesH todo (insert s done)
-
--- if migration not already done or todo, recurse with migration added to todo
-allSpacesG :: [Region] -> Space -> Space -> [Space] -> [Space] -> [Space]
-allSpacesG r s t todo done
- | (s == t) || (member t todo) || (member t done) = allSpacesF r s todo done
- | otherwise = allSpacesF r s (insert t todo) done
-
--- recurse with choice removed from todo
-allSpacesH :: [Space] -> [Space] -> [Space]
-allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
-allSpacesH [] done = done
-
-minEquiv :: Space -> Space
-minEquiv posit = fst (minEquivWithPerms posit)
-
-minEquivWithPerms :: Space -> (Space,[[Region]])
-minEquivWithPerms posit = let
- todo = regionsOfSpace posit
- regions = indices (length todo)
- results = foldl minEquivPrefix [([],posit,todo,[])] regions
- (result,_,_,_) = head results
- dones = map (\(_,_,_,z) -> reverse z) results
- in (sortSpace result, dones)
-
--- members of listed tuples are unsorted minimum sofar, positions of regions, position regions todo, inorder regions done
-minEquivPrefix :: [(Space, Space, [Region], [Region])] -> Region -> [(Space, Space, [Region], [Region])]
-minEquivPrefix s r = let
- branches = concat (map (\(w,x,y,z) -> minEquivPrefixF w x y z r) s)
- comparable = map (\(w,x,y,z) -> (sortSpace w, (w, x, y, z))) branches
- result = minimum (map fst comparable)
- results = filter (\(x,_) -> x == result) comparable
- in map snd results
-
--- given minimum sofar, positional todo, listed todo, inorder done, region to add to given minimum
--- return new possible minimum for each listed todo
-minEquivPrefixF :: Space -> Space -> [Region] -> [Region] -> Region -> [(Space, Space, [Region], [Region])]
-minEquivPrefixF sofar posit todo done toadd = map (minEquivPrefixG sofar posit todo done toadd) todo
-
--- return new possible minimum using given from todo
-minEquivPrefixG :: Space -> Space -> [Region] -> [Region] -> Region -> Region -> (Space, Space, [Region], [Region])
-minEquivPrefixG sofar posit todo done toadd torem = let
- newSofar = minEquivPrefixH sofar posit toadd torem
- newTodo = remove torem todo
- newDone = torem:done
- in (newSofar, posit, newTodo, newDone)
-
--- add toadd to sofar in positions of torem in posit
-minEquivPrefixH :: Space -> Space -> Region -> Region -> Space
-minEquivPrefixH sofar posit toadd torem = map (minEquivPrefixI toadd torem) (zip sofar posit)
-
--- add toadd to sofar in position of torem in posit
-minEquivPrefixI :: Region -> Region -> ([Half],[Half]) -> [Half]
-minEquivPrefixI toadd torem (sofar, posit) = map (minEquivPrefixJ toadd torem) (zip sofar posit)
-
--- add toadd to sofar if torem in posit
-minEquivPrefixJ :: Region -> Region -> (Half,Half) -> Half
-minEquivPrefixJ toadd torem (sofar, posit)
- | member torem posit = insert toadd sofar
- | otherwise = sofar
-
 -- return sorted equivalent
 sortSpace :: Space -> Space
 sortSpace s = sort (map sort (map (map sort) s))
@@ -394,8 +328,93 @@ singleSpace :: Int -> Boundary -> Place
 singleSpace 0 b = [(b,[[0],[]])]
 singleSpace _ b = [(b,[[0],[1]])]
 
+-- return space by calling superSpace with singleton space
+anySpace :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
+anySpace g n m = let
+ (s,h) = foldl (\(x,y) z -> superSpace y n x (singleSpace n z)) ([],g) (indices m)
+ in (range s, h)
+
+-- return all linear spaces given any space to start
+allSpaces :: Space -> [Space]
+allSpaces s = let
+ space = minEquiv s
+ regions = regionsOfSpace space
+ in allSpacesF regions space [] []
+
+-- migrate all possible from current space, and go on to next todo
+allSpacesF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
+allSpacesF (p:q) s todo done
+ | canMigrate p s = allSpacesG q s (minEquiv (migrateSpace p s)) todo done
+ | otherwise = allSpacesF q s todo done
+allSpacesF [] s todo done = allSpacesH todo (insert s done)
+
+-- if migration not already done or todo, recurse with migration added to todo
+allSpacesG :: [Region] -> Space -> Space -> [Space] -> [Space] -> [Space]
+allSpacesG r s t todo done
+ | (s == t) || (member t todo) || (member t done) = allSpacesF r s todo done
+ | otherwise = allSpacesF r s (insert t todo) done
+
+-- recurse with choice removed from todo
+allSpacesH :: [Space] -> [Space] -> [Space]
+allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
+allSpacesH [] done = done
+
+--
+-- so far so simple
+--
+
+-- optimize this
+minEquiv :: Space -> Space
+minEquiv posit = fst (minEquivWithPerms posit)
+
+minEquivWithPerms :: Space -> (Space,[[Region]])
+minEquivWithPerms posit = let
+ todo = regionsOfSpace posit
+ regions = indices (length todo)
+ results = foldl minEquivPrefix [([],posit,todo,[])] regions
+ (result,_,_,_) = head results
+ dones = map (\(_,_,_,z) -> reverse z) results
+ in (sortSpace result, dones)
+
+-- members of listed tuples are unsorted minimum sofar, positions of regions, position regions todo, inorder regions done
+minEquivPrefix :: [(Space, Space, [Region], [Region])] -> Region -> [(Space, Space, [Region], [Region])]
+minEquivPrefix s r = let
+ branches = concat (map (\(w,x,y,z) -> minEquivPrefixF w x y z r) s)
+ comparable = map (\(w,x,y,z) -> (sortSpace w, (w, x, y, z))) branches
+ result = minimum (map fst comparable)
+ results = filter (\(x,_) -> x == result) comparable
+ in map snd results
+
+-- given minimum sofar, positional todo, listed todo, inorder done, region to add to given minimum
+-- return new possible minimum for each listed todo
+minEquivPrefixF :: Space -> Space -> [Region] -> [Region] -> Region -> [(Space, Space, [Region], [Region])]
+minEquivPrefixF sofar posit todo done toadd = map (minEquivPrefixG sofar posit todo done toadd) todo
+
+-- return new possible minimum using given from todo
+minEquivPrefixG :: Space -> Space -> [Region] -> [Region] -> Region -> Region -> (Space, Space, [Region], [Region])
+minEquivPrefixG sofar posit todo done toadd torem = let
+ newSofar = minEquivPrefixH sofar posit toadd torem
+ newTodo = remove torem todo
+ newDone = torem:done
+ in (newSofar, posit, newTodo, newDone)
+
+-- add toadd to sofar in positions of torem in posit
+minEquivPrefixH :: Space -> Space -> Region -> Region -> Space
+minEquivPrefixH sofar posit toadd torem = map (minEquivPrefixI toadd torem) (zip sofar posit)
+
+-- add toadd to sofar in position of torem in posit
+minEquivPrefixI :: Region -> Region -> ([Half],[Half]) -> [Half]
+minEquivPrefixI toadd torem (sofar, posit) = map (minEquivPrefixJ toadd torem) (zip sofar posit)
+
+-- add toadd to sofar if torem in posit
+minEquivPrefixJ :: Region -> Region -> (Half,Half) -> Half
+minEquivPrefixJ toadd torem (sofar, posit)
+ | member torem posit = insert toadd sofar
+ | otherwise = sofar
+
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space
+-- homeomorphisms are not simple
 takeRegions :: Place -> Place -> [Region] -> [Region]
 takeRegions s t r = let
  (firstBoundaries,firstSpace) = unzip s
@@ -432,6 +451,7 @@ takeRegionsF (Nothing:_) [] = error "not enough permutations"
 takeRegionsF [] (_:_) = error "too many permutations"
 
 -- return superspace with given spaces as subspaces
+-- this could be the counterexample to my life's work
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | n == 0 = (map (\x -> (x,[[0],[]])) (sBounds ++ tBounds), g)
@@ -518,27 +538,9 @@ superSpaceH b r s = let
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
 superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
--- return how many regions a space of given dimension and boundaries has
-defineLinear :: Int -> Int -> Int
-defineLinear n m
- | (n == 0) || (m == 0) = 1
- | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
-
--- return whether all subspaces have correct number of regions
-isLinear :: Int -> Space -> Bool
-isLinear n s = let
- boundaries = boundariesOfSpace s
- sizes = indices (length boundaries)
- subs = foldl (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
- in foldl (\a b -> a && (isLinearF n s b)) True subs
-
-isLinearF :: Int -> Space -> [Boundary] -> Bool
-isLinearF n s b = let
- fixed = map (\(x,y) -> y - x) (enumerate (welldef b))
- subspace = foldl (\x y -> subSpace y x) s fixed
- regions = regionsOfSpace subspace
- boundaries = boundariesOfSpace subspace
- in (defineLinear n (length boundaries)) == (length regions)
+--
+-- randomPlanes
+--
 
 -- return given number of planes in given number of dimensions
 randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
@@ -608,6 +610,10 @@ randomPlanesJ2 a = a /= Nothing
 randomPlanesK2 :: Int -> Int
 randomPlanesK2 n = n + 1
 
+--
+-- intersectPlanes
+--
+
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
 -- each column specifies points that a plane passes through
@@ -639,6 +645,10 @@ intersectPlanesH n w = let
  square = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
  rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
  in fmap Matrix.flatten (Matrix.linearSolve square rhs)
+
+--
+-- spaceFromPlanes
+--
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
@@ -688,6 +698,10 @@ spaceFromPlanesH _ [] _ _ (s:t) = s:t
 spaceFromPlanesH v (u:w) _ _ [] = (boolToInt (isAbovePlane v u)):(spaceFromPlanesH v w 0 [] [])
 spaceFromPlanesH _ [] _ _ [] = []
 spaceFromPlanesH _ _ _ _ _ = error "too many or few guards"
+
+--
+-- planesFromSpace
+--
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
