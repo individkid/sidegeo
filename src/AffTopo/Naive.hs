@@ -44,6 +44,9 @@ boolToInt a = if a then 1 else 0
 notOfInt :: Int -> Int
 notOfInt a = boolToInt (not (intToBool a))
 
+packToBools :: Int -> Pack -> [Bool]
+packToBools a b = map (\x -> belongs x b) (indices a)
+
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
 power a = indices (shift 1 a)
@@ -365,52 +368,20 @@ allSpacesH [] done = done
 
 -- optimize this
 minEquiv :: Space -> Space
-minEquiv posit = fst (minEquivWithPerms posit)
+minEquiv s = head (sort (map (\x -> sortSpace (minEquivH (length s) (minEquivG x (minEquivF s)))) (minEquivI (length s))))
 
-minEquivWithPerms :: Space -> (Space,[[Region]])
-minEquivWithPerms posit = let
- todo = regionsOfSpace posit
- regions = indices (length todo)
- results = foldl minEquivPrefix [([],posit,todo,[])] regions
- (result,_,_,_) = head results
- dones = map (\(_,_,_,z) -> reverse z) results
- in (sortSpace result, dones)
+minEquivF :: Space -> [Pack]
+minEquivF s = map (\x -> foldl (\y (p,q) -> if member x (q !! 0) then setBit y p else y) 0 (enumerate s)) (regionsOfSpace s)
 
--- members of listed tuples are unsorted minimum sofar, positions of regions, position regions todo, inorder regions done
-minEquivPrefix :: [(Space, Space, [Region], [Region])] -> Region -> [(Space, Space, [Region], [Region])]
-minEquivPrefix s r = let
- branches = concat (map (\(w,x,y,z) -> minEquivPrefixF w x y z r) s)
- comparable = map (\(w,x,y,z) -> (sortSpace w, (w, x, y, z))) branches
- result = minimum (map fst comparable)
- results = filter (\(x,_) -> x == result) comparable
- in map snd results
+minEquivG :: [(Int, Bool)] -> [Pack] -> [Pack]
+minEquivG a b = sort (map (\p -> foldl (\q (x,(y,z)) -> if (belongs x p) /= z then setBit q y else q) 0 (enumerate a)) b)
 
--- given minimum sofar, positional todo, listed todo, inorder done, region to add to given minimum
--- return new possible minimum for each listed todo
-minEquivPrefixF :: Space -> Space -> [Region] -> [Region] -> Region -> [(Space, Space, [Region], [Region])]
-minEquivPrefixF sofar posit todo done toadd = map (minEquivPrefixG sofar posit todo done toadd) todo
+minEquivH :: Int -> [Pack] -> Space
+minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) == y) (enumerate s))) [False,True]) (indices m)
 
--- return new possible minimum using given from todo
-minEquivPrefixG :: Space -> Space -> [Region] -> [Region] -> Region -> Region -> (Space, Space, [Region], [Region])
-minEquivPrefixG sofar posit todo done toadd torem = let
- newSofar = minEquivPrefixH sofar posit toadd torem
- newTodo = remove torem todo
- newDone = torem:done
- in (newSofar, posit, newTodo, newDone)
+minEquivI :: Int -> [[(Int, Bool)]]
+minEquivI m = [zip a b | a <- permutations (indices m), b <- map (packToBools m) (power m)]
 
--- add toadd to sofar in positions of torem in posit
-minEquivPrefixH :: Space -> Space -> Region -> Region -> Space
-minEquivPrefixH sofar posit toadd torem = map (minEquivPrefixI toadd torem) (zip sofar posit)
-
--- add toadd to sofar in position of torem in posit
-minEquivPrefixI :: Region -> Region -> ([Half],[Half]) -> [Half]
-minEquivPrefixI toadd torem (sofar, posit) = map (minEquivPrefixJ toadd torem) (zip sofar posit)
-
--- add toadd to sofar if torem in posit
-minEquivPrefixJ :: Region -> Region -> (Half,Half) -> Half
-minEquivPrefixJ toadd torem (sofar, posit)
- | member torem posit = insert toadd sofar
- | otherwise = sofar
 
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space

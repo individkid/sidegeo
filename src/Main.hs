@@ -18,6 +18,11 @@ module Main (main) where
 
 import AffTopo.Naive
 
+import Prelude hiding ((++))
+import Data.List hiding ((\\), (++), insert)
+import Data.Maybe
+import qualified System.Random as Random
+
 main :: IO ()
 main = putStrLn (show [
   ("empty",empty),
@@ -25,7 +30,12 @@ main = putStrLn (show [
   ("antisection",antisection),
   ("corners",corners),
   ("migrate",migrate),
-  ("higher",higher)])
+  ("higher",higher),
+  ("meta",meta),
+  ("single",single),
+  ("super",super),
+  ("rename",rename),
+  ("equivalent",equivalent)])
 
 empty :: Bool
 empty = (regionsOfSpace []) == [0]
@@ -104,3 +114,63 @@ higher = let
   (doubles == ([9.0,8.0,7.0,6.0,5.0],10)) &&
   (justs == (Just [4,3,2,1,0]))
 
+subPlace :: [Boundary] -> Place -> Place
+subPlace b s = foldl (\x y -> superSpaceF y x) s ((domain s) \\ b)
+
+isSubPlace :: Place -> Place -> Bool
+isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
+
+powerSets :: Ord a => [a] -> [[a]]
+powerSets a = concat (map (\x -> subsets x a) (indices (length a)))
+
+meta :: Bool
+meta = let
+ spaces = extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ places = map enumerate spaces
+ tuples = [(a,b) | a <- places, b <- powerSets (domain a)]
+ subs = map (\(a,b) -> (a, subPlace b a)) tuples
+ in all (\(a,b) -> isSubPlace b a) subs
+
+single :: Bool
+single = let
+ spaces = extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ places = map enumerate spaces
+ tuples = [(a,b,c) | a <- [head places], b <- [[1]], c <- [[0]]]
+ strain = filter (\(_,b,c) -> ((length (b +\ c)) == 0) && ((length (b AffTopo.Naive.++ c)) <= 2)) tuples
+ subs = map (\(a,b,c) -> (subPlace b a, subPlace c a)) strain
+ sups = map (\(d,(b,c)) -> (superSpace (Random.mkStdGen d) 2 b c, b, c)) (enumerate subs)
+ [((sup,_),_,_)] = sups
+ space = sortSpace (range sup)
+ in ((space == [[[0,1],[2,3]],[[0,2],[1,3]]]) ||
+  (space == [[[0,1],[2,3]],[[0,3],[1,2]]]) ||
+  (space == [[[0,2],[1,3]],[[0,3],[1,2]]]))
+
+super :: Bool
+super = let
+ spaces = extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ places = map enumerate spaces
+ tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
+ strain = filter (\(_,b,c) -> ((length (b +\ c)) == 0) && ((length (b AffTopo.Naive.++ c)) <= 2)) tuples
+ subs = map (\(a,b,c) -> (subPlace b a, subPlace c a)) strain
+ sups = map (\(d,(b,c)) -> (superSpace (Random.mkStdGen d) 2 b c, b, c)) (enumerate subs)
+ in all (\((a,_),b,c) -> (isSubPlace b a) && (isSubPlace c a)) sups
+
+equivSpace :: [Region] -> Space -> Space
+equivSpace r s = map (\x -> map (\y -> map (\z -> r !! (fromJust (elemIndex z (regionsOfSpace s)))) y) x) s
+
+rename :: Bool
+rename = let
+ spaces = extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ regions = map (\x -> x * 3) (indices (defineLinear 2 4))
+ in all (\x -> (regionsOfSpace (equivSpace regions x)) == regions) spaces
+
+equivalent :: Bool
+equivalent = let
+ spaces = extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ linear = defineLinear 2 4
+ func :: Random.StdGen -> (Int,Random.StdGen)
+ func g = Random.randomR (0,linear*2) g
+ perms :: [([Int],Random.StdGen)]
+ perms = map (\x -> catalyze func (Random.mkStdGen x) linear) (indices (length spaces))
+ equivs = map (\(a,(b,_)) -> (a, equivSpace b a)) (zip spaces perms)
+ in all (\(a,b) -> (minEquiv a) == (minEquiv b)) equivs
