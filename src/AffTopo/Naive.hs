@@ -213,7 +213,7 @@ regionWrtBoundary b r s = fromJust (findIndex (\a -> member r a) (s !! b))
 
 -- side of vertex identified by n boundaries
 vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Side
-vertexWrtBoundary b r s = regionWrtBoundary b (fromJust (find (\a -> oppositeOfRegionExists r a s) (regionsOfSpace s))) s
+vertexWrtBoundary b r s = regionWrtBoundary b (head (attachedRegions r s)) s
 
 -- return per boundary side of region
 sidesOfRegion :: Region -> Space -> [Side]
