@@ -377,7 +377,7 @@ minEquivG :: [(Int, Bool)] -> [Pack] -> [Pack]
 minEquivG a b = sort (map (\p -> foldl (\q (x,(y,z)) -> if (belongs x p) /= z then setBit q y else q) 0 (enumerate a)) b)
 
 minEquivH :: Int -> [Pack] -> Space
-minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) == y) (enumerate s))) [False,True]) (indices m)
+minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) == y) (enumerate s))) [True,False]) (indices m)
 
 minEquivI :: Int -> [[(Int, Bool)]]
 minEquivI m = [zip a b | a <- permutations (indices m), b <- map (packToBools m) (power m)]

@@ -168,9 +168,6 @@ equivalent :: Bool
 equivalent = let
  spaces = extendSpace (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
  linear = defineLinear 2 4
- func :: Random.StdGen -> (Int,Random.StdGen)
- func g = Random.randomR (0,linear*2) g
- perms :: [([Int],Random.StdGen)]
- perms = map (\x -> catalyze func (Random.mkStdGen x) linear) (indices (length spaces))
- equivs = map (\(a,(b,_)) -> (a, equivSpace b a)) (zip spaces perms)
- in all (\(a,b) -> (minEquiv a) == (minEquiv b)) equivs
+ perms = permutations (indices linear)
+ equivs = map (\(a,b) -> (a, equivSpace b a)) (zip spaces perms)
+ in (all (\x -> (minEquivH (length x) (minEquivF x)) == x) spaces) && (all (\(a,b) -> (minEquiv a) == (minEquiv b)) equivs)
