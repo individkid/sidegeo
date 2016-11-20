@@ -184,6 +184,14 @@ defineLinear n m
 
 -- return whether all subspaces have correct number of regions
 isLinear :: Int -> Space -> Bool
+isLinear _ [] = True
+isLinear 1 s = let
+ halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (enumerate s))
+ ends = filter (\(_,x) -> (length x) == 1) halves
+ dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
+ sorts = map (\z -> sortBy (\(_,x) (_,y) -> if x == y then EQ else (if (length (y \\ x)) == 0 then GT else LT)) z) dirs
+ domains = map domain sorts
+ in ((length domains) == 2) && ((domains !! 0) == (reverse (domains !! 1)) || ((domains !! 0) == (domains !! 1)))
 isLinear n s = let
  boundaries = boundariesOfSpace s
  sizes = indices (length boundaries)
@@ -221,7 +229,7 @@ sidesOfRegion r s = map (\a -> boolToInt (member r (a !! 1))) s
 
 -- return region from per boundary side
 regionOfSides :: [Side] -> Space -> Region
-regionOfSides r s = (regionOfSidesF r s) !! 0
+regionOfSides r s = head (regionOfSidesF r s)
 
 -- return whether region with given side map exists in space
 regionOfSidesExists :: [Side] -> Space -> Bool
@@ -425,14 +433,29 @@ takeRegionsF [] (_:_) = error "too many permutations"
 -- this could be the counterexample to my life's work
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
- | n == 0 = (map (\x -> (x,[[0],[]])) (sBounds ++ tBounds), g)
  | (length (tBounds \\ sBounds)) == 0 = (s,g)
  | (length (sBounds \\ tBounds)) == 0 = (t,g)
  | (length (sBounds ++ tBounds)) <= n = let
   -- every possible region
   boundaries = sBounds ++ tBounds
   regions = power (length boundaries)
-  in (map (\x -> (x, [superSpaceI x regions 0, superSpaceI x regions 1])) boundaries, g)
+  in (map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate boundaries), g)
+ | n == 1 && ((length (sBounds +\ tBounds)) == 0) = let
+  -- starting from either ends
+  -- take from either
+  (sBound,h) = choose g sBounds
+  (tBound,i) = choose h tBounds
+  (bounds,j) = superSpaceJ i (superSpaceK sBound s) (superSpaceK tBound t) []
+  in (superSpaceL bounds [] (indices ((length bounds) + 1)), j)
+ | n == 1 = let
+  -- starting from ends on same side of head of shared
+  -- take from either until one is shared
+  -- then take from unshared until both are shared
+  -- then take shared and go back to first until
+  shared = sBounds +\ tBounds
+  (bound,h) = choose g shared
+  (bounds,i) = superSpaceJ h (superSpaceK bound s) (superSpaceK bound t) shared
+  in (superSpaceL bounds [] (indices ((length bounds) + 1)), i)
  | ((length (sBounds +\ tBounds)) == 0) && ((length tBounds) == 1) && ((length sBounds) > 1) = superSpace g n t s
  | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = let
   -- choose boundary to immitate
@@ -508,6 +531,44 @@ superSpaceH b r s = let
 -- regions indicated by bits of boundary
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
 superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+
+-- shuffle together two one dimensional spaces
+superSpaceJ :: Random.RandomGen g => g -> [Boundary] -> [Boundary] -> [Boundary] -> ([Boundary], g)
+superSpaceJ g [] [] _ = ([],g)
+superSpaceJ g [] t _ = (t,g)
+superSpaceJ g s [] _ = (s,g)
+superSpaceJ g (a:s) (b:t) c
+ | (member a c) && (member b c) = let (d,h) = superSpaceJ g s t c in ((a:d), h)
+ | member a c = let (d,h) = superSpaceJ g (a:s) t c in ((b:d), h)
+ | member b c = let (d,h) = superSpaceJ g s (b:t) c in ((a:d), h)
+ | otherwise = let
+  (d,h) = choose g [False,True]
+  (e,i) = if d then superSpaceJ h (a:s) t c else superSpaceJ h s (b:t) c
+  in if d then ((b:e), i) else ((a:e), i)
+
+-- put boundaries in order
+superSpaceK :: Boundary -> Place -> [Boundary]
+superSpaceK b s = let
+ boundaries = domain s
+ space = range s
+ boundary = fromJust (elemIndex b boundaries)
+ orders = sortBy (superSpaceM boundary space) (boundariesOfSpace space)
+ in map (\x -> boundaries !! x) orders
+
+-- convert ordered boundaries to space
+superSpaceL :: [Boundary] -> [Region] -> [Region] -> Place
+superSpaceL (x:a) b (y:c) = (x, [b, (y:c)]) : (superSpaceL a (y:b) c)
+superSpaceL _ _ _ = []
+
+superSpaceM :: Boundary -> Space -> Boundary -> Boundary -> Ordering
+superSpaceM b s x y
+ | x == y = EQ
+ | (x == b) && (((vertexWrtBoundary b [y] s) == 0) == ((vertexWrtBoundary y [b] s) == 0)) = GT
+ | x == b = LT
+ | (y == b) && (((vertexWrtBoundary b [x] s) == 0) == ((vertexWrtBoundary x [b] s) == 0)) = LT
+ | y == b = GT
+ | (((vertexWrtBoundary b [x] s) == 0) == ((vertexWrtBoundary x [b] s) == 0)) == ((vertexWrtBoundary x [y] s) == 0) = LT
+ | otherwise = GT
 
 --
 -- randomPlanes
