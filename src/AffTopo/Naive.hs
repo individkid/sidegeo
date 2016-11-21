@@ -184,9 +184,9 @@ foldMaybeF _ a _ _ = a
 
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
-defineLinear n m
- | (n == 0) || (m == 0) = 1
- | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
+defineLinear _ 0 = 1
+defineLinear 1 m = m + 1
+defineLinear n m = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
 
 -- return whether all subspaces have correct number of regions
 isLinear :: Int -> Space -> Bool
@@ -341,14 +341,13 @@ sectionSpace b s = let
  in map (map (\x -> x +\ regions)) (unplace b s)
 
 -- space of just one boundary
-singleSpace :: Int -> Boundary -> Place
-singleSpace 0 b = [(b,[[0],[]])]
-singleSpace _ b = [(b,[[0],[1]])]
+singleSpace :: Boundary -> Place
+singleSpace b = [(b,[[0],[1]])]
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- (s,h) = foldl' (\(x,y) z -> superSpace y n x (singleSpace n z)) ([],g) (indices m)
+ (s,h) = foldl' (\(x,y) z -> superSpace y n x (singleSpace z)) ([],g) (indices m)
  in (range s, h)
 
 -- return all linear spaces given any space to start
@@ -395,7 +394,6 @@ minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) ==
 
 minEquivI :: Int -> [[(Int, Bool)]]
 minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
-
 
 -- assume given spaces are subspaces in a superspace
 -- return regions in second space that overlap any of the given regions in the first space
@@ -472,7 +470,7 @@ superSpace g n s t
   sBound = head sBounds -- boundary to add
   (bound,h) = choose g tBounds -- boundary to immitate
   section = superSpaceG bound t -- homeomorphic to immitated or added
-  singlespace = singleSpace (n-1) bound
+  singlespace = singleSpace bound
   (supersect,i) = superSpace h (n-1) singlespace section -- homeomorphic after restoring immitated
   regions = takeRegions supersect t (regionsOfSpace (range supersect)) -- regions in t that are homeomorphic
   in (superSpaceH sBound regions t, i)
@@ -483,7 +481,7 @@ superSpace g n s t
   (bound,h) = choose g sBounds
   subspace = superSpaceF bound s
   (space,i) = superSpace h n subspace t
-  singlespace = singleSpace n bound
+  singlespace = singleSpace bound
   in superSpace i n singlespace space
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
   -- choose shared boundary for sections
