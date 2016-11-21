@@ -51,6 +51,12 @@ packToBools a b = map (\x -> belongs x b) (indices a)
 power :: Int -> [Pack]
 power a = indices (shift 1 a)
 
+polybools :: Int -> [[Bool]]
+polybools a = map (packToBools a) (power a)
+
+polyants :: Int -> [[Side]]
+polyants a = map (map boolToInt) (polybools a)
+
 -- whether given Int is in given set
 belongs :: Int -> Pack -> Bool
 belongs a b = testBit b a
@@ -63,7 +69,7 @@ subsets n (a:b) = (map (a:) (subsets (n-1) b)) Prelude.++ (subsets n b)
 
 -- those indexed by list of indices
 subset :: [Int] -> [a] -> [a]
-subset p a = foldl (\b q -> (a !! q) : b) [] p
+subset p a = foldr (\q b -> (a !! q) : b) [] p
 
 -- make elements sorted and unique
 welldef :: Ord a => [a] -> [a]
@@ -162,7 +168,7 @@ generateF f a todo done
 
 -- given number of firsts found by calling function on second
 catalyze :: (g -> (a,g)) -> g -> Int -> ([a],g)
-catalyze f g n = foldl (\(a,h) _ -> catalyzeF f h a) ([],g) ((indices n)::[Int])
+catalyze f g n = foldl' (\(a,h) _ -> catalyzeF f h a) ([],g) ((indices n)::[Int])
 
 catalyzeF :: (g -> (a,g)) -> g -> [a] -> ([a],g)
 catalyzeF f g a = let (b,h) = f g in (b:a,h)
@@ -195,13 +201,13 @@ isLinear 1 s = let
 isLinear n s = let
  boundaries = boundariesOfSpace s
  sizes = indices (length boundaries)
- subs = foldl (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
- in foldl (\a b -> a && (isLinearF n s b)) True subs
+ subs = foldl' (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
+ in foldl' (\a b -> a && (isLinearF n s b)) True subs
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
 isLinearF n s b = let
  fixed = map (\(x,y) -> y - x) (enumerate (welldef b))
- subspace = foldl (\x y -> subSpace y x) s fixed
+ subspace = foldl' (\x y -> subSpace y x) s fixed
  regions = regionsOfSpace subspace
  boundaries = boundariesOfSpace subspace
  in (defineLinear n (length boundaries)) == (length regions)
@@ -236,11 +242,11 @@ regionOfSidesExists :: [Side] -> Space -> Bool
 regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 
 regionOfSidesF :: [Side] -> Space -> [Region]
-regionOfSidesF r s = foldl (\a (b,c) -> a +\ (c !! b)) (regionsOfSpace s) (zip r s)
+regionOfSidesF r s = foldl' (\a (b,c) -> a +\ (c !! b)) (regionsOfSpace s) (zip r s)
 
 -- return sidedness with boundaries reversed
 oppositeOfSides :: [Boundary] -> [Side] -> [Side]
-oppositeOfSides b r = foldl (\x y -> replace y (notOfInt (x !! y)) x) r b
+oppositeOfSides b r = foldl' (\x y -> replace y (notOfInt (x !! y)) x) r b
 
 -- return neighbor region of given region wrt given boundaries
 oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
@@ -290,7 +296,7 @@ canMigrate r s = let
  empty = not (regionOfSidesExists opposite s)
  neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
  exists = map (\a -> regionOfSidesExists a s) neighbors
- in foldl (\a b -> a && b) empty exists
+ in foldl' (\a b -> a && b) empty exists
 
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
@@ -342,7 +348,7 @@ singleSpace _ b = [(b,[[0],[1]])]
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- (s,h) = foldl (\(x,y) z -> superSpace y n x (singleSpace n z)) ([],g) (indices m)
+ (s,h) = foldl' (\(x,y) z -> superSpace y n x (singleSpace n z)) ([],g) (indices m)
  in (range s, h)
 
 -- return all linear spaces given any space to start
@@ -379,16 +385,16 @@ minEquiv :: Space -> Space
 minEquiv s = head (sort (map (\x -> sortSpace (minEquivH (length s) (minEquivG x (minEquivF s)))) (minEquivI (length s))))
 
 minEquivF :: Space -> [Pack]
-minEquivF s = map (\x -> foldl (\y (p,q) -> if member x (q !! 0) then setBit y p else y) 0 (enumerate s)) (regionsOfSpace s)
+minEquivF s = map (\x -> foldl' (\y (p,q) -> if member x (q !! 0) then setBit y p else y) 0 (enumerate s)) (regionsOfSpace s)
 
 minEquivG :: [(Int, Bool)] -> [Pack] -> [Pack]
-minEquivG a b = sort (map (\p -> foldl (\q (x,(y,z)) -> if (belongs x p) /= z then setBit q y else q) 0 (enumerate a)) b)
+minEquivG a b = sort (map (\p -> foldl' (\q (x,(y,z)) -> if (belongs x p) /= z then setBit q y else q) 0 (enumerate a)) b)
 
 minEquivH :: Int -> [Pack] -> Space
 minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) == y) (enumerate s))) [True,False]) (indices m)
 
 minEquivI :: Int -> [[(Int, Bool)]]
-minEquivI m = [zip a b | a <- permutations (indices m), b <- map (packToBools m) (power m)]
+minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
 
 
 -- assume given spaces are subspaces in a superspace
@@ -409,10 +415,10 @@ takeRegions s t r = let
  secondSides = map (\x -> map (\y -> fmap (\z -> x !! z) y) secondToFirst) firstSides
  -- for each boundary in second space, count number of Nothing
  count :: Int
- count = foldl (\x y -> if y == Nothing then x+1 else x) 0 secondToFirst
+ count = foldl' (\x y -> if y == Nothing then x+1 else x) 0 secondToFirst
  -- find sidedness permutations of same length as indices
  permutes :: [[Side]] -- every possible -> count of TBoundary -> Side
- permutes = map (\x -> map (\y -> boolToInt (belongs y x)) (indices count)) (power count)
+ permutes = polyants count
  -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
  fixedSides :: [[Side]] -- given of SRegion -> TBoundary -> Side
  fixedSides = map (\(x,y) -> takeRegionsF x y) [(x,y) | x <- secondSides, y <- permutes]
@@ -528,7 +534,7 @@ superSpaceH b r s = let
  (bounds,space) = unzip s
  in zip (bounds Prelude.++ [b]) (divideSpace r space)
 
--- regions indicated by bits of boundary
+-- regions indicated by boundary as bit position
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
 superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
@@ -708,9 +714,7 @@ spaceFromPlanesF n m w
   tuples = map (\x -> (m - 1):x) vertices
   points = map (\x -> fromJust (intersectPlanes n (subset x w))) tuples
   -- convert intersection points to sides in each permutation of sides wrt intersection planes
-  packs = power (n - 1)
-  unpacks = indices (n - 1)
-  perms = map (\x -> map (\y -> boolToInt (belongs y x)) unpacks) packs
+  perms = polyants (n - 1)
   sides = concat (map (spaceFromPlanesG perms w) (zip vertices points))
   -- convert sides to regions to divide
   divided = welldef (map (\x -> regionOfSides x space) sides)
@@ -774,7 +778,7 @@ planesFromSpaceH n region space planes = let
  corners = attachedFacets n region space
  points = map (\x -> fromJust (intersectPlanes n (subset x planes))) corners
  zero = Matrix.fromList (replicate n 0.0)
- in Matrix.scale (1.0 / (fromIntegral (length points))) (foldl (\x y -> Matrix.add x y) zero points)
+ in Matrix.scale (1.0 / (fromIntegral (length points))) (foldl' (\x y -> Matrix.add x y) zero points)
 
  -- find point some distance out on line to coregion from other outside
 planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point -> Point
