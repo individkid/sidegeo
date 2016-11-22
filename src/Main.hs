@@ -37,7 +37,9 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("equivalent",equivalent)
   ,("section",section)
   ,("ordering",ordering)
-  -- ,("super",super)
+  ,("intervals",intervals)
+  ,("special",special)
+  -- ,("general",general)
   ]))
 
 rv :: Bool -> String -> Maybe String
@@ -196,14 +198,31 @@ ordering = let
  orders = [(x,y,z) | x <- sections, y <- boundariesOfSpace x, z <- boundariesOfSpace x]
  in rvb (\(x,y,z) -> rv ((superSpaceM 0 x y z) == (negateOrdering (superSpaceM 0 x z y))) (show (x,y,z))) orders
 
-super :: Maybe String
-super = let
+intervals :: Maybe String
+intervals = let
+ spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ sections = [sectionSpace y x | x <- spaces, y <- boundariesOfSpace x]
+ orders = [(x,superSpaceK y (enumerate x)) | x <- sections, y <- indices (length x)]
+ unorders = map (\(x,y) -> (x, y, range (superSpaceL y [] (indices ((length y) + 1))))) orders
+ in rvb (\(x,y,z) -> rv ((minEquiv x) == (minEquiv z)) (show (x,y,z))) unorders
+
+special :: Maybe String
+special = let
+ spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ sections = [sectionSpace y x | x <- spaces, y <- boundariesOfSpace x]
+ places = map enumerate sections
+ tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
+ subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) tuples
+ sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
+ in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
+
+general :: Maybe String
+general = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
  places = map enumerate spaces
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  strain = filter (\(_,b,c) -> (length (b +\ c)) == 0) tuples
  subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) strain
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 2 b c, a, b, c,d)) (enumerate subs)
- in rvb (\((e,_),_,b,c,d) -> (rv (isSubPlace b e) (show ("left",b,c,d,e))) `rva` (rv (isSubPlace c e) (show ("right",b,c,d,e)))) sups
-
+ in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show (b,c,d,e)))) sups
 

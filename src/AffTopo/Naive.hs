@@ -561,7 +561,7 @@ superSpaceK b s = let
 
 -- convert ordered boundaries to space
 superSpaceL :: [Boundary] -> [Region] -> [Region] -> Place
-superSpaceL (x:a) b (y:c) = (x, [b, (y:c)]) : (superSpaceL a (y:b) c)
+superSpaceL (x:a) b (y:c) = (x, [y:b, c]) : (superSpaceL a (y:b) c)
 superSpaceL _ _ _ = []
 
 superSpaceM :: Boundary -> Space -> Boundary -> Boundary -> Ordering
