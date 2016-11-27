@@ -195,7 +195,8 @@ isLinear 1 s = let
  halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (enumerate s))
  ends = filter (\(_,x) -> (length x) == 1) halves
  dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
- sorts = map (\z -> sortBy (\(_,x) (_,y) -> if x == y then EQ else (if (length (y \\ x)) == 0 then GT else LT)) z) dirs
+ func a b = let ((_,x),(_,y)) = (a,b) in if (length (y \\ x)) == 0 then GT else (if (length (x \\ y)) == 0 then LT else EQ)
+ sorts = map (\z -> sortBy func z) dirs
  domains = map domain sorts
  in ((length domains) == 2) && ((domains !! 0) == (reverse (domains !! 1)) || ((domains !! 0) == (domains !! 1)))
 isLinear n s = let
@@ -459,6 +460,7 @@ superSpace g n s t
   shared = sBounds +\ tBounds
   (bound,h) = choose g shared
   (bounds,i) = superSpaceJ h (superSpaceK bound s) (superSpaceK bound t) shared
+  -- TODO superSpaceL needs to preserve given mirror arrows
   in (superSpaceL bounds [] (indices ((length bounds) + 1)), i)
  | ((length (sBounds +\ tBounds)) == 0) && ((length tBounds) == 1) && ((length sBounds) > 1) = superSpace g n t s
  | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = let
@@ -536,43 +538,51 @@ superSpaceH b r s = let
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
 superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
--- shuffle together two one dimensional spaces
-superSpaceJ :: Random.RandomGen g => g -> [Boundary] -> [Boundary] -> [Boundary] -> ([Boundary], g)
+-- shuffle together two one dimensional spaces carrying along mirror arrow
+superSpaceJ :: Random.RandomGen g => g -> [(Boundary,Side)] -> [(Boundary,Side)] -> [Boundary] -> ([(Boundary,Side)], g)
 superSpaceJ g [] [] _ = ([],g)
 superSpaceJ g [] t _ = (t,g)
 superSpaceJ g s [] _ = (s,g)
-superSpaceJ g (a:s) (b:t) c
- | (member a c) && (member b c) = let (d,h) = superSpaceJ g s t c in ((a:d), h)
- | member a c = let (d,h) = superSpaceJ g (a:s) t c in ((b:d), h)
- | member b c = let (d,h) = superSpaceJ g s (b:t) c in ((a:d), h)
+superSpaceJ g ((a,x):s) ((b,y):t) c
+ | (member a c) && (member b c) = let (d,h) = superSpaceJ g s t c in (((a,x):d), h)
+ | member a c = let (d,h) = superSpaceJ g ((a,x):s) t c in (((b,y):d), h)
+ | member b c = let (d,h) = superSpaceJ g s ((b,y):t) c in (((a,x):d), h)
  | otherwise = let
   (d,h) = choose g [False,True]
-  (e,i) = if d then superSpaceJ h (a:s) t c else superSpaceJ h s (b:t) c
-  in if d then ((b:e), i) else ((a:e), i)
+  (e,i) = if d then superSpaceJ h ((a,x):s) t c else superSpaceJ h s ((b,y):t) c
+  in if d then (((b,y):e), i) else (((a,x):e), i)
 
--- put boundaries in order
-superSpaceK :: Boundary -> Place -> [Boundary]
+-- put boundaries in order with oudside region in first halfspace of given boundary as first region
+superSpaceK :: Boundary -> Place -> [(Boundary,Side)]
 superSpaceK b s = let
- boundaries = domain s
+ given = domain s
  space = range s
- boundary = fromJust (elemIndex b boundaries)
- orders = sortBy (superSpaceM boundary space) (boundariesOfSpace space)
- in map (\x -> boundaries !! x) orders
+ boundaries = boundariesOfSpace space
+ boundary = fromJust (elemIndex b given)
+ region = superSpaceN boundary space
+ orders = sortBy (superSpaceM region space) boundaries
+ mirrors = map (\x -> (x, regionWrtBoundary x region space)) boundaries
+ results = map (\x -> mirrors !! x) orders
+ in map (\(x,y) -> (given !! x, y)) results
 
--- convert ordered boundaries to space
-superSpaceL :: [Boundary] -> [Region] -> [Region] -> Place
-superSpaceL (x:a) b (y:c) = (x, [y:b, c]) : (superSpaceL a (y:b) c)
+-- convert ordered boundaries to space putting first regions in indicated halfspace
+superSpaceL :: [(Boundary,Side)] -> [Region] -> [Region] -> Place
+superSpaceL ((x,y):a) b (z:c) = (x, (if intToBool y then [c,z:b] else [z:b,c])) : (superSpaceL a (z:b) c)
 superSpaceL _ _ _ = []
 
-superSpaceM :: Boundary -> Space -> Boundary -> Boundary -> Ordering
-superSpaceM b s x y
+-- return boundary order wrt given outside region that is in first halfspace of all boundaries
+superSpaceM :: Region -> Space -> Boundary -> Boundary -> Ordering
+superSpaceM r s x y
  | x == y = EQ
- | (x == b) && (((vertexWrtBoundary b [y] s) == 0) == ((vertexWrtBoundary y [b] s) == 0)) = GT
- | x == b = LT
- | (y == b) && (((vertexWrtBoundary b [x] s) == 0) == ((vertexWrtBoundary x [b] s) == 0)) = LT
- | y == b = GT
- | (((vertexWrtBoundary b [x] s) == 0) == ((vertexWrtBoundary x [b] s) == 0)) == ((vertexWrtBoundary x [y] s) == 0) = LT
- | otherwise = GT
+ | ((regionWrtBoundary x r s) == 0) == ((vertexWrtBoundary x [y] s) == 0) = GT
+ | otherwise = LT
+
+-- return outside region on first side of given boundary
+superSpaceN :: Boundary -> Space -> Region
+superSpaceN b s = let
+ regions = regionsOfSpace s
+ func x = (outsideOfRegionExists x s) && ((regionWrtBoundary b x s) == 0)
+ in fromJust (find func regions)
 
 --
 -- randomPlanes

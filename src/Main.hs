@@ -36,6 +36,7 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("rename",rename)
   ,("equivalent",equivalent)
   ,("section",section)
+  ,("outside",outside)
   ,("ordering",ordering)
   ,("intervals",intervals)
   ,("special",special)
@@ -186,6 +187,14 @@ section = let
  sections = [(x,y,sectionSpace y x) | x <- spaces, y <- boundariesOfSpace x]
  in rvb (\(x,y,z) -> rv (isLinear 1 z) (show (x,y,z))) sections
 
+outside :: Maybe String
+outside = let
+ spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
+ sections = [sectionSpace y x | x <- spaces, y <- boundariesOfSpace x]
+ func x s y = (outsideOfRegionExists y s) && ((regionWrtBoundary x y s) == 0)
+ args = [(b,s) | s <- sections, b <- boundariesOfSpace s]
+ in rvb (\(b,s) -> rv ((find (func b s) (regionsOfSpace s)) /= Nothing) (show (b,s))) args
+
 negateOrdering :: Ordering -> Ordering
 negateOrdering LT = GT
 negateOrdering GT = LT
@@ -195,8 +204,8 @@ ordering :: Maybe String
 ordering = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
  sections = [sectionSpace y x | x <- spaces, y <- boundariesOfSpace x]
- orders = [(x,y,z) | x <- sections, y <- boundariesOfSpace x, z <- boundariesOfSpace x]
- in rvb (\(x,y,z) -> rv ((superSpaceM 0 x y z) == (negateOrdering (superSpaceM 0 x z y))) (show (x,y,z))) orders
+ orders = [(x,y,z,superSpaceN 0 x) | x <- sections, y <- boundariesOfSpace x, z <- boundariesOfSpace x]
+ in rvb (\(x,y,z,r) -> rv ((superSpaceM r x y z) == (negateOrdering (superSpaceM r x z y))) (show (x,y,z))) orders
 
 intervals :: Maybe String
 intervals = let
@@ -221,8 +230,12 @@ general = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
  places = map enumerate spaces
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
- strain = filter (\(_,b,c) -> (length (b +\ c)) == 0) tuples
+ strain = filter (\(_,b,c) -> ((length (b \\ c)) == 1) && ((length (c \\ b)) == 1)) tuples
  subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) strain
- sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 2 b c, a, b, c,d)) (enumerate subs)
- in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show (b,c,d,e)))) sups
+ sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 2 b c, a, b, c, d)) (enumerate subs)
+ in rvb (\((d,_),a,b,c,g) -> (rv (isLinear 2 (range b)) (show ("left",b))) `rva`
+  (rv (isLinear 2 (range c)) (show ("right",c))) `rva`
+  (rv (isLinear 2 (range d)) (show ("number",g,"space",a,"left",b,"right",c,"super",d))) `rva`
+  (rv (isSubPlace b d) (show ("left",b,"super",d))) `rva`
+  (rv (isSubPlace c d) (show ("right",c,"super",d)))) sups
 
