@@ -40,7 +40,7 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("ordering",ordering)
   ,("intervals",intervals)
   ,("special",special)
-  -- ,("general",general)
+  ,("general",general)
   ]))
 
 rv :: Bool -> String -> Maybe String
@@ -230,8 +230,7 @@ general = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
  places = map enumerate spaces
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
- strain = filter (\(_,b,c) -> ((length (b \\ c)) == 1) && ((length (c \\ b)) == 1)) tuples
- subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) strain
+ subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) tuples
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 2 b c, a, b, c, d)) (enumerate subs)
  in rvb (\((d,_),a,b,c,g) -> (rv (isLinear 2 (range b)) (show ("left",b))) `rva`
   (rv (isLinear 2 (range c)) (show ("right",c))) `rva`
