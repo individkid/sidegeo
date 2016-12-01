@@ -41,6 +41,8 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("intervals",intervals)
   ,("special",special)
   ,("general",general)
+  ,("complexity",complexity)
+  ,("symbolic",symbolic)
   ]))
 
 rv :: Bool -> String -> Maybe String
@@ -238,3 +240,14 @@ general = let
   (rv (isSubPlace b d) (show ("left",b,"super",d))) `rva`
   (rv (isSubPlace c d) (show ("right",c,"super",d)))) sups
 
+complexity :: Maybe String
+complexity = let
+ complexities = [(n,m) | n <- [3..5], m <- [3..8]]
+ spaces = map (\(g,(n,m)) -> (n, anySpace (Random.mkStdGen g) n m)) (enumerate complexities)
+ in rvb (\(n,(s,_)) -> rv (isLinear n s) (show (n,s))) spaces
+
+symbolic :: Maybe String
+symbolic = let
+ (space,_) = anySpace (Random.mkStdGen 0) 2 5
+ linears = allSpaces space
+ in rvb (\s -> rv (isLinear 2 s) (show s)) linears
