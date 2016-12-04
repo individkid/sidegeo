@@ -142,12 +142,6 @@ higher = let
   (rv (doubles == ([9.0,8.0,7.0,6.0,5.0],10)) (show ("doubles",doubles))) `rva`
   (rv (justs == (Just [4,3,2,1,0])) (show ("justs",justs)))
 
-subPlace :: [Boundary] -> Place -> Place
-subPlace b s = foldl (\x y -> superSpaceF y x) s ((domain s) \\ b)
-
-isSubPlace :: Place -> Place -> Bool
-isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
-
 powerSets :: Ord a => [a] -> [[a]]
 powerSets a = concat (map (\x -> subsets x a) (indices (length a)))
 
@@ -229,16 +223,18 @@ special = let
 
 general :: Maybe String
 general = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
- places = map enumerate spaces
- tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
- subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) tuples
- sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 2 b c, a, b, c, d)) (enumerate subs)
- in rvb (\((d,_),a,b,c,g) -> (rv (isLinear 2 (range b)) (show ("left",b))) `rva`
-  (rv (isLinear 2 (range c)) (show ("right",c))) `rva`
-  (rv (isLinear 2 (range d)) (show ("number",g,"space",a,"left",b,"right",c,"super",d))) `rva`
-  (rv (isSubPlace b d) (show ("left",b,"super",d))) `rva`
-  (rv (isSubPlace c d) (show ("right",c,"super",d)))) sups
+ complexities = [(n,m) | n <- [3..4], m <- [3..6]]
+ spaces = map (\(g,(n,m)) -> (n,anySpace (Random.mkStdGen g) n m)) (enumerate complexities)
+ places = map (\(n,(a,_)) -> (n,enumerate a)) spaces
+ tuples = [(n,a,b,c) | (n,a) <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
+ subs = map (\(n,a,b,c) -> (n, a, subPlace b a, subPlace c a)) tuples
+ sups = map (\(d,(n,a,b,c)) -> (n, superSpace (Random.mkStdGen d) n b c, a, b, c, d)) (enumerate subs)
+ in rvb (\(n,(d,_),a,b,c,g) ->
+  (rv (isLinear n (range b)) (show ("left",b))) `rva`
+  (rv (isLinear n (range c)) (show ("right",c))) `rva`
+  (rv (isLinear n (range d)) (show ("dimension",n,"number",g,"space",a,"left",b,"right",c,"super",d))) `rva`
+  (rv (isSubPlace b d) (show ("dimension",n,"left",b,"super",d))) `rva`
+  (rv (isSubPlace c d) (show ("dimension",n,"right",c,"super",d)))) sups
 
 complexity :: Maybe String
 complexity = let

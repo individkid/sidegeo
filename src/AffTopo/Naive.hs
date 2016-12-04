@@ -460,7 +460,6 @@ superSpace g n s t
   shared = sBounds +\ tBounds
   (bound,h) = choose g shared
   (bounds,i) = superSpaceJ h (superSpaceK bound s) (superSpaceK bound t) shared
-  -- TODO superSpaceL needs to preserve given mirror arrows
   in (superSpaceL bounds [] (indices ((length bounds) + 1)), i)
  | ((length (sBounds +\ tBounds)) == 0) && ((length tBounds) == 1) && ((length sBounds) > 1) = superSpace g n t s
  | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = let
@@ -471,7 +470,7 @@ superSpace g n s t
   -- divide by this linear subset of regions
   sBound = head sBounds -- boundary to add
   (bound,h) = choose g tBounds -- boundary to immitate
-  section = superSpaceG bound t -- homeomorphic to immitated or added
+  section = superSpaceG bound t -- homeomorphic to immitated or addedgit
   singlespace = singleSpace bound
   (supersect,i) = superSpace h (n-1) singlespace section -- homeomorphic after restoring immitated
   regions = takeRegions supersect t (regionsOfSpace (range supersect)) -- regions in t that are homeomorphic
@@ -497,7 +496,8 @@ superSpace g n s t
   sSect = superSpaceG sBound s -- missing sBound and tBound
   (section,i) = superSpace h (n-1) tSect sSect -- missing sBound
   regions = takeRegions section t (regionsOfSpace (range section))
-  in ((superSpaceH sBound regions t), i)
+  regions_ = if (length regions) /= (length (regionsOfSpace (range section))) then error (show ("dimension",n,"s",s,"t",t,"section",section,"sSect",sSect,"tSect",tSect)) else regions
+  in ((superSpaceH sBound regions_ t), i)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
  | otherwise = let -- s and t are not proper
   -- 0 1 2 3 5 7 + 0 1 2 4 =
@@ -513,6 +513,12 @@ superSpace g n s t
   in superSpace i n s sup where -- easier because sup contains t plus one other than b that t did not
  sBounds = domain s
  tBounds = domain t
+
+subPlace :: [Boundary] -> Place -> Place
+subPlace b s = foldl (\x y -> superSpaceF y x) s ((domain s) \\ b)
+
+isSubPlace :: Place -> Place -> Bool
+isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
 
 -- subspace with boundary map
 superSpaceF :: Boundary -> Place -> Place
