@@ -434,6 +434,24 @@ takeRegionsF [] [] = []
 takeRegionsF (Nothing:_) [] = error "not enough permutations"
 takeRegionsF [] (_:_) = error "too many permutations"
 
+subSection :: Random.RandomGen g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place, g)
+subSection g _ _ _ _ _ [] = ([],g)
+subSection g p q n s t u
+ | (p > n) || (q > n) || ((p+q) < n) = error "wrong dimensions"
+ | (welldef (domain s)) /= (welldef (domain u)) = error "wrong first boundaries"
+ | (welldef (domain t)) /= (welldef (domain u)) = error "wrong second boundaries"
+ | p == 0 = (s,g)
+ | q == 0 = (t,g)
+ | otherwise = let
+  boundaries = domain u
+  (boundary,h) = choose g boundaries
+  s0 = superSpaceF boundary s
+  t0 = superSpaceF boundary t
+  u0 = superSpaceF boundary u
+  u1 = superSpaceG boundary u
+  (u2,i) = subSection h p q n s0 t0 u0
+  in subSection i (n-1) (p+q-n) n u1 u2 u0
+
 -- return superspace with given spaces as subspaces
 -- this could be the counterexample to my life's work
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
