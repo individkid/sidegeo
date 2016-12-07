@@ -327,7 +327,7 @@ divideSpaceF r s
  | otherwise = []
 
 divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
-divideSpaceG m a b = b ++ (image (a +\ b) m)
+divideSpaceG m a b = (image (a +\ b) m) ++ b
 
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
@@ -396,10 +396,10 @@ minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) ==
 minEquivI :: Int -> [[(Int, Bool)]]
 minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
 
--- assume given spaces are subspaces in a superspace
--- return regions in second space that overlap any of the given regions in the first space
--- homeomorphisms are not simple
+-- sub-regions in second space of super-regions in shared sub-space of given regions in first space
 takeRegions :: Place -> Place -> [Region] -> [Region]
+takeRegions _ [] [] = []
+takeRegions _ [] _ = regionsOfSpace []
 takeRegions s t r = let
  (firstBoundaries,firstSpace) = unzip s
  (secondBoundaries,secondSpace) = unzip t
@@ -434,26 +434,28 @@ takeRegionsF [] [] = []
 takeRegionsF (Nothing:_) [] = error "not enough permutations"
 takeRegionsF [] (_:_) = error "too many permutations"
 
+-- linear intersection of regions in u indicated by s and t
 subSection :: Random.RandomGen g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place, g)
 subSection g _ _ _ _ _ [] = ([],g)
 subSection g p q n s t u
  | (p > n) || (q > n) || ((p+q) < n) = error "wrong dimensions"
- | (welldef (domain s)) /= (welldef (domain u)) = error "wrong first boundaries"
- | (welldef (domain t)) /= (welldef (domain u)) = error "wrong second boundaries"
+ | (welldef (domain s)) /= (welldef (domain u)) = error (show ("wrong first boundaries", (domain s), (domain u)))
+ | (welldef (domain t)) /= (welldef (domain u)) = error (show ("wrong second boundaries", (domain t), (domain u)))
  | p == 0 = (s,g)
  | q == 0 = (t,g)
+ | (p == n) && (q == n) = (u,g)
  | otherwise = let
   boundaries = domain u
   (boundary,h) = choose g boundaries
-  s0 = superSpaceF boundary s
-  t0 = superSpaceF boundary t
-  u0 = superSpaceF boundary u
-  u1 = superSpaceG boundary u
-  (u2,i) = subSection h p q n s0 t0 u0
-  in subSection i (n-1) (p+q-n) n u1 u2 u0
+  sSub = superSpaceF boundary s
+  tSub = superSpaceF boundary t
+  uSub = superSpaceF boundary u
+  uSect = superSpaceG boundary u
+  (subsection,i) = subSection h p q n sSub tSub uSub
+  regions = takeRegions uSect subsection (regionsOfSpace (range uSect))
+  in (superSpaceH boundary regions subsection u, i)
 
 -- return superspace with given spaces as subspaces
--- this could be the counterexample to my life's work
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | (length (tBounds \\ sBounds)) == 0 = (s,g)
@@ -492,7 +494,7 @@ superSpace g n s t
   singlespace = singleSpace bound
   (supersect,i) = superSpace h (n-1) singlespace section -- homeomorphic after restoring immitated
   regions = takeRegions supersect t (regionsOfSpace (range supersect)) -- regions in t that are homeomorphic
-  in (superSpaceH sBound regions t, i)
+  in (superSpaceH sBound regions t s, i)
  | (length (sBounds +\ tBounds)) == 0 = let
   -- choose boundary to remove
   -- recurse with one fewer boundary
@@ -503,19 +505,17 @@ superSpace g n s t
   singlespace = singleSpace bound
   in superSpace i n singlespace space
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
-  -- choose shared boundary for sections
-  -- recurse to find subspace (wrt chosen) of supersection
-  -- find subspace (wrt left unshared) of full supersection
-  -- recurse to find full supersection
-  -- take regions to space with right unshared to find those divided by left unshared
-  sBound = head (sBounds \\ tBounds) -- left unshared
-  (bound,h) = choose g (sBounds +\ tBounds) -- shared
-  tSect = superSpaceG bound t -- missing bound and sBound
-  sSect = superSpaceG sBound s -- missing sBound and tBound
-  (section,i) = superSpace h (n-1) tSect sSect -- missing sBound
-  regions = takeRegions section t (regionsOfSpace (range section))
-  regions_ = if (length regions) /= (length (regionsOfSpace (range section))) then error (show ("dimension",n,"s",s,"t",t,"section",section,"sSect",sSect,"tSect",tSect)) else regions
-  in ((superSpaceH sBound regions_ t), i)
+  -- add section with added subsection
+  sBound = head (sBounds \\ tBounds)
+  tBound = head (tBounds \\ sBounds)
+  sSect = superSpaceG sBound s
+  tSect = superSpaceG tBound t
+  shared = superSpaceF sBound s
+  (subsection,h) = subSection g (n-1) (n-1) n sSect tSect shared
+  tRegions = takeRegions subsection tSect (regionsOfSpace (range subsection))
+  section = superSpaceH sBound tRegions tSect s
+  sRegions = takeRegions section s (regionsOfSpace (range section))
+  in (superSpaceH tBound sRegions s t, h)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
  | otherwise = let -- s and t are not proper
   -- 0 1 2 3 5 7 + 0 1 2 4 =
@@ -552,11 +552,25 @@ superSpaceG b s = let
  index = fromJust (elemIndex b bounds)
  in zip (unplace index bounds) (sectionSpace index space)
 
--- divide space with boundary map
-superSpaceH :: Boundary -> [Region] -> Place -> Place
-superSpaceH b r s = let
+-- divide s such that undivided region has same sidedness wrt divided regions as wrt b in t
+superSpaceH :: Boundary -> [Region] -> Place -> Place -> Place
+superSpaceH b r s t = let
  (bounds,space) = unzip s
- in zip (bounds Prelude.++ [b]) (divideSpace r space)
+ index = length bounds
+ bound = fromJust (elemIndex b (domain t))
+ boundaries = bounds Prelude.++ [b]
+ regions  = regionsOfSpace space
+ undivided = regions \\ r
+ chosen = head (if (length undivided) > 0 then undivided else regions)
+ taken = head (takeRegions s t [chosen])
+ expected = regionWrtBoundary bound taken (range t)
+ super = divideSpace r space
+ place = zip boundaries super
+ region = head (takeRegions s place [chosen])
+ [left,right] = super !! index
+ mirror = (take index super) Prelude.++ [[right,left]]
+ actual = regionWrtBoundary index region super
+ in if actual /= expected then zip boundaries mirror else place
 
 -- regions indicated by boundary as bit position
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
