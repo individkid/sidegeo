@@ -438,22 +438,23 @@ takeRegionsF [] (_:_) = error "too many permutations"
 subSection :: Random.RandomGen g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place, g)
 subSection g _ _ _ _ _ [] = ([],g)
 subSection g p q n s t u
- | (p > n) || (q > n) || ((p+q) < n) = error "wrong dimensions"
+ | (p > n) || (q > n) = error "wrong dimensions"
  | (welldef (domain s)) /= (welldef (domain u)) = error (show ("wrong first boundaries", (domain s), (domain u)))
  | (welldef (domain t)) /= (welldef (domain u)) = error (show ("wrong second boundaries", (domain t), (domain u)))
- | p == 0 = (s,g)
- | q == 0 = (t,g)
+ | (p < q) && ((p+q) < n) = (s,g)
+ | (p+q) < n = (t,g)
  | (p == n) && (q == n) = (u,g)
  | otherwise = let
   boundaries = domain u
   (boundary,h) = choose g boundaries
+  uSub = superSpaceF boundary u
   sSub = superSpaceF boundary s
   tSub = superSpaceF boundary t
-  uSub = superSpaceF boundary u
   uSect = superSpaceG boundary u
-  (subsection,i) = subSection h p q n sSub tSub uSub
-  regions = takeRegions uSect subsection (regionsOfSpace (range uSect))
-  in (superSpaceH boundary regions subsection u, i)
+  (sub,i) = subSection h p q n sSub tSub uSub
+  (sect,j) = subSection i (n-1) (p+q-n) n uSect sub uSub
+  regions = takeRegions sect sub (regionsOfSpace (range sect))
+  in (superSpaceH boundary regions sub u, j)
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
