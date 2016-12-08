@@ -191,6 +191,7 @@ defineLinear n m = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
 -- return whether all subspaces have correct number of regions
 isLinear :: Int -> Space -> Bool
 isLinear _ [] = True
+isLinear 0 s = (length (regionsOfSpace s)) == 1
 isLinear 1 s = let
  halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (enumerate s))
  ends = filter (\(_,x) -> (length x) == 1) halves
@@ -438,12 +439,16 @@ takeRegionsF [] (_:_) = error "too many permutations"
 subSection :: Random.RandomGen g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place, g)
 subSection g _ _ _ _ _ [] = ([],g)
 subSection g p q n s t u
- | (p > n) || (q > n) = error "wrong dimensions"
+ | (p > n) || (q > n) || ((p+q) < n) = error "wrong dimensions"
  | (welldef (domain s)) /= (welldef (domain u)) = error (show ("wrong first boundaries", (domain s), (domain u)))
  | (welldef (domain t)) /= (welldef (domain u)) = error (show ("wrong second boundaries", (domain t), (domain u)))
- | (p < q) && ((p+q) < n) = (s,g)
- | (p+q) < n = (t,g)
+ | ((p+q) == n) && ((length shared) == 0) = error "no shared regions"
+ | (p+q) == n = let
+  (region,h) = choose g shared
+  in (map (\(x,y) -> (x, map (\z -> filter (\r -> r == region) z) y)) u, h)
  | (p == n) && (q == n) = (u,g)
+ | p == n = (t,g)
+ | q == n = (s,g)
  | otherwise = let
   boundaries = domain u
   (boundary,h) = choose g boundaries
@@ -454,7 +459,12 @@ subSection g p q n s t u
   (sub,i) = subSection h p q n sSub tSub uSub
   (sect,j) = subSection i (n-1) (p+q-n) n uSect sub uSub
   regions = takeRegions sect sub (regionsOfSpace (range sect))
-  in (superSpaceH boundary regions sub u, j)
+  in (superSpaceH boundary regions sub u, j) where
+ sRegs = takeRegions s u (regionsOfSpace (range s))
+ tRegs = takeRegions t u (regionsOfSpace (range t))
+ shared = sRegs +\ tRegs
+
+
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
