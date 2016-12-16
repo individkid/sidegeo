@@ -40,10 +40,22 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("ordering",ordering)
   ,("intervals",intervals)
   ,("special",special)
+  ,("bug",bug)
   ,("general",general)
   ,("complexity",complexity)
   ,("symbolic",symbolic)
   ]))
+
+data Random.RandomGen g => Debug g = Debug [Int] [Int] g
+
+instance Random.RandomGen g => Show (Debug g) where
+ show (Debug a _ _) = show (reverse a)
+
+instance Random.RandomGen g => Random.RandomGen (Debug g) where
+ next (Debug a (b:c) d) = (b, (Debug (b:a) c d))
+ next (Debug a [] d) = let (b,e) = Random.next d in (b, (Debug (b:a) [] e))
+ genRange (Debug _ _ d) = Random.genRange d
+ split (Debug _ _ d) = let (e,f) = Random.split d in ((Debug [] [] e), (Debug [] [] f))
 
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
@@ -220,6 +232,17 @@ special = let
  subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) tuples
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
  in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
+
+bug :: Maybe String
+bug = let
+ debug = Debug [19566168,1209040243,496624308,1070083020,1667246904] [1345982562,1246616065,300535185,2077363930,679299596] (Random.mkStdGen 0)
+ sSect = [(0,[[0,8,12],[3,7,9,13]]),(2,[[0,3,8,9],[7,12,13]]),(3,[[8,9,12,13],[0,3,7]])]
+ tSect = [(0,[[4,15,19],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,24]]),(3,[[19,20,24],[1,4,5,15]])]
+ shared = [(0,[[4,15,19,23],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,23,24]]),(3,[[19,20,23,24],[1,4,5,15]])]
+ (subsection,_) = subSection debug 2 2 3 sSect tSect shared
+ regions = regionsOfSpace (range subsection)
+ taken = takeRegions subsection tSect regions
+ in rv ((length regions) == (length taken)) (show ("sSect",sSect,"tSect",tSect,"shared",shared))
 
 general :: Maybe String
 general = let
