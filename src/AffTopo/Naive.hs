@@ -47,6 +47,9 @@ notOfInt a = boolToInt (not (intToBool a))
 packToBools :: Int -> Pack -> [Bool]
 packToBools a b = map (\x -> belongs x b) (indices a)
 
+boolsToPack :: [Bool] -> Pack
+boolsToPack a = foldr (\x y -> (shift y 1) + (boolToInt x)) 0 a
+
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
 power a = indices (shift 1 a)
@@ -463,8 +466,6 @@ subSection g p q n s t u
  sRegs = takeRegions s u (regionsOfSpace (range s))
  tRegs = takeRegions t u (regionsOfSpace (range t))
  shared = sRegs +\ tRegs
-
-
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)

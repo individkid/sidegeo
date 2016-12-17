@@ -57,6 +57,15 @@ instance Random.RandomGen g => Random.RandomGen (Debug g) where
  genRange (Debug _ _ d) = Random.genRange d
  split (Debug _ _ d) = let (e,f) = Random.split d in ((Debug [] [] e), (Debug [] [] f))
 
+regionsToPacks :: [Region] -> Space -> [Pack]
+regionsToPacks r s = sort (map (\x -> boolsToPack (map (\y -> member x (y !! 1)) s)) r)
+
+placeToPacks :: Place -> [Pack]
+placeToPacks s = regionsToPacks (regionsOfSpace (range s)) (range (sort s))
+
+takePacks :: Place -> Place -> [[Pack]]
+takePacks s t = sort (map (\x -> regionsToPacks (takeRegions s t [x]) (range (sort t))) (regionsOfSpace (range s)))
+
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
 
@@ -236,13 +245,13 @@ special = let
 bug :: Maybe String
 bug = let
  debug = Debug [19566168,1209040243,496624308,1070083020,1667246904] [1345982562,1246616065,300535185,2077363930,679299596] (Random.mkStdGen 0)
- sSect = [(0,[[0,8,12],[3,7,9,13]]),(2,[[0,3,8,9],[7,12,13]]),(3,[[8,9,12,13],[0,3,7]])]
- tSect = [(0,[[4,15,19],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,24]]),(3,[[19,20,24],[1,4,5,15]])]
- shared = [(0,[[4,15,19,23],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,23,24]]),(3,[[19,20,23,24],[1,4,5,15]])]
+ sSect = [(0,[[0,8,12],[3,7,9,13]]),(1,[[0,3,8,9],[7,12,13]]),(2,[[8,9,12,13],[0,3,7]])]
+ tSect = [(0,[[4,15,19],[1,5,20,24]]),(1,[[1,15,19,20],[4,5,24]]),(2,[[19,20,24],[1,4,5,15]])]
+ shared = [(0,[[4,15,19,23],[1,5,20,24]]),(1,[[1,15,19,20],[4,5,23,24]]),(2,[[19,20,23,24],[1,4,5,15]])]
  (subsection,_) = subSection debug 2 2 3 sSect tSect shared
  regions = regionsOfSpace (range subsection)
  taken = takeRegions subsection tSect regions
- in rv ((length regions) == (length taken)) (show ("sSect",sSect,"tSect",tSect,"shared",shared))
+ in rv ((length regions) == (length taken)) (show ("subsection", takePacks subsection shared, "sSect", takePacks sSect shared, "tSect", takePacks tSect shared, "shared", placeToPacks shared))
 
 general :: Maybe String
 general = let
