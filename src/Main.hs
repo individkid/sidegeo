@@ -66,6 +66,12 @@ placeToPacks s = regionsToPacks (regionsOfSpace (range s)) (range (sort s))
 takePacks :: Place -> Place -> [[Pack]]
 takePacks s t = sort (map (\x -> regionsToPacks (takeRegions s t [x]) (range (sort t))) (regionsOfSpace (range s)))
 
+subPlace :: [Boundary] -> Place -> Place
+subPlace b s = foldl (\x y -> superSpaceF y x) s ((domain s) \\ b)
+
+isSubPlace :: Place -> Place -> Bool
+isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
+
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
 
@@ -244,14 +250,12 @@ special = let
 
 bug :: Maybe String
 bug = let
- debug = Debug [19566168,1209040243,496624308,1070083020,1667246904] [1345982562,1246616065,300535185,2077363930,679299596] (Random.mkStdGen 0)
- sSect = [(0,[[0,8,12],[3,7,9,13]]),(1,[[0,3,8,9],[7,12,13]]),(2,[[8,9,12,13],[0,3,7]])]
- tSect = [(0,[[4,15,19],[1,5,20,24]]),(1,[[1,15,19,20],[4,5,24]]),(2,[[19,20,24],[1,4,5,15]])]
- shared = [(0,[[4,15,19,23],[1,5,20,24]]),(1,[[1,15,19,20],[4,5,23,24]]),(2,[[19,20,23,24],[1,4,5,15]])]
- (subsection,_) = subSection debug 2 2 3 sSect tSect shared
- regions = regionsOfSpace (range subsection)
- taken = takeRegions subsection tSect regions
- in rv ((length regions) == (length taken)) (show ("subsection", takePacks subsection shared, "sSect", takePacks sSect shared, "tSect", takePacks tSect shared, "shared", placeToPacks shared))
+ g = Debug [] [1345982562,1246616065,300535185,2077363930,679299596] (Random.mkStdGen 0)
+ s = [(0,[[0,8,12],[3,7,9,13]]),(2,[[0,3,8,9],[7,12,13]]),(3,[[8,9,12,13],[0,3,7]])]
+ t = [(0,[[4,15,19],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,24]]),(3,[[19,20,24],[1,4,5,15]])]
+ u = [(0,[[4,15,19,23],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,23,24]]),(3,[[19,20,23,24],[1,4,5,15]])]
+ (subsect,h) = subSection g 2 2 3 s t u
+ in rv (isLinear 1 (range subsect)) (show ("subsect",subsect,"s",s,"t",t,"u",u))
 
 general :: Maybe String
 general = let
@@ -260,11 +264,11 @@ general = let
  places = map (\(n,(a,_)) -> (n,enumerate a)) spaces
  tuples = [(n,a,b,c) | (n,a) <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(n,a,b,c) -> (n, a, subPlace b a, subPlace c a)) tuples
- sups = map (\(d,(n,a,b,c)) -> (n, superSpace (Random.mkStdGen d) n b c, a, b, c, d)) (enumerate subs)
- in rvb (\(n,(d,_),a,b,c,g) ->
+ sups = map (\(d,(n,a,b,c)) -> (n, superSpace (Debug [] [] (Random.mkStdGen d)) n b c, a, b, c, d)) (enumerate subs)
+ in rvb (\(n,(d,g),a,b,c,h) ->
   (rv (isLinear n (range b)) (show ("left",b))) `rva`
   (rv (isLinear n (range c)) (show ("right",c))) `rva`
-  (rv (isLinear n (range d)) (show ("dimension",n,"number",g,"space",a,"left",b,"right",c,"super",d))) `rva`
+  (rv (isLinear n (range d)) (show ("dimension",n,"number",g,h,"space",a,"left",b,"right",c,"super",d))) `rva`
   (rv (isSubPlace b d) (show ("dimension",n,"left",b,"super",d))) `rva`
   (rv (isSubPlace c d) (show ("dimension",n,"right",c,"super",d)))) sups
 

@@ -440,15 +440,20 @@ takeRegionsF [] (_:_) = error "too many permutations"
 
 -- linear intersection of regions in u indicated by s and t
 subSection :: Random.RandomGen g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place, g)
-subSection g _ _ _ _ _ [] = ([],g)
-subSection g p q n s t u
+subSection g p q n s t u = let
+ sRegs = takeRegions s u (regionsOfSpace (range s))
+ tRegs = takeRegions t u (regionsOfSpace (range t))
+ in subSectionF g p q n (sRegs +\ tRegs) s t u
+
+subSectionF :: Random.RandomGen g => g -> Int -> Int -> Int -> [Region] -> Place -> Place -> Place -> (Place, g)
+subSectionF g _ _ _ _ _ _ [] = ([],g)
+subSectionF g p q n r s t u
  | (p > n) || (q > n) || ((p+q) < n) = error "wrong dimensions"
  | (welldef (domain s)) /= (welldef (domain u)) = error (show ("wrong first boundaries", (domain s), (domain u)))
  | (welldef (domain t)) /= (welldef (domain u)) = error (show ("wrong second boundaries", (domain t), (domain u)))
- | ((p+q) == n) && ((length shared) == 0) = error "no shared regions"
  | (p+q) == n = let
-  (region,h) = choose g shared
-  in (map (\(x,y) -> (x, map (\z -> filter (\r -> r == region) z) y)) u, h)
+  (region,h) = choose g r
+  in (map (\(x,y) -> (x, map (\z -> filter (\w -> w == region) z) y)) u, h)
  | (p == n) && (q == n) = (u,g)
  | p == n = (t,g)
  | q == n = (s,g)
@@ -459,13 +464,14 @@ subSection g p q n s t u
   sSub = superSpaceF boundary s
   tSub = superSpaceF boundary t
   uSect = superSpaceG boundary u
-  (sub,i) = subSection h p q n sSub tSub uSub
-  (sect,j) = subSection i (n-1) (p+q-n) n uSect sub uSub
+  shared = filter (subSectionG u uSub r) (regionsOfSpace (range uSub))
+  (sub,i) = subSectionF h p q n shared sSub tSub uSub
+  (sect,j) = subSectionF i (n-1) (p+q-n) n shared uSect sub uSub
   regions = takeRegions sect sub (regionsOfSpace (range sect))
-  in (superSpaceH boundary regions sub u, j) where
- sRegs = takeRegions s u (regionsOfSpace (range s))
- tRegs = takeRegions t u (regionsOfSpace (range t))
- shared = sRegs +\ tRegs
+  in (superSpaceH boundary regions sub u, j)
+
+subSectionG :: Place -> Place -> [Region] -> Region -> Bool
+subSectionG s t a b = let regions = takeRegions t s [b] in (length (regions +\ a)) /= 0
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
@@ -543,12 +549,6 @@ superSpace g n s t
   in superSpace i n s sup where -- easier because sup contains t plus one other than b that t did not
  sBounds = domain s
  tBounds = domain t
-
-subPlace :: [Boundary] -> Place -> Place
-subPlace b s = foldl (\x y -> superSpaceF y x) s ((domain s) \\ b)
-
-isSubPlace :: Place -> Place -> Bool
-isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
 
 -- subspace with boundary map
 superSpaceF :: Boundary -> Place -> Place
