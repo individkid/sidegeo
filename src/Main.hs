@@ -57,21 +57,6 @@ instance Random.RandomGen g => Random.RandomGen (Debug g) where
  genRange (Debug _ _ d) = Random.genRange d
  split (Debug _ _ d) = let (e,f) = Random.split d in ((Debug [] [] e), (Debug [] [] f))
 
-regionsToPacks :: [Region] -> Space -> [Pack]
-regionsToPacks r s = sort (map (\x -> boolsToPack (map (\y -> member x (y !! 1)) s)) r)
-
-placeToPacks :: Place -> [Pack]
-placeToPacks s = regionsToPacks (regionsOfSpace (range s)) (range (sort s))
-
-takePacks :: Place -> Place -> [[Pack]]
-takePacks s t = sort (map (\x -> regionsToPacks (takeRegions s t [x]) (range (sort t))) (regionsOfSpace (range s)))
-
-subPlace :: [Boundary] -> Place -> Place
-subPlace b s = foldl (\x y -> superSpaceF y x) s ((domain s) \\ b)
-
-isSubPlace :: Place -> Place -> Bool
-isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
-
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
 
@@ -250,11 +235,10 @@ special = let
 
 bug :: Maybe String
 bug = let
- g = Debug [] [19566168,1209040243,496624308,1070083020,1667246904,1345982562,1246616065,300535185,2077363930,679299596] (Random.mkStdGen 0)
- s = [(0,[[19,21],[20,22]]),(1,[[19,20],[21,22]])]
- t = [(0,[[0,4,8,12,15,19,23],[1,3,5,7,9,13,20,24]]),(2,[[0,1,3,8,9,15,19,20],[4,5,7,12,13,23,24]]),(3,[[8,9,12,13,19,20,23,24],[0,1,3,4,5,7,15]]),(4,[[1,4,5,15,19,20,23,24],[0,3,7,8,9,12,13]])]
- u = [(0,[[4,15,19,23],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,23,24]]),(3,[[19,20,23,24],[1,4,5,15]])]
- (super,h) = superSpace g 3 s t
+ g = Debug [] [] (Random.mkStdGen 0)
+ s = [(0,[[0,4,8,12,15,19,23],[1,3,5,7,9,13,20,24]]),(2,[[0,1,3,8,9,15,19,20],[4,5,7,12,13,23,24]]),(3,[[8,9,12,13,19,20,23,24],[0,1,3,4,5,7,15]]),(4,[[1,4,5,15,19,20,23,24],[0,3,7,8,9,12,13]])]
+ t = [(0,[[2,4,6,7,9,15,19,23],[0,1,3,5,8,20,24]]),(2,[[0,1,6,7,8,15,19,20],[2,3,4,5,9,23,24]]),(3,[[7,8,9,19,20,23,24],[0,1,2,3,4,5,6,15]]),(1,[[0,2,3,6,7,8,9,24],[1,4,5,15,19,20,23]])]
+ (super,_) = superSpace g 3 s t
  in rv (isLinear 3 (range super)) (show ("super",super,"s",s,"t",t))
 
 general :: Maybe String
