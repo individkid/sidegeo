@@ -57,6 +57,12 @@ instance Random.RandomGen g => Random.RandomGen (Debug g) where
  genRange (Debug _ _ d) = Random.genRange d
  split (Debug _ _ d) = let (e,f) = Random.split d in ((Debug [] [] e), (Debug [] [] f))
 
+subPlace :: [Boundary] -> Place -> Place
+subPlace b s = foldl' (\x y -> superSpaceF y x) s ((domain s) \\ b)
+
+isSubPlace :: Place -> Place -> Bool
+isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
+
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
 
@@ -235,11 +241,12 @@ special = let
 
 bug :: Maybe String
 bug = let
- g = Debug [] [] (Random.mkStdGen 0)
- s = [(0,[[0,4,8,12,15,19,23],[1,3,5,7,9,13,20,24]]),(2,[[0,1,3,8,9,15,19,20],[4,5,7,12,13,23,24]]),(3,[[8,9,12,13,19,20,23,24],[0,1,3,4,5,7,15]]),(4,[[1,4,5,15,19,20,23,24],[0,3,7,8,9,12,13]])]
- t = [(0,[[2,4,6,7,9,15,19,23],[0,1,3,5,8,20,24]]),(2,[[0,1,6,7,8,15,19,20],[2,3,4,5,9,23,24]]),(3,[[7,8,9,19,20,23,24],[0,1,2,3,4,5,6,15]]),(1,[[0,2,3,6,7,8,9,24],[1,4,5,15,19,20,23]])]
- (super,_) = superSpace g 3 s t
- in rv (isLinear 3 (range super)) (show ("super",super,"s",s,"t",t))
+ g = Debug [] [2147482884,2092764894,1390461064,715295839,79337801] (Random.mkStdGen 0)
+ s = [(0,[[0,8,12],[3,7,9,13]]),(2,[[0,3,8,9],[7,12,13]]),(3,[[8,9,12,13],[0,3,7]])]
+ t = [(0,[[4,15,19,23],[1,5,20]]),(2,[[1,15,19,20],[4,5,23]]),(3,[[19,20,23],[1,4,5,15]])]
+ u = [(0,[[4,15,19,23],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,23,24]]),(3,[[19,20,23,24],[1,4,5,15]])]
+ (subsection,_) = subSection g 2 2 3 s t u
+ in rv ((superSpaceX subsection s) && (superSpaceX subsection t)) (show ("subsection->s",superSpaceY subsection s,regionsOfSpace (range s),"subsection->t",superSpaceY subsection t,regionsOfSpace (range t)))
 
 general :: Maybe String
 general = let

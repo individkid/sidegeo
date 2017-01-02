@@ -217,33 +217,6 @@ isLinearF n s b = let
  boundaries = boundariesOfSpace subspace
  in (defineLinear n (length boundaries)) == (length regions)
 
-placeToPacks :: [Boundary] -> Place -> [[Pack]]
-placeToPacks b s = let
- boundaries = b \\ (domain s)
- count = length boundaries
- shifted = map (\x -> shift 1 (fromJust (elemIndex x b))) boundaries
- zipped = map (\x -> zip shifted (packToBools count x)) (power count)
- filtered = map (\x -> filter (\(_,y) -> y) x) zipped
- unzipped = map (\x -> map (\(y,_) -> y) x) filtered
- versions = map (\x -> foldl' (\y z -> y + z) 0 x) unzipped
- in map (\x -> map (\y -> (placeToPacksF b x s) + y) versions) (regionsOfSpace (range s))
-
-placeToPacksF :: [Boundary] -> Region -> Place -> Pack
-placeToPacksF b r s = let
- boundaries = domain s
- shifted = map (\x -> shift 1 (fromJust (elemIndex x b))) boundaries
- bools = map intToBool (sidesOfRegion r (range s))
- zipped = zip shifted bools
- filtered = filter (\(_,x) -> x) zipped
- unzipped = map (\(x,_) -> x) filtered
- in foldl' (\x y -> x + y) 0 unzipped
-
-subPlace :: [Boundary] -> Place -> Place
-subPlace b s = foldl' (\x y -> superSpaceF y x) s ((domain s) \\ b)
-
-isSubPlace :: Place -> Place -> Bool
-isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
-
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
 boundariesOfSpace s = indices (length s)
@@ -547,8 +520,7 @@ superSpace g n s t
   tSect = superSpaceG tBound t
   shared = superSpaceF sBound s
   (subsection,h) = subSection g (n-1) (n-1) n sSect tSect shared
-  section_ = superSpaceH sBound subsection tSect s
-  section = if superSpaceX section_ s then section_ else error (show (n,"section",placeToPacks (sBounds ++ tBounds) section_,"s",placeToPacks (sBounds ++ tBounds) s,"subsection",placeToPacks (sBounds ++ tBounds) subsection,"tSect",placeToPacks (sBounds ++ tBounds) tSect,"t",placeToPacks (sBounds ++ tBounds) t))
+  section = superSpaceH sBound subsection tSect s
   in (superSpaceH tBound section s t, h)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
  | otherwise = let -- s and t are not proper
@@ -585,6 +557,9 @@ superSpaceX s t = let
  given = regionsOfSpace (range s)
  divided = takeRegions s t given
  in (length given) == (length divided)
+
+superSpaceY :: Place -> Place -> [[Region]]
+superSpaceY s t = map (\x -> takeRegions s t [x]) (regionsOfSpace (range s))
 
 -- divide t such that undivided region has same sidedness wrt divided regions as wrt b in u
 superSpaceH :: Boundary -> Place -> Place -> Place -> Place
