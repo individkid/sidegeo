@@ -57,11 +57,11 @@ instance Random.RandomGen g => Random.RandomGen (Debug g) where
  genRange (Debug _ _ d) = Random.genRange d
  split (Debug _ _ d) = let (e,f) = Random.split d in ((Debug [] [] e), (Debug [] [] f))
 
-subPlace :: [Boundary] -> Place -> Place
-subPlace b s = foldl' (\x y -> superSpaceF y x) s ((domain s) \\ b)
+subSubPlace :: [Boundary] -> Place -> Place
+subSubPlace b s = foldl' (\x y -> subPlace y x) s ((domain s) \\ b)
 
 isSubPlace :: Place -> Place -> Bool
-isSubPlace a b = (minEquiv (range (subPlace (domain a) b))) == (minEquiv (range a))
+isSubPlace a b = (minEquiv (range (subSubPlace (domain a) b))) == (minEquiv (range a))
 
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
@@ -118,7 +118,7 @@ corners = let
  myAttachedRegions :: [Boundary] -> Space -> [Region]
  myAttachedRegions b s = let
   place = enumerate s
-  subplace = foldl (\x y -> superSpaceF y x) place b
+  subplace = foldl (\x y -> subPlace y x) place b
   supers = map (\x -> takeRegions subplace place [x]) (regionsOfSpace (range subplace))
   in concat (filter (\x -> all (\y -> oppositeOfRegionExists b y s) x) supers)
  crosses = [(b,s) | s <- spaces, b <- (subsets 2 (boundariesOfSpace s))]
@@ -168,7 +168,7 @@ meta = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
  places = map enumerate spaces
  tuples = [(a,b) | a <- places, b <- powerSets (domain a)]
- subs = map (\(a,b) -> (a, subPlace b a)) tuples
+ subs = map (\(a,b) -> (a, subSubPlace b a)) tuples
  in rvb (\(a,b) -> rv (isSubPlace b a) (show (a,b))) subs
 
 single :: Maybe String
@@ -235,7 +235,7 @@ special = let
  sections = [sectionSpace y x | x <- spaces, y <- boundariesOfSpace x]
  places = map enumerate sections
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
- subs = map (\(a,b,c) -> (a, subPlace b a, subPlace c a)) tuples
+ subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
  in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
 
@@ -243,7 +243,7 @@ bug :: Maybe String
 bug = let
  g = Debug [] [2147482884,2092764894,1390461064,715295839,79337801] (Random.mkStdGen 0)
  s = [(0,[[0,8,12],[3,7,9,13]]),(2,[[0,3,8,9],[7,12,13]]),(3,[[8,9,12,13],[0,3,7]])]
- t = [(0,[[4,15,19,23],[1,5,20]]),(2,[[1,15,19,20],[4,5,23]]),(3,[[19,20,23],[1,4,5,15]])]
+ t = [(0,[[4,15,19],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,24]]),(3,[[19,20,24],[1,4,5,15]])]
  u = [(0,[[4,15,19,23],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,23,24]]),(3,[[19,20,23,24],[1,4,5,15]])]
  (subsection,_) = subSection g 2 2 3 s t u
  in rv ((superSpaceX subsection s) && (superSpaceX subsection t)) (show ("subsection->s",superSpaceY subsection s,regionsOfSpace (range s),"subsection->t",superSpaceY subsection t,regionsOfSpace (range t)))
@@ -254,7 +254,7 @@ general = let
  spaces = map (\(g,(n,m)) -> (n,anySpace (Random.mkStdGen g) n m)) (enumerate complexities)
  places = map (\(n,(a,_)) -> (n,enumerate a)) spaces
  tuples = [(n,a,b,c) | (n,a) <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
- subs = map (\(n,a,b,c) -> (n, a, subPlace b a, subPlace c a)) tuples
+ subs = map (\(n,a,b,c) -> (n, a, subSubPlace b a, subSubPlace c a)) tuples
  sups = map (\(d,(n,a,b,c)) -> (n, superSpace (Debug [] [] (Random.mkStdGen d)) n b c, a, b, c, d)) (enumerate subs)
  in rvb (\(n,(d,g),a,b,c,h) ->
   (rv (isLinear n (range b)) (show ("left",b))) `rva`
