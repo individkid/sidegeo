@@ -292,75 +292,6 @@ outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 sortSpace :: Space -> Space
 sortSpace s = sort (map sort (map (map sort) s))
 
--- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
-canMigrate :: Region -> Space -> Bool
-canMigrate r s = let
- boundaries = attachedBoundaries r s
- sides = sidesOfRegion r s
- opposite = oppositeOfSides boundaries sides
- empty = not (regionOfSidesExists opposite s)
- neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
- exists = map (\a -> regionOfSidesExists a s) neighbors
- in foldl' (\a b -> a && b) empty exists
-
--- return space with given region changed to its local opposite
-migrateSpace :: Region -> Space -> Space
-migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
-
-migrateSpaceF :: [Boundary] -> Region -> (Boundary,Full) -> Full
-migrateSpaceF b r (a,s)
- | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
- | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
- | otherwise = s
-
--- return space with given regions divided by new boundary
-divideSpace :: [Region] -> Space -> Space
-divideSpace figure space = let
- whole = regionsOfSpace space
- ground = whole \\ figure
- halfspace = divideSpaceF ground space
- duplicates = holes (length figure) whole
- mapping = zip figure duplicates
- withDups = map (map (divideSpaceG mapping figure)) space
- newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
- in withDups Prelude.++ [newBoundary]
-
-divideSpaceF :: [Region] -> Space -> [Region]
-divideSpaceF r s
- | (length r) > 0 = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
- | otherwise = []
-
-divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
-divideSpaceG m a b = (image (a +\ b) m) ++ b
-
--- divide t such that undivided region has same sidedness wrt divided regions as wrt b in u
-dividePlace :: Boundary -> Place -> Place -> Place -> Place
-dividePlace b s t u = let
- given = regionsOfSpace (range s)
- divided = takeRegions s t given
- (bounds,space) = unzip t
- index = length bounds
- bound = fromJust (elemIndex b (domain u))
- boundaries = bounds Prelude.++ [b]
- regions  = regionsOfSpace space
- undivided = regions \\ divided
- tochoose_ = if (length undivided) > 0 then undivided else regions
- tochoose = if (length tochoose_) > 0 then tochoose_ else error (show ("tochoose",tochoose_))
- chosen = head tochoose
- totake_ = takeRegions t u [chosen]
- totake = if (length totake_) > 0 then totake_ else error (show ("totake",totake_))
- taken = head totake
- expected = regionWrtBoundary bound taken (range u)
- super = divideSpace divided space
- place = zip boundaries super
- toregion_ = takeRegions t place [chosen]
- toregion = if (length toregion_) > 0 then toregion_ else error (show ("toregion",toregion_))
- region = head toregion
- [left,right] = super !! index
- mirror = (take index super) Prelude.++ [[right,left]]
- actual = regionWrtBoundary index region super
- in if actual /= expected then zip boundaries mirror else place
-
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
 subSpace b s = let
@@ -385,14 +316,26 @@ sectionPlace b s = let
  index = fromJust (elemIndex b bounds)
  in zip (unplace index bounds) (sectionSpace index space)
 
--- return space with only given nonempty
-degenerateSpace :: [Region] -> Space -> Space
-degenerateSpace r s = map (map (filter (\x -> member x r))) s
+-- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
+canMigrate :: Region -> Space -> Bool
+canMigrate r s = let
+ boundaries = attachedBoundaries r s
+ sides = sidesOfRegion r s
+ opposite = oppositeOfSides boundaries sides
+ empty = not (regionOfSidesExists opposite s)
+ neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
+ exists = map (\a -> regionOfSidesExists a s) neighbors
+ in foldl' (\a b -> a && b) empty exists
 
-degeneratePlace :: [Region] -> Place -> Place
-degeneratePlace r s = let
- (bounds,space) = unzip s
- in zip bounds (degenerateSpace r space)
+-- return space with given region changed to its local opposite
+migrateSpace :: Region -> Space -> Space
+migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
+
+migrateSpaceF :: [Boundary] -> Region -> (Boundary,Full) -> Full
+migrateSpaceF b r (a,s)
+ | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
+ | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
+ | otherwise = s
 
 -- space of just one boundary
 singleSpace :: Boundary -> Place
@@ -487,33 +430,72 @@ takeRegionsF [] [] = []
 takeRegionsF (Nothing:_) [] = error "not enough permutations"
 takeRegionsF [] (_:_) = error "too many permutations"
 
--- linear intersection of regions in u indicated by s and t
-subSection :: Random.RandomGen g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place, g)
-subSection g _ _ _ _ _ [] = ([],g)
-subSection g p q n s t u
- | (p > n) || (q > n) || ((p+q) < n) = error "wrong dimensions"
- | (welldef (domain s)) /= (welldef (domain u)) = error (show ("wrong first boundaries", (domain s), (domain u)))
- | (welldef (domain t)) /= (welldef (domain u)) = error (show ("wrong second boundaries", (domain t), (domain u)))
+-- return space with given regions divided by new boundary
+divideSpace :: [Region] -> Space -> Space
+divideSpace figure space = let
+ whole = regionsOfSpace space
+ ground = whole \\ figure
+ halfspace = divideSpaceF ground space
+ duplicates = holes (length figure) whole
+ mapping = zip figure duplicates
+ withDups = map (map (divideSpaceG mapping figure)) space
+ newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
+ in withDups Prelude.++ [newBoundary]
+
+divideSpaceF :: [Region] -> Space -> [Region]
+divideSpaceF r s
+ | (length r) > 0 = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
+ | otherwise = []
+
+divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
+divideSpaceG m a b = (image (a +\ b) m) ++ b
+
+-- divide t such that undivided region has same sidedness wrt divided regions as wrt b in u
+dividePlace :: Boundary -> Place -> Place -> Place -> Place
+dividePlace b s t u = let
+ given = regionsOfSpace (range s)
+ divided = takeRegions s t given
+ (bounds,space) = unzip t
+ index = length bounds
+ bound = fromJust (elemIndex b (domain u))
+ boundaries = bounds Prelude.++ [b]
+ regions  = regionsOfSpace space
+ undivided = regions \\ divided
+ tochoose = if (length undivided) > 0 then undivided else regions
+ chosen = head tochoose
+ totake = takeRegions t u [chosen]
+ taken = head totake
+ expected = regionWrtBoundary bound taken (range u)
+ super = divideSpace divided space
+ place = zip boundaries super
+ toregion = takeRegions t place [chosen]
+ region = head toregion
+ [left,right] = super !! index
+ mirror = (take index super) Prelude.++ [[right,left]]
+ actual = regionWrtBoundary index region super
+ in if actual /= expected then zip boundaries mirror else place
+
+-- linear intersection of regions in s and t
+subSection :: Random.RandomGen g => g -> Int -> Int -> Place -> Place -> (Place, g)
+subSection g _ _ [] [] = ([],g)
+subSection g p q s t
+ | q < p = subSection g q p t s
+ | (p+q) < n = error "wrong dimensions"
+ | (welldef (domain s)) /= (welldef (domain t)) = error (show ("wrong boundaries", (domain s), (domain t)))
  | (p+q) == n = let
   (region,h) = choose g shared
-  in (map (\(x,y) -> (x, map (\z -> filter (\w -> w == region) z) y)) u, h)
- | (p == n) && (q == n) = (u,g)
- | p == n = (t,g)
- | q == n = (s,g)
+  in (map (\(x,y) -> (x, map (\z -> filter (\w -> w == region) z) y)) t, h)
  | otherwise = let
-  boundaries = domain u
+  boundaries = domain t
   (boundary,h) = choose g boundaries
-  uSub = subPlace boundary u
   sSub = subPlace boundary s
   tSub = subPlace boundary t
-  uSect = sectionPlace boundary u
-  (sub,i) = subSection h p q n sSub tSub uSub
-  (sect,j) = subSection i (n-1) (p+q-n) n uSect sub uSub
-  degen = degeneratePlace shared u
-  in (dividePlace boundary sect sub degen, j) where
- sRegs = takeRegions s u (regionsOfSpace (range s))
- tRegs = takeRegions t u (regionsOfSpace (range t))
- shared = sRegs +\ tRegs
+  tSect = sectionPlace boundary t
+  (sub,i) = subSection h p q sSub tSub
+  (sect,j) = subSection i (p-1) q sub tSect
+  in (dividePlace boundary sect sub t, j) where
+ n = q + 1
+ shared = takeRegions s t (regionsOfSpace (range s))
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
@@ -569,8 +551,7 @@ superSpace g n s t
   tBound = head (tBounds \\ sBounds)
   sSect = sectionPlace sBound s
   tSect = sectionPlace tBound t
-  shared = subPlace sBound s
-  (subsection,h) = subSection g (n-1) (n-1) n sSect tSect shared
+  (subsection,h) = subSection g (n-1) (n-1) sSect tSect
   section = dividePlace sBound subsection tSect s
   in (dividePlace tBound section s t, h)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
@@ -650,7 +631,7 @@ superSpaceN b s = let
  in fromJust (find func regions)
 
 --
--- randomPlanes
+-- from symbolic to numeric
 --
 
 -- return given number of planes in given number of dimensions
@@ -721,10 +702,6 @@ randomPlanesJ2 a = a /= Nothing
 randomPlanesK2 :: Int -> Int
 randomPlanesK2 n = n + 1
 
---
--- intersectPlanes
---
-
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
 -- each column specifies points that a plane passes through
@@ -756,10 +733,6 @@ intersectPlanesH n w = let
  square = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
  rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
  in fmap Matrix.flatten (Matrix.linearSolve square rhs)
-
---
--- spaceFromPlanes
---
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
@@ -807,10 +780,6 @@ spaceFromPlanesH _ [] _ _ (s:t) = s:t
 spaceFromPlanesH v (u:w) _ _ [] = (boolToInt (isAbovePlane v u)):(spaceFromPlanesH v w 0 [] [])
 spaceFromPlanesH _ [] _ _ [] = []
 spaceFromPlanesH _ _ _ _ _ = error "too many or few guards"
-
---
--- planesFromSpace
---
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
