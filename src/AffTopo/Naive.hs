@@ -167,7 +167,7 @@ generateF f a todo done
  | (length newTodo) == 0 = newDone
  | otherwise = generateF f (head newTodo) (tail newTodo) newDone where
  newTodo = remove a (((f a) \\ done) ++ todo)
- newDone = [a] ++ done
+ newDone = insert a done
 
 -- given number of firsts found by calling function on second
 catalyze :: (g -> (a,g)) -> g -> Int -> ([a],g)
@@ -178,36 +178,49 @@ catalyzeF f g a = let (b,h) = f g in (b:a,h)
 
 -- call function for new result until it returns Nothing
 foldMaybe :: (a -> b -> Maybe a) -> a -> [b] -> Maybe a
-foldMaybe f a (b:c) = foldMaybeF f Nothing (f a b) c
-foldMaybe _ _ [] = Nothing
+foldMaybe f a (b:c) = foldMaybeF f (Just a) (f a b) c
+foldMaybe _ a [] = Just a
 
 foldMaybeF :: (a -> b -> Maybe a) -> Maybe a -> Maybe a -> [b] -> Maybe a
 foldMaybeF f _ (Just b) (c:d) = foldMaybeF f (Just b) (f b c) d
 foldMaybeF _ a _ _ = a
 
+-- call function until it returns Just
+findMaybe :: (b -> Maybe a) -> [b] -> Maybe a
+findMaybe f (b:c) = findMaybeF f (f b) c
+findMaybe _ [] = Nothing
+
+findMaybeF :: (b -> Maybe a) -> Maybe a -> [b] -> Maybe a
+findMaybeF _ (Just b) _ = Just b
+findMaybeF f Nothing (b:c) = findMaybeF f (f b) c
+findMaybeF _ Nothing [] = Nothing
+
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
-defineLinear _ 0 = 1
-defineLinear 1 m = m + 1
-defineLinear n m = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
+defineLinear n m
+ | n < 0 = error "negative dimension"
+ | m < 0 = error "negative boundaries"
+ | (n == 0) || (m == 0) = 1
+ | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
 
 -- return whether all subspaces have correct number of regions
 isLinear :: Int -> Space -> Bool
-isLinear _ [] = True
-isLinear 0 s = (length (regionsOfSpace s)) == 1
-isLinear 1 s = let
- halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (enumerate s))
- ends = filter (\(_,x) -> (length x) == 1) halves
- dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
- func a b = let ((_,x),(_,y)) = (a,b) in if (length (y \\ x)) == 0 then GT else (if (length (x \\ y)) == 0 then LT else EQ)
- sorts = map (\z -> sortBy func z) dirs
- domains = map domain sorts
- in ((length domains) == 2) && ((domains !! 0) == (reverse (domains !! 1)) || ((domains !! 0) == (domains !! 1)))
-isLinear n s = let
- boundaries = boundariesOfSpace s
- sizes = indices (length boundaries)
- subs = foldl' (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
- in foldl' (\a b -> a && (isLinearF n s b)) True subs
+isLinear n s
+ | n < 0 = error "negative dimension"
+ | (n == 0) || ((length s) == 0) = (length (regionsOfSpace s)) == 1
+ | n == 1 = let
+  halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (enumerate s))
+  ends = filter (\(_,x) -> (length x) == 1) halves
+  dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
+  func a b = let ((_,x),(_,y)) = (a,b) in if (length (y \\ x)) == 0 then GT else (if (length (x \\ y)) == 0 then LT else EQ)
+  sorts = map (\z -> sortBy func z) dirs
+  domains = map domain sorts
+  in ((length domains) == 2) && ((domains !! 0) == (reverse (domains !! 1)) || ((domains !! 0) == (domains !! 1)))
+ | otherwise = let
+  boundaries = boundariesOfSpace s
+  sizes = indices (length boundaries)
+  subs = foldl' (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
+  in foldl' (\a b -> a && (isLinearF n s b)) True subs
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
 isLinearF n s b = let
@@ -240,7 +253,7 @@ sidesOfRegion r s = map (\a -> boolToInt (member r (a !! 1))) s
 
 -- return region from per boundary side
 regionOfSides :: [Side] -> Space -> Region
-regionOfSides r s = head (regionOfSidesF r s)
+regionOfSides r s = let [x] = (regionOfSidesF r s) in x
 
 -- return whether region with given side map exists in space
 regionOfSidesExists :: [Side] -> Space -> Bool
@@ -492,7 +505,7 @@ subSection g p q s t
   tSub = subPlace boundary t
   tSect = sectionPlace boundary t
   (sub,i) = subSection h p q sSub tSub
-  (sect,j) = subSection i (p-1) q sub tSect
+  (sect,j) = subSection i (p-1) (q-1) sub tSect
   in (dividePlace boundary sect sub t, j) where
  n = q + 1
  shared = takeRegions s t (regionsOfSpace (range s))
@@ -635,13 +648,13 @@ superSpaceN b s = let
 --
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
+randomPlanes :: Random.RandomGen g => g -> Int -> Int -> Maybe ([Plane], g)
 randomPlanes g n m = let
  (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n * m)
  b = Matrix.toColumns (Matrix.matrix m a)
- tweaks = [randomPlanesH0 n m, randomPlanesH1 n m, randomPlanesH2 n m]
- func x = foldMaybe (\y z -> z y) x tweaks
- in until (isNothing . func) (fromJust . func) (b,h)
+ tweak = [randomPlanesH0 n m, randomPlanesH1 n m, randomPlanesH2 n m]
+ func x = findMaybe (\y -> y x)
+ in foldMaybe func (b,h) (repeat tweak)
 
 -- tweak some plane from tuple found by testing intersection of planes in tuple
 randomPlanesF :: Random.RandomGen g => ((Plane, g) -> (Plane, g)) -> (Maybe Point -> Bool) -> (Int -> Int) ->
