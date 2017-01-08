@@ -489,13 +489,12 @@ dividePlace b s t u = let
  in if actual /= expected then zip boundaries mirror else place
 
 -- linear intersection of regions in s and t
-subSection :: Random.RandomGen g => g -> Int -> Int -> Place -> Place -> (Place, g)
-subSection g _ _ [] [] = ([],g)
-subSection g p q s t
- | q < p = subSection g q p t s
- | (p+q) < n = error "wrong dimensions"
+subSection :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
+subSection g _ [] [] = ([],g)
+subSection g n s t
+ | n < 1 = error "wrong dimensions"
  | (welldef (domain s)) /= (welldef (domain t)) = error (show ("wrong boundaries", (domain s), (domain t)))
- | (p+q) == n = let
+ | n == 1 = let
   (region,h) = choose g shared
   in (map (\(x,y) -> (x, map (\z -> filter (\w -> w == region) z) y)) t, h)
  | otherwise = let
@@ -504,10 +503,9 @@ subSection g p q s t
   sSub = subPlace boundary s
   tSub = subPlace boundary t
   tSect = sectionPlace boundary t
-  (sub,i) = subSection h p q sSub tSub
-  (sect,j) = subSection i (p-1) (q-1) sub tSect
+  (sub,i) = subSection h n sSub tSub
+  (sect,j) = subSection i (n-1) sub tSect
   in (dividePlace boundary sect sub t, j) where
- n = q + 1
  shared = takeRegions s t (regionsOfSpace (range s))
 
 -- return superspace with given spaces as subspaces
@@ -564,7 +562,7 @@ superSpace g n s t
   tBound = head (tBounds \\ sBounds)
   sSect = sectionPlace sBound s
   tSect = sectionPlace tBound t
-  (subsection,h) = subSection g (n-1) (n-1) sSect tSect
+  (subsection,h) = subSection g (n-1) sSect tSect
   section = dividePlace sBound subsection tSect s
   in (dividePlace tBound section s t, h)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
