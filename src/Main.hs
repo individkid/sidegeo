@@ -244,7 +244,7 @@ bug = let
  g = Debug [] [2147482884,2092764894,1390461064,715295839,79337801] (Random.mkStdGen 0)
  s = [(0,[[0,8,12],[3,7,9,13]]),(2,[[0,3,8,9],[7,12,13]]),(3,[[8,9,12,13],[0,3,7]])]
  t = [(0,[[4,15,19],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,24]]),(3,[[19,20,24],[1,4,5,15]])]
- (subsection,_) = subSection g 2 2 s t
+ (subsection,_) = subSection g 2 s t
  in rv ((superSpaceX subsection s) && (superSpaceX subsection t)) (show ("subsection->s",superSpaceY subsection s,regionsOfSpace (range s),"subsection->t",superSpaceY subsection t,regionsOfSpace (range t)))
 
 general :: Maybe String
