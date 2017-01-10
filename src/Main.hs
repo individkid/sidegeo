@@ -60,8 +60,8 @@ instance Random.RandomGen g => Random.RandomGen (Debug g) where
 subSubPlace :: [Boundary] -> Place -> Place
 subSubPlace b s = foldl' (\x y -> subPlace y x) s ((domain s) \\ b)
 
-isSubPlace :: Place -> Place -> Bool
-isSubPlace a b = (minEquiv (range (subSubPlace (domain a) b))) == (minEquiv (range a))
+isSubPlaceEquiv :: Place -> Place -> Bool
+isSubPlaceEquiv a b = (minEquiv (range (subSubPlace (domain a) b))) == (minEquiv (range a))
 
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
@@ -157,7 +157,7 @@ meta = let
  places = map enumerate spaces
  tuples = [(a,b) | a <- places, b <- powerSets (domain a)]
  subs = map (\(a,b) -> (a, subSubPlace b a)) tuples
- in rvb (\(a,b) -> rv (isSubPlace b a) (show (a,b))) subs
+ in rvb (\(a,b) -> rv (isSubPlaceEquiv b a) (show (a,b))) subs
 
 single :: Maybe String
 single = let
@@ -225,7 +225,7 @@ special = let
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
- in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
+ in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlaceEquiv b e) && (isSubPlaceEquiv c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
 
 bug :: Maybe String
 bug = let
@@ -252,8 +252,8 @@ general = let
   (rv (isLinear n (range b)) (show ("left",b))) `rva`
   (rv (isLinear n (range c)) (show ("right",c))) `rva`
   (rv (isLinear n (range d)) (show ("dimension",n,"number",g,h,"space",a,"left",b,"right",c,"super",d))) `rva`
-  (rv (isSubPlace b d) (show ("dimension",n,"left",b,"super",d))) `rva`
-  (rv (isSubPlace c d) (show ("dimension",n,"right",c,"super",d)))) sups
+  (rv (isSubPlaceEquiv b d) (show ("dimension",n,"left",b,"super",d))) `rva`
+  (rv (isSubPlaceEquiv c d) (show ("dimension",n,"right",c,"super",d)))) sups
 
 complexity :: Maybe String
 complexity = let

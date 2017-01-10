@@ -30,6 +30,7 @@ type Side = Int -- index into Full
 type Half = [Region] -- assume welldef set
 type Full = [Half] -- assume disjoint covering pair
 type Space = [Full] -- assume equal covers
+type Dual = [[[Boundary]]]
 type Place = [(Boundary,Full)] -- assume one-to-one
 type Plane = Matrix.Vector Double -- single column of distances above base
 type Point = Matrix.Vector Double -- single column of coordinates
@@ -427,7 +428,26 @@ divideSpaceG m a b = (image (a +\ b) m) ++ b
 
 -- divide t such that undivided region has same sidedness wrt divided regions as wrt b in u
 dividePlace :: Boundary -> Place -> Place -> Place
-dividePlace b s t = undefined
+dividePlace b s t = let
+ space = range t
+ boundaries = (domain t) Prelude.++ [b]
+ regions = image (placeToDual s) (zip (placeToDual t) (regionsOfSpace space))
+ in zip boundaries (divideSpace regions space)
+
+mirrorPlace :: Boundary -> Place -> Place
+mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
+
+isSubPlace :: Place -> Place -> Bool
+isSubPlace s t = let
+ sDual = placeToDual s
+ tDual = placeToDual t
+ in (length ((sort sDual) \\ (sort tDual))) == 0
+
+placeToDual :: Place -> Dual
+placeToDual s = let
+ left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) s)) (regionsOfSpace (range s))
+ right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) (regionsOfSpace (range s))
+ in map (\(x,y) -> [x,y]) (zip left right)
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
@@ -489,7 +509,8 @@ superSpace g n s t
   sect = if isLinear (n-1) (range sect_) then sect_ else error (show ("sect",domain sect_,sect_))
   result_ = dividePlace bound sect sub
   result = if isLinear n (range result_) then result_ else error (show (n,defineLinear n (length result_),"result",domain result_,result_,"sect",domain sect,sect,"sub",domain sub,sub))
-  in (result, j)
+  mirror = mirrorPlace bound result
+  in if (isSubPlace result s) && (isSubPlace result t) then (result, j) else (mirror, j)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
  | otherwise = let -- s and t are not proper
   -- 0 1 2 3 5 7 + 0 1 2 4 =
