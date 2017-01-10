@@ -28,7 +28,6 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ("empty",empty)
   ,("simplex",simplex)
   ,("antisection",antisection)
-  ,("corners",corners)
   ,("migrate",migrate)
   ,("higher",higher)
   ,("meta",meta)
@@ -40,6 +39,8 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("ordering",ordering)
   ,("intervals",intervals)
   ,("special",special)
+  ,("bug",bug)
+  ,("disjoint",disjoint)
   ,("general",general)
   ,("complexity",complexity)
   ,("symbolic",symbolic)
@@ -110,18 +111,6 @@ antisection = let
  space = foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]]
  spaces = extendSpace 2 space
  in rvb (\x -> rv (isLinear 2 x) (show x)) spaces
-
-corners :: Maybe String
-corners = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
- myAttachedRegions :: [Boundary] -> Space -> [Region]
- myAttachedRegions b s = let
-  place = enumerate s
-  subplace = foldl (\x y -> subPlace y x) place b
-  supers = map (\x -> takeRegions subplace place [x]) (regionsOfSpace (range subplace))
-  in concat (filter (\x -> all (\y -> oppositeOfRegionExists b y s) x) supers)
- crosses = [(b,s) | s <- spaces, b <- (subsets 2 (boundariesOfSpace s))]
- in rvb (\(b,s) -> rv ((myAttachedRegions b s) == (attachedRegions b s)) (show ((myAttachedRegions b s), (attachedRegions b s)))) crosses
 
 migrate :: Maybe String
 migrate = let
@@ -237,6 +226,19 @@ special = let
  subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
  in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
+
+bug :: Maybe String
+bug = let
+ g = Debug [] [315069880,840462263,506335523,940130511,977375085,1593321438,1511714125,1127685618] (Random.mkStdGen 0)
+ s = [(0,[[0,2,7,8],[1,3,9]]),(3,[[0,1,7],[2,3,8,9]]),(2,[[1,7,8,9],[0,2,3]])]
+ t = [(4,[[0,1,4],[2,5,6,8]]),(3,[[1,4,5,6],[0,2,8]]),(0,[[0,4,5,8],[1,2,6]])]
+ (place,_) = superSpace g 2 s t
+ in rv (isLinear 2 (range place)) (show ("place",domain place,place,"s",domain s,s,"t",domain t,t))
+
+disjoint :: Maybe String
+disjoint = let
+ disany = map (\(d,(n,m)) -> (n,m,anySpace (Debug [] [] (Random.mkStdGen d)) n m)) (enumerate [(n,m) | n <- [2..4], m <- [0..6]])
+ in rvb (\(n,m,(s,g)) -> rv (isLinear n s) (show (g,n,m,defineLinear n m,length s,s))) disany
 
 general :: Maybe String
 general = let

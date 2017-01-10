@@ -355,7 +355,7 @@ singleSpace :: Boundary -> Place
 singleSpace b = [(b,[[0],[1]])]
 
 -- return space by calling superSpace with singleton space
-anySpace :: Random.RandomGen g => g -> Int -> Int -> (Space, g)
+anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
  (s,h) = foldl' (\(x,y) z -> superSpace y n x (singleSpace z)) ([],g) (indices m)
  in (range s, h)
@@ -405,44 +405,6 @@ minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) ==
 minEquivI :: Int -> [[(Int, Bool)]]
 minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
 
--- sub-regions in second space of super-regions in shared sub-space of given regions in first space
-takeRegions :: Place -> Place -> [Region] -> [Region]
-takeRegions _ [] [] = []
-takeRegions _ [] _ = regionsOfSpace []
-takeRegions s t r = let
- (firstBoundaries,firstSpace) = unzip s
- (secondBoundaries,secondSpace) = unzip t
- -- for each given region, find sides in first space
- firstSides :: [[Side]] -- given of SRegion -> SBoundary -> Side
- firstSides = map (\x -> sidesOfRegion x firstSpace) r
- -- for each boundary in second space, find corresponding boundary in first space or Nothing
- secondToFirst :: [Maybe Int] -- TBoundary -> Maybe SBoundary index
- secondToFirst = map (\x -> elemIndex x firstBoundaries) secondBoundaries
- -- for each given region, for each boundary in second space, find sidedness or Nothing in first space
- secondSides :: [[Maybe Side]] -- given of SRegion -> TBoundary -> Maybe Side
- secondSides = map (\x -> map (\y -> fmap (\z -> x !! z) y) secondToFirst) firstSides
- -- for each boundary in second space, count number of Nothing
- count :: Int
- count = foldl' (\x y -> if y == Nothing then x+1 else x) 0 secondToFirst
- -- find sidedness permutations of same length as indices
- permutes :: [[Side]] -- every possible -> count of TBoundary -> Side
- permutes = polyants count
- -- for each given region, for each permutation, fix second sides of region, consuming head of permutation as needed
- fixedSides :: [[Side]] -- given of SRegion -> TBoundary -> Side
- fixedSides = map (\(x,y) -> takeRegionsF x y) [(x,y) | x <- secondSides, y <- permutes]
- -- ignore empty regions
- extantSides :: [[Side]] -- given of SRegion -> TBoundary -> Side
- extantSides = filter (\x -> regionOfSidesExists x secondSpace) fixedSides
- -- map sides to regions
- in welldef (map (\x -> regionOfSides x secondSpace) extantSides)
-
-takeRegionsF :: [Maybe Side] -> [Side] -> [Side]
-takeRegionsF ((Just a):b) c = a:(takeRegionsF b c)
-takeRegionsF (Nothing:b) (c:d) = c:(takeRegionsF b d)
-takeRegionsF [] [] = []
-takeRegionsF (Nothing:_) [] = error "not enough permutations"
-takeRegionsF [] (_:_) = error "too many permutations"
-
 -- return space with given regions divided by new boundary
 divideSpace :: [Region] -> Space -> Space
 divideSpace figure space = let
@@ -464,32 +426,11 @@ divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
 divideSpaceG m a b = (image (a +\ b) m) ++ b
 
 -- divide t such that undivided region has same sidedness wrt divided regions as wrt b in u
-dividePlace :: Boundary -> Place -> Place -> Place -> Place
-dividePlace b s t u = let
- given = regionsOfSpace (range s)
- divided = takeRegions s t given
- (bounds,space) = unzip t
- index = length bounds
- bound = fromJust (elemIndex b (domain u))
- boundaries = bounds Prelude.++ [b]
- regions  = regionsOfSpace space
- undivided = regions \\ divided
- tochoose = if (length undivided) > 0 then undivided else regions
- chosen = head tochoose
- totake = takeRegions t u [chosen]
- taken = head totake
- expected = regionWrtBoundary bound taken (range u)
- super = divideSpace divided space
- place = zip boundaries super
- toregion = takeRegions t place [chosen]
- region = head toregion
- [left,right] = super !! index
- mirror = (take index super) Prelude.++ [[right,left]]
- actual = regionWrtBoundary index region super
- in if actual /= expected then zip boundaries mirror else place
+dividePlace :: Boundary -> Place -> Place -> Place
+dividePlace b s t = undefined
 
 -- return superspace with given spaces as subspaces
-superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
+superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | n < 0 = error "negative dimension"
  | n == 0 = let
@@ -533,21 +474,22 @@ superSpace g n s t
   -- recurse to restore boundary
   (bound,h) = choose g sBounds
   singlespace = singleSpace bound
-  (space,i) = superSpace h n singlespace t
+  (space,i) = superSpace h n t singlespace
   in superSpace i n s space
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
   -- recurse with one fewer boundary
-  [sBound] = sBounds \\ tBounds
-  u_ = subPlace sBound s
-  u = if (sort u_) == (sort (subPlace (head (tBounds \\ sBounds)) t)) then u_ else error "unequal shared"
   (bound,h) = choose g (sBounds +\ tBounds)
   sSub = subPlace bound s
   tSub = subPlace bound t
   sSect = sectionPlace bound s
   tSect = sectionPlace bound t
-  (sub,i) = superSpace h n sSub tSub
-  (sect,j) = superSpace i (n-1) sSect tSect
-  in (dividePlace bound sect sub u, j)
+  (sub_,i) = superSpace h n sSub tSub
+  sub = if isLinear n (range sub_) then sub_ else error (show ("sub",domain sub_,sub_))
+  (sect_,j) = superSpace i (n-1) sSect tSect
+  sect = if isLinear (n-1) (range sect_) then sect_ else error (show ("sect",domain sect_,sect_))
+  result_ = dividePlace bound sect sub
+  result = if isLinear n (range result_) then result_ else error (show (n,defineLinear n (length result_),"result",domain result_,result_,"sect",domain sect,sect,"sub",domain sub,sub))
+  in (result, j)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
  | otherwise = let -- s and t are not proper
   -- 0 1 2 3 5 7 + 0 1 2 4 =
@@ -563,19 +505,6 @@ superSpace g n s t
   in superSpace i n s sup where -- easier because sup contains t plus one other than b that t did not
  sBounds = domain s
  tBounds = domain t
-
-superSpaceX :: Place -> Place -> Bool
-superSpaceX s t = let
- given = regionsOfSpace (range s)
- taken = superSpaceY s t
- nonempty = filter (\x -> (length x) > 0) taken
- in (length given) == (length nonempty)
-
-superSpaceY :: Place -> Place -> [[Region]]
-superSpaceY s t = map (\x -> takeRegions s t [x]) (regionsOfSpace (range s))
-
-superSpaceZ :: Place -> Place -> [(Region,[Region])]
-superSpaceZ s t = map (\x -> (x,takeRegions s t [x])) (regionsOfSpace (range s))
 
 -- regions indicated by boundary as bit position
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
