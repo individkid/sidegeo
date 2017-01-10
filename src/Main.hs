@@ -40,7 +40,6 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("ordering",ordering)
   ,("intervals",intervals)
   ,("special",special)
-  ,("bug",bug)
   ,("general",general)
   ,("complexity",complexity)
   ,("symbolic",symbolic)
@@ -238,14 +237,6 @@ special = let
  subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
  in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlace b e) && (isSubPlace c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
-
-bug :: Maybe String
-bug = let
- g = Debug [] [2147482884,2092764894,1390461064,715295839,79337801] (Random.mkStdGen 0)
- s = [(0,[[0,8,12],[3,7,9,13]]),(2,[[0,3,8,9],[7,12,13]]),(3,[[8,9,12,13],[0,3,7]])]
- t = [(0,[[4,15,19],[1,5,20,24]]),(2,[[1,15,19,20],[4,5,24]]),(3,[[19,20,24],[1,4,5,15]])]
- (subsection,_) = subSection g 2 s t
- in rv ((superSpaceX subsection s) && (superSpaceX subsection t)) (show ("subsection->s",superSpaceY subsection s,regionsOfSpace (range s),"subsection->t",superSpaceY subsection t,regionsOfSpace (range t)))
 
 general :: Maybe String
 general = let

@@ -488,29 +488,20 @@ dividePlace b s t u = let
  actual = regionWrtBoundary index region super
  in if actual /= expected then zip boundaries mirror else place
 
--- linear intersection of regions in s and t
-subSection :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
-subSection g _ [] [] = ([],g)
-subSection g n s t
- | n < 1 = error "wrong dimensions"
- | (welldef (domain s)) /= (welldef (domain t)) = error (show ("wrong boundaries", (domain s), (domain t)))
- | n == 1 = let
-  (region,h) = choose g shared
-  in (map (\(x,y) -> (x, map (\z -> filter (\w -> w == region) z) y)) t, h)
- | otherwise = let
-  boundaries = domain t
-  (boundary,h) = choose g boundaries
-  sSub = subPlace boundary s
-  tSub = subPlace boundary t
-  tSect = sectionPlace boundary t
-  (sub,i) = subSection h n sSub tSub
-  (sect,j) = subSection i (n-1) sub tSect
-  in (dividePlace boundary sect sub t, j) where
- shared = takeRegions s t (regionsOfSpace (range s))
-
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
+ | n < 0 = error "negative dimension"
+ | n == 0 = let
+  sLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) s)
+  sRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) s)
+  tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
+  tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
+  lBounds = sLeft ++ tLeft
+  rBounds = sRight ++ tRight
+  left = map (\x -> (x,[[0],[]])) (lBounds \\ rBounds)
+  right = map (\x -> (x,[[],[0]])) rBounds
+  in (left ++ right, g)
  | (length (tBounds \\ sBounds)) == 0 = (s,g)
  | (length (sBounds \\ tBounds)) == 0 = (t,g)
  | (length (sBounds ++ tBounds)) <= n = let
@@ -534,37 +525,29 @@ superSpace g n s t
   (bound,h) = choose g shared
   (bounds,i) = superSpaceJ h (superSpaceK bound s) (superSpaceK bound t) shared
   in (superSpaceL bounds [] (indices ((length bounds) + 1)), i)
- | ((length (sBounds +\ tBounds)) == 0) && ((length tBounds) == 1) && ((length sBounds) > 1) = superSpace g n t s
- | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = let
-  -- choose boundary to immitate
-  -- find section by chosen
-  -- recurse to add singleton boundary to chosen section
-  -- take from section for linear subset of regions attached to immitate
-  -- divide by this linear subset of regions
-  sBound = head sBounds -- boundary to add
-  (bound,h) = choose g tBounds -- boundary to immitate
-  section = sectionPlace bound t -- homeomorphic to immitated or addedgit
-  singlespace = singleSpace bound
-  (supersect,i) = superSpace h (n-1) singlespace section -- homeomorphic after restoring immitated
-  in (dividePlace sBound supersect t s, i) -- divide regions in t that are homeomorphic
+ | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) && ((length tBounds) == 1) = error "unreachable"
+ | ((length (sBounds +\ tBounds)) == 0) && ((length sBounds) == 1) = superSpace g n t s
  | (length (sBounds +\ tBounds)) == 0 = let
   -- choose boundary to remove
   -- recurse with one fewer boundary
   -- recurse to restore boundary
   (bound,h) = choose g sBounds
-  subspace = subPlace bound s
-  (space,i) = superSpace h n subspace t
   singlespace = singleSpace bound
-  in superSpace i n singlespace space
+  (space,i) = superSpace h n singlespace t
+  in superSpace i n s space
  | ((length (sBounds \\ tBounds)) == 1) && ((length (tBounds \\ sBounds)) == 1) = let
-  -- add section with added subsection
-  sBound = head (sBounds \\ tBounds)
-  tBound = head (tBounds \\ sBounds)
-  sSect = sectionPlace sBound s
-  tSect = sectionPlace tBound t
-  (subsection,h) = subSection g (n-1) sSect tSect
-  section = dividePlace sBound subsection tSect s
-  in (dividePlace tBound section s t, h)
+  -- recurse with one fewer boundary
+  [sBound] = sBounds \\ tBounds
+  u_ = subPlace sBound s
+  u = if (sort u_) == (sort (subPlace (head (tBounds \\ sBounds)) t)) then u_ else error "unequal shared"
+  (bound,h) = choose g (sBounds +\ tBounds)
+  sSub = subPlace bound s
+  tSub = subPlace bound t
+  sSect = sectionPlace bound s
+  tSect = sectionPlace bound t
+  (sub,i) = superSpace h n sSub tSub
+  (sect,j) = superSpace i (n-1) sSect tSect
+  in (dividePlace bound sect sub u, j)
  | ((length (sBounds \\ tBounds)) == 1) = superSpace g n t s
  | otherwise = let -- s and t are not proper
   -- 0 1 2 3 5 7 + 0 1 2 4 =
@@ -590,6 +573,9 @@ superSpaceX s t = let
 
 superSpaceY :: Place -> Place -> [[Region]]
 superSpaceY s t = map (\x -> takeRegions s t [x]) (regionsOfSpace (range s))
+
+superSpaceZ :: Place -> Place -> [(Region,[Region])]
+superSpaceZ s t = map (\x -> (x,takeRegions s t [x])) (regionsOfSpace (range s))
 
 -- regions indicated by boundary as bit position
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
