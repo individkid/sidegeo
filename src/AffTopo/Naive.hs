@@ -362,21 +362,25 @@ migrateSpaceF b r (a,s)
  | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
  | otherwise = s
 
+-- reverse sidedness of given boundary
 mirrorPlace :: Boundary -> Place -> Place
 mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
+-- subset is subspace in dual representation
 isSubPlace :: Place -> Place -> Bool
 isSubPlace s t = let
  sDual = placeToDual s
  tDual = placeToDual t
  in (length ((sort sDual) \\ (sort tDual))) == 0
 
+-- representation converter
 placeToDual :: Place -> Dual
 placeToDual s = let
  left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) s)) (regionsOfSpace (range s))
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) (regionsOfSpace (range s))
  in map (\(x,y) -> [x,y]) (zip left right)
 
+-- representation converter
 dualToPlace :: Dual -> Place
 dualToPlace s = let
  bounds = welldef (concat (head s))
@@ -385,13 +389,16 @@ dualToPlace s = let
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
  in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
 
+-- preserve sidedness, but halves are sets
 sortDualRegion :: [[Boundary]] -> [[Boundary]]
 sortDualRegion [a,b] = [sort a,sort b]
 sortDualRegion _ = error "malformed dual region in sort"
 
+-- same as sortSpace
 sortDual :: Dual -> Dual
 sortDual a = sort (map sortDualRegion a)
 
+-- same as oppositeOfRegion of singleton
 hopDualRegion :: Boundary -> [[Boundary]] -> [[Boundary]]
 hopDualRegion b [l,r]
  | member b l = [remove b l, insert b r]
