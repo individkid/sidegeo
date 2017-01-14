@@ -548,7 +548,8 @@ superSpaceF g n s t u
   filtered = map (\x -> filter (\(y,(_,z)) -> member (sortDualRegion (hopDualRegion y z)) dual) x) mapped
   hops = map (\x -> map (\(y,(z,_)) -> (y,z)) x) filtered
   -- try each dual as start to qualify by boundaries with hops as function
-  indexes = findMaybe (superSpaceG bounds hops) (indices (length hops)) -- TODO pass g to qualify
+  starts = filter (\x -> member (sortDualRegion (reverse (dual !! x))) dual) (indices (length hops)) 
+  indexes = findMaybe (superSpaceG bounds hops) starts -- TODO pass g to qualify
   -- indices = if indices_ /= Nothing then indices_ else error (show ("base",n,superSpaceX boundaries [s,t,u]))
   result :: [Int]
   result = fromJust indexes
