@@ -36,8 +36,6 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("equivalent",equivalent)
   ,("section",section)
   ,("outside",outside)
-  ,("ordering",ordering)
-  ,("intervals",intervals)
   ,("special",special)
   ,("bug",bug)
   ,("disjoint",disjoint)
@@ -196,26 +194,6 @@ outside = let
  func x s y = (outsideOfRegionExists y s) && ((regionWrtBoundary x y s) == 0)
  args = [(b,s) | s <- sections, b <- boundariesOfSpace s]
  in rvb (\(b,s) -> rv ((find (func b s) (regionsOfSpace s)) /= Nothing) (show (b,s))) args
-
-negateOrdering :: Ordering -> Ordering
-negateOrdering LT = GT
-negateOrdering GT = LT
-negateOrdering EQ = EQ
-
-ordering :: Maybe String
-ordering = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
- sections = [sectionSpace y x | x <- spaces, y <- boundariesOfSpace x]
- orders = [(x,y,z,superSpaceN 0 x) | x <- sections, y <- boundariesOfSpace x, z <- boundariesOfSpace x]
- in rvb (\(x,y,z,r) -> rv ((superSpaceM r x y z) == (negateOrdering (superSpaceM r x z y))) (show (x,y,z))) orders
-
-intervals :: Maybe String
-intervals = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpace y x) [] [[0],[0,1],[0,1,2]])
- sections = [sectionSpace y x | x <- spaces, y <- boundariesOfSpace x]
- orders = [(x,superSpaceK y (enumerate x)) | x <- sections, y <- indices (length x)]
- unorders = map (\(x,y) -> (x, y, range (superSpaceL y [] (indices ((length y) + 1))))) orders
- in rvb (\(x,y,z) -> rv ((minEquiv x) == (minEquiv z)) (show (x,y,z))) unorders
 
 special :: Maybe String
 special = let
