@@ -203,6 +203,10 @@ findMaybeF _ (Just b) _ = Just b
 findMaybeF f Nothing (b:c) = findMaybeF f (f b) c
 findMaybeF _ Nothing [] = Nothing
 
+--
+-- now for something new
+--
+
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
 defineLinear n m
@@ -358,6 +362,42 @@ migrateSpaceF b r (a,s)
  | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
  | otherwise = s
 
+mirrorPlace :: Boundary -> Place -> Place
+mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
+
+isSubPlace :: Place -> Place -> Bool
+isSubPlace s t = let
+ sDual = placeToDual s
+ tDual = placeToDual t
+ in (length ((sort sDual) \\ (sort tDual))) == 0
+
+placeToDual :: Place -> Dual
+placeToDual s = let
+ left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) s)) (regionsOfSpace (range s))
+ right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) (regionsOfSpace (range s))
+ in map (\(x,y) -> [x,y]) (zip left right)
+
+dualToPlace :: Dual -> Place
+dualToPlace s = let
+ bounds = welldef (concat (head s))
+ plual = enumerate s
+ left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) plual)) bounds
+ right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
+ in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
+
+sortDualRegion :: [[Boundary]] -> [[Boundary]]
+sortDualRegion [a,b] = [sort a,sort b]
+sortDualRegion _ = error "malformed dual region in sort"
+
+sortDual :: Dual -> Dual
+sortDual a = sort (map sortDualRegion a)
+
+hopDualRegion :: Boundary -> [[Boundary]] -> [[Boundary]]
+hopDualRegion b [l,r]
+ | member b l = [remove b l, insert b r]
+ | otherwise = [insert b l, remove b r]
+hopDualRegion _ _ = error "malformed dual region in hop"
+
 -- space of just one boundary
 singleSpace :: Boundary -> Place
 singleSpace b = [(b,[[0],[1]])]
@@ -440,42 +480,6 @@ dividePlace b s t = let
  boundaries = (domain t) Prelude.++ [b]
  regions = image (placeToDual s) (zip (placeToDual t) (regionsOfSpace space))
  in zip boundaries (divideSpace regions space)
-
-mirrorPlace :: Boundary -> Place -> Place
-mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
-
-isSubPlace :: Place -> Place -> Bool
-isSubPlace s t = let
- sDual = placeToDual s
- tDual = placeToDual t
- in (length ((sort sDual) \\ (sort tDual))) == 0
-
-placeToDual :: Place -> Dual
-placeToDual s = let
- left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) s)) (regionsOfSpace (range s))
- right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) (regionsOfSpace (range s))
- in map (\(x,y) -> [x,y]) (zip left right)
-
-dualToPlace :: Dual -> Place
-dualToPlace s = let
- bounds = welldef (concat (head s))
- plual = enumerate s
- left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) plual)) bounds
- right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
- in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
-
-sortDualRegion :: [[Boundary]] -> [[Boundary]]
-sortDualRegion [a,b] = [sort a,sort b]
-sortDualRegion _ = error "malformed dual region in sort"
-
-sortDual :: Dual -> Dual
-sortDual a = sort (map sortDualRegion a)
-
-hopDualRegion :: Boundary -> [[Boundary]] -> [[Boundary]]
-hopDualRegion b [l,r]
- | member b l = [remove b l, insert b r]
- | otherwise = [insert b l, remove b r]
-hopDualRegion _ _ = error "malformed dual region in hop"
 
 superSpaceX :: [Boundary] -> [Place] -> String
 superSpaceX b s = let
