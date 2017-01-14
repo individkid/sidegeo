@@ -433,7 +433,7 @@ divideSpaceF r s
 divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
 divideSpaceG m a b = (image (a +\ b) m) ++ b
 
--- divide t such that undivided region has same sidedness wrt divided regions as wrt b in u
+-- divide regions of s in t by new boundary b
 dividePlace :: Boundary -> Place -> Place -> Place
 dividePlace b s t = let
  space = range t
@@ -487,7 +487,7 @@ superSpaceX b s = let
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t = superSpaceF g n s t []
 
-superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> Place -> (Place, g)
+superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place, g)
 superSpaceF g n s t u
  | n < 0 = error (show ("negative",n))
  | n == 0 = let
@@ -497,7 +497,7 @@ superSpaceF g n s t u
   tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
   lBounds = sLeft ++ tLeft
   rBounds_ = sRight ++ tRight
-  rBounds = if (length (lBounds +\ rBounds_)) == 0 then rBounds_ else error (show ("zero",superSpaceX boundaries [s,t,u]))
+  rBounds = if (length (lBounds +\ rBounds_)) == 0 then rBounds_ else error (show ("zero",superSpaceX boundaries [s,t]))
   left = map (\x -> (x,[[0],[]])) lBounds
   right = map (\x -> (x,[[],[0]])) rBounds
   in (left ++ right, g)
@@ -507,7 +507,7 @@ superSpaceF g n s t u
   -- every possible region
   regions = power (length boundaries)
   in (map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate boundaries), g)
- | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) == 1) = error (show ("guard",n,superSpaceX boundaries [s,t,u]))
+ | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) == 1) = error (show ("guard",n,superSpaceX boundaries [s,t]))
  | ((length shared) == 0) && ((length sBounds) == 1) = superSpaceF g n t s u
  | (length shared) == 0 = let
   -- choose boundary to remove
@@ -531,25 +531,24 @@ superSpaceF g n s t u
   (sup,i) = superSpaceF h n sub t u -- adds something to t because sub and t are not proper
   in superSpaceF i n s sup u -- easier because sup contains t plus one other than b that t did not
  | n == 1 = let
-  bounds = domain u
-  [sBound] = sOnly
-  [tBound] = tOnly
+  [sBound] = sBounds
+  [tBound] = tBounds
   -- divide all regions of s by tBound, and all regions of t by sBound
   sGuide = dividePlace tBound s s
   tGuide = dividePlace sBound t t
   -- find sorted duals of divided s, divided t, and u
   sDual = sortDual (placeToDual sGuide)
   tDual = sortDual (placeToDual tGuide)
-  uDual = sortDual (placeToDual u)
+  uDual = map (\x -> sortDual (placeToDual x)) u
   -- find intersection of sorted duals
-  dual = if (length u) == 0 then sDual +\ tDual else sDual +\ tDual +\ uDual
+  dual = foldl' (\x y -> x +\ y) (sDual +\ tDual) uDual
   -- find per-region maps from boundary to region-index
-  mapped = map (\x -> map (\y -> (y,x)) bounds) (enumerate dual)
+  mapped = map (\x -> map (\y -> (y,x)) boundaries) (enumerate dual)
   filtered = map (\x -> filter (\(y,(_,z)) -> member (sortDualRegion (hopDualRegion y z)) dual) x) mapped
   hops = map (\x -> map (\(y,(z,_)) -> (y,z)) x) filtered
   -- try each dual as start to qualify by boundaries with hops as function
   starts = filter (\x -> member (sortDualRegion (reverse (dual !! x))) dual) (indices (length hops)) 
-  indexes = findMaybe (superSpaceG bounds hops) starts -- TODO pass g to qualify
+  indexes = findMaybe (superSpaceG boundaries hops) starts -- TODO pass g to qualify
   -- indices = if indices_ /= Nothing then indices_ else error (show ("base",n,superSpaceX boundaries [s,t,u]))
   result :: [Int]
   result = fromJust indexes
@@ -563,7 +562,7 @@ superSpaceF g n s t u
   sSect = sectionPlace bound s
   tSect = sectionPlace bound t
   (sub,i) = superSpaceF h n sSub tSub u
-  (sect,j) = superSpaceF i (n-1) sSect tSect sub -- use sub as universe
+  (sect,j) = superSpaceF i (n-1) sSect tSect (sub:u)
   result = dividePlace bound sect sub
   mirror = mirrorPlace bound result
   test = (isLinear n (range result)) && (isSubPlace result s) && (isSubPlace result t)
@@ -575,9 +574,13 @@ superSpaceF g n s t u
  shared = sBounds +\ tBounds
  boundaries = sBounds ++ tBounds
 
+-- given per-index map from boundary to index hopped to,
+-- return index list that hops across all given boundaries or nothing
 superSpaceG :: [Boundary] -> [[(Boundary,Int)]] -> Int -> Maybe [Int]
 superSpaceG bounds hops index = qualify (superSpaceH hops) index bounds
 
+-- given hop maps, current index, boundaries not hopped yet, return list of potential hops,
+-- or nothing if not possible to nop across sime remaining boundary
 superSpaceH :: [[(Boundary,Int)]] -> Int -> [Boundary] -> Maybe [(Int,[Boundary])]
 superSpaceH hops index bounds = let
  result = filter (\(x,_) -> member x bounds) (hops !! index)
