@@ -496,54 +496,41 @@ superSpaceX b s = let
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
-superSpace g n s t = superSpaceF g n s t []
-
-superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place, g)
-superSpaceF g n s t u
+superSpace g n s t
  | n < 0 = error (show ("negative",n))
- | n == 0 = let
-  sLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) s)
-  sRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) s)
-  tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
-  tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
-  lBounds = sLeft ++ tLeft
-  rBounds_ = sRight ++ tRight
-  rBounds = if (length (lBounds +\ rBounds_)) == 0 then rBounds_ else error (show ("zero",superSpaceX boundaries [s,t]))
-  left = map (\x -> (x,[[0],[]])) lBounds
-  right = map (\x -> (x,[[],[0]])) rBounds
-  in (left ++ right, g)
+ | n == 0 = (superSpaceI s t, g)
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
- | (length boundaries) <= n = let
-  -- every possible region
-  regions = power (length boundaries)
-  in (map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate boundaries), g)
- | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) == 1) = error (show ("guard",n,superSpaceX boundaries [s,t]))
- | ((length shared) == 0) && ((length sBounds) == 1) = superSpaceF g n t s u
- | (length shared) == 0 = let
-  -- choose boundary to remove
-  -- recurse with one fewer boundary
-  -- recurse to restore boundary
+ | (length boundaries) <= n = (superSpaceJ boundaries, g)
+ | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) == 1) && n > 1 = error "unreachable"
+ | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
+ | ((length shared) == 0) && ((length sBounds) > 1) = let
+  -- recurse to conjoint case
   (bound,h) = choose g sBounds
-  singlespace = singleSpace bound
-  (space,i) = superSpaceF h n t singlespace u
-  in superSpaceF i n s space u
- | ((length sOnly) == 1) && ((length tOnly) > 1) = superSpaceF g n t s u
- | ((length sOnly) > 1) = let -- s and t are not proper
-  -- 0 1 2 3 5 7 + 0 1 2 4 =
-  -- 0 1 2 3 5 7 + (0 1 2 3 5 + 0 1 2 4) =
-  -- 0 1 2 3 5 7 + (0 1 2 3 5 + (0 1 2 3 + 0 1 2 4))
-  -- or
-  -- 0 1 2 3 5 7 + 0 1 2 4 6 8 =
-  -- 0 1 2 3 5 7 + (0 1 2 3 5 + 0 1 2 4 6 8) =
-  -- 0 1 2 3 5 7 + (0 1 2 3 5 + (0 1 2 3 + 0 1 2 4 6 8))
-  (b,h) = choose g sOnly -- choice is from more than one
-  sub = subPlace b s -- since choice was from more than one, sub and t are not proper
-  (sup,i) = superSpaceF h n sub t u -- adds something to t because sub and t are not proper
-  in superSpaceF i n s sup u -- easier because sup contains t plus one other than b that t did not
+  single = singleSpace bound
+  (space,i) = superSpace h n t single
+  in superSpace i n s space
+ | ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
+ | ((length sOnly) > 1) = let -- s and t are not proper, meaning each has a boundary not in the other
+  (b,h) = choose g sOnly -- s contains c not equal to b and not in t
+  sub = subPlace b s -- sub contains c
+  (sup,i) = superSpace h n sub t -- sup contains c, but not b
+  in superSpace i n s sup -- s and sup contain c, so recursion has larger shared, but still not proper
+ | otherwise = superSpaceF g n s t [] where
+ sBounds = domain s
+ tBounds = domain t
+ tOnly = tBounds \\ sBounds
+ sOnly = sBounds \\ tBounds
+ shared = sBounds +\ tBounds
+ boundaries = sBounds ++ tBounds
+
+-- independent boundary theorem: two extensions of the same space have a superspace
+superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place, g)
+superSpaceF g n s t u
+ | (length boundaries) <= n = (superSpaceJ boundaries, g)
  | n == 1 = let
-  [sBound] = sBounds
-  [tBound] = tBounds
+  [sBound] = sOnly
+  [tBound] = tOnly
   -- divide all regions of s by tBound, and all regions of t by sBound
   sGuide = dividePlace tBound s s
   tGuide = dividePlace sBound t t
@@ -559,10 +546,7 @@ superSpaceF g n s t u
   hops = map (\x -> map (\(y,(z,_)) -> (y,z)) x) filtered
   -- try each dual as start to qualify by boundaries with hops as function
   starts = filter (\x -> member (sortDualRegion (reverse (dual !! x))) dual) (indices (length hops)) 
-  indexes = findMaybe (superSpaceG boundaries hops) starts -- TODO pass g to qualify
-  -- indices = if indices_ /= Nothing then indices_ else error (show ("base",n,superSpaceX boundaries [s,t,u]))
-  result :: [Int]
-  result = fromJust indexes
+  result = fromJust (findMaybe (superSpaceG boundaries hops) starts) -- TODO pass g to qualify
   -- map indices to dual to place
   in (dualToPlace (map (\x -> dual !! x) result), g)
  | otherwise = let
@@ -570,10 +554,12 @@ superSpaceF g n s t u
   (bound,h) = choose g shared
   sSub = subPlace bound s
   tSub = subPlace bound t
+  uSub = map (subPlace bound) u
   sSect = sectionPlace bound s
   tSect = sectionPlace bound t
-  (sub,i) = superSpaceF h n sSub tSub u
-  (sect,j) = superSpaceF i (n-1) sSect tSect (sub:u)
+  uSect = map (sectionPlace bound) u
+  (sub,i) = superSpaceF h n sSub tSub uSub
+  (sect,j) = superSpaceF i (n-1) sSect tSect (sub:uSect)
   result = dividePlace bound sect sub
   mirror = mirrorPlace bound result
   test = (isLinear n (range result)) && (isSubPlace result s) && (isSubPlace result t)
@@ -598,9 +584,29 @@ superSpaceH hops index bounds = let
  test = ((length result) == 0) == ((length bounds) == 0)
  in if test then Just (map (\(x,y) -> (y, remove x bounds)) result) else Nothing
 
+-- zero dimensional space
+superSpaceI :: Place -> Place -> Place
+superSpaceI s t = let
+ sLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) s)
+ sRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) s)
+ tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
+ tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
+ lBounds = sLeft ++ tLeft
+ rBounds_ = sRight ++ tRight
+ rBounds = if (length (lBounds +\ rBounds_)) == 0 then rBounds_ else error "zero"
+ left = map (\x -> (x,[[0],[]])) lBounds
+ right = map (\x -> (x,[[],[0]])) rBounds
+ in left ++ right
+
+-- every possible region
+superSpaceJ :: [Boundary] -> Place
+superSpaceJ boundaries = let
+ regions = power (length boundaries)
+ in map (\(x,y) -> (y, [superSpaceK x regions 0, superSpaceK x regions 1])) (enumerate boundaries)
+
 -- regions indicated by boundary as bit position
-superSpaceI :: Int -> [Pack] -> Int -> [Region]
-superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+superSpaceK :: Int -> [Pack] -> Int -> [Region]
+superSpaceK b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 --
 -- between symbolic and numeric
