@@ -499,24 +499,23 @@ superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Pla
 superSpace g n s t
  | n < 0 = error (show ("negative",n))
  | n == 0 = (superSpaceI s t, g)
+ | (length boundaries) <= n = (superSpaceJ boundaries, g)
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
- | (length boundaries) <= n = (superSpaceJ boundaries, g)
- | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) == 1) && n > 1 = error "unreachable"
- | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
- | ((length shared) == 0) && ((length sBounds) > 1) = let
-  -- recurse to conjoint case
-  (bound,h) = choose g sBounds
-  single = singleSpace bound
-  (space,i) = superSpace h n t single
-  in superSpace i n s space
- | ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
- | ((length sOnly) > 1) = let -- s and t are not proper, meaning each has a boundary not in the other
+ | ((length sOnly) == 1) && ((length tOnly) == 1) = superSpaceF g n s t []
+ | ((length shared) > 0) && ((length sOnly) == 1) = superSpace g n t s
+ | (length shared) > 0 = let -- s and t are not proper, meaning each has a boundary not in the other
   (b,h) = choose g sOnly -- s contains c not equal to b and not in t
   sub = subPlace b s -- sub contains c
   (sup,i) = superSpace h n sub t -- sup contains c, but not b
   in superSpace i n s sup -- s and sup contain c, so recursion has larger shared, but still not proper
- | otherwise = superSpaceF g n s t [] where
+ | (length sBounds) == 1 = superSpace g n t s
+ | otherwise = let
+  -- recu1rse to conjoint case
+  (bound,h) = choose g sBounds
+  single = singleSpace bound
+  (space,i) = superSpace h n t single
+  in superSpace i n s space where
  sBounds = domain s
  tBounds = domain t
  tOnly = tBounds \\ sBounds
