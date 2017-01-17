@@ -341,6 +341,67 @@ sectionPlace b s = let
  index = fromJust (elemIndex b bounds)
  in zip (unplace index bounds) (sectionSpace index space)
 
+-- return space with given regions divided by new boundary
+divideSpace :: [Region] -> Space -> Space
+divideSpace figure space = let
+ whole = regionsOfSpace space
+ ground = whole \\ figure
+ halfspace = divideSpaceF ground space
+ duplicates = holes (length figure) whole
+ mapping = zip figure duplicates
+ withDups = map (map (divideSpaceG mapping figure)) space
+ newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
+ in withDups Prelude.++ [newBoundary]
+
+divideSpaceF :: [Region] -> Space -> [Region]
+divideSpaceF [] _ = []
+divideSpaceF r s = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
+
+divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
+divideSpaceG m a b = (image (a +\ b) m) ++ b
+
+-- divide regions of s in t by new boundary b
+dividePlace :: Boundary -> Place -> Place -> Place
+dividePlace b s t = let
+ space = range t
+ boundaries = (domain t) Prelude.++ [b]
+ regions = image (placeToDual s) (zip (placeToDual t) (regionsOfSpace space))
+ in zip boundaries (divideSpace regions space)
+
+-- space of just one boundary, assumed more than zero dimensions
+singleSpace :: Space
+singleSpace = [[[0],[1]]]
+
+singlePlace :: Boundary -> Place
+singlePlace b = zip [b] singleSpace
+
+-- space of two boundaries, assumed more than one dimension
+doubleSpace :: Space
+doubleSpace = [[[0,1],[2,3]],[[0,2],[1,3]]]
+
+doublePlace :: Boundary -> Boundary -> Place
+doublePlace a b = zip [a,b] doubleSpace
+
+-- remove region to produce non-linear space
+degenSpace :: Region -> Space -> Space
+degenSpace r s = map (\x -> map (\y -> filter (\z -> z /= r) y) x) s
+
+degenPlace :: Region -> Place -> Place
+degenPlace r s = map (\(b,x) -> (b, map (\y -> filter (\z -> z /= r) y) x) ) s
+
+-- divide regions by space into non-linear space
+crossSpace :: Space -> Space -> Space
+crossSpace s t = let
+ sRegions = regionsOfSpace s
+ tRegions = regionsOfSpace t
+ regions = enumerate [(x,y) | x <- sRegions, y <- tRegions]
+ left = map (\x -> map (\y -> preimage [(p,q) | p <- y, q <- tRegions] regions) x) s
+ right = map (\x -> map (\y -> preimage [(p,q) | p <- sRegions, q <- y] regions) x) t
+ in left ++ right
+
+crossPlace :: Place -> Place -> Place
+crossPlace s t = zip ((domain s) Prelude.++ (domain t)) (crossSpace (range s) (range t))
+
 -- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
 canMigrate :: Region -> Space -> Bool
 canMigrate r s = let
@@ -405,14 +466,36 @@ hopDualRegion b [l,r]
  | otherwise = [insert b l, remove b r]
 hopDualRegion _ _ = error "malformed dual region in hop"
 
--- space of just one boundary
-singleSpace :: Boundary -> Place
-singleSpace b = [(b,[[0],[1]])]
+--
+-- so far so simple
+--
+
+-- optimize this
+minEquiv :: Space -> Space
+minEquiv s = head (sort (map (\x -> sortSpace (minEquivH (length s) (minEquivG x (minEquivF s)))) (minEquivI (length s))))
+
+minEquivF :: Space -> [Pack]
+minEquivF s = map (\x -> foldl' (\y (p,q) -> if member x (q !! 0) then setBit y p else y) 0 (enumerate s)) (regionsOfSpace s)
+
+minEquivG :: [(Int, Bool)] -> [Pack] -> [Pack]
+minEquivG a b = sort (map (\p -> foldl' (\q (x,(y,z)) -> if (belongs x p) /= z then setBit q y else q) 0 (enumerate a)) b)
+
+minEquivH :: Int -> [Pack] -> Space
+minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) == y) (enumerate s))) [True,False]) (indices m)
+
+minEquivI :: Int -> [[(Int, Bool)]]
+minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
+
+superSpaceX :: [Boundary] -> [Place] -> String
+superSpaceX b s = let
+ boundaries = map domain s
+ place = map (\z -> map (\[_,x] -> boolsToPack (map (\y -> member y x) b)) (placeToDual z)) s
+ in show (zip boundaries place)
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- (s,h) = foldl' (\(x,y) z -> superSpace y n x (singleSpace z)) ([],g) (indices m)
+ (s,h) = foldl' (\(x,y) z -> superSpace y n x (singlePlace z)) ([],g) (indices m)
  in (range s, h)
 
 -- return all linear spaces given any space to start
@@ -440,60 +523,6 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
 
---
--- so far so simple
---
-
--- optimize this
-minEquiv :: Space -> Space
-minEquiv s = head (sort (map (\x -> sortSpace (minEquivH (length s) (minEquivG x (minEquivF s)))) (minEquivI (length s))))
-
-minEquivF :: Space -> [Pack]
-minEquivF s = map (\x -> foldl' (\y (p,q) -> if member x (q !! 0) then setBit y p else y) 0 (enumerate s)) (regionsOfSpace s)
-
-minEquivG :: [(Int, Bool)] -> [Pack] -> [Pack]
-minEquivG a b = sort (map (\p -> foldl' (\q (x,(y,z)) -> if (belongs x p) /= z then setBit q y else q) 0 (enumerate a)) b)
-
-minEquivH :: Int -> [Pack] -> Space
-minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) == y) (enumerate s))) [True,False]) (indices m)
-
-minEquivI :: Int -> [[(Int, Bool)]]
-minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
-
--- return space with given regions divided by new boundary
-divideSpace :: [Region] -> Space -> Space
-divideSpace figure space = let
- whole = regionsOfSpace space
- ground = whole \\ figure
- halfspace = divideSpaceF ground space
- duplicates = holes (length figure) whole
- mapping = zip figure duplicates
- withDups = map (map (divideSpaceG mapping figure)) space
- newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
- in withDups Prelude.++ [newBoundary]
-
-divideSpaceF :: [Region] -> Space -> [Region]
-divideSpaceF r s
- | (length r) > 0 = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
- | otherwise = []
-
-divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
-divideSpaceG m a b = (image (a +\ b) m) ++ b
-
--- divide regions of s in t by new boundary b
-dividePlace :: Boundary -> Place -> Place -> Place
-dividePlace b s t = let
- space = range t
- boundaries = (domain t) Prelude.++ [b]
- regions = image (placeToDual s) (zip (placeToDual t) (regionsOfSpace space))
- in zip boundaries (divideSpace regions space)
-
-superSpaceX :: [Boundary] -> [Place] -> String
-superSpaceX b s = let
- boundaries = map domain s
- place = map (\z -> map (\[_,x] -> boolsToPack (map (\y -> member y x) b)) (placeToDual z)) s
- in show (zip boundaries place)
-
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
@@ -502,67 +531,38 @@ superSpace g n s t
  | (length boundaries) <= n = (superSpaceJ boundaries, g)
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
- | ((length sOnly) == 1) && ((length tOnly) == 1) = superSpaceF g n s t []
- | ((length shared) > 0) && ((length sOnly) == 1) = superSpace g n t s
- | (length shared) > 0 = let -- s and t are not proper, meaning each has a boundary not in the other
+ | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
+ | ((length shared) > 0) && ((length sOnly) > 1) = let
+  -- s and t are not proper, meaning each has a boundary not in the other
   (b,h) = choose g sOnly -- s contains c not equal to b and not in t
   sub = subPlace b s -- sub contains c
   (sup,i) = superSpace h n sub t -- sup contains c, but not b
   in superSpace i n s sup -- s and sup contain c, so recursion has larger shared, but still not proper
- | (length sBounds) == 1 = superSpace g n t s
- | otherwise = let
-  -- recu1rse to conjoint case
+ | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
+ | ((length shared) == 0) && ((length sBounds) > 1) = let
+  -- recurse to conjoint case
   (bound,h) = choose g sBounds
-  single = singleSpace bound
+  single = singlePlace bound
   (space,i) = superSpace h n t single
-  in superSpace i n s space where
- sBounds = domain s
- tBounds = domain t
- tOnly = tBounds \\ sBounds
- sOnly = sBounds \\ tBounds
- shared = sBounds +\ tBounds
- boundaries = sBounds ++ tBounds
-
--- independent boundary theorem: two extensions of the same space have a superspace
-superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place, g)
-superSpaceF g n s t u
- | (length boundaries) <= n = (superSpaceJ boundaries, g)
- | n == 1 = let
-  [sBound] = sOnly
-  [tBound] = tOnly
-  -- divide all regions of s by tBound, and all regions of t by sBound
-  sGuide = dividePlace tBound s s
-  tGuide = dividePlace sBound t t
-  -- find sorted duals of divided s, divided t, and u
-  sDual = sortDual (placeToDual sGuide)
-  tDual = sortDual (placeToDual tGuide)
-  uDual = map (\x -> sortDual (placeToDual x)) u
-  -- find intersection of sorted duals
-  dual = foldl' (\x y -> x +\ y) (sDual +\ tDual) uDual
-  -- find per-region maps from boundary to region-index
-  mapped = map (\x -> map (\y -> (y,x)) boundaries) (enumerate dual)
-  filtered = map (\x -> filter (\(y,(_,z)) -> member (sortDualRegion (hopDualRegion y z)) dual) x) mapped
-  hops = map (\x -> map (\(y,(z,_)) -> (y,z)) x) filtered
-  -- try each dual as start to qualify by boundaries with hops as function
-  starts = filter (\x -> member (sortDualRegion (reverse (dual !! x))) dual) (indices (length hops)) 
-  result = fromJust (findMaybe (superSpaceG boundaries hops) starts) -- TODO pass g to qualify
-  -- map indices to dual to place
-  in (dualToPlace (map (\x -> dual !! x) result), g)
- | otherwise = let
+  in superSpace i n s space
+ | (n >= 3) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   -- recurse with one fewer boundary
   (bound,h) = choose g shared
-  sSub = subPlace bound s
-  tSub = subPlace bound t
-  uSub = map (subPlace bound) u
-  sSect = sectionPlace bound s
-  tSect = sectionPlace bound t
-  uSect = map (sectionPlace bound) u
-  (sub,i) = superSpaceF h n sSub tSub uSub
-  (sect,j) = superSpaceF i (n-1) sSect tSect (sub:uSect)
-  result = dividePlace bound sect sub
-  mirror = mirrorPlace bound result
-  test = (isLinear n (range result)) && (isSubPlace result s) && (isSubPlace result t)
-  in if test then (result, j) else (mirror, j) where
+  (sub,i) = superSpaceH h n bound s t
+  (sect,j) = superSpace i (n-1) (sectionPlace bound s) (sectionPlace bound t)
+  in (superSpaceG n bound sect sub s t, j)
+ | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
+  (bound,h) = choose g shared
+  (sub,i) = superSpaceH h n bound s t
+  sect = superSpaceF bound sOnly tOnly s t sub
+  in (superSpaceG n bound sect sub s t, i)
+ | (n == 1) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
+  (bound,h) = choose g shared
+  [sBound] = sOnly
+  [tBound] = tOnly
+  cross = crossPlace (subPlace sBound s) (degenPlace bound (doublePlace sBound tBound))
+  in (superSpaceF bound sOnly tOnly s t cross, h)
+ | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
  tOnly = tBounds \\ sBounds
@@ -570,18 +570,23 @@ superSpaceF g n s t u
  shared = sBounds +\ tBounds
  boundaries = sBounds ++ tBounds
 
--- given per-index map from boundary to index hopped to,
--- return index list that hops across all given boundaries or nothing
-superSpaceG :: [Boundary] -> [[(Boundary,Int)]] -> Int -> Maybe [Int]
-superSpaceG bounds hops index = qualify (superSpaceH hops) index bounds
+-- find one dimensional superspace by intersecting duals
+superSpaceF :: Boundary -> [Boundary] -> [Boundary] -> Place -> Place -> Place -> Place
+superSpaceF bound [sBound] [tBound] s t u = let
+ sSect = placeToDual (crossPlace (sectionPlace bound s) (singlePlace tBound))
+ tSect = placeToDual (crossPlace (sectionPlace bound t) (singlePlace sBound))
+ in dualToPlace (sSect +\ tSect +\ (placeToDual u))
+superSpaceF _ _ _ _ _ _ = undefined
 
--- given hop maps, current index, boundaries not hopped yet, return list of potential hops,
--- or nothing if not possible to nop across sime remaining boundary
-superSpaceH :: [[(Boundary,Int)]] -> Int -> [Boundary] -> Maybe [(Int,[Boundary])]
-superSpaceH hops index bounds = let
- result = filter (\(x,_) -> member x bounds) (hops !! index)
- test = ((length result) == 0) == ((length bounds) == 0)
- in if test then Just (map (\(x,y) -> (y, remove x bounds)) result) else Nothing
+superSpaceG :: Int -> Boundary -> Place -> Place -> Place -> Place -> Place
+superSpaceG n bound sect sub s t = let
+ result = dividePlace bound sect sub
+ mirror = mirrorPlace bound result
+ test = (isLinear n (range result)) && (isSubPlace result s) && (isSubPlace result t)
+ in if test then result else mirror
+
+superSpaceH :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> (Place,g)
+superSpaceH g n b s t = superSpace g n (subPlace b s) (subPlace b t)
 
 -- zero dimensional space
 superSpaceI :: Place -> Place -> Place
