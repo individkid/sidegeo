@@ -210,15 +210,15 @@ findMaybeF _ Nothing [] = Nothing
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
 defineLinear n m
- | n < 0 = error "negative dimension"
- | m < 0 = error "negative boundaries"
+ | n < 0 = undefined
+ | m < 0 = undefined
  | (n == 0) || (m == 0) = 1
  | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
 
 -- return whether all subspaces have correct number of regions
 isLinear :: Int -> Space -> Bool
 isLinear n s
- | n < 0 = error "negative dimension"
+ | n < 0 = undefined
  | (n == 0) || ((length s) == 0) = (length (regionsOfSpace s)) == 1
  | n == 1 = let
   halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (enumerate s))
@@ -453,7 +453,7 @@ dualToPlace s = let
 -- preserve sidedness, but halves are sets
 sortDualRegion :: [[Boundary]] -> [[Boundary]]
 sortDualRegion [a,b] = [sort a,sort b]
-sortDualRegion _ = error "malformed dual region in sort"
+sortDualRegion _ = undefined
 
 -- same as sortSpace
 sortDual :: Dual -> Dual
@@ -464,7 +464,7 @@ hopDualRegion :: Boundary -> [[Boundary]] -> [[Boundary]]
 hopDualRegion b [l,r]
  | member b l = [remove b l, insert b r]
  | otherwise = [insert b l, remove b r]
-hopDualRegion _ _ = error "malformed dual region in hop"
+hopDualRegion _ _ = undefined
 
 --
 -- so far so simple
@@ -526,7 +526,7 @@ allSpacesH [] done = done
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
- | n < 0 = error (show ("negative",n))
+ | n < 0 = undefined
  | n == 0 = (superSpaceI s t, g)
  | (length boundaries) <= n = (superSpaceJ boundaries, g)
  | (length tOnly) == 0 = (s,g)
@@ -596,8 +596,7 @@ superSpaceI s t = let
  tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
  tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
  lBounds = sLeft ++ tLeft
- rBounds_ = sRight ++ tRight
- rBounds = if (length (lBounds +\ rBounds_)) == 0 then rBounds_ else error "zero"
+ rBounds = sRight ++ tRight
  left = map (\x -> (x,[[0],[]])) lBounds
  right = map (\x -> (x,[[],[0]])) rBounds
  in left ++ right
@@ -761,7 +760,7 @@ spaceFromPlanesH v (u:w) a (b:c) (s:t)
 spaceFromPlanesH _ [] _ _ (s:t) = s:t
 spaceFromPlanesH v (u:w) _ _ [] = (boolToInt (isAbovePlane v u)):(spaceFromPlanesH v w 0 [] [])
 spaceFromPlanesH _ [] _ _ [] = []
-spaceFromPlanesH _ _ _ _ _ = error "too many or few guards"
+spaceFromPlanesH _ _ _ _ _ = undefined
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
