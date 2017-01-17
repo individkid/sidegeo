@@ -177,13 +177,6 @@ catalyze f g n = foldl' (\(a,h) _ -> catalyzeF f h a) ([],g) ((indices n)::[Int]
 catalyzeF :: (g -> (a,g)) -> g -> [a] -> ([a],g)
 catalyzeF f g a = let (b,h) = f g in (b:a,h)
 
--- given start and context, depth first search for path to first leaf
-qualify :: (a -> b -> Maybe [(a,b)]) -> a -> b -> Maybe [a]
-qualify f a b = fmap (\x -> a:x) ((f a b) >>= (\x -> findMaybe (qualifyF f) x))
-
-qualifyF :: (a -> b -> Maybe [(a,b)]) -> (a,b) -> Maybe [a]
-qualifyF f (a,b) = qualify f a b
-
 -- call function for new result until it returns Nothing
 foldMaybe :: (a -> b -> Maybe a) -> a -> [b] -> Maybe a
 foldMaybe f a (b:c) = foldMaybeF f (Just a) (f a b) c
