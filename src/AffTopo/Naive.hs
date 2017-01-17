@@ -555,8 +555,10 @@ superSpace g n s t
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
-  (cross,i) = superSpaceJ h sBound tBound s
-  in (superSpaceF bound sBound tBound s t cross, i)
+  crosses = superSpaceJ sBound tBound s
+  sups = map (\x -> superSpaceF bound sBound tBound s t x) crosses
+  func = (\x -> (length (regionsOfSpace (range x))) == ((length x) + 1))
+  in choose h (filter func sups)
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
@@ -585,11 +587,10 @@ superSpaceH g n b s t = superSpace g n (subPlace b s) (subPlace b t)
 superSpaceI :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> (Place,g)
 superSpaceI g n b s t = superSpace g (n-1) (sectionPlace b s) (sectionPlace b t)
 
-superSpaceJ :: Random.RandomGen g => Show g => g -> Boundary -> Boundary -> Place -> (Place,g)
-superSpaceJ g a b s = let
+superSpaceJ :: Boundary -> Boundary -> Place -> [Place]
+superSpaceJ a b s = let
  double = doublePlace a b
- (r,h) = choose g (regionsOfSpace (range double))
- in (crossPlace (subPlace a s) (degenPlace r double), h)
+ in map (\x -> crossPlace (subPlace a s) (degenPlace x double)) (regionsOfSpace (range double))
 
 -- zero dimensional space
 superSpaceK :: Place -> Place -> Place
