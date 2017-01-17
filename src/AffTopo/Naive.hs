@@ -520,8 +520,19 @@ allSpacesH [] done = done
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | n < 0 = undefined
- | n == 0 = (superSpaceK s t, g)
- | (length boundaries) <= n = (superSpaceL boundaries, g)
+ | n == 0 = let
+  sLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) s)
+  sRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) s)
+  tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
+  tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
+  lBounds = sLeft ++ tLeft
+  rBounds = sRight ++ tRight
+  left = map (\x -> (x,[[0],[]])) lBounds
+  right = map (\x -> (x,[[],[0]])) rBounds
+  in (left ++ right, g)
+ | (length boundaries) <= n = let
+  regions = power (length boundaries)
+  in (map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate boundaries), g)
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
@@ -542,7 +553,7 @@ superSpace g n s t
   -- recurse with one fewer boundary
   (bound,h) = choose g shared
   (sub,i) = superSpaceH h n bound s t
-  (sect,j) = superSpaceI i n bound s t
+  (sect,j) = superSpace i (n-1) (sectionPlace bound s) (sectionPlace bound t)
   in (superSpaceG n bound sect sub s t, j)
  | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
@@ -555,9 +566,10 @@ superSpace g n s t
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
-  crosses = superSpaceJ sBound tBound s
-  sups = map (\x -> superSpaceF bound sBound tBound s t x) crosses
-  in choose h (filter (\x -> isLinear (range x)) sups)
+  double = doublePlace sBound tBound
+  cross = map (\x -> crossPlace (subPlace sBound s) (degenPlace x double)) (regionsOfSpace (range double))
+  sup = map (\x -> superSpaceF bound sBound tBound s t x) cross
+  in choose h (filter (\x -> isLinear 1 (range x)) sup)
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
@@ -583,36 +595,9 @@ superSpaceG n bound sect sub s t = let
 superSpaceH :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> (Place,g)
 superSpaceH g n b s t = superSpace g n (subPlace b s) (subPlace b t)
 
-superSpaceI :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> (Place,g)
-superSpaceI g n b s t = superSpace g (n-1) (sectionPlace b s) (sectionPlace b t)
-
-superSpaceJ :: Boundary -> Boundary -> Place -> [Place]
-superSpaceJ a b s = let
- double = doublePlace a b
- in map (\x -> crossPlace (subPlace a s) (degenPlace x double)) (regionsOfSpace (range double))
-
--- zero dimensional space
-superSpaceK :: Place -> Place -> Place
-superSpaceK s t = let
- sLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) s)
- sRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) s)
- tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
- tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
- lBounds = sLeft ++ tLeft
- rBounds = sRight ++ tRight
- left = map (\x -> (x,[[0],[]])) lBounds
- right = map (\x -> (x,[[],[0]])) rBounds
- in left ++ right
-
--- every possible region
-superSpaceL :: [Boundary] -> Place
-superSpaceL boundaries = let
- regions = power (length boundaries)
- in map (\(x,y) -> (y, [superSpaceM x regions 0, superSpaceM x regions 1])) (enumerate boundaries)
-
 -- regions indicated by boundary as bit position
-superSpaceM :: Int -> [Pack] -> Int -> [Region]
-superSpaceM b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+superSpaceI :: Int -> [Pack] -> Int -> [Region]
+superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 --
 -- between symbolic and numeric
