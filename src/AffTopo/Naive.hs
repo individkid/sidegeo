@@ -557,8 +557,7 @@ superSpace g n s t
   [tBound] = tOnly
   crosses = superSpaceJ sBound tBound s
   sups = map (\x -> superSpaceF bound sBound tBound s t x) crosses
-  func = (\x -> (length (regionsOfSpace (range x))) == ((length x) + 1))
-  in choose h (filter func sups)
+  in choose h (filter (\x -> isLinear (range x)) sups)
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
