@@ -306,6 +306,27 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
+-- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
+canMigrate :: Region -> Space -> Bool
+canMigrate r s = let
+ boundaries = attachedBoundaries r s
+ sides = sidesOfRegion r s
+ opposite = oppositeOfSides boundaries sides
+ empty = not (regionOfSidesExists opposite s)
+ neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
+ exists = map (\a -> regionOfSidesExists a s) neighbors
+ in foldl' (\a b -> a && b) empty exists
+
+-- return space with given region changed to its local opposite
+migrateSpace :: Region -> Space -> Space
+migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
+
+migrateSpaceF :: [Boundary] -> Region -> (Boundary,Full) -> Full
+migrateSpaceF b r (a,s)
+ | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
+ | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
+ | otherwise = s
+
 -- return sorted equivalent
 sortSpace :: Space -> Space
 sortSpace s = sort (map sort (map (map sort) s))
@@ -394,27 +415,6 @@ crossSpace s t = let
 
 crossPlace :: Place -> Place -> Place
 crossPlace s t = zip ((domain s) Prelude.++ (domain t)) (crossSpace (range s) (range t))
-
--- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
-canMigrate :: Region -> Space -> Bool
-canMigrate r s = let
- boundaries = attachedBoundaries r s
- sides = sidesOfRegion r s
- opposite = oppositeOfSides boundaries sides
- empty = not (regionOfSidesExists opposite s)
- neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
- exists = map (\a -> regionOfSidesExists a s) neighbors
- in foldl' (\a b -> a && b) empty exists
-
--- return space with given region changed to its local opposite
-migrateSpace :: Region -> Space -> Space
-migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
-
-migrateSpaceF :: [Boundary] -> Region -> (Boundary,Full) -> Full
-migrateSpaceF b r (a,s)
- | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
- | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
- | otherwise = s
 
 -- reverse sidedness of given boundary
 mirrorPlace :: Boundary -> Place -> Place
@@ -520,8 +520,8 @@ allSpacesH [] done = done
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | n < 0 = undefined
- | n == 0 = (superSpaceI s t, g)
- | (length boundaries) <= n = (superSpaceJ boundaries, g)
+ | n == 0 = (superSpaceK s t, g)
+ | (length boundaries) <= n = (superSpaceL boundaries, g)
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
@@ -542,7 +542,7 @@ superSpace g n s t
   -- recurse with one fewer boundary
   (bound,h) = choose g shared
   (sub,i) = superSpaceH h n bound s t
-  (sect,j) = superSpace i (n-1) (sectionPlace bound s) (sectionPlace bound t)
+  (sect,j) = superSpaceI i n bound s t
   in (superSpaceG n bound sect sub s t, j)
  | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
@@ -555,8 +555,8 @@ superSpace g n s t
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
-  cross = crossPlace (subPlace sBound s) (degenPlace bound (doublePlace sBound tBound))
-  in (superSpaceF bound sBound tBound s t cross, h)
+  (cross,i) = superSpaceJ h sBound tBound s
+  in (superSpaceF bound sBound tBound s t cross, i)
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
@@ -582,9 +582,18 @@ superSpaceG n bound sect sub s t = let
 superSpaceH :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> (Place,g)
 superSpaceH g n b s t = superSpace g n (subPlace b s) (subPlace b t)
 
+superSpaceI :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> (Place,g)
+superSpaceI g n b s t = superSpace g (n-1) (sectionPlace b s) (sectionPlace b t)
+
+superSpaceJ :: Random.RandomGen g => Show g => g -> Boundary -> Boundary -> Place -> (Place,g)
+superSpaceJ g a b s = let
+ double = doublePlace a b
+ (r,h) = choose g (regionsOfSpace (range double))
+ in (crossPlace (subPlace a s) (degenPlace r double), h)
+
 -- zero dimensional space
-superSpaceI :: Place -> Place -> Place
-superSpaceI s t = let
+superSpaceK :: Place -> Place -> Place
+superSpaceK s t = let
  sLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) s)
  sRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) s)
  tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
@@ -596,14 +605,14 @@ superSpaceI s t = let
  in left ++ right
 
 -- every possible region
-superSpaceJ :: [Boundary] -> Place
-superSpaceJ boundaries = let
+superSpaceL :: [Boundary] -> Place
+superSpaceL boundaries = let
  regions = power (length boundaries)
- in map (\(x,y) -> (y, [superSpaceK x regions 0, superSpaceK x regions 1])) (enumerate boundaries)
+ in map (\(x,y) -> (y, [superSpaceM x regions 0, superSpaceM x regions 1])) (enumerate boundaries)
 
 -- regions indicated by boundary as bit position
-superSpaceK :: Int -> [Pack] -> Int -> [Region]
-superSpaceK b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+superSpaceM :: Int -> [Pack] -> Int -> [Region]
+superSpaceM b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 --
 -- between symbolic and numeric
