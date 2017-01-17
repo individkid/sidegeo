@@ -553,15 +553,17 @@ superSpace g n s t
   in (superSpaceG n bound sect sub s t, j)
  | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
+  [sBound] = sOnly
+  [tBound] = tOnly
   (sub,i) = superSpaceH h n bound s t
-  sect = superSpaceF bound sOnly tOnly s t sub
+  sect = superSpaceF bound sBound tBound s t sub
   in (superSpaceG n bound sect sub s t, i)
  | (n == 1) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
   cross = crossPlace (subPlace sBound s) (degenPlace bound (doublePlace sBound tBound))
-  in (superSpaceF bound sOnly tOnly s t cross, h)
+  in (superSpaceF bound sBound tBound s t cross, h)
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
@@ -571,12 +573,11 @@ superSpace g n s t
  boundaries = sBounds ++ tBounds
 
 -- find one dimensional superspace by intersecting duals
-superSpaceF :: Boundary -> [Boundary] -> [Boundary] -> Place -> Place -> Place -> Place
-superSpaceF bound [sBound] [tBound] s t u = let
+superSpaceF :: Boundary -> Boundary -> Boundary -> Place -> Place -> Place -> Place
+superSpaceF bound sBound tBound s t u = let
  sSect = placeToDual (crossPlace (sectionPlace bound s) (singlePlace tBound))
  tSect = placeToDual (crossPlace (sectionPlace bound t) (singlePlace sBound))
  in dualToPlace (sSect +\ tSect +\ (placeToDual u))
-superSpaceF _ _ _ _ _ _ = undefined
 
 superSpaceG :: Int -> Boundary -> Place -> Place -> Place -> Place -> Place
 superSpaceG n bound sect sub s t = let
