@@ -134,7 +134,7 @@ higher = let
  doubles :: ([Double],Int)
  doubles = catalyze func1 5 5
  func2 x y = if y < 5 then Just (y:x) else Nothing
- justs :: Maybe [Int]
+ justs :: [Int]
  justs = foldMaybe func2 [] [0,1..]
  in (rvb (\x -> rv ((length x) == (length a)) (show ("unsorted0",x,a))) unsorted0) `rva`
   (rvb (\x -> rv ((length x) == 1) (show ("unsorted1",x))) unsorted1) `rva`
@@ -144,7 +144,7 @@ higher = let
   (rvb (\x -> rv (x == c) (show ("sorted2",x,c))) sorted2) `rva`
   (rv (ints == ([9,8,7,6,5],10)) (show ("ints",ints))) `rva`
   (rv (doubles == ([9.0,8.0,7.0,6.0,5.0],10)) (show ("doubles",doubles))) `rva`
-  (rv (justs == (Just [4,3,2,1,0])) (show ("justs",justs)))
+  (rv (justs == [4,3,2,1,0]) (show ("justs",justs)))
 
 powerSets :: Ord a => [a] -> [[a]]
 powerSets a = concat (map (\x -> subsets x a) (indices (length a)))
