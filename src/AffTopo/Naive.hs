@@ -178,23 +178,24 @@ catalyzeF :: (g -> (a,g)) -> g -> [a] -> ([a],g)
 catalyzeF f g a = let (b,h) = f g in (b:a,h)
 
 -- call function for new result until it returns Nothing
-foldMaybe :: (a -> b -> Maybe a) -> a -> [b] -> Maybe a
-foldMaybe f a (b:c) = foldMaybeF f (Just a) (f a b) c
-foldMaybe _ a [] = Just a
+foldMaybe :: (a -> b -> Maybe a) -> a -> [b] -> a
+foldMaybe f a (b:c) = foldMaybeF f a c (f a b)
+foldMaybe _ a [] = a
 
-foldMaybeF :: (a -> b -> Maybe a) -> Maybe a -> Maybe a -> [b] -> Maybe a
-foldMaybeF f _ (Just b) (c:d) = foldMaybeF f (Just b) (f b c) d
-foldMaybeF _ a _ _ = a
+foldMaybeF :: (a -> b -> Maybe a) -> a -> [b] -> Maybe a -> a
+foldMaybeF f _ (c:d) (Just b) = foldMaybeF f b d (f b c)
+foldMaybeF _ a _ Nothing = a
+foldMaybeF _ a [] _ = a
 
 -- call function until it returns Just
 findMaybe :: (b -> Maybe a) -> [b] -> Maybe a
-findMaybe f (b:c) = findMaybeF f (f b) c
+findMaybe f (b:c) = findMaybeF f c (f b)
 findMaybe _ [] = Nothing
 
-findMaybeF :: (b -> Maybe a) -> Maybe a -> [b] -> Maybe a
-findMaybeF _ (Just b) _ = Just b
-findMaybeF f Nothing (b:c) = findMaybeF f (f b) c
-findMaybeF _ Nothing [] = Nothing
+findMaybeF :: (b -> Maybe a) -> [b] -> Maybe a -> Maybe a
+findMaybeF _ _ (Just b) = Just b
+findMaybeF f (b:c) Nothing = findMaybeF f c (f b)
+findMaybeF _ [] Nothing = Nothing
 
 --
 -- now for something new
@@ -604,7 +605,7 @@ superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 --
 
 -- return given number of planes in given number of dimensions
-randomPlanes :: Random.RandomGen g => g -> Int -> Int -> Maybe ([Plane], g)
+randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
 randomPlanes g n m = let
  (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n * m)
  b = Matrix.toColumns (Matrix.matrix m a)
