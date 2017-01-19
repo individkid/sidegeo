@@ -37,7 +37,6 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("section",section)
   ,("outside",outside)
   ,("special",special)
-  ,("bug",bug)
   ,("disjoint",disjoint)
   ,("general",general)
   ,("complexity",complexity)
@@ -202,16 +201,8 @@ special = let
  places = map enumerate sections
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
- sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
+ sups = map (\(d,(a,b,c)) -> (anySuperSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
  in rvb (\((e,_),_,b,c,d) -> (rv ((isSubPlaceEquiv b e) && (isSubPlaceEquiv c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
-
-bug :: Maybe String
-bug = let
- g = Debug [] [315069880,840462263,506335523,940130511,977375085,1593321438,1511714125,1127685618] (Random.mkStdGen 0)
- s = [(0,[[0,2,7,8],[1,3,9]]),(3,[[0,1,7],[2,3,8,9]]),(2,[[1,7,8,9],[0,2,3]])]
- t = [(4,[[0,1,4],[2,5,6,8]]),(3,[[1,4,5,6],[0,2,8]]),(0,[[0,4,5,8],[1,2,6]])]
- (place,_) = superSpace g 2 s t
- in rv (isLinear 2 (range place)) (show ("place",domain place,place,"s",domain s,s,"t",domain t,t))
 
 disjoint :: Maybe String
 disjoint = let
@@ -225,7 +216,7 @@ general = let
  places = map (\(n,(a,_)) -> (n,enumerate a)) spaces
  tuples = [(n,a,b,c) | (n,a) <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(n,a,b,c) -> (n, a, subSubPlace b a, subSubPlace c a)) tuples
- sups = map (\(d,(n,a,b,c)) -> (n, superSpace (Debug [] [] (Random.mkStdGen d)) n b c, a, b, c, d)) (enumerate subs)
+ sups = map (\(d,(n,a,b,c)) -> (n, anySuperSpace (Debug [] [] (Random.mkStdGen d)) n b c, a, b, c, d)) (enumerate subs)
  in rvb (\(n,(d,g),a,b,c,h) ->
   (rv (isLinear n (range b)) (show ("left",b))) `rva`
   (rv (isLinear n (range c)) (show ("right",c))) `rva`
