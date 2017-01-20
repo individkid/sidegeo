@@ -572,14 +572,14 @@ superSpace g n s t
   (bound,h) = choose g shared
   (sub,i) = superSpaceH h n bound s t
   (sect,j) = superSpace i (n-1) (sectionPlace bound s) (sectionPlace bound t)
-  in (superSpaceJ n s t (concat [superSpaceG n bound x y s t | x <- sect, y <- sub]), j)
+  in (superSpaceJ n s t (concat [superSpaceG bound x y | x <- sect, y <- sub]), j)
  | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
   (sub,i) = superSpaceH h n bound s t
   sect = map (\x -> superSpaceF bound sBound tBound s t x) sub
-  in (superSpaceJ n s t (concat (map (\(x,y) -> superSpaceG n bound x y s t) (zip sect sub))), i)
+  in (superSpaceJ n s t (concat (map (\(x,y) -> superSpaceG bound x y) (zip sect sub))), i)
  | (n == 1) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
   [sBound] = sOnly
@@ -603,12 +603,10 @@ superSpaceF bound sBound tBound s t u = let
  tSect = placeToDual (crossPlace (sectionPlace bound t) (singlePlace sBound))
  in dualToPlace (sSect +\ tSect +\ (placeToDual u))
 
-superSpaceG :: Int -> Boundary -> Place -> Place -> Place -> Place -> [Place]
-superSpaceG n bound sect sub s t = let
+superSpaceG :: Boundary -> Place -> Place -> [Place]
+superSpaceG bound sect sub = let
  result = dividePlace bound sect sub
- mirror = mirrorPlace bound result
- test x = (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)
- in filter test [result,mirror]
+ in [result, mirrorPlace bound result]
 
 superSpaceH :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> ([Place],g)
 superSpaceH g n b s t = superSpace g n (subPlace b s) (subPlace b t)
