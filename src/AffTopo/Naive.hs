@@ -30,10 +30,10 @@ type Side = Int -- index into Full
 type Half = [Region] -- assume welldef set
 type Full = [Half] -- assume disjoint covering pair
 type Space = [Full] -- assume equal covers
-type Dual = [[[Boundary]]]
+type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,Full)] -- assume one-to-one
-type Plane = Matrix.Vector Double -- single column of distances above base
-type Point = Matrix.Vector Double -- single column of coordinates
+type Plane = Matrix.Vector Double -- distances above base
+type Point = Matrix.Vector Double -- coordinates
 type Pack = Int -- bits indicate membership
 
 intToBool :: Int -> Bool
@@ -228,10 +228,19 @@ isLinear n s
   halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (enumerate s))
   ends = filter (\(_,x) -> (length x) == 1) halves
   dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
-  func a b = let ((_,x),(_,y)) = (a,b) in if (length (y \\ x)) == 0 then GT else (if (length (x \\ y)) == 0 then LT else EQ)
-  sorts = map (\z -> sortBy func z) dirs
+  func x y
+   | (length (y \\ x)) == 0 = GT
+   | (length (x \\ y)) == 0 = LT
+   | otherwise = EQ
+  comp a b = let ((_,x),(_,y)) = (a,b) in func x y
+  sorts = map (\z -> sortBy comp z) dirs
   domains = map domain sorts
-  in ((length domains) == 2) && ((domains !! 0) == (reverse (domains !! 1)) || ((domains !! 0) == (domains !! 1)))
+  valid = (length domains) == 2
+  left = domains !! 0
+  right = domains !! 1
+  mirror = left == (reverse right)
+  plain = left == right
+  in valid && (mirror || plain)
  | otherwise = let
   boundaries = boundariesOfSpace s
   sizes = indices (length boundaries)
@@ -284,30 +293,40 @@ oppositeOfSides b r = foldl' (\x y -> replace y (notOfInt (x !! y)) x) r b
 
 -- return neighbor region of given region wrt given boundaries
 oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
-oppositeOfRegion b r s = regionOfSides (oppositeOfSides b (sidesOfRegion r s)) s
+oppositeOfRegion b r s = let
+ opposite = oppositeOfSides b (sidesOfRegion r s)
+ in regionOfSides opposite s
 
 -- return whether neighbor region exists
 oppositeOfRegionExists :: [Boundary] -> Region -> Space -> Bool
-oppositeOfRegionExists b r s = regionOfSidesExists (oppositeOfSides b (sidesOfRegion r s)) s
+oppositeOfRegionExists b r s = let
+ opposite = oppositeOfSides b (sidesOfRegion r s)
+ in regionOfSidesExists opposite s
 
 -- return shell of regions around given region
 oppositesOfRegion :: Region -> Space -> [Region]
-oppositesOfRegion r s = map (\b -> oppositeOfRegion [b] r s) (attachedBoundaries r s)
+oppositesOfRegion r s = let
+ opposite b = oppositeOfRegion [b] r s
+ in map (\b -> opposite b) (attachedBoundaries r s)
 
 -- return boundaries attached to region
 attachedBoundaries :: Region -> Space -> [Boundary]
-attachedBoundaries r s = filter (\b -> oppositeOfRegionExists [b] r s) (boundariesOfSpace s)
+attachedBoundaries r s = let
+ opposite b = oppositeOfRegionExists [b] r s
+ in filter (\b -> opposite b) (boundariesOfSpace s)
 
 -- return facets attached to region
 attachedFacets :: Int -> Region -> Space -> [[Boundary]]
-attachedFacets n r s = filter (\b -> oppositeOfRegionExists b r s) (subsets n (attachedBoundaries r s))
+attachedFacets n r s = let
+ opposite b = oppositeOfRegionExists b r s
+ in filter (\b -> opposite b) (subsets n (attachedBoundaries r s))
 
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
-attachedRegions [] s = regionsOfSpace s
-attachedRegions [b] s = filter (\r -> oppositeOfRegionExists [b] r s) (regionsOfSpace s)
-attachedRegions b s = filter (\r -> (length (b \\ (attachedBoundaries r s))) == 0)
- (filter (\r -> oppositeOfRegionExists b r s) (regionsOfSpace s))
+attachedRegions b s = let
+ attached r = (length (b \\ (attachedBoundaries r s))) == 0
+ opposite r = oppositeOfRegionExists b r s
+ in filter (\r -> (attached r) && (opposite r)) (regionsOfSpace s)
 
 -- return corresponding outside region
 outsideOfRegion :: Region -> Space -> Region
@@ -317,7 +336,8 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
--- return whether local opposite of given region is empty and all of its oppositeOf regions are non-empty
+-- return whether local opposite of given region is empty
+-- and all of its oppositeOf regions are non-empty
 canMigrate :: Region -> Space -> Bool
 canMigrate r s = let
  boundaries = attachedBoundaries r s
@@ -436,11 +456,17 @@ mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
 -- each dual region of superspace is superset of some dual region of subspace
 isSubPlace :: Place -> Place -> Bool
-isSubPlace s t = all (\x -> any (\y -> (length ((sort y) \\ (sort x))) == 0) (placeToDual s)) (placeToDual t)
+isSubPlace s t = let
+ sDual = sortDual (placeToDual s)
+ tDual = sortDual (placeToDual t)
+ in all (\x -> any (\y -> (length (y \\ x)) == 0) sDual) tDual
 
 -- subset is section space in dual representation
 isSectionPlace :: Place -> Place -> Bool
-isSectionPlace s t = (length ((sort (placeToDual s)) \\ (sort (placeToDual t)))) == 0
+isSectionPlace s t = let
+ sDual = sortDual (placeToDual s)
+ tDual = sortDual (placeToDual t)
+ in (length (sDual \\ tDual)) == 0
 
 -- representation converter
 placeToDual :: Place -> Dual
@@ -578,7 +604,7 @@ superSpace g n s t
   (b,h) = choose g sOnly -- s contains c not equal to b and not in t
   sub = subPlace b s -- sub contains c
   (sup,i) = superSpace h n sub t -- sup contains c, but not b
-  (res,j) = mapFold (\x y -> superSpace x n s y) i sup -- s and sup contain c, so recursion has larger shared, but still not proper
+  (res,j) = mapFold (\x y -> superSpace x n s y) i sup -- s and sup contain c
   in (superSpaceI n s t (concat res), j)
  | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) && valid = superSpace g n t s
  | ((length shared) == 0) && ((length sBounds) > 1) && valid = let
