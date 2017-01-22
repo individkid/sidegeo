@@ -539,9 +539,9 @@ subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (((p+q)-n) < 0) = undefined
  | (p == n) && (subSectionF s t u) = ([t],g)
  | (q == n) && (subSectionF s t u) = ([s],g)
- | (((p+q)-n) == 0) && (subSectionF s t u) = (superSpaceJ s t, g)
- | ((length u) <= ((p+q)-n)) && (subSectionF s t u) = ([superSpaceK (domain u)], g)
- | (((p+q)-n) > 0) && (subSectionF s t u) = let
+ | (dim == 0) && (subSectionF s t u) = (superSpaceJ s t, g)
+ | (dim >= (length u)) && (subSectionF s t u) = ([superSpaceK (domain u)], g)
+ | (dim > 0) && (subSectionF s t u) = let
   -- antisection of subsection in subspace
   (b,h) = choose g (domain u)
   sSub = subPlace b s
@@ -549,10 +549,11 @@ subSection g p q n s t u
   uSub = subPlace b u
   (sub,i) = subSection h p q n sSub tSub uSub
   uSect = sectionPlace b u
-  (sect,j) = mapFold (\x y -> subSection x (p+q-n) (n-1) n y uSect uSub) i sub
+  (sect,j) = mapFold (\x y -> subSection x dim (n-1) n y uSect uSub) i sub
   zipped = concat (map (\(x,y) -> map (\z -> (z,y)) x) (zip sect sub))
   in (concat (map (\(x,y) -> superSpaceG b x y) zipped), j)
- | otherwise = undefined
+ | otherwise = undefined where
+ dim = (p+q)-n
 
 subSectionF :: Place -> Place -> Place -> Bool
 subSectionF s t u = (isSectionPlace s u) && (isSectionPlace t u)
