@@ -340,7 +340,10 @@ migrateSpaceF b r (a,s)
 
 -- return sorted equivalent
 sortSpace :: Space -> Space
-sortSpace s = sort (map sort (map (map sort) s))
+sortSpace s = sort (map (\x -> sort (map (\y -> sort y) x)) s)
+
+sortPlace :: Place -> Place
+sortPlace s = sort (map (\(x,y) -> (x, sort (map (\z -> sort z) y))) s)
 
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
@@ -460,7 +463,7 @@ sortDualRegion :: [[Boundary]] -> [[Boundary]]
 sortDualRegion [a,b] = [sort a,sort b]
 sortDualRegion _ = undefined
 
--- same as sortSpace
+-- differs from sortSpace in that it does no mirroring
 sortDual :: Dual -> Dual
 sortDual a = sort (map sortDualRegion a)
 
@@ -528,7 +531,7 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
 
--- return space that is section of given spaces
+-- return space that is section of given spacescabal
 anySubSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place,g)
 anySubSection g p q n s t u = let
  (res,h) = subSection g p q n s t u
@@ -537,11 +540,11 @@ anySubSection g p q n s t u = let
 subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> ([Place],g)
 subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (((p+q)-n) < 0) = undefined
- | (p == n) && (subSectionF s t u) = ([t],g)
- | (q == n) && (subSectionF s t u) = ([s],g)
- | (dim == 0) && (subSectionF s t u) = (superSpaceJ s t, g)
- | (dim >= (length u)) && (subSectionF s t u) = ([superSpaceK (domain u)], g)
- | (dim > 0) && (subSectionF s t u) = let
+ | (p == n) && valid = ([t],g)
+ | (q == n) && valid = ([s],g)
+ | (dim == 0) && valid = (superSpaceJ s t, g)
+ | (dim >= (length u)) && valid = ([superSpaceK (domain u)], g)
+ | (dim > 0) && valid = let
   -- antisection of subsection in subspace
   (b,h) = choose g (domain u)
   sSub = subPlace b s
@@ -554,9 +557,7 @@ subSection g p q n s t u
   in (concat (map (\(x,y) -> superSpaceG b x y) zipped), j)
  | otherwise = undefined where
  dim = (p+q)-n
-
-subSectionF :: Place -> Place -> Place -> Bool
-subSectionF s t u = (isSectionPlace s u) && (isSectionPlace t u)
+ valid = (isSectionPlace s u) && (isSectionPlace t u)
 
 -- return superspace with given spaces as subspaces
 anySuperSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place,g)
@@ -567,27 +568,27 @@ anySuperSpace g n s t = let
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> ([Place], g)
 superSpace g n s t
  | n < 0 = undefined
- | (length tOnly) == 0 = ([s],g)
- | (length sOnly) == 0 = ([t],g)
- | n == 0 = (superSpaceJ s t, g)
- | (length bounds) <= n = ([superSpaceK bounds], g)
- | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
- | ((length shared) > 0) && ((length sOnly) > 1) = let
+ | ((length tOnly) == 0) && valid = ([s],g)
+ | ((length sOnly) == 0) && valid = ([t],g)
+ | (n == 0) && valid = (superSpaceJ s t, g)
+ | ((length bounds) <= n) && valid = ([superSpaceK bounds], g)
+ | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) && valid = superSpace g n t s
+ | ((length shared) > 0) && ((length sOnly) > 1) && valid = let
   -- s and t are not proper, meaning each has a boundary not in the other
   (b,h) = choose g sOnly -- s contains c not equal to b and not in t
   sub = subPlace b s -- sub contains c
   (sup,i) = superSpace h n sub t -- sup contains c, but not b
   (res,j) = mapFold (\x y -> superSpace x n s y) i sup -- s and sup contain c, so recursion has larger shared, but still not proper
   in (superSpaceI n s t (concat res), j)
- | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
- | ((length shared) == 0) && ((length sBounds) > 1) = let
+ | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) && valid = superSpace g n t s
+ | ((length shared) == 0) && ((length sBounds) > 1) && valid = let
   -- recurse to conjoint case
   (bound,h) = choose g sBounds
   single = singlePlace bound
   (sup,i) = superSpace h n t single
   (res,j) = mapFold (\x y -> superSpace x n s y) i sup
   in (superSpaceI n s t (concat res), j)
- | (n >= 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
+ | (n >= 2) && ((length sOnly) == 1) && ((length tOnly) == 1) && valid = let
   -- antisection of antisection of subsection
   [sBound] = sOnly
   [tBound] = tOnly
@@ -597,20 +598,20 @@ superSpace g n s t
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
   sSup = concat (map (\x -> superSpaceG tBound x sSect) sect)
   in (superSpaceI n s t (concat (map (\x -> superSpaceG sBound x t) sSup)), h)
- | (n >= 3) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
+ | (n >= 3) && ((length sOnly) == 1) && ((length tOnly) == 1) && valid = let
   -- recurse with one fewer boundary
   (bound,h) = choose g shared
   (sub,i) = superSpaceH h n bound s t
   (sect,j) = superSpace i (n-1) (sectionPlace bound s) (sectionPlace bound t)
   in (superSpaceI n s t (concat [superSpaceG bound x y | x <- sect, y <- sub]), j)
- | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
+ | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) && valid = let
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
   (sub,i) = superSpaceH h n bound s t
   sect = map (\x -> superSpaceF bound sBound tBound s t x) sub
   in (superSpaceI n s t (concat (map (\(x,y) -> superSpaceG bound x y) (zip sect sub))), i)
- | (n == 1) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
+ | (n == 1) && ((length sOnly) == 1) && ((length tOnly) == 1) && valid = let
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
@@ -625,6 +626,7 @@ superSpace g n s t
  sOnly = sBounds \\ tBounds
  shared = sBounds +\ tBounds
  bounds = sBounds ++ tBounds
+ valid = (superSpaceM bounds s) == (superSpaceM bounds t)
 
 -- find one dimensional superspace by intersecting duals
 superSpaceF :: Boundary -> Boundary -> Boundary -> Place -> Place -> Place -> Place
@@ -660,6 +662,12 @@ superSpaceK b = let
 -- regions indicated by boundary as bit position
 superSpaceL :: Int -> [Pack] -> Int -> [Region]
 superSpaceL b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+
+-- sort repeated subPlace without mirroring
+superSpaceM :: [Boundary] -> Place -> Place
+superSpaceM b s = let
+ t = foldl' (\x y -> subPlace y x) s b
+ in sort (map (\(x,y) -> (x, map (\z -> sort z) y)) t)
 
 --
 -- between symbolic and numeric
