@@ -563,7 +563,10 @@ subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (dim < 0) = undefined
  | (p == n) && valid = ([t],g)
  | (q == n) && valid = ([s],g)
- | (dim == 0) && valid = (map (\x -> dualToPlace [x]) ((placeToDual s) +\ (placeToDual t)), g)
+ | (dim == 0) && valid = let
+  sDual = sortDual (placeToDual s)
+  tDual = sortDual (placeToDual t)
+  in (map (\x -> dualToPlace [x]) (sDual +\ tDual), g)
  | (dim >= (length u)) && valid = ([superSpaceH (domain u)], g)
  | (dim > 0) && valid = let
   -- antisection of subsection in subspace
@@ -591,6 +594,11 @@ superSpace g n s t
  | n < 0 = undefined
  | ((length tOnly) == 0) && valid = ([s],g)
  | ((length sOnly) == 0) && valid = ([t],g)
+ | (n == 0) && valid = let
+  sDual = placeToDual s
+  tDual = placeToDual t
+  dual = map (\(x,y) -> map (\(p,q) -> p ++ q) (zip x y)) (zip sDual tDual)
+  in ([dualToPlace dual], g)
  | ((length bounds) <= n) && valid = ([superSpaceH bounds], g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) && valid = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) && valid = let
