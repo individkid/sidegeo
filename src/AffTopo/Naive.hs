@@ -235,12 +235,9 @@ isLinear n s
   comp a b = let ((_,x),(_,y)) = (a,b) in func x y
   sorts = map (\z -> sortBy comp z) dirs
   domains = map domain sorts
-  valid = (length domains) == 2
-  left = domains !! 0
-  right = domains !! 1
-  mirror = left == (reverse right)
-  plain = left == right
-  in valid && (mirror || plain)
+  valid [x,y] = x == (reverse y)
+  valid _ = False
+  in valid domains
  | otherwise = let
   boundaries = boundariesOfSpace s
   sizes = indices (length boundaries)
