@@ -527,6 +527,31 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
 
+subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> ([Place],g)
+subSection g p q n s t u
+ | (p > n) || (q > n) || (n < 0) || (((p+q)-n) < 0) = undefined
+ | p == n = ([t],g)
+ | q == n = ([s],g)
+ | (length u) <= ((p+q)-n) = let
+  boundaries = domain u
+  regions = power (length boundaries)
+  in ([map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate boundaries)], g)
+ | ((p+q)-n) == 0 = let
+  sDual = placeToDual s
+  tDual = placeToDual t
+  in (map (\x -> dualToPlace [x]) (sDual +\ tDual),g)
+ | ((p+q)-n) > 0 = let
+  -- antisection of subsection in subspace
+  (b,h) = choose g (domain u)
+  sSub = subPlace b s
+  tSub = subPlace b t
+  uSub = subPlace b u
+  (sub,i) = subSection h p q n sSub tSub uSub
+  uSect = sectionPlace b u
+  (sect,j) = mapFold (\x y -> subSection x (p+q-n) (n-1) n y uSect uSub) i sub
+  in (concat (map (\(x,y) -> concat (map (\z -> superSpaceG b z y) x)) (zip sect sub)), j)
+ | otherwise = undefined
+
 -- return superspace with given spaces as subspaces
 anySuperSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place,g)
 anySuperSpace g n s t = let
@@ -567,6 +592,16 @@ superSpace g n s t
   (space,i) = superSpace h n t single
   (result,j) = mapFold (\x y -> superSpace x n s y) i space
   in (superSpaceJ n s t (concat result), j)
+ | (n >= 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
+  -- antisection of antisection of subsection
+  [sBound] = sOnly
+  [tBound] = tOnly
+  sSect = sectionPlace sBound s
+  tSect = sectionPlace tBound t
+  sub = subPlace sBound s
+  (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
+  sSup = concat (map (\x -> superSpaceG tBound x sSect) sect)
+  in (superSpaceJ n s t (concat (map (\x -> superSpaceG sBound x t) sSup)), h)
  | (n >= 3) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   -- recurse with one fewer boundary
   (bound,h) = choose g shared
