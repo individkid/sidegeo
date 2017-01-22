@@ -569,7 +569,7 @@ superSpace g n s t
  | (length tOnly) == 0 = ([s],g)
  | (length sOnly) == 0 = ([t],g)
  | n == 0 = (superSpaceJ s t, g)
- | (length boundaries) <= n = ([superSpaceK boundaries], g)
+ | (length bounds) <= n = ([superSpaceK bounds], g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
   -- s and t are not proper, meaning each has a boundary not in the other
@@ -583,9 +583,9 @@ superSpace g n s t
   -- recurse to conjoint case
   (bound,h) = choose g sBounds
   single = singlePlace bound
-  (space,i) = superSpace h n t single
-  (result,j) = mapFold (\x y -> superSpace x n s y) i space
-  in (superSpaceI n s t (concat result), j)
+  (sup,i) = superSpace h n t single
+  (res,j) = mapFold (\x y -> superSpace x n s y) i sup
+  in (superSpaceI n s t (concat res), j)
  | (n >= 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   -- antisection of antisection of subsection
   [sBound] = sOnly
@@ -623,7 +623,7 @@ superSpace g n s t
  tOnly = tBounds \\ sBounds
  sOnly = sBounds \\ tBounds
  shared = sBounds +\ tBounds
- boundaries = sBounds ++ tBounds
+ bounds = sBounds ++ tBounds
 
 -- find one dimensional superspace by intersecting duals
 superSpaceF :: Boundary -> Boundary -> Boundary -> Place -> Place -> Place -> Place
