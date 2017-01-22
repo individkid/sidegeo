@@ -214,8 +214,7 @@ mapFoldF f (c,a) b = let
 -- return how many regions a space of given dimension and boundaries has
 defineLinear :: Int -> Int -> Int
 defineLinear n m
- | n < 0 = undefined
- | m < 0 = undefined
+ | (n < 0) || (m < 0) = undefined
  | (n == 0) || (m == 0) = 1
  | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
 
@@ -246,8 +245,7 @@ isLinear n s
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
 isLinearF n s b = let
- fixed = map (\(x,y) -> y - x) (enumerate (welldef b))
- subspace = foldl' (\x y -> subSpace y x) s fixed
+ subspace = range (foldl' (\x y -> subPlace y x) (enumerate s) b)
  regions = regionsOfSpace subspace
  boundaries = boundariesOfSpace subspace
  in (defineLinear n (length boundaries)) == (length regions)
