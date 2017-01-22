@@ -527,19 +527,19 @@ allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
 
+-- return space that is section of given spaces
+anySubSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place,g)
+anySubSection g p q n s t u = let
+ (res,h) = subSection g p q n s t u
+ in choose h res
+
 subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> ([Place],g)
 subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (((p+q)-n) < 0) = undefined
  | p == n = ([t],g)
  | q == n = ([s],g)
- | (length u) <= ((p+q)-n) = let
-  boundaries = domain u
-  regions = power (length boundaries)
-  in ([map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate boundaries)], g)
- | ((p+q)-n) == 0 = let
-  sDual = placeToDual s
-  tDual = placeToDual t
-  in (map (\x -> dualToPlace [x]) (sDual +\ tDual),g)
+ | (length u) <= ((p+q)-n) = ([superSpaceK (domain u)], g)
+ | ((p+q)-n) == 0 = (superSpaceJ s t, g)
  | ((p+q)-n) > 0 = let
   -- antisection of subsection in subspace
   (b,h) = choose g (domain u)
@@ -549,31 +549,21 @@ subSection g p q n s t u
   (sub,i) = subSection h p q n sSub tSub uSub
   uSect = sectionPlace b u
   (sect,j) = mapFold (\x y -> subSection x (p+q-n) (n-1) n y uSect uSub) i sub
-  in (concat (map (\(x,y) -> concat (map (\z -> superSpaceG b z y) x)) (zip sect sub)), j)
+  zipped = concat (map (\(x,y) -> map (\z -> (z,y)) x) (zip sect sub))
+  in (concat (map (\(x,y) -> superSpaceG b x y) zipped), j)
  | otherwise = undefined
 
 -- return superspace with given spaces as subspaces
 anySuperSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place,g)
 anySuperSpace g n s t = let
- (u,h) = superSpace g n s t
- in choose h u
+ (res,h) = superSpace g n s t
+ in choose h res
 
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> ([Place], g)
 superSpace g n s t
  | n < 0 = undefined
- | n == 0 = let
-  sLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) s)
-  sRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) s)
-  tLeft = domain (filter (\(_,[y,_]) -> (length y) /= 0) t)
-  tRight = domain (filter (\(_,[_,z]) -> (length z) /= 0) t)
-  lBounds = sLeft ++ tLeft
-  rBounds = sRight ++ tRight
-  left = map (\x -> (x,[[0],[]])) lBounds
-  right = map (\x -> (x,[[],[0]])) rBounds
-  in ([left ++ right], g)
- | (length boundaries) <= n = let
-  regions = power (length boundaries)
-  in ([map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate boundaries)], g)
+ | n == 0 = (superSpaceJ s t, g)
+ | (length boundaries) <= n = ([superSpaceK boundaries], g)
  | (length tOnly) == 0 = ([s],g)
  | (length sOnly) == 0 = ([t],g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
@@ -583,7 +573,7 @@ superSpace g n s t
   sub = subPlace b s -- sub contains c
   (sup,i) = superSpace h n sub t -- sup contains c, but not b
   (res,j) = mapFold (\x y -> superSpace x n s y) i sup -- s and sup contain c, so recursion has larger shared, but still not proper
-  in (superSpaceJ n s t (concat res), j)
+  in (superSpaceI n s t (concat res), j)
  | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
  | ((length shared) == 0) && ((length sBounds) > 1) = let
   -- recurse to conjoint case
@@ -591,7 +581,7 @@ superSpace g n s t
   single = singlePlace bound
   (space,i) = superSpace h n t single
   (result,j) = mapFold (\x y -> superSpace x n s y) i space
-  in (superSpaceJ n s t (concat result), j)
+  in (superSpaceI n s t (concat result), j)
  | (n >= 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   -- antisection of antisection of subsection
   [sBound] = sOnly
@@ -601,20 +591,20 @@ superSpace g n s t
   sub = subPlace sBound s
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
   sSup = concat (map (\x -> superSpaceG tBound x sSect) sect)
-  in (superSpaceJ n s t (concat (map (\x -> superSpaceG sBound x t) sSup)), h)
+  in (superSpaceI n s t (concat (map (\x -> superSpaceG sBound x t) sSup)), h)
  | (n >= 3) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   -- recurse with one fewer boundary
   (bound,h) = choose g shared
   (sub,i) = superSpaceH h n bound s t
   (sect,j) = superSpace i (n-1) (sectionPlace bound s) (sectionPlace bound t)
-  in (superSpaceJ n s t (concat [superSpaceG bound x y | x <- sect, y <- sub]), j)
+  in (superSpaceI n s t (concat [superSpaceG bound x y | x <- sect, y <- sub]), j)
  | (n == 2) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
   (sub,i) = superSpaceH h n bound s t
   sect = map (\x -> superSpaceF bound sBound tBound s t x) sub
-  in (superSpaceJ n s t (concat (map (\(x,y) -> superSpaceG bound x y) (zip sect sub))), i)
+  in (superSpaceI n s t (concat (map (\(x,y) -> superSpaceG bound x y) (zip sect sub))), i)
  | (n == 1) && ((length sOnly) == 1) && ((length tOnly) == 1) = let
   (bound,h) = choose g shared
   [sBound] = sOnly
@@ -622,7 +612,7 @@ superSpace g n s t
   double = doublePlace sBound tBound
   cross = map (\x -> crossPlace (subPlace sBound s) (degenPlace x double)) (regionsOfSpace (range double))
   sup = map (\x -> superSpaceF bound sBound tBound s t x) cross
-  in (superSpaceJ n s t sup, h)
+  in (superSpaceI n s t sup, h)
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
@@ -638,20 +628,33 @@ superSpaceF bound sBound tBound s t u = let
  tSect = placeToDual (crossPlace (sectionPlace bound t) (singlePlace sBound))
  in dualToPlace (sSect +\ tSect +\ (placeToDual u))
 
+-- return both divided spaces
 superSpaceG :: Boundary -> Place -> Place -> [Place]
 superSpaceG bound sect sub = let
  result = dividePlace bound sect sub
  in [result, mirrorPlace bound result]
 
+-- return superspaces of subspaces
 superSpaceH :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Place -> Place -> ([Place],g)
 superSpaceH g n b s t = superSpace g n (subPlace b s) (subPlace b t)
 
--- regions indicated by boundary as bit position
-superSpaceI :: Int -> [Pack] -> Int -> [Region]
-superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+-- return given that are linear and contain both given
+superSpaceI :: Int -> Place -> Place -> [Place] -> [Place]
+superSpaceI n s t u = filter (\x -> (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)) u
 
-superSpaceJ :: Int -> Place -> Place -> [Place] -> [Place]
-superSpaceJ n s t u = filter (\x -> (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)) u
+-- return spaces from given regions
+superSpaceJ :: Place -> Place -> [Place]
+superSpaceJ s t = map (\x -> dualToPlace [x]) ((placeToDual s) +\ (placeToDual t))
+
+-- all possible regions
+superSpaceK :: [Boundary] -> Place
+superSpaceK b = let
+ regions = power (length b)
+ in map (\(x,y) -> (y, [superSpaceL x regions 0, superSpaceL x regions 1])) (enumerate b)
+
+-- regions indicated by boundary as bit position
+superSpaceL :: Int -> [Pack] -> Int -> [Region]
+superSpaceL b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 --
 -- between symbolic and numeric
