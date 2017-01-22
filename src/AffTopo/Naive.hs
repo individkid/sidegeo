@@ -431,12 +431,13 @@ crossPlace s t = zip ((domain s) Prelude.++ (domain t)) (crossSpace (range s) (r
 mirrorPlace :: Boundary -> Place -> Place
 mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
--- subset is subspace in dual representation
+-- each dual region of superspace is superset of some dual region of subspace
 isSubPlace :: Place -> Place -> Bool
-isSubPlace s t = let
- sDual = placeToDual s
- tDual = placeToDual t
- in (length ((sort sDual) \\ (sort tDual))) == 0
+isSubPlace s t = all (\x -> any (\y -> (length ((sort y) \\ (sort x))) == 0) (placeToDual s)) (placeToDual t)
+
+-- subset is section space in dual representation
+isSectionPlace :: Place -> Place -> Bool
+isSectionPlace s t = (length ((sort (placeToDual s)) \\ (sort (placeToDual t)))) == 0
 
 -- representation converter
 placeToDual :: Place -> Dual
@@ -536,11 +537,11 @@ anySubSection g p q n s t u = let
 subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> ([Place],g)
 subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (((p+q)-n) < 0) = undefined
- | p == n = ([t],g)
- | q == n = ([s],g)
- | (length u) <= ((p+q)-n) = ([superSpaceK (domain u)], g)
- | ((p+q)-n) == 0 = (superSpaceJ s t, g)
- | ((p+q)-n) > 0 = let
+ | (p == n) && (subSectionF s t u) = ([t],g)
+ | (q == n) && (subSectionF s t u) = ([s],g)
+ | (((p+q)-n) == 0) && (subSectionF s t u) = (superSpaceJ s t, g)
+ | ((length u) <= ((p+q)-n)) && (subSectionF s t u) = ([superSpaceK (domain u)], g)
+ | (((p+q)-n) > 0) && (subSectionF s t u) = let
   -- antisection of subsection in subspace
   (b,h) = choose g (domain u)
   sSub = subPlace b s
@@ -553,6 +554,9 @@ subSection g p q n s t u
   in (concat (map (\(x,y) -> superSpaceG b x y) zipped), j)
  | otherwise = undefined
 
+subSectionF :: Place -> Place -> Place -> Bool
+subSectionF s t u = (isSectionPlace s u) && (isSectionPlace t u)
+
 -- return superspace with given spaces as subspaces
 anySuperSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place,g)
 anySuperSpace g n s t = let
@@ -562,10 +566,10 @@ anySuperSpace g n s t = let
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> ([Place], g)
 superSpace g n s t
  | n < 0 = undefined
- | n == 0 = (superSpaceJ s t, g)
- | (length boundaries) <= n = ([superSpaceK boundaries], g)
  | (length tOnly) == 0 = ([s],g)
  | (length sOnly) == 0 = ([t],g)
+ | n == 0 = (superSpaceJ s t, g)
+ | (length boundaries) <= n = ([superSpaceK boundaries], g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
   -- s and t are not proper, meaning each has a boundary not in the other
