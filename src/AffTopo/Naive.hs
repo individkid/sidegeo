@@ -556,14 +556,15 @@ allSpacesH [] done = done
 subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place,g)
 subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (dim < 0) = undefined
- | (p == n) && valid = (t,g)
- | (q == n) && valid = (s,g)
- | (dim == 0) && valid = let
+ | not (subSectionF s t u) = undefined
+ | p == n = (t,g)
+ | q == n = (s,g)
+ | dim == 0 = let
   sDual = sortDual (placeToDual s)
   tDual = sortDual (placeToDual t)
   in choose g (map (\x -> dualToPlace [x]) (sDual +\ tDual))
- | (dim >= (length u)) && valid = (superSpaceH (domain u), g)
- | (dim > 0) && valid = let
+ | dim >= (length u) = (superSpaceH (domain u), g)
+ | dim > 0 = let
   (b,h) = choose g (domain u)
   sSub = subPlace b s
   tSub = subPlace b t
@@ -574,7 +575,6 @@ subSection g p q n s t u
   in choose j (filter (\x -> subSectionF s t x) (superSpaceF b sect sub))
  | otherwise = undefined where
  dim = (p+q)-n
- valid = subSectionF s t u
 
 subSectionF :: Place -> Place -> Place -> Bool
 subSectionF s t u = (isSectionPlace u s) && (isSectionPlace u t)
@@ -583,25 +583,22 @@ subSectionF s t u = (isSectionPlace u s) && (isSectionPlace u t)
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | n < 0 = undefined
- | ((length tOnly) == 0) && valid = (s,g)
- | ((length sOnly) == 0) && valid = (t,g)
- | (n == 0) && valid = let
-  sDual = placeToDual s
-  tDual = placeToDual t
-  dual = map (\(x,y) -> map (\(p,q) -> p ++ q) (zip x y)) (zip sDual tDual)
-  in (dualToPlace dual, g)
- | ((length bounds) <= n) && valid = (superSpaceH bounds, g)
- | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) && valid = superSpace g n t s
- | ((length shared) > 0) && ((length sOnly) > 1) && valid = let
+ | (n == 0) && (shared /= bounds) = undefined
+ | not (isSubPlace place (superSpaceJ tOnly t)) = undefined
+ | (length tOnly) == 0 = (s,g)
+ | (length sOnly) == 0 = (t,g)
+ | (length bounds) <= n = (superSpaceH bounds, g)
+ | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
+ | ((length shared) > 0) && ((length sOnly) > 1) = let
   (bound,h) = choose g sOnly
   (sup,i) = superSpace h n (subPlace bound s) t
   in superSpace i n s sup
- | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) && valid = superSpace g n t s
- | ((length shared) == 0) && ((length sBounds) > 1) && valid = let
+ | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
+ | ((length shared) == 0) && ((length sBounds) > 1) = let
   (bound,h) = choose g sBounds
   (sup,i) = superSpace h n t (singlePlace bound)
   in superSpace i n s sup
- | (n >= 2) && ((length sOnly) == 1) && ((length tOnly) == 1) && valid = let
+ | ((length sOnly) == 1) && ((length tOnly) == 1) && (n >= 2) = let
   [sBound] = sOnly
   [tBound] = tOnly
   sSect = sectionPlace sBound s
@@ -610,7 +607,7 @@ superSpace g n s t
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
   sSup = superSpaceF tBound sect sSect
   in superSpaceG h n s t (concat (map (\x -> superSpaceF sBound x t) sSup))
- | (n == 1) && ((length sOnly) == 1) && ((length tOnly) == 1) && valid = let
+ | ((length sOnly) == 1) && ((length tOnly) == 1) && (n == 1) = let
   (bound,h) = choose g shared
   [sBound] = sOnly
   [tBound] = tOnly
@@ -628,7 +625,6 @@ superSpace g n s t
  shared = sBounds +\ tBounds
  bounds = sBounds ++ tBounds
  place = superSpaceJ sOnly s
- valid = place == (superSpaceJ tOnly t)
 
 -- return both divided spaces
 superSpaceF :: Boundary -> Place -> Place -> [Place]
@@ -651,11 +647,9 @@ superSpaceH b = let
 superSpaceI :: Int -> [Pack] -> Int -> [Region]
 superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
--- sort repeated subPlace without mirroring
+-- repeated subPlace without mirroring
 superSpaceJ :: [Boundary] -> Place -> Place
-superSpaceJ b s = let
- t = foldl' (\x y -> subPlace y x) s b
- in sort (map (\(x,y) -> (x, map (\z -> sort z) y)) t)
+superSpaceJ b s = foldl' (\x y -> subPlace y x) s b
 
 --
 -- between symbolic and numeric
