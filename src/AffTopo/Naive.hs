@@ -577,7 +577,7 @@ subSection g p q n s t u
  valid = subSectionF s t u
 
 subSectionF :: Place -> Place -> Place -> Bool
-subSectionF s t u = (isSectionPlace s u) && (isSectionPlace t u)
+subSectionF s t u = (isSectionPlace u s) && (isSectionPlace u t)
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
@@ -639,8 +639,8 @@ superSpaceF bound sect sub = let
 -- return given that are linear and contain both given
 superSpaceG :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
 superSpaceG g n s t u = let
- res = filter (\x -> (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)) u
- in choose g res
+ result = filter (\x -> (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)) u
+ in choose g result
 -- all possible regions
 superSpaceH :: [Boundary] -> Place
 superSpaceH b = let
