@@ -100,6 +100,9 @@ unplace a b = (take a b) Prelude.++ (drop (a+1) b)
 replace :: Int -> a -> [a] -> [a]
 replace a b c = (take a c) Prelude.++ (b : (drop (a+1) c))
 
+emplace :: Int -> a -> [a] -> [a]
+emplace a b c = (take a c) Prelude.++ (b : (drop a c))
+
 choose :: Random.RandomGen g => g -> [a] -> (a, g)
 choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in ((a !! b), h)
 
@@ -196,16 +199,6 @@ findMaybeF :: (b -> Maybe a) -> [b] -> Maybe a -> Maybe a
 findMaybeF _ _ (Just b) = Just b
 findMaybeF f (b:c) Nothing = findMaybeF f c (f b)
 findMaybeF _ [] Nothing = Nothing
-
-mapFold :: (a -> b -> (c,a)) -> a -> [b] -> ([c],a)
-mapFold f a b = let
- (c,d) = foldl' (mapFoldF f) ([],a) b
- in (reverse c, d)
-
-mapFoldF :: (a -> b -> (c,a)) -> ([c],a) -> b -> ([c],a)
-mapFoldF f (c,a) b = let
- (d,e) = f a b
- in (d:c,e)
 
 --
 -- now for something new
@@ -357,9 +350,6 @@ migrateSpaceF b r (a,s)
 sortSpace :: Space -> Space
 sortSpace s = sort (map (\x -> sort (map (\y -> sort y) x)) s)
 
-sortPlace :: Place -> Place
-sortPlace s = sort (map (\(x,y) -> (x, sort (map (\z -> sort z) y))) s)
-
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
 subSpace b s = let
@@ -385,8 +375,8 @@ sectionPlace b s = let
  in zip (unplace index bounds) (sectionSpace index space)
 
 -- return space with given regions divided by new boundary
-divideSpace :: [Region] -> Space -> Space
-divideSpace figure space = let
+divideSpace :: Boundary -> [Region] -> Space -> Space
+divideSpace bound figure space = let
  whole = regionsOfSpace space
  ground = whole \\ figure
  halfspace = divideSpaceF ground space
@@ -394,7 +384,7 @@ divideSpace figure space = let
  mapping = zip figure duplicates
  withDups = map (map (divideSpaceG mapping figure)) space
  newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
- in withDups Prelude.++ [newBoundary]
+ in emplace bound newBoundary withDups
 
 divideSpaceF :: [Region] -> Space -> [Region]
 divideSpaceF [] _ = []
@@ -407,43 +397,34 @@ divideSpaceG m a b = (image (a +\ b) m) ++ b
 dividePlace :: Boundary -> Place -> Place -> Place
 dividePlace b s t = let
  space = range t
- boundaries = (domain t) Prelude.++ [b]
+ boundaries = b : (domain t)
  regions = image (placeToDual s) (zip (placeToDual t) (regionsOfSpace space))
- in zip boundaries (divideSpace regions space)
+ in zip boundaries (divideSpace 0 regions space)
 
 -- space of just one boundary, assumed more than zero dimensions
-singleSpace :: Space
-singleSpace = [[[0],[1]]]
-
 singlePlace :: Boundary -> Place
-singlePlace b = zip [b] singleSpace
+singlePlace b = zip [b] [[[0],[1]]]
 
 -- space of two boundaries, assumed more than one dimension
-doubleSpace :: Space
-doubleSpace = [[[0,1],[2,3]],[[0,2],[1,3]]]
-
 doublePlace :: Boundary -> Boundary -> Place
-doublePlace a b = zip [a,b] doubleSpace
+doublePlace a b = zip [a,b] [[[0,1],[2,3]],[[0,2],[1,3]]]
 
 -- remove region to produce non-linear space
-degenSpace :: Region -> Space -> Space
-degenSpace r s = map (\x -> map (\y -> filter (\z -> z /= r) y) x) s
-
 degenPlace :: Region -> Place -> Place
 degenPlace r s = map (\(b,x) -> (b, map (\y -> filter (\z -> z /= r) y) x) ) s
 
 -- divide regions by space into non-linear space
-crossSpace :: Space -> Space -> Space
-crossSpace s t = let
- sRegions = regionsOfSpace s
- tRegions = regionsOfSpace t
- regions = enumerate [(x,y) | x <- sRegions, y <- tRegions]
- left = map (\x -> map (\y -> preimage [(p,q) | p <- y, q <- tRegions] regions) x) s
- right = map (\x -> map (\y -> preimage [(p,q) | p <- sRegions, q <- y] regions) x) t
- in left ++ right
-
 crossPlace :: Place -> Place -> Place
-crossPlace s t = zip ((domain s) Prelude.++ (domain t)) (crossSpace (range s) (range t))
+crossPlace s t = let
+ sRange = range s
+ tRange = range t
+ sRegions = regionsOfSpace sRange
+ tRegions = regionsOfSpace tRange
+ regions = enumerate [(x,y) | x <- sRegions, y <- tRegions]
+ left = map (\x -> map (\y -> preimage [(p,q) | p <- y, q <- tRegions] regions) x) sRange
+ right = map (\x -> map (\y -> preimage [(p,q) | p <- sRegions, q <- y] regions) x) tRange
+ cross = left ++ right
+ in zip ((domain s) Prelude.++ (domain t)) cross
 
 -- reverse sidedness of given boundary
 mirrorPlace :: Boundary -> Place -> Place
@@ -454,7 +435,14 @@ isSubPlace :: Place -> Place -> Bool
 isSubPlace s t = let
  sDual = sortDual (placeToDual s)
  tDual = sortDual (placeToDual t)
- in all (\x -> any (\y -> (length (y \\ x)) == 0) sDual) tDual
+ -- each sub-region of the super-space belongs in some super-region of the sub-space
+ -- x is the sub-region, y is the super-region, so y is a subset of x
+ belong = all (\x -> any (\y -> (length (y \\ x)) == 0) sDual) tDual
+ -- each super-region of the sub-space contains some sub-region of the super-space
+ -- x is the super-region, y is the sub-region, so x is a subset of y
+ -- TODO this is overkill (i think) because belong and linearity of given imply contain
+ contain = all (\x -> any (\y -> (length (x \\ y)) == 0) tDual) sDual
+ in belong && contain
 
 -- subset is section space in dual representation
 isSectionPlace :: Place -> Place -> Bool
@@ -466,8 +454,9 @@ isSectionPlace s t = let
 -- representation converter
 placeToDual :: Place -> Dual
 placeToDual s = let
- left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) s)) (regionsOfSpace (range s))
- right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) (regionsOfSpace (range s))
+ regions = regionsOfSpace (range s)
+ left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) s)) regions
+ right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) regions
  in map (\(x,y) -> [x,y]) (zip left right)
 
 -- representation converter
@@ -479,14 +468,13 @@ dualToPlace s = let
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
  in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
 
--- preserve sidedness, but halves are sets
-sortDualRegion :: [[Boundary]] -> [[Boundary]]
-sortDualRegion [a,b] = [sort a,sort b]
-sortDualRegion _ = undefined
-
 -- differs from sortSpace in that it does no mirroring
 sortDual :: Dual -> Dual
-sortDual a = sort (map sortDualRegion a)
+sortDual a = sort (map sortDualF a)
+
+sortDualF :: [[Boundary]] -> [[Boundary]]
+sortDualF [a,b] = [sort a,sort b]
+sortDualF _ = undefined
 
 -- same as oppositeOfRegion of singleton
 hopDualRegion :: Boundary -> [[Boundary]] -> [[Boundary]]
@@ -773,7 +761,7 @@ spaceFromPlanes n w
 
 spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
 spaceFromPlanesF n m w
- | m <= n = divideSpace (regionsOfSpace space) space
+ | m <= n = divideSpace 0 (regionsOfSpace space) space
  | otherwise = let
   -- find intersection points on plane to add
   vertices = map welldef (subsets (n - 1) (indices (m - 1)))
@@ -785,7 +773,7 @@ spaceFromPlanesF n m w
   -- convert sides to regions to divide
   divided = welldef (map (\x -> regionOfSides x space) sides)
   -- return space with found regions divided by new boundary
-  in divideSpace divided space where
+  in divideSpace 0 divided space where
  planes = take (m - 1) w
  space = spaceFromPlanes n planes
 
