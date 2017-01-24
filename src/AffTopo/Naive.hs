@@ -269,7 +269,7 @@ vertexWrtBoundary b r s = regionWrtBoundary b (head (attachedRegions r s)) s
 
 -- return per boundary side of region
 sidesOfRegion :: Region -> Space -> [Side]
-sidesOfRegion r s = map (\a -> boolToInt (member r (a !! 1))) s
+sidesOfRegion r s = map (\b -> regionWrtBoundary b r s) (boundariesOfSpace s)
 
 -- return region from per boundary side
 regionOfSides :: [Side] -> Space -> Region
@@ -515,12 +515,6 @@ minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) ==
 minEquivI :: Int -> [[(Int, Bool)]]
 minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
 
-superSpaceX :: [Boundary] -> [Place] -> String
-superSpaceX b s = let
- boundaries = map domain s
- place = map (\z -> map (\[_,x] -> boolsToPack (map (\y -> member y x) b)) (placeToDual z)) s
- in show (zip boundaries place)
-
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
@@ -562,17 +556,22 @@ subSection g p q n s t u
  | dim == 0 = let
   sDual = sortDual (placeToDual s)
   tDual = sortDual (placeToDual t)
-  in choose g (map (\x -> dualToPlace [x]) (sDual +\ tDual))
+  res = map (\x -> dualToPlace [x]) (sDual +\ tDual)
+  in choose g res
  | dim >= (length u) = (superSpaceH (domain u), g)
  | dim > 0 = let
-  (b,h) = choose g (domain u)
+  bounds = domain u
+  (b,h) = choose g bounds
   sSub = subPlace b s
   tSub = subPlace b t
   uSub = subPlace b u
   (sub,i) = subSection h p q n sSub tSub uSub
   uSect = sectionPlace b u
   (sect,j) = subSection i dim (n-1) n sub uSect uSub
-  in choose j (filter (\x -> subSectionF s t x) (superSpaceF b sect sub))
+  anti = superSpaceF b sect sub
+  valid = filter (\x -> subSectionF s t x) anti
+  res = filter (\x -> (length x) == (length bounds)) valid
+  in choose j res
  | otherwise = undefined where
  dim = (p+q)-n
 
