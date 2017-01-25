@@ -33,7 +33,6 @@ main = putStrLn (show (find (\(_,x) -> x /= Nothing) [
   ,("meta",meta)
   ,("single",single)
   ,("rename",rename)
-  ,("equivalent",equivalent)
   ,("section",section)
   ,("outside",outside)
   ,("special",special)
@@ -170,15 +169,6 @@ rename = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpace 0 y x) [] [[0],[0,1],[0,1,2]])
  regions = map (\x -> x * 3) (indices (defineLinear 2 4))
  in rvb (\x -> rv ((regionsOfSpace (equivSpace regions x)) == regions) (show (x,regions))) spaces
-
-equivalent :: Maybe String
-equivalent = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpace 0 y x) [] [[0],[0,1],[0,1,2]])
- linear = defineLinear 2 4
- perms = permutations (indices linear)
- equivs = map (\(a,b) -> (a, equivSpace b a)) (zip spaces perms)
- in (rvb (\x -> rv ((minEquivH (length x) (minEquivF x)) == x) (show x)) spaces) `rva`
-  (rvb (\(a,b) -> rv ((minEquiv a) == (minEquiv b)) (show (a,b))) equivs)
 
 section :: Maybe String
 section = let

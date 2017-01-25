@@ -346,10 +346,6 @@ migrateSpaceF b r (a,s)
  | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
  | otherwise = s
 
--- return sorted equivalent
-sortSpace :: Space -> Space
-sortSpace s = sort (map (\x -> sort (map (\y -> sort y) x)) s)
-
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Space -> Space
 subSpace b s = let
@@ -468,7 +464,7 @@ dualToPlace s = let
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
  in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
 
--- differs from sortSpace in that it does no mirroring
+-- does no mirroring
 sortDual :: Dual -> Dual
 sortDual a = sort (map sortDualF a)
 
@@ -489,19 +485,19 @@ hopDualRegion _ _ = undefined
 
 -- optimize this
 minEquiv :: Space -> Space
-minEquiv s = head (sort (map (\x -> sortSpace (minEquivH (length s) (minEquivG x (minEquivF s)))) (minEquivI (length s))))
+minEquiv s = let
+ bounds = boundariesOfSpace s
+ place = zip bounds s
+ dual = placeToDual place
+ perms = permutations bounds
+ equivs = map (\x -> minEquivF x dual) perms
+ equiv = minimum equivs
+ in range (dualToPlace equiv)
 
-minEquivF :: Space -> [Pack]
-minEquivF s = map (\x -> foldl' (\y (p,q) -> if member x (q !! 0) then setBit y p else y) 0 (enumerate s)) (regionsOfSpace s)
-
-minEquivG :: [(Int, Bool)] -> [Pack] -> [Pack]
-minEquivG a b = sort (map (\p -> foldl' (\q (x,(y,z)) -> if (belongs x p) /= z then setBit q y else q) 0 (enumerate a)) b)
-
-minEquivH :: Int -> [Pack] -> Space
-minEquivH m s = map (\x -> map (\y -> domain (filter (\(_,z) -> (belongs x z) == y) (enumerate s))) [True,False]) (indices m)
-
-minEquivI :: Int -> [[(Int, Bool)]]
-minEquivI m = [zip a b | a <- permutations (indices m), b <- (polybools m)]
+minEquivF :: [Boundary] -> Dual -> Dual
+minEquivF b s = let
+ perm = map (\x -> map (\y -> map (\z -> fromJust (elemIndex z b)) y) x) s
+ in sort (map (\x -> sort (map (\y -> sort y) x)) perm)
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
@@ -593,7 +589,8 @@ superSpace g n s t
   sub = subPlace sBound s
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
   sSup = superSpaceF tBound sect sSect
-  in superSpaceG h n s t (concat (map (\x -> superSpaceF sBound x t) sSup))
+  tSup = concat (map (\x -> superSpaceF sBound x t) sSup)
+  in superSpaceG h n s t tSup
  | ((length sOnly) == 1) && ((length tOnly) == 1) && (n == 1) = let
   (bound,h) = choose g shared
   [sBound] = sOnly
