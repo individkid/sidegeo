@@ -200,6 +200,10 @@ findMaybeF _ _ (Just b) = Just b
 findMaybeF f (b:c) Nothing = findMaybeF f c (f b)
 findMaybeF _ [] Nothing = Nothing
 
+-- modify function taking single to function taking list
+fold' :: (a -> b -> b) -> [a] -> b -> b
+fold' f b s = foldl' (\x y -> f y x) s b
+
 --
 -- now for something new
 --
@@ -238,7 +242,7 @@ isLinear n s
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
 isLinearF n s b = let
- subspace = range (foldl' (\x y -> subPlace y x) (enumerate s) b)
+ subspace = range (foldl' (\x y -> subSpace y x) (enumerate s) b)
  regions = regionsOfSpace subspace
  boundaries = boundariesOfSpace subspace
  in (defineLinear n (length boundaries)) == (length regions)
@@ -347,28 +351,28 @@ migrateSpaceF b r (a,s)
  | otherwise = s
 
 -- return space of same dimension with given boundary removed
-subSpace :: Boundary -> Space -> Space
+subSpace :: Boundary -> Place -> Place
 subSpace b s = let
+ (bounds,space) = unzip s
+ index = fromJust (elemIndex b bounds)
+ in zip (unplace index bounds) (subSpaceF index space)
+
+subSpaceF :: Boundary -> Space -> Space
+subSpaceF b s = let
  regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
  in map (map (\x -> x \\ regions)) (unplace b s)
 
-subPlace :: Boundary -> Place -> Place
-subPlace b s = let
+-- return space of less dimension homeomorphic to regions attached to given boundary
+sectionSpace :: Boundary -> Place -> Place
+sectionSpace b s = let
  (bounds,space) = unzip s
  index = fromJust (elemIndex b bounds)
- in zip (unplace index bounds) (subSpace index space)
+ in zip (unplace index bounds) (sectionSpaceF index space)
 
--- return space of one less dimension homeomorphic to regions attached to given boundary
-sectionSpace :: Boundary -> Space -> Space
-sectionSpace b s = let
+sectionSpaceF :: Boundary -> Space -> Space
+sectionSpaceF b s = let
  regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
  in map (map (\x -> x +\ regions)) (unplace b s)
-
-sectionPlace :: Boundary -> Place -> Place
-sectionPlace b s = let
- (bounds,space) = unzip s
- index = fromJust (elemIndex b bounds)
- in zip (unplace index bounds) (sectionSpace index space)
 
 -- return space with given regions divided by new boundary
 divideSpace :: Boundary -> [Region] -> Space -> Space
@@ -414,10 +418,6 @@ subSimplex b = let
 -- regions indicated by boundary as bit position
 subSimplexF :: Int -> [Pack] -> Int -> [Region]
 subSimplexF b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
-
--- repeated subPlace without mirroring
-lsubPlace :: [Boundary] -> Place -> Place
-lsubPlace b s = foldl' (\x y -> subPlace y x) s b
 
 -- remove region to produce non-linear space
 degenPlace :: Region -> Place -> Place
@@ -557,11 +557,11 @@ subSection g p q n s t u
  | dim > 0 = let
   bounds = domain u
   (b,h) = choose g bounds
-  sSub = subPlace b s
-  tSub = subPlace b t
-  uSub = subPlace b u
+  sSub = subSpace b s
+  tSub = subSpace b t
+  uSub = subSpace b u
   (sub,i) = subSection h p q n sSub tSub uSub
-  uSect = sectionPlace b u
+  uSect = sectionSpace b u
   (sect,j) = subSection i dim (n-1) n sub uSect uSub
   anti = superSpaceH b sect sub
   valid = filter (\x -> subSectionF s t x) anti
@@ -578,14 +578,14 @@ superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Pla
 superSpace g n s t
  | n < 0 = undefined
  | (n == 0) && (shared /= bounds) = undefined
- | not (isEquPlace place (lsubPlace tOnly t)) = undefined
+ | not (isEquPlace place ((fold' subSpace) tOnly t)) = undefined
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
  | (length bounds) <= n = (subSimplex bounds, g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
   (bound,h) = choose g sOnly
-  (sup,i) = superSpace h n (subPlace bound s) t
+  (sup,i) = superSpace h n (subSpace bound s) t
   in superSpace i n s sup
  | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
  | ((length shared) == 0) && ((length sBounds) > 1) = let
@@ -603,24 +603,23 @@ superSpace g n s t
  sOnly = sBounds \\ tBounds
  shared = sBounds +\ tBounds
  bounds = sBounds ++ tBounds
- place = lsubPlace sOnly s
+ place = (fold' subSpace) sOnly s
 
 -- cases where sOnly and tOnly are singletons
 superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Boundary -> [Boundary] -> Place -> Place -> Place -> (Place, g)
 superSpaceF g n sBound tBound shared s t place
  | ((length shared) > 0) && (n >= 2) = let
-  sSect = sectionPlace sBound s
-  tSect = sectionPlace tBound t
-  sub = subPlace sBound s
-  (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
+  sSect = sectionSpace sBound s
+  tSect = sectionSpace tBound t
+  (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
   sSup = superSpaceH tBound sect sSect
   tSup = concat (map (\x -> superSpaceH sBound x t) sSup)
   in superSpaceI h n s t tSup
  | ((length shared) > 0) && (n == 1) = let
   (bound,h) = choose g shared
   cross = superSpaceG sBound tBound place
-  sSect = crossPlace (sectionPlace bound s) (singlePlace tBound)
-  tSect = crossPlace (sectionPlace bound t) (singlePlace sBound)
+  sSect = crossPlace (sectionSpace bound s) (singlePlace tBound)
+  tSect = crossPlace (sectionSpace bound t) (singlePlace sBound)
   sup = map (\x -> dualToPlace ((placeToDual sSect) +\ (placeToDual tSect) +\ (placeToDual x))) cross
   in superSpaceI h n s t sup
  | ((length shared) == 0) && (n == 1) = let
@@ -805,7 +804,7 @@ planesFromSpace n s
  | otherwise = let
   -- recurse with one fewer boundary
   bound = m - 1
-  space = subSpace bound s
+  space = subSpaceF bound s
   planes = planesFromSpace n space
   -- find vertices
   vertices = subsets n (indices (length space))
