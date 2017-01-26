@@ -472,13 +472,6 @@ sortDualF :: [[Boundary]] -> [[Boundary]]
 sortDualF [a,b] = [sort a,sort b]
 sortDualF _ = undefined
 
--- same as oppositeOfRegion of singleton
-hopDualRegion :: Boundary -> [[Boundary]] -> [[Boundary]]
-hopDualRegion b [l,r]
- | member b l = [remove b l, insert b r]
- | otherwise = [insert b l, remove b r]
-hopDualRegion _ _ = undefined
-
 --
 -- so far so simple
 --
@@ -542,7 +535,7 @@ subSection g p q n s t u
   tDual = sortDual (placeToDual t)
   res = map (\x -> dualToPlace [x]) (sDual +\ tDual)
   in choose g res
- | dim >= (length u) = (superSpaceH (domain u), g)
+ | dim >= (length u) = (superSpaceJ (domain u), g)
  | dim > 0 = let
   bounds = domain u
   (b,h) = choose g bounds
@@ -552,7 +545,7 @@ subSection g p q n s t u
   (sub,i) = subSection h p q n sSub tSub uSub
   uSect = sectionPlace b u
   (sect,j) = subSection i dim (n-1) n sub uSect uSub
-  anti = superSpaceF b sect sub
+  anti = superSpaceH b sect sub
   valid = filter (\x -> subSectionF s t x) anti
   res = filter (\x -> (length x) == (length bounds)) valid
   in choose j res
@@ -567,10 +560,10 @@ superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Pla
 superSpace g n s t
  | n < 0 = undefined
  | (n == 0) && (shared /= bounds) = undefined
- | not (isSubPlace place (superSpaceJ tOnly t)) = undefined
+ | not (isSubPlace place (superSpaceL tOnly t)) = undefined
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
- | (length bounds) <= n = (superSpaceH bounds, g)
+ | (length bounds) <= n = (superSpaceJ bounds, g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
   (bound,h) = choose g sOnly
@@ -579,28 +572,12 @@ superSpace g n s t
  | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
  | ((length shared) == 0) && ((length sBounds) > 1) = let
   (bound,h) = choose g sBounds
-  (sup,i) = superSpace h n t (singlePlace bound)
+  (sup,i) = superSpace h n (singlePlace bound) t
   in superSpace i n s sup
- | ((length sOnly) == 1) && ((length tOnly) == 1) && (n >= 2) = let
+ | ((length sOnly) == 1) && ((length tOnly) == 1) = let
   [sBound] = sOnly
   [tBound] = tOnly
-  sSect = sectionPlace sBound s
-  tSect = sectionPlace tBound t
-  sub = subPlace sBound s
-  (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
-  sSup = superSpaceF tBound sect sSect
-  tSup = concat (map (\x -> superSpaceF sBound x t) sSup)
-  in superSpaceG h n s t tSup
- | ((length sOnly) == 1) && ((length tOnly) == 1) && (n == 1) = let
-  (bound,h) = choose g shared
-  [sBound] = sOnly
-  [tBound] = tOnly
-  double = doublePlace sBound tBound
-  cross = map (\x -> crossPlace place (degenPlace x double)) (regionsOfSpace (range double))
-  sSect = crossPlace (sectionPlace bound s) (singlePlace tBound)
-  tSect = crossPlace (sectionPlace bound t) (singlePlace sBound)
-  sup = map (\x -> dualToPlace ((placeToDual sSect) +\ (placeToDual tSect) +\ (placeToDual x))) cross
-  in superSpaceG h n s t sup
+  in superSpaceF g n sBound tBound shared s t place
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
@@ -608,32 +585,62 @@ superSpace g n s t
  sOnly = sBounds \\ tBounds
  shared = sBounds +\ tBounds
  bounds = sBounds ++ tBounds
- place = superSpaceJ sOnly s
+ place = superSpaceL sOnly s
+
+-- cases where sOnly and tOnly are singletons
+superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Boundary -> [Boundary] -> Place -> Place -> Place -> (Place, g)
+superSpaceF g n sBound tBound shared s t place
+ | ((length shared) > 0) && (n >= 2) = let
+  sSect = sectionPlace sBound s
+  tSect = sectionPlace tBound t
+  sub = subPlace sBound s
+  (sect,h) = subSection g (n-1) (n-1) n sSect tSect sub
+  sSup = superSpaceH tBound sect sSect
+  tSup = concat (map (\x -> superSpaceH sBound x t) sSup)
+  in superSpaceI h n s t tSup
+ | ((length shared) > 0) && (n == 1) = let
+  (bound,h) = choose g shared
+  cross = superSpaceG sBound tBound place
+  sSect = crossPlace (sectionPlace bound s) (singlePlace tBound)
+  tSect = crossPlace (sectionPlace bound t) (singlePlace sBound)
+  sup = map (\x -> dualToPlace ((placeToDual sSect) +\ (placeToDual tSect) +\ (placeToDual x))) cross
+  in superSpaceI h n s t sup
+ | ((length shared) == 0) && (n == 1) = let
+  cross = superSpaceG sBound tBound place
+  in superSpaceI g n s t cross
+ | otherwise = undefined
+
+-- each one dimensional three region space
+superSpaceG :: Boundary -> Boundary -> Place -> [Place]
+superSpaceG sBound tBound place = let
+ double = doublePlace sBound tBound
+ in map (\x -> crossPlace place (degenPlace x double)) (regionsOfSpace (range double))
 
 -- return both divided spaces
-superSpaceF :: Boundary -> Place -> Place -> [Place]
-superSpaceF bound sect sub = let
+superSpaceH :: Boundary -> Place -> Place -> [Place]
+superSpaceH bound sect sub = let
  result = dividePlace bound sect sub
  in [result, mirrorPlace bound result]
 
--- return given that are linear and contain both given
-superSpaceG :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
-superSpaceG g n s t u = let
+-- return given that is linear and contains both given
+superSpaceI :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
+superSpaceI g n s t u = let
  result = filter (\x -> (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)) u
  in choose g result
+
 -- all possible regions
-superSpaceH :: [Boundary] -> Place
-superSpaceH b = let
+superSpaceJ :: [Boundary] -> Place
+superSpaceJ b = let
  regions = power (length b)
- in map (\(x,y) -> (y, [superSpaceI x regions 0, superSpaceI x regions 1])) (enumerate b)
+ in map (\(x,y) -> (y, [superSpaceK x regions 0, superSpaceK x regions 1])) (enumerate b)
 
 -- regions indicated by boundary as bit position
-superSpaceI :: Int -> [Pack] -> Int -> [Region]
-superSpaceI b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+superSpaceK :: Int -> [Pack] -> Int -> [Region]
+superSpaceK b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 -- repeated subPlace without mirroring
-superSpaceJ :: [Boundary] -> Place -> Place
-superSpaceJ b s = foldl' (\x y -> subPlace y x) s b
+superSpaceL :: [Boundary] -> Place -> Place
+superSpaceL b s = foldl' (\x y -> subPlace y x) s b
 
 --
 -- between symbolic and numeric
