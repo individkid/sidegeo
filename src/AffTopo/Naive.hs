@@ -405,6 +405,20 @@ singlePlace b = zip [b] [[[0],[1]]]
 doublePlace :: Boundary -> Boundary -> Place
 doublePlace a b = zip [a,b] [[[0,1],[2,3]],[[0,2],[1,3]]]
 
+-- all possible regions
+subSimplex :: [Boundary] -> Place
+subSimplex b = let
+ regions = power (length b)
+ in map (\(x,y) -> (y, [subSimplexF x regions 0, subSimplexF x regions 1])) (enumerate b)
+
+-- regions indicated by boundary as bit position
+subSimplexF :: Int -> [Pack] -> Int -> [Region]
+subSimplexF b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+
+-- repeated subPlace without mirroring
+lsubPlace :: [Boundary] -> Place -> Place
+lsubPlace b s = foldl' (\x y -> subPlace y x) s b
+
 -- remove region to produce non-linear space
 degenPlace :: Region -> Place -> Place
 degenPlace r s = map (\(b,x) -> (b, map (\y -> filter (\z -> z /= r) y) x) ) s
@@ -425,6 +439,10 @@ crossPlace s t = let
 -- reverse sidedness of given boundary
 mirrorPlace :: Boundary -> Place -> Place
 mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
+
+-- subplace of each other
+isEquPlace :: Place -> Place -> Bool
+isEquPlace s t = (isSubPlace s t) && (isSubPlace t s)
 
 -- each dual region of superspace is superset of some dual region of subspace
 isSubPlace :: Place -> Place -> Bool
@@ -535,7 +553,7 @@ subSection g p q n s t u
   tDual = sortDual (placeToDual t)
   res = map (\x -> dualToPlace [x]) (sDual +\ tDual)
   in choose g res
- | dim >= (length u) = (superSpaceJ (domain u), g)
+ | dim >= (length u) = (subSimplex (domain u), g)
  | dim > 0 = let
   bounds = domain u
   (b,h) = choose g bounds
@@ -560,10 +578,10 @@ superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Pla
 superSpace g n s t
  | n < 0 = undefined
  | (n == 0) && (shared /= bounds) = undefined
- | not (isSubPlace place (superSpaceL tOnly t)) = undefined
+ | not (isEquPlace place (lsubPlace tOnly t)) = undefined
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
- | (length bounds) <= n = (superSpaceJ bounds, g)
+ | (length bounds) <= n = (subSimplex bounds, g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
   (bound,h) = choose g sOnly
@@ -585,7 +603,7 @@ superSpace g n s t
  sOnly = sBounds \\ tBounds
  shared = sBounds +\ tBounds
  bounds = sBounds ++ tBounds
- place = superSpaceL sOnly s
+ place = lsubPlace sOnly s
 
 -- cases where sOnly and tOnly are singletons
 superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Boundary -> [Boundary] -> Place -> Place -> Place -> (Place, g)
@@ -627,20 +645,6 @@ superSpaceI :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Pl
 superSpaceI g n s t u = let
  result = filter (\x -> (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)) u
  in choose g result
-
--- all possible regions
-superSpaceJ :: [Boundary] -> Place
-superSpaceJ b = let
- regions = power (length b)
- in map (\(x,y) -> (y, [superSpaceK x regions 0, superSpaceK x regions 1])) (enumerate b)
-
--- regions indicated by boundary as bit position
-superSpaceK :: Int -> [Pack] -> Int -> [Region]
-superSpaceK b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
-
--- repeated subPlace without mirroring
-superSpaceL :: [Boundary] -> Place -> Place
-superSpaceL b s = foldl' (\x y -> subPlace y x) s b
 
 --
 -- between symbolic and numeric
