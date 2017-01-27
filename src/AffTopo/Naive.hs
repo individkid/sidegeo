@@ -51,6 +51,12 @@ packToBools a b = map (\x -> belongs x b) (indices a)
 boolsToPack :: [Bool] -> Pack
 boolsToPack a = fold' (\x y -> (shift y 1) + (boolToInt x)) a 0
 
+intsToPack :: [Int] -> Pack
+intsToPack a = fold' (\x y -> y + (shift 1 x)) (welldef a) 0
+
+intsToBools :: Int -> [Int] -> [Bool]
+intsToBools a b = packToBools a (intsToPack b)
+
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
 power a = indices (shift 1 a)
@@ -203,6 +209,10 @@ findMaybeF _ [] Nothing = Nothing
 fold' :: (a -> b -> b) -> [a] -> b -> b
 fold' = flip . foldr
 
+-- when condition is fst and result is snd
+filterByFst :: [(Bool,a)] -> [a]
+filterByFst = (map snd) . (filter fst)
+
 --
 -- now for something new
 --
@@ -315,20 +325,14 @@ attachedFacets n r s = let
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
 attachedRegions b s = let
- attached r = (length (b \\ (attachedBoundaries r s))) == 0
- opposite r = oppositeOfRegionExists b r s
- in filter (\r -> (attached r) && (opposite r)) (regionsOfSpace s)
-
-attachedRegionsF :: [Boundary] -> Space -> [Region]
-attachedRegionsF b s = let
  sect = fold' sectionSpaceF b s
  regions = map (\x -> sidesOfRegion x sect) (regionsOfSpace sect)
  sub = map (\x -> (x, sidesOfRegion x s)) (regionsOfSpace s)
- super = map (\(x,y) -> (x, attachedRegionsG b y)) sub
+ super = map (\(x,y) -> (x, attachedRegionsF b y)) sub
  in preimage regions super
 
-attachedRegionsG :: [Boundary] -> [Side] -> [Side]
-attachedRegionsG b s = range (filter (\(x,_) -> member x b) (enumerate s))
+attachedRegionsF :: [Boundary] -> [Side] -> [Side]
+attachedRegionsF b s = filterByFst (zip (intsToBools (length s) b) s)
 
 -- return corresponding outside region
 outsideOfRegion :: Region -> Space -> Region
