@@ -49,7 +49,7 @@ packToBools :: Int -> Pack -> [Bool]
 packToBools a b = map (\x -> belongs x b) (indices a)
 
 boolsToPack :: [Bool] -> Pack
-boolsToPack a = foldr (\x y -> (shift y 1) + (boolToInt x)) 0 a
+boolsToPack a = fold' (\x y -> (shift y 1) + (boolToInt x)) a 0
 
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
@@ -73,7 +73,7 @@ subsets n (a:b) = (map (a:) (subsets (n-1) b)) Prelude.++ (subsets n b)
 
 -- those indexed by list of indices
 subset :: [Int] -> [a] -> [a]
-subset p a = foldr (\q b -> (a !! q) : b) [] p
+subset p a = fold' (\q b -> (a !! q) : b) p []
 
 -- make elements sorted and unique
 welldef :: Ord a => [a] -> [a]
@@ -175,7 +175,7 @@ generateF f a todo done
 
 -- given number of firsts found by calling function on second
 catalyze :: (g -> (a,g)) -> g -> Int -> ([a],g)
-catalyze f g n = foldl' (\(a,h) _ -> catalyzeF f h a) ([],g) ((indices n)::[Int])
+catalyze f g n = fold' (\_ (a,h) -> catalyzeF f h a) ((indices n)::[Int]) ([],g)
 
 catalyzeF :: (g -> (a,g)) -> g -> [a] -> ([a],g)
 catalyzeF f g a = let (b,h) = f g in (b:a,h)
@@ -202,7 +202,7 @@ findMaybeF _ [] Nothing = Nothing
 
 -- modify function taking single to function taking list
 fold' :: (a -> b -> b) -> [a] -> b -> b
-fold' f b s = foldl' (\x y -> f y x) s b
+fold' = flip . foldr
 
 --
 -- now for something new
@@ -237,12 +237,12 @@ isLinear n s
  | otherwise = let
   boundaries = boundariesOfSpace s
   sizes = indices (length boundaries)
-  subs = foldl' (\a b -> a Prelude.++ (subsets b boundaries)) [] sizes
-  in foldl' (\a b -> a && (isLinearF n s b)) True subs
+  subs = fold' (\a b -> b Prelude.++ (subsets a boundaries)) sizes []
+  in fold' (\a b -> b && (isLinearF n s a)) subs True
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
 isLinearF n s b = let
- subspace = range (foldl' (\x y -> subSpace y x) (enumerate s) b)
+ subspace = range (fold' subSpace b (enumerate s))
  regions = regionsOfSpace subspace
  boundaries = boundariesOfSpace subspace
  in (defineLinear n (length boundaries)) == (length regions)
@@ -277,11 +277,11 @@ regionOfSidesExists :: [Side] -> Space -> Bool
 regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 
 regionOfSidesF :: [Side] -> Space -> [Region]
-regionOfSidesF r s = foldl' (\a (b,c) -> a +\ (c !! b)) (regionsOfSpace s) (zip r s)
+regionOfSidesF r s = fold' (\(b,c) a -> a +\ (c !! b)) (zip r s) (regionsOfSpace s)
 
 -- return sidedness with boundaries reversed
 oppositeOfSides :: [Boundary] -> [Side] -> [Side]
-oppositeOfSides b r = foldl' (\x y -> replace y (notOfInt (x !! y)) x) r b
+oppositeOfSides b r = fold' (\x y -> replace x (notOfInt (y !! x)) y) b r
 
 -- return neighbor region of given region wrt given boundaries
 oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
@@ -328,18 +328,6 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
--- return whether local opposite of given region is empty
--- and all of its oppositeOf regions are non-empty
-canMigrate :: Region -> Space -> Bool
-canMigrate r s = let
- boundaries = attachedBoundaries r s
- sides = sidesOfRegion r s
- opposite = oppositeOfSides boundaries sides
- empty = not (regionOfSidesExists opposite s)
- neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
- exists = map (\a -> regionOfSidesExists a s) neighbors
- in foldl' (\a b -> a && b) empty exists
-
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
 migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (enumerate s)
@@ -349,6 +337,18 @@ migrateSpaceF b r (a,s)
  | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
  | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
  | otherwise = s
+
+-- return whether local opposite of given region is empty
+-- and all of its oppositeOf regions are non-empty
+migrateSpaceExists :: Region -> Space -> Bool
+migrateSpaceExists r s = let
+ boundaries = attachedBoundaries r s
+ sides = sidesOfRegion r s
+ opposite = oppositeOfSides boundaries sides
+ empty = not (regionOfSidesExists opposite s)
+ neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
+ exists = map (\a -> regionOfSidesExists a s) neighbors
+ in fold' (\a b -> a && b) exists empty
 
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Place -> Place
@@ -374,58 +374,58 @@ sectionSpaceF b s = let
  regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
  in map (map (\x -> x +\ regions)) (unplace b s)
 
--- return space with given regions divided by new boundary
-divideSpace :: Boundary -> [Region] -> Space -> Space
-divideSpace bound figure space = let
- whole = regionsOfSpace space
- ground = whole \\ figure
- halfspace = divideSpaceF ground space
- duplicates = holes (length figure) whole
- mapping = zip figure duplicates
- withDups = map (map (divideSpaceG mapping figure)) space
- newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
- in emplace bound newBoundary withDups
-
-divideSpaceF :: [Region] -> Space -> [Region]
-divideSpaceF [] _ = []
-divideSpaceF r s = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
-
-divideSpaceG :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
-divideSpaceG m a b = (image (a +\ b) m) ++ b
-
 -- divide regions of s in t by new boundary b
-dividePlace :: Boundary -> Place -> Place -> Place
-dividePlace b s t = let
+divideSpace :: Boundary -> Place -> Place -> Place
+divideSpace b s t = let
  space = range t
  boundaries = b : (domain t)
  regions = image (placeToDual s) (zip (placeToDual t) (regionsOfSpace space))
- in zip boundaries (divideSpace 0 regions space)
+ in zip boundaries (divideSpaceF 0 regions space)
+
+-- return space with given regions divided by new boundary
+divideSpaceF :: Boundary -> [Region] -> Space -> Space
+divideSpaceF bound figure space = let
+ whole = regionsOfSpace space
+ ground = whole \\ figure
+ halfspace = divideSpaceG ground space
+ duplicates = holes (length figure) whole
+ mapping = zip figure duplicates
+ withDups = map (map (divideSpaceH mapping figure)) space
+ newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
+ in emplace bound newBoundary withDups
+
+divideSpaceG :: [Region] -> Space -> [Region]
+divideSpaceG [] _ = []
+divideSpaceG r s = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
+
+divideSpaceH :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
+divideSpaceH m a b = (image (a +\ b) m) ++ b
 
 -- space of just one boundary, assumed more than zero dimensions
-singlePlace :: Boundary -> Place
-singlePlace b = zip [b] [[[0],[1]]]
+singleSpace :: Boundary -> Place
+singleSpace b = zip [b] [[[0],[1]]]
 
 -- space of two boundaries, assumed more than one dimension
-doublePlace :: Boundary -> Boundary -> Place
-doublePlace a b = zip [a,b] [[[0,1],[2,3]],[[0,2],[1,3]]]
+doubleSpace :: Boundary -> Boundary -> Place
+doubleSpace a b = zip [a,b] [[[0,1],[2,3]],[[0,2],[1,3]]]
 
 -- all possible regions
-subSimplex :: [Boundary] -> Place
-subSimplex b = let
+powerSpace :: [Boundary] -> Place
+powerSpace b = let
  regions = power (length b)
- in map (\(x,y) -> (y, [subSimplexF x regions 0, subSimplexF x regions 1])) (enumerate b)
+ in map (\(x,y) -> (y, [powerSpaceF x regions 0, powerSpaceF x regions 1])) (enumerate b)
 
 -- regions indicated by boundary as bit position
-subSimplexF :: Int -> [Pack] -> Int -> [Region]
-subSimplexF b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+powerSpaceF :: Int -> [Pack] -> Int -> [Region]
+powerSpaceF b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 -- remove region to produce non-linear space
-degenPlace :: Region -> Place -> Place
-degenPlace r s = map (\(b,x) -> (b, map (\y -> filter (\z -> z /= r) y) x) ) s
+degenSpace :: Region -> Place -> Place
+degenSpace r s = map (\(b,x) -> (b, map (\y -> filter (\z -> z /= r) y) x) ) s
 
 -- divide regions by space into non-linear space
-crossPlace :: Place -> Place -> Place
-crossPlace s t = let
+crossSpace :: Place -> Place -> Place
+crossSpace s t = let
  sRange = range s
  tRange = range t
  sRegions = regionsOfSpace sRange
@@ -437,18 +437,18 @@ crossPlace s t = let
  in zip ((domain s) Prelude.++ (domain t)) cross
 
 -- reverse sidedness of given boundary
-mirrorPlace :: Boundary -> Place -> Place
-mirrorPlace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
+mirrorSpace :: Boundary -> Place -> Place
+mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
 -- subplace of each other
-isEquPlace :: Place -> Place -> Bool
-isEquPlace s t = (isSubPlace s t) && (isSubPlace t s)
+isEquSpace :: Place -> Place -> Bool
+isEquSpace s t = (isSubSpace s t) && (isSubSpace t s)
 
 -- each dual region of superspace is superset of some dual region of subspace
-isSubPlace :: Place -> Place -> Bool
-isSubPlace s t = let
- sDual = sortDual (placeToDual s)
- tDual = sortDual (placeToDual t)
+isSubSpace :: Place -> Place -> Bool
+isSubSpace s t = let
+ sDual = sortSpace (placeToDual s)
+ tDual = sortSpace (placeToDual t)
  -- each sub-region of the super-space belongs in some super-region of the sub-space
  -- x is the sub-region, y is the super-region, so y is a subset of x
  belong = all (\x -> any (\y -> (length (y \\ x)) == 0) sDual) tDual
@@ -459,11 +459,19 @@ isSubPlace s t = let
  in belong && contain
 
 -- subset is section space in dual representation
-isSectionPlace :: Place -> Place -> Bool
-isSectionPlace s t = let
- sDual = sortDual (placeToDual s)
- tDual = sortDual (placeToDual t)
+isSectionSpace :: Place -> Place -> Bool
+isSectionSpace s t = let
+ sDual = sortSpace (placeToDual s)
+ tDual = sortSpace (placeToDual t)
  in (length (sDual \\ tDual)) == 0
+
+-- does no mirroring
+sortSpace :: Dual -> Dual
+sortSpace a = sort (map sortSpaceF a)
+
+sortSpaceF :: [[Boundary]] -> [[Boundary]]
+sortSpaceF [a,b] = [sort a,sort b]
+sortSpaceF _ = undefined
 
 -- representation converter
 placeToDual :: Place -> Dual
@@ -482,13 +490,8 @@ dualToPlace s = let
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
  in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
 
--- does no mirroring
-sortDual :: Dual -> Dual
-sortDual a = sort (map sortDualF a)
-
-sortDualF :: [[Boundary]] -> [[Boundary]]
-sortDualF [a,b] = [sort a,sort b]
-sortDualF _ = undefined
+-- spaceToPlace = enumerate
+-- placeToSpace = range
 
 --
 -- so far so simple
@@ -513,7 +516,7 @@ minEquivF b s = let
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- (s,h) = foldl' (\(x,y) z -> superSpace y n x (singlePlace z)) ([],g) (indices m)
+ (s,h) = fold' (\z (x,y) -> superSpace y n x (singleSpace z)) (indices m) ([],g)
  in (range s, h)
 
 -- return all linear spaces given any space to start
@@ -526,7 +529,7 @@ allSpaces s = let
 -- migrate all possible from current space, and go on to next todo
 allSpacesF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
 allSpacesF (p:q) s todo done
- | canMigrate p s = allSpacesG q s (minEquiv (migrateSpace p s)) todo done
+ | migrateSpaceExists p s = allSpacesG q s (minEquiv (migrateSpace p s)) todo done
  | otherwise = allSpacesF q s todo done
 allSpacesF [] s todo done = allSpacesH todo (insert s done)
 
@@ -549,11 +552,11 @@ subSection g p q n s t u
  | p == n = (t,g)
  | q == n = (s,g)
  | dim == 0 = let
-  sDual = sortDual (placeToDual s)
-  tDual = sortDual (placeToDual t)
+  sDual = sortSpace (placeToDual s)
+  tDual = sortSpace (placeToDual t)
   res = map (\x -> dualToPlace [x]) (sDual +\ tDual)
   in choose g res
- | dim >= (length u) = (subSimplex (domain u), g)
+ | dim >= (length u) = (powerSpace (domain u), g)
  | dim > 0 = let
   bounds = domain u
   (b,h) = choose g bounds
@@ -571,17 +574,17 @@ subSection g p q n s t u
  dim = (p+q)-n
 
 subSectionF :: Place -> Place -> Place -> Bool
-subSectionF s t u = (isSectionPlace u s) && (isSectionPlace u t)
+subSectionF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
 -- return superspace with given spaces as subspaces
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | n < 0 = undefined
  | (n == 0) && (shared /= bounds) = undefined
- | not (isEquPlace place ((fold' subSpace) tOnly t)) = undefined
+ | not (isEquSpace place ((fold' subSpace) tOnly t)) = undefined
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
- | (length bounds) <= n = (subSimplex bounds, g)
+ | (length bounds) <= n = (powerSpace bounds, g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
   (bound,h) = choose g sOnly
@@ -590,7 +593,7 @@ superSpace g n s t
  | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
  | ((length shared) == 0) && ((length sBounds) > 1) = let
   (bound,h) = choose g sBounds
-  (sup,i) = superSpace h n (singlePlace bound) t
+  (sup,i) = superSpace h n (singleSpace bound) t
   in superSpace i n s sup
  | ((length sOnly) == 1) && ((length tOnly) == 1) = let
   [sBound] = sOnly
@@ -618,8 +621,8 @@ superSpaceF g n sBound tBound shared s t place
  | ((length shared) > 0) && (n == 1) = let
   (bound,h) = choose g shared
   cross = superSpaceG sBound tBound place
-  sSect = crossPlace (sectionSpace bound s) (singlePlace tBound)
-  tSect = crossPlace (sectionSpace bound t) (singlePlace sBound)
+  sSect = crossSpace (sectionSpace bound s) (singleSpace tBound)
+  tSect = crossSpace (sectionSpace bound t) (singleSpace sBound)
   sup = map (\x -> dualToPlace ((placeToDual sSect) +\ (placeToDual tSect) +\ (placeToDual x))) cross
   in superSpaceI h n s t sup
  | ((length shared) == 0) && (n == 1) = let
@@ -630,19 +633,19 @@ superSpaceF g n sBound tBound shared s t place
 -- each one dimensional three region space
 superSpaceG :: Boundary -> Boundary -> Place -> [Place]
 superSpaceG sBound tBound place = let
- double = doublePlace sBound tBound
- in map (\x -> crossPlace place (degenPlace x double)) (regionsOfSpace (range double))
+ double = doubleSpace sBound tBound
+ in map (\x -> crossSpace place (degenSpace x double)) (regionsOfSpace (range double))
 
 -- return both divided spaces
 superSpaceH :: Boundary -> Place -> Place -> [Place]
 superSpaceH bound sect sub = let
- result = dividePlace bound sect sub
- in [result, mirrorPlace bound result]
+ result = divideSpace bound sect sub
+ in [result, mirrorSpace bound result]
 
 -- return given that is linear and contains both given
 superSpaceI :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
 superSpaceI g n s t u = let
- result = filter (\x -> (isLinear n (range x)) && (isSubPlace x s) && (isSubPlace x t)) u
+ result = filter (\x -> (isLinear n (range x)) && (isSubSpace x s) && (isSubSpace x t)) u
  in choose g result
 
 --
@@ -768,7 +771,7 @@ spaceFromPlanes n w
 
 spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
 spaceFromPlanesF n m w
- | m <= n = divideSpace 0 (regionsOfSpace space) space
+ | m <= n = divideSpaceF 0 (regionsOfSpace space) space
  | otherwise = let
   -- find intersection points on plane to add
   vertices = map welldef (subsets (n - 1) (indices (m - 1)))
@@ -780,7 +783,7 @@ spaceFromPlanesF n m w
   -- convert sides to regions to divide
   divided = welldef (map (\x -> regionOfSides x space) sides)
   -- return space with found regions divided by new boundary
-  in divideSpace 0 divided space where
+  in divideSpaceF 0 divided space where
  planes = take (m - 1) w
  space = spaceFromPlanes n planes
 
@@ -835,7 +838,7 @@ planesFromSpaceH n region space planes = let
  corners = attachedFacets n region space
  points = map (\x -> fromJust (intersectPlanes n (subset x planes))) corners
  zero = Matrix.fromList (replicate n 0.0)
- in Matrix.scale (1.0 / (fromIntegral (length points))) (foldl' (\x y -> Matrix.add x y) zero points)
+ in Matrix.scale (1.0 / (fromIntegral (length points))) (fold' (\x y -> Matrix.add x y) points zero)
 
  -- find point some distance out on line to coregion from other outside
 planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point -> Point
