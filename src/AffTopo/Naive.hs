@@ -181,14 +181,13 @@ catalyzeF :: (g -> (a,g)) -> g -> [a] -> ([a],g)
 catalyzeF f g a = let (b,h) = f g in (b:a,h)
 
 -- call function for new result until it returns Nothing
-foldMaybe :: (a -> b -> Maybe a) -> a -> [b] -> a
-foldMaybe f a (b:c) = foldMaybeF f a c (f a b)
-foldMaybe _ a [] = a
+foldMaybe :: (a -> b -> Maybe b) -> [a] -> b -> b
+foldMaybe f (a:b) c = foldMaybeF f b c (f a c)
+foldMaybe _ [] c = c
 
-foldMaybeF :: (a -> b -> Maybe a) -> a -> [b] -> Maybe a -> a
-foldMaybeF f _ (c:d) (Just b) = foldMaybeF f b d (f b c)
-foldMaybeF _ a _ Nothing = a
-foldMaybeF _ a [] _ = a
+foldMaybeF :: (a -> b -> Maybe b) -> [a] -> b -> Maybe b -> b
+foldMaybeF f (a:b) _ (Just c) = foldMaybeF f b c (f a c)
+foldMaybeF _ _ a _ = a
 
 -- call function until it returns Just
 findMaybe :: (b -> Maybe a) -> [b] -> Maybe a
@@ -319,6 +318,17 @@ attachedRegions b s = let
  attached r = (length (b \\ (attachedBoundaries r s))) == 0
  opposite r = oppositeOfRegionExists b r s
  in filter (\r -> (attached r) && (opposite r)) (regionsOfSpace s)
+
+attachedRegionsF :: [Boundary] -> Space -> [Region]
+attachedRegionsF b s = let
+ sect = fold' sectionSpaceF b s
+ regions = map (\x -> sidesOfRegion x sect) (regionsOfSpace sect)
+ sub = map (\x -> (x, sidesOfRegion x s)) (regionsOfSpace s)
+ super = map (\(x,y) -> (x, attachedRegionsG b y)) sub
+ in preimage regions super
+
+attachedRegionsG :: [Boundary] -> [Side] -> [Side]
+attachedRegionsG b s = range (filter (\(x,_) -> member x b) (enumerate s))
 
 -- return corresponding outside region
 outsideOfRegion :: Region -> Space -> Region
@@ -657,9 +667,9 @@ randomPlanes :: Random.RandomGen g => g -> Int -> Int -> ([Plane], g)
 randomPlanes g n m = let
  (a,h) = catalyze (\i -> Random.randomR (-100.0,100.0) i) g (n * m)
  b = Matrix.toColumns (Matrix.matrix m a)
- tweak = [randomPlanesH0 n m, randomPlanesH1 n m, randomPlanesH2 n m]
- func x = findMaybe (\y -> y x)
- in foldMaybe func (b,h) (repeat tweak)
+ tweak = repeat [randomPlanesH0 n m, randomPlanesH1 n m, randomPlanesH2 n m]
+ func x y = findMaybe (\z -> z y) x
+ in foldMaybe func tweak (b,h)
 
 -- tweak some plane from tuple found by testing intersection of planes in tuple
 randomPlanesF :: Random.RandomGen g => ((Plane, g) -> (Plane, g)) -> (Maybe Point -> Bool) -> (Int -> Int) ->

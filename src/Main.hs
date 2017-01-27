@@ -131,9 +131,9 @@ higher = let
  ints = catalyze func1 5 5
  doubles :: ([Double],Int)
  doubles = catalyze func1 5 5
- func2 x y = if y < 5 then Just (y:x) else Nothing
+ func2 x y = if x < 5 then Just (x:y) else Nothing
  justs :: [Int]
- justs = foldMaybe func2 [] [0,1..]
+ justs = foldMaybe func2 [0,1..] []
  in (rvb (\x -> rv ((length x) == (length a)) (show ("unsorted0",x,a))) unsorted0) `rva`
   (rvb (\x -> rv ((length x) == 1) (show ("unsorted1",x))) unsorted1) `rva`
   (rvb (\x -> rv ((length x) == (length c)) (show ("unsorted2",x,c))) unsorted2) `rva`
