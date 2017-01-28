@@ -414,15 +414,14 @@ divideSpaceH m a b = (image (a +\ b) m) ++ b
 -- return regions in second given homeomorphic to regions in first given
 takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
- shared = (domain s) +\ (domain t)
- sSub = map (\x -> sidesOfRegion x (range s)) (regionsOfSpace (range s))
- sSup = map (\x -> takeRegionsF shared x) sSub
- tSub = map (\x -> (x, sidesOfRegion x (range t))) (regionsOfSpace (range t))
- tSup = map (\(x,y) -> (x, takeRegionsF shared y)) tSub
- in preimage sSup tSup
-
-takeRegionsF :: [Boundary] -> [Side] -> [Side]
-takeRegionsF b s = filterByFst (zip (intsToBools (length s) b) s)
+ (sBounds,sSpace) = unzip s
+ (tBounds,tSpace) = unzip t
+ shared = sBounds +\ tBounds
+ sSub = map (\x -> sort (zip sBounds (sidesOfRegion x sSpace))) (regionsOfSpace sSpace)
+ sSup = map (\x -> image shared x) sSub -- assume image is not welldef
+ tSub = map (\x -> (x, sort (zip tBounds (sidesOfRegion x tSpace)))) (regionsOfSpace tSpace)
+ tSup = map (\(x,y) -> (x, image shared y)) tSub -- assume image is not welldef
+ in preimage sSup tSup -- welldef because tSup is because regionsOfSpace is because tSpace is
 
 -- space of just one boundary, assumed more than zero dimensions
 singleSpace :: Boundary -> Place
