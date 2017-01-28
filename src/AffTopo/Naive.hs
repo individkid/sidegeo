@@ -54,8 +54,14 @@ boolsToPack a = fold' (\x y -> (shift y 1) + (boolToInt x)) a 0
 intsToPack :: [Int] -> Pack
 intsToPack a = fold' (\x y -> y + (shift 1 x)) (welldef a) 0
 
+packToInts :: Pack -> [Int]
+packToInts a = filter (\x -> belongs x a) (indices (fromJust (find (a<) (iterate (1+) 0))))
+
 intsToBools :: Int -> [Int] -> [Bool]
 intsToBools a b = packToBools a (intsToPack b)
+
+boolsToInts :: [Bool] -> [Int]
+boolsToInts a = packToInts (boolsToPack a)
 
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
@@ -116,7 +122,7 @@ holes :: Ord a => Num a => Int -> [a] -> [a]
 holes n a = take n ((indices ((length a)+n)) \\ a)
 
 indices :: Num a => Int -> [a]
-indices n = take n (iterate (\a -> a + 1) 0)
+indices n = take n (iterate (1+) 0)
 
 enumerate :: [a] -> [(Int,a)]
 enumerate a = zip (indices (length a)) a
@@ -263,7 +269,7 @@ boundariesOfSpace s = indices (length s)
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
 regionsOfSpace [] = [0]
-regionsOfSpace s = welldef (concat (head s))
+regionsOfSpace s = concat (head s)
 
 -- side of region with regard to boundary
 regionWrtBoundary :: Boundary -> Region -> Space -> Side
@@ -325,14 +331,8 @@ attachedFacets n r s = let
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
 attachedRegions b s = let
- sect = fold' sectionSpaceF b s
- regions = map (\x -> sidesOfRegion x sect) (regionsOfSpace sect)
- sub = map (\x -> (x, sidesOfRegion x s)) (regionsOfSpace s)
- super = map (\(x,y) -> (x, attachedRegionsF b y)) sub
- in preimage regions super
-
-attachedRegionsF :: [Boundary] -> [Side] -> [Side]
-attachedRegionsF b s = filterByFst (zip (intsToBools (length s) b) s)
+ space = enumerate s
+ in takeRegions (fold' sectionSpace b space) space
 
 -- return corresponding outside region
 outsideOfRegion :: Region -> Space -> Region
@@ -390,11 +390,7 @@ sectionSpaceF b s = let
 
 -- divide regions of s in t by new boundary b
 divideSpace :: Boundary -> Place -> Place -> Place
-divideSpace b s t = let
- space = range t
- boundaries = b : (domain t)
- regions = image (placeToDual s) (zip (placeToDual t) (regionsOfSpace space))
- in zip boundaries (divideSpaceF 0 regions space)
+divideSpace b s t = zip (b : (domain t)) (divideSpaceF 0 (takeRegions s t) (range t))
 
 -- return space with given regions divided by new boundary
 divideSpaceF :: Boundary -> [Region] -> Space -> Space
@@ -414,6 +410,19 @@ divideSpaceG r s = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
 
 divideSpaceH :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
 divideSpaceH m a b = (image (a +\ b) m) ++ b
+
+-- return regions in second given homeomorphic to regions in first given
+takeRegions :: Place -> Place -> [Region]
+takeRegions s t = let
+ shared = (domain s) +\ (domain t)
+ sSub = map (\x -> sidesOfRegion x (range s)) (regionsOfSpace (range s))
+ sSup = map (\x -> takeRegionsF shared x) sSub
+ tSub = map (\x -> (x, sidesOfRegion x (range t))) (regionsOfSpace (range t))
+ tSup = map (\(x,y) -> (x, takeRegionsF shared y)) tSub
+ in preimage sSup tSup
+
+takeRegionsF :: [Boundary] -> [Side] -> [Side]
+takeRegionsF b s = filterByFst (zip (intsToBools (length s) b) s)
 
 -- space of just one boundary, assumed more than zero dimensions
 singleSpace :: Boundary -> Place
@@ -498,7 +507,7 @@ placeToDual s = let
 -- representation converter
 dualToPlace :: Dual -> Place
 dualToPlace s = let
- bounds = welldef (concat (head s))
+ bounds = concat (head s)
  plual = enumerate s
  left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) plual)) bounds
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
