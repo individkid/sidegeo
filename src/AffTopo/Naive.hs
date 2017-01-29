@@ -19,6 +19,7 @@ module AffTopo.Naive where
 import Prelude hiding ((++))
 import qualified Prelude
 import Data.List hiding ((\\), (++), insert)
+import qualified Data.List
 import Data.Maybe
 import Data.Bits
 import qualified Numeric.LinearAlgebra as Matrix
@@ -139,40 +140,20 @@ domain m = map (\(x,_) -> x) m
 range :: [(a,b)] -> [b]
 range m = map (\(_,y) -> y) m
 
--- ++ and \\ are as in Data.List except welldef
+-- ++ is as in Data.List except welldef
 (++) :: Ord a => [a] -> [a] -> [a]
-a ++ b = setF a b True True True
+a ++ b = a Prelude.++ (b \\ a)
 
 (\\) :: Ord a => [a] -> [a] -> [a]
-a \\ b = setF a b True False False
+a \\ b = a Data.List.\\ b
 
 -- intersection
 (+\) :: Ord a => [a] -> [a] -> [a]
-a +\ b = setF a b False True False
+a +\ b = a \\ (b \\ a)
 
 -- symmetric difference
 (\+) :: Ord a => [a] -> [a] -> [a]
-a \+ b = setF a b True False True
-
-setF :: Ord a => [a] -> [a] -> Bool -> Bool -> Bool -> [a]
-setF a b c d e = setG (welldef a) (welldef b) c d e
-
-setG :: Ord a => [a] -> [a] -> Bool -> Bool -> Bool -> [a]
-setG a _ True True False = a
-setG _ b False True True = b
-setG _ _ False False False = []
-setG a b False False True = (b \\ a)
-setG (a:s) (b:t) c d e
- | a < b = setH c a (setG s (b:t) c d e)
- | a == b = setH d a (setG s t c d e)
- | otherwise = setH e b (setG (a:s) t c d e)
-setG (a:s) [] c d e = setH c a (setG s [] c d e)
-setG [] (b:t) c d e = setH e b (setG [] t c d e)
-setG [] [] _ _ _ = []
-
-setH :: Bool -> a -> [a] -> [a]
-setH True a b = a:b
-setH False _ b = b
+a \+ b = (a ++ b) \\ (a +\ b)
 
 -- all connected by given function to given start
 generate :: Ord a => (a -> [a]) -> a -> [a]
@@ -214,10 +195,6 @@ findMaybeF _ [] Nothing = Nothing
 -- modify function taking single to function taking list
 fold' :: (a -> b -> b) -> [a] -> b -> b
 fold' = flip . foldr
-
--- when condition is fst and result is snd
-filterByFst :: [(Bool,a)] -> [a]
-filterByFst = (map snd) . (filter fst)
 
 --
 -- now for something new
@@ -390,11 +367,11 @@ sectionSpaceF b s = let
 
 -- divide regions of s in t by new boundary b
 divideSpace :: Boundary -> Place -> Place -> Place
-divideSpace b s t = zip (b : (domain t)) (divideSpaceF 0 (takeRegions s t) (range t))
+divideSpace b s t = zip (b : (domain t)) (divideSpaceF (takeRegions s t) (range t))
 
 -- return space with given regions divided by new boundary
-divideSpaceF :: Boundary -> [Region] -> Space -> Space
-divideSpaceF bound figure space = let
+divideSpaceF :: [Region] -> Space -> Space
+divideSpaceF figure space = let
  whole = regionsOfSpace space
  ground = whole \\ figure
  halfspace = divideSpaceG ground space
@@ -402,7 +379,7 @@ divideSpaceF bound figure space = let
  mapping = zip figure duplicates
  withDups = map (map (divideSpaceH mapping figure)) space
  newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
- in emplace bound newBoundary withDups
+ in newBoundary : withDups
 
 divideSpaceG :: [Region] -> Space -> [Region]
 divideSpaceG [] _ = []
@@ -411,17 +388,20 @@ divideSpaceG r s = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
 divideSpaceH :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
 divideSpaceH m a b = (image (a +\ b) m) ++ b
 
--- return regions in second given homeomorphic to regions in first given
+-- return regions in second homeomorphic to regions in first
 takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
- (sBounds,sSpace) = unzip s
- (tBounds,tSpace) = unzip t
+ (sBounds,sRegions,sSpace) = placeToTrip s
+ (tBounds,tRegions,tSpace) = placeToTrip t
  shared = sBounds +\ tBounds
- sSub = map (\x -> sort (zip sBounds (sidesOfRegion x sSpace))) (regionsOfSpace sSpace)
- sSup = map (\x -> image shared x) sSub -- assume image is not welldef
- tSub = map (\x -> (x, sort (zip tBounds (sidesOfRegion x tSpace)))) (regionsOfSpace tSpace)
- tSup = map (\(x,y) -> (x, image shared y)) tSub -- assume image is not welldef
- in preimage sSup tSup -- welldef because tSup is because regionsOfSpace is because tSpace is
+ sSup = takeRegionsF shared sBounds sRegions sSpace
+ tSup = takeRegionsF shared tBounds tRegions tSpace
+ in preimage sSup (zip tRegions tSup) -- welldef because tSup is because regionsOfSpace is because tSpace is
+
+takeRegionsF :: [Boundary] -> [Boundary] -> [Region] -> Space -> [[Side]]
+takeRegionsF shared bounds regions space = let
+ sub = map (\x -> zip bounds (sidesOfRegion x space)) regions
+ in map (\x -> sort (image shared x)) sub -- assume image is not welldef
 
 -- space of just one boundary, assumed more than zero dimensions
 singleSpace :: Boundary -> Place
@@ -469,31 +449,18 @@ isEquSpace s t = (isSubSpace s t) && (isSubSpace t s)
 -- each dual region of superspace is superset of some dual region of subspace
 isSubSpace :: Place -> Place -> Bool
 isSubSpace s t = let
- sDual = sortSpace (placeToDual s)
- tDual = sortSpace (placeToDual t)
- -- each sub-region of the super-space belongs in some super-region of the sub-space
- -- x is the sub-region, y is the super-region, so y is a subset of x
- belong = all (\x -> any (\y -> (length (y \\ x)) == 0) sDual) tDual
- -- each super-region of the sub-space contains some sub-region of the super-space
- -- x is the super-region, y is the sub-region, so x is a subset of y
- -- TODO this is overkill (i think) because belong and linearity of given imply contain
- contain = all (\x -> any (\y -> (length (x \\ y)) == 0) tDual) sDual
- in belong && contain
+ a = (length ((domain s) \\ (domain t))) == 0
+ b = (length (takeRegions t s)) == (length (range t))
+ c = (length (takeRegions s t)) == (length (range s))
+ in a && b && c
 
 -- subset is section space in dual representation
 isSectionSpace :: Place -> Place -> Bool
 isSectionSpace s t = let
- sDual = sortSpace (placeToDual s)
- tDual = sortSpace (placeToDual t)
- in (length (sDual \\ tDual)) == 0
-
--- does no mirroring
-sortSpace :: Dual -> Dual
-sortSpace a = sort (map sortSpaceF a)
-
-sortSpaceF :: [[Boundary]] -> [[Boundary]]
-sortSpaceF [a,b] = [sort a,sort b]
-sortSpaceF _ = undefined
+ a = (length ((domain s) \\ (domain t))) == 0
+ b = (length ((domain t) \\ (domain s))) == 0
+ c = (length (takeRegions s t)) == (length (range s))
+ in a && b && c
 
 -- representation converter
 placeToDual :: Place -> Dual
@@ -514,6 +481,11 @@ dualToPlace s = let
 
 -- spaceToPlace = enumerate
 -- placeToSpace = range
+
+placeToTrip :: Place -> ([Boundary],[Region],Space)
+placeToTrip s = let
+ (bounds,space) = unzip s
+ in (bounds, regionsOfSpace space, space)
 
 --
 -- so far so simple
@@ -574,10 +546,9 @@ subSection g p q n s t u
  | p == n = (t,g)
  | q == n = (s,g)
  | dim == 0 = let
-  sDual = sortSpace (placeToDual s)
-  tDual = sortSpace (placeToDual t)
-  res = map (\x -> dualToPlace [x]) (sDual +\ tDual)
-  in choose g res
+  (region,h) = choose g (takeRegions s t)
+  regions = remove region (regionsOfSpace (range t))
+  in (fold' degenSpace regions t, h)
  | dim >= (length u) = (powerSpace (domain u), g)
  | dim > 0 = let
   bounds = domain u
@@ -793,7 +764,7 @@ spaceFromPlanes n w
 
 spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
 spaceFromPlanesF n m w
- | m <= n = divideSpaceF 0 (regionsOfSpace space) space
+ | m <= n = divideSpaceF (regionsOfSpace space) space
  | otherwise = let
   -- find intersection points on plane to add
   vertices = map welldef (subsets (n - 1) (indices (m - 1)))
@@ -805,7 +776,7 @@ spaceFromPlanesF n m w
   -- convert sides to regions to divide
   divided = welldef (map (\x -> regionOfSides x space) sides)
   -- return space with found regions divided by new boundary
-  in divideSpaceF 0 divided space where
+  in divideSpaceF divided space where
  planes = take (m - 1) w
  space = spaceFromPlanes n planes
 
