@@ -149,7 +149,7 @@ a \\ b = a Data.List.\\ b
 
 -- intersection
 (+\) :: Ord a => [a] -> [a] -> [a]
-a +\ b = a \\ (b \\ a)
+a +\ b = a \\ (a \\ b)
 
 -- symmetric difference
 (\+) :: Ord a => [a] -> [a] -> [a]
