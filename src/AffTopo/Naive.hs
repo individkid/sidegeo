@@ -400,8 +400,10 @@ takeRegions s t = let
 
 takeRegionsF :: [Boundary] -> [Boundary] -> [Region] -> Space -> [[Side]]
 takeRegionsF shared bounds regions space = let
- sub = map (\x -> zip bounds (sidesOfRegion x space)) regions
- in map (\x -> sort (image shared x)) sub -- assume image is not welldef
+ sides = map (flip sidesOfRegion $ space) regions
+ zipped = map (zip bounds) sides
+ sorted = map sort zipped
+ in map (image shared) sorted -- assume image is not welldef
 
 -- space of just one boundary, assumed more than zero dimensions
 singleSpace :: Boundary -> Place
