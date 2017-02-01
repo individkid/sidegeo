@@ -64,6 +64,13 @@ intsToBools a b = packToBools a (intsToPack b)
 boolsToInts :: [Bool] -> [Int]
 boolsToInts a = packToInts (boolsToPack a)
 
+-- intersection of bitmasks
+collapse :: Pack -> Pack -> Pack
+collapse a b = let
+ limit = (maximum ((packToInts a) ++ (packToInts b))) + 1
+ pairs = zip (packToBools limit a) (packToBools limit b)
+ in boolsToPack . (map snd) . (filter fst) $ pairs
+
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
 power a = indices (shift 1 a)
@@ -391,19 +398,18 @@ divideSpaceH m a b = (image (a +\ b) m) ++ b
 -- return regions in second homeomorphic to regions in first
 takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
- (sBounds,sRegions,sSpace) = placeToTrip s
- (tBounds,tRegions,tSpace) = placeToTrip t
- shared = sBounds +\ tBounds
- sSup = takeRegionsF shared sBounds sRegions sSpace
- tSup = takeRegionsF shared tBounds tRegions tSpace
- in preimage sSup (zip tRegions tSup) -- welldef because tSup is because regionsOfSpace is because tSpace is
+ regions = regionsOfSpace (range t)
+ shared = (regionsOfSpace (range s)) +\ regions
+ sSup = takeRegionsF shared s
+ tSup = takeRegionsF shared t
+ in preimage sSup (zip regions tSup) -- welldef because tSup is because regionsOfSpace is because tSpace is
 
-takeRegionsF :: [Boundary] -> [Boundary] -> [Region] -> Space -> [[Side]]
-takeRegionsF shared bounds regions space = let
- sides = map (flip sidesOfRegion $ space) regions
- zipped = map (zip bounds) sides
- sorted = map sort zipped
- in map (image shared) sorted -- assume image is not welldef
+takeRegionsF :: [Boundary] -> Place -> [Pack]
+takeRegionsF shared place = let
+ dual = placeToDual place
+ packs = dualToPacks dual
+ mask = intsToPack shared
+ in map (collapse mask) packs
 
 -- space of just one boundary, assumed more than zero dimensions
 singleSpace :: Boundary -> Place
@@ -464,6 +470,9 @@ isSectionSpace s t = let
  c = (length (takeRegions s t)) == (length (range s))
  in a && b && c
 
+-- spaceToPlace = enumerate
+-- placeToSpace = range
+
 -- representation converter
 placeToDual :: Place -> Dual
 placeToDual s = let
@@ -481,13 +490,22 @@ dualToPlace s = let
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
  in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
 
--- spaceToPlace = enumerate
--- placeToSpace = range
+dualToPacks :: Dual -> [Pack]
+dualToPacks s = let
+ bounds = concat (head s)
+ count = enumerate bounds
+ renum = map (map (\x -> preimage x count)) s
+ heads = map head renum
+ bools = map (intsToBools (length bounds)) heads
+ in map boolsToPack bools
 
-placeToTrip :: Place -> ([Boundary],[Region],Space)
-placeToTrip s = let
- (bounds,space) = unzip s
- in (bounds, regionsOfSpace space, space)
+packsToDual :: [Boundary] -> [Pack] -> Dual
+packsToDual b s = let
+ count = enumerate b
+ bools = map (packToBools (length b)) s
+ heads = map boolsToInts bools
+ renum = map (\x -> image x count) heads
+ in map (\x -> [x, b \\ x]) renum
 
 --
 -- so far so simple
