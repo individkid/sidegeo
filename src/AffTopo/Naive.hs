@@ -56,7 +56,11 @@ intsToPack :: [Int] -> Pack
 intsToPack a = fold' (\x y -> y + (shift 1 x)) (welldef a) 0
 
 packToInts :: Pack -> [Int]
-packToInts a = filter (\x -> belongs x a) (indices (fromJust (find (a<) (iterate (1+) 0))))
+packToInts a = let
+ arith = iterate (1+) 0
+ geom = map (flip shift $ 1) arith
+ index = fromJust (findIndex (a<) geom)
+ in filter (\x -> belongs x a) (take index arith)
 
 intsToBools :: Int -> [Int] -> [Bool]
 intsToBools a b = packToBools a (intsToPack b)
@@ -64,12 +68,13 @@ intsToBools a b = packToBools a (intsToPack b)
 boolsToInts :: [Bool] -> [Int]
 boolsToInts a = packToInts (boolsToPack a)
 
--- intersection of bitmasks
+-- pack out masked bits
 collapse :: Pack -> Pack -> Pack
 collapse a b = let
  limit = (maximum ((packToInts a) ++ (packToInts b))) + 1
- pairs = zip (packToBools limit a) (packToBools limit b)
- in boolsToPack . (map snd) . (filter fst) $ pairs
+ zipped = zip (packToBools limit a) (packToBools limit b)
+ masked = filter fst zipped
+ in boolsToPack (range masked)
 
 -- all subsets of non-negative Int less than given
 power :: Int -> [Pack]
@@ -400,9 +405,9 @@ takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
  regions = regionsOfSpace (range t)
  shared = (regionsOfSpace (range s)) +\ regions
- sSup = takeRegionsF shared s
- tSup = takeRegionsF shared t
- in preimage sSup (zip regions tSup) -- welldef because tSup is because regionsOfSpace is because tSpace is
+ sSub = takeRegionsF shared s
+ tSub = takeRegionsF shared t
+ in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
 
 takeRegionsF :: [Boundary] -> Place -> [Pack]
 takeRegionsF shared place = let
@@ -494,18 +499,10 @@ dualToPacks :: Dual -> [Pack]
 dualToPacks s = let
  bounds = concat (head s)
  count = enumerate bounds
- renum = map (map (\x -> preimage x count)) s
- heads = map head renum
- bools = map (intsToBools (length bounds)) heads
+ heads = map head s
+ renum = map (\x -> preimage x count) heads
+ bools = map (intsToBools (length bounds)) renum
  in map boolsToPack bools
-
-packsToDual :: [Boundary] -> [Pack] -> Dual
-packsToDual b s = let
- count = enumerate b
- bools = map (packToBools (length b)) s
- heads = map boolsToInts bools
- renum = map (\x -> image x count) heads
- in map (\x -> [x, b \\ x]) renum
 
 --
 -- so far so simple
