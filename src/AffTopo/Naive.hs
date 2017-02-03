@@ -413,7 +413,7 @@ takeRegionsF :: [Boundary] -> Place -> [Pack]
 takeRegionsF shared place = let
  dual = placeToDual place
  packs = dualToPacks dual
- mask = intsToPack shared
+ mask = dualToPacksF dual shared
  in map (collapse mask) packs
 
 -- space of just one boundary, assumed more than zero dimensions
@@ -496,13 +496,15 @@ dualToPlace s = let
  in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
 
 dualToPacks :: Dual -> [Pack]
-dualToPacks s = let
+dualToPacks s = map ((dualToPacksF s) . head) s
+
+dualToPacksF :: Dual -> [Boundary] -> Pack
+dualToPacksF s b = let
  bounds = concat (head s)
  count = enumerate bounds
- heads = map head s
- renum = map (\x -> preimage x count) heads
- bools = map (intsToBools (length bounds)) renum
- in map boolsToPack bools
+ renum = preimage b count
+ bools = intsToBools (length bounds) renum
+ in boolsToPack bools
 
 --
 -- so far so simple
