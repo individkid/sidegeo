@@ -33,9 +33,9 @@ type Full = [Half] -- assume disjoint covering pair
 type Space = [Full] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,Full)] -- assume one-to-one
+type Pack = Int -- bits indicate membership
 type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
-type Pack = Int -- bits indicate membership
 
 intToBool :: Int -> Bool
 intToBool a = a /= 0
@@ -98,7 +98,7 @@ subsets n (a:b) = (map (a:) (subsets (n-1) b)) Prelude.++ (subsets n b)
 
 -- those indexed by list of indices
 subset :: [Int] -> [a] -> [a]
-subset p a = fold' (\q b -> (a !! q) : b) p []
+subset a b = image a (enumerate b)
 
 -- make elements sorted and unique
 welldef :: Ord a => [a] -> [a]
@@ -320,8 +320,8 @@ attachedFacets n r s = let
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
 attachedRegions b s = let
- space = enumerate s
- in takeRegions (fold' sectionSpace b space) space
+ place = enumerate s
+ in takeRegions (fold' sectionSpace b place) place
 
 -- return corresponding outside region
 outsideOfRegion :: Region -> Space -> Region
@@ -404,14 +404,14 @@ divideSpaceH m a b = (image (a +\ b) m) ++ b
 takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
  regions = regionsOfSpace (range t)
- shared = (regionsOfSpace (range s)) +\ regions
+ shared = (domain s) +\ (domain t)
  sSub = takeRegionsF shared s
  tSub = takeRegionsF shared t
  in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
 
 takeRegionsF :: [Boundary] -> Place -> [Pack]
 takeRegionsF shared place = let
- dual = placeToDual place
+ dual = placeToDual place -- region order same as from regionsOfSpace
  packs = dualToPacks dual
  mask = dualToPacksF dual shared
  in map (collapse mask) packs
@@ -463,8 +463,8 @@ isEquSpace s t = (isSubSpace s t) && (isSubSpace t s)
 isSubSpace :: Place -> Place -> Bool
 isSubSpace s t = let
  a = (length ((domain s) \\ (domain t))) == 0
- b = (length (takeRegions t s)) == (length (range t))
- c = (length (takeRegions s t)) == (length (range s))
+ b = (length (takeRegions t s)) == (length (regionsOfSpace (range s)))
+ c = (length (takeRegions s t)) == (length (regionsOfSpace (range t)))
  in a && b && c
 
 -- subset is section space in dual representation
@@ -472,13 +472,10 @@ isSectionSpace :: Place -> Place -> Bool
 isSectionSpace s t = let
  a = (length ((domain s) \\ (domain t))) == 0
  b = (length ((domain t) \\ (domain s))) == 0
- c = (length (takeRegions s t)) == (length (range s))
+ c = (length (takeRegions s t)) == (length (regionsOfSpace (range s)))
  in a && b && c
 
--- spaceToPlace = enumerate
--- placeToSpace = range
-
--- representation converter
+-- representation converters
 placeToDual :: Place -> Dual
 placeToDual s = let
  regions = regionsOfSpace (range s)
@@ -486,7 +483,6 @@ placeToDual s = let
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) regions
  in map (\(x,y) -> [x,y]) (zip left right)
 
--- representation converter
 dualToPlace :: Dual -> Place
 dualToPlace s = let
  bounds = concat (head s)
@@ -501,9 +497,10 @@ dualToPacks s = map ((dualToPacksF s) . head) s
 dualToPacksF :: Dual -> [Boundary] -> Pack
 dualToPacksF s b = let
  bounds = concat (head s)
+ limit = length bounds
  count = enumerate bounds
  renum = preimage b count
- bools = intsToBools (length bounds) renum
+ bools = intsToBools limit renum
  in boolsToPack bools
 
 --
