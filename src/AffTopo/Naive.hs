@@ -84,7 +84,7 @@ polybools :: Int -> [[Bool]]
 polybools a = map (packToBools a) (power a)
 
 polyants :: Int -> [[Side]]
-polyants a = map (map boolToInt) (polybools a)
+polyants a = map2 boolToInt (polybools a)
 
 -- whether given Int is in given set
 belongs :: Int -> Pack -> Bool
@@ -207,6 +207,9 @@ findMaybeF _ [] Nothing = Nothing
 -- modify function taking single to function taking list
 fold' :: (a -> b -> b) -> [a] -> b -> b
 fold' = flip . foldr
+
+map2 :: (a -> b) -> [[a]] -> [[b]]
+map2 = map . map
 
 --
 -- now for something new
@@ -363,7 +366,7 @@ subSpace b s = let
 subSpaceF :: Boundary -> Space -> Space
 subSpaceF b s = let
  regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
- in map (map (\x -> x \\ regions)) (unplace b s)
+ in map2 (\x -> x \\ regions) (unplace b s)
 
 -- return space of less dimension homeomorphic to regions attached to given boundary
 sectionSpace :: Boundary -> Place -> Place
@@ -375,7 +378,7 @@ sectionSpace b s = let
 sectionSpaceF :: Boundary -> Space -> Space
 sectionSpaceF b s = let
  regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
- in map (map (\x -> x +\ regions)) (unplace b s)
+ in map2 (\x -> x +\ regions) (unplace b s)
 
 -- divide regions of s in t by new boundary b
 divideSpace :: Boundary -> Place -> Place -> Place
@@ -389,7 +392,7 @@ divideSpaceF figure space = let
  halfspace = divideSpaceG ground space
  duplicates = holes (length figure) whole
  mapping = zip figure duplicates
- withDups = map (map (divideSpaceH mapping figure)) space
+ withDups = map2 (divideSpaceH mapping figure) space
  newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
  in newBoundary : withDups
 
@@ -436,20 +439,21 @@ powerSpaceF b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
 
 -- remove region to produce non-linear space
 degenSpace :: Region -> Place -> Place
-degenSpace r s = map (\(b,x) -> (b, map (\y -> filter (\z -> z /= r) y) x) ) s
+degenSpace r s = zip (domain s) (map2 (remove r) (range s))
 
 -- divide regions by space into non-linear space
 crossSpace :: Place -> Place -> Place
 crossSpace s t = let
- sRange = range s
- tRange = range t
- sRegions = regionsOfSpace sRange
- tRegions = regionsOfSpace tRange
+ sSpace = range s
+ tSpace = range t
+ sRegions = regionsOfSpace sSpace
+ tRegions = regionsOfSpace tSpace
+ sPairs x = [(p,q) | p <- x, q <- tRegions]
+ tPairs x = [(p,q) | p <- sRegions, q <- x]
  regions = enumerate [(x,y) | x <- sRegions, y <- tRegions]
- left = map (\x -> map (\y -> preimage [(p,q) | p <- y, q <- tRegions] regions) x) sRange
- right = map (\x -> map (\y -> preimage [(p,q) | p <- sRegions, q <- y] regions) x) tRange
- cross = left ++ right
- in zip ((domain s) Prelude.++ (domain t)) cross
+ sCross = map2 (\x -> preimage (sPairs x) regions) sSpace
+ tCross = map2 (\x -> preimage (tPairs x) regions) tSpace
+ in zip ((domain s) ++ (domain t)) (sCross ++ tCross)
 
 -- reverse sidedness of given boundary
 mirrorSpace :: Boundary -> Place -> Place
@@ -575,10 +579,10 @@ subSection g p q n s t u
   (sub,i) = subSection h p q n sSub tSub uSub
   uSect = sectionSpace b u
   (sect,j) = subSection i dim (n-1) n sub uSect uSub
-  anti = superSpaceH b sect sub
+  anti = rabbitSpaceG b sect sub
   valid = filter (\x -> subSectionF s t x) anti
-  res = filter (\x -> (length x) == (length bounds)) valid
-  in choose j res
+  result = filter (\x -> (length x) == (length bounds)) valid
+  in choose j result
  | otherwise = undefined where
  dim = (p+q)-n
 
@@ -607,7 +611,7 @@ superSpace g n s t
  | ((length sOnly) == 1) && ((length tOnly) == 1) = let
   [sBound] = sOnly
   [tBound] = tOnly
-  in superSpaceF g n sBound tBound shared s t place
+  in rabbitSpace g n sBound tBound shared s t place
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
@@ -618,42 +622,42 @@ superSpace g n s t
  place = (fold' subSpace) sOnly s
 
 -- cases where sOnly and tOnly are singletons
-superSpaceF :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Boundary -> [Boundary] -> Place -> Place -> Place -> (Place, g)
-superSpaceF g n sBound tBound shared s t place
+rabbitSpace :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Boundary -> [Boundary] -> Place -> Place -> Place -> (Place, g)
+rabbitSpace g n sBound tBound shared s t place
  | ((length shared) > 0) && (n >= 2) = let
   sSect = sectionSpace sBound s
   tSect = sectionSpace tBound t
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
-  sSup = superSpaceH tBound sect sSect
-  tSup = concat (map (\x -> superSpaceH sBound x t) sSup)
-  in superSpaceI h n s t tSup
+  sSup = rabbitSpaceG tBound sect sSect
+  tSup = concat (map (\x -> rabbitSpaceG sBound x t) sSup)
+  in rabbitSpaceI h n s t tSup
  | ((length shared) > 0) && (n == 1) = let
   (bound,h) = choose g shared
-  cross = superSpaceG sBound tBound place
+  cross = rabbitSpaceF sBound tBound place
   sSect = crossSpace (sectionSpace bound s) (singleSpace tBound)
   tSect = crossSpace (sectionSpace bound t) (singleSpace sBound)
   sup = map (\x -> dualToPlace ((placeToDual sSect) +\ (placeToDual tSect) +\ (placeToDual x))) cross
-  in superSpaceI h n s t sup
+  in rabbitSpaceI h n s t sup
  | ((length shared) == 0) && (n == 1) = let
-  cross = superSpaceG sBound tBound place
-  in superSpaceI g n s t cross
+  cross = rabbitSpaceF sBound tBound place
+  in rabbitSpaceI g n s t cross
  | otherwise = undefined
 
 -- each one dimensional three region space
-superSpaceG :: Boundary -> Boundary -> Place -> [Place]
-superSpaceG sBound tBound place = let
+rabbitSpaceF :: Boundary -> Boundary -> Place -> [Place]
+rabbitSpaceF sBound tBound place = let
  double = doubleSpace sBound tBound
  in map (\x -> crossSpace place (degenSpace x double)) (regionsOfSpace (range double))
 
 -- return both divided spaces
-superSpaceH :: Boundary -> Place -> Place -> [Place]
-superSpaceH bound sect sub = let
+rabbitSpaceG :: Boundary -> Place -> Place -> [Place]
+rabbitSpaceG bound sect sub = let
  result = divideSpace bound sect sub
  in [result, mirrorSpace bound result]
 
 -- return given that is linear and contains both given
-superSpaceI :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
-superSpaceI g n s t u = let
+rabbitSpaceI :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
+rabbitSpaceI g n s t u = let
  result = filter (\x -> (isLinear n (range x)) && (isSubSpace x s) && (isSubSpace x t)) u
  in choose g result
 
