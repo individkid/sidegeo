@@ -630,17 +630,17 @@ rabbitSpace g n sBound tBound shared s t place
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
   sSup = rabbitSpaceG tBound sect sSect
   tSup = concat (map (\x -> rabbitSpaceG sBound x t) sSup)
-  in rabbitSpaceI h n s t tSup
+  in rabbitSpaceH h n s t tSup
  | ((length shared) > 0) && (n == 1) = let
   (bound,h) = choose g shared
   cross = rabbitSpaceF sBound tBound place
   sSect = crossSpace (sectionSpace bound s) (singleSpace tBound)
   tSect = crossSpace (sectionSpace bound t) (singleSpace sBound)
   sup = map (\x -> dualToPlace ((placeToDual sSect) +\ (placeToDual tSect) +\ (placeToDual x))) cross
-  in rabbitSpaceI h n s t sup
+  in rabbitSpaceH h n s t sup
  | ((length shared) == 0) && (n == 1) = let
   cross = rabbitSpaceF sBound tBound place
-  in rabbitSpaceI g n s t cross
+  in rabbitSpaceH g n s t cross
  | otherwise = undefined
 
 -- each one dimensional three region space
@@ -656,8 +656,8 @@ rabbitSpaceG bound sect sub = let
  in [result, mirrorSpace bound result]
 
 -- return given that is linear and contains both given
-rabbitSpaceI :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
-rabbitSpaceI g n s t u = let
+rabbitSpaceH :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
+rabbitSpaceH g n s t u = let
  result = filter (\x -> (isLinear n (range x)) && (isSubSpace x s) && (isSubSpace x t)) u
  in choose g result
 
