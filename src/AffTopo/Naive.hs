@@ -381,8 +381,10 @@ sectionSpaceF b s = let
  in map2 (\x -> x +\ regions) (unplace b s)
 
 -- divide regions of s in t by new boundary b
-divideSpace :: Boundary -> Place -> Place -> Place
-divideSpace b s t = zip (b : (domain t)) (divideSpaceF (takeRegions s t) (range t))
+divideSpace :: Boundary -> Place -> Place -> [Place]
+divideSpace b s t = let
+ place = zip (b : (domain t)) (divideSpaceF (takeRegions s t) (range t))
+ in [place, mirrorSpace b place]
 
 -- return space with given regions divided by new boundary
 divideSpaceF :: [Region] -> Space -> Space
@@ -572,17 +574,16 @@ subSection g p q n s t u
  | dim >= (length u) = (powerSpace (domain u), g)
  | dim > 0 = let
   bounds = domain u
-  (b,h) = choose g bounds
-  sSub = subSpace b s
-  tSub = subSpace b t
-  uSub = subSpace b u
+  (bound,h) = choose g bounds
+  sSub = subSpace bound s
+  tSub = subSpace bound t
+  uSub = subSpace bound u
   (sub,i) = subSection h p q n sSub tSub uSub
-  uSect = sectionSpace b u
+  uSect = sectionSpace bound u
   (sect,j) = subSection i dim (n-1) n sub uSect uSub
-  anti = rabbitSpaceG b sect sub
-  valid = filter (\x -> subSectionF s t x) anti
-  result = filter (\x -> (length x) == (length bounds)) valid
-  in choose j result
+  anti = divideSpace bound sect sub
+  valid = filter (subSectionF s t) anti
+  in choose j valid
  | otherwise = undefined where
  dim = (p+q)-n
 
@@ -594,70 +595,57 @@ superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Pla
 superSpace g n s t
  | n < 0 = undefined
  | (n == 0) && (shared /= bounds) = undefined
- | not (isEquSpace place ((fold' subSpace) tOnly t)) = undefined
  | (length tOnly) == 0 = (s,g)
  | (length sOnly) == 0 = (t,g)
  | (length bounds) <= n = (powerSpace bounds, g)
  | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace g n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
   (bound,h) = choose g sOnly
-  (sup,i) = superSpace h n (subSpace bound s) t
-  in superSpace i n s sup
+  (sup,i) = superSpace h n (subSpace bound s) t -- sOnly gets smaller because it is missing bound
+  in superSpace i n s sup -- sOnly gets smaller because it goes from more than bound to only bound
  | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
  | ((length shared) == 0) && ((length sBounds) > 1) = let
   (bound,h) = choose g sBounds
-  (sup,i) = superSpace h n (singleSpace bound) t
-  in superSpace i n s sup
- | ((length sOnly) == 1) && ((length tOnly) == 1) = let
-  [sBound] = sOnly
-  [tBound] = tOnly
-  in rabbitSpace g n sBound tBound shared s t place
+  (sup,i) = superSpace h n (singleSpace bound) t -- sBounds becomes just bound from more than bound 
+  in superSpace i n s sup -- s and sup share bound
+ | ((length sOnly) == 1) && ((length tOnly) == 1) = rabbitSpace g n s t -- independent boundary case
  | otherwise = undefined where
  sBounds = domain s
  tBounds = domain t
- tOnly = tBounds \\ sBounds
  sOnly = sBounds \\ tBounds
+ tOnly = tBounds \\ sBounds
  shared = sBounds +\ tBounds
  bounds = sBounds ++ tBounds
- place = (fold' subSpace) sOnly s
 
 -- cases where sOnly and tOnly are singletons
-rabbitSpace :: Random.RandomGen g => Show g => g -> Int -> Boundary -> Boundary -> [Boundary] -> Place -> Place -> Place -> (Place, g)
-rabbitSpace g n sBound tBound shared s t place
- | ((length shared) > 0) && (n >= 2) = let
+rabbitSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
+rabbitSpace g n s t
+ | n >= 2 = let
   sSect = sectionSpace sBound s
   tSect = sectionSpace tBound t
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
-  sSup = rabbitSpaceG tBound sect sSect
-  tSup = concat (map (\x -> rabbitSpaceG sBound x t) sSup)
-  in rabbitSpaceH h n s t tSup
- | ((length shared) > 0) && (n == 1) = let
-  (bound,h) = choose g shared
-  cross = rabbitSpaceF sBound tBound place
-  sSect = crossSpace (sectionSpace bound s) (singleSpace tBound)
-  tSect = crossSpace (sectionSpace bound t) (singleSpace sBound)
-  sup = map (\x -> dualToPlace ((placeToDual sSect) +\ (placeToDual tSect) +\ (placeToDual x))) cross
-  in rabbitSpaceH h n s t sup
- | ((length shared) == 0) && (n == 1) = let
-  cross = rabbitSpaceF sBound tBound place
-  in rabbitSpaceH g n s t cross
- | otherwise = undefined
-
--- each one dimensional three region space
-rabbitSpaceF :: Boundary -> Boundary -> Place -> [Place]
-rabbitSpaceF sBound tBound place = let
- double = doubleSpace sBound tBound
- in map (\x -> crossSpace place (degenSpace x double)) (regionsOfSpace (range double))
-
--- return both divided spaces
-rabbitSpaceG :: Boundary -> Place -> Place -> [Place]
-rabbitSpaceG bound sect sub = let
- result = divideSpace bound sect sub
- in [result, mirrorSpace bound result]
+  sSup = divideSpace tBound sect sSect
+  tSup = concat (map (\x -> divideSpace sBound x t) sSup)
+  in rabbitSpaceF h n s t tSup
+ | n == 1 = let
+  sDual = placeToDual (crossSpace s (singleSpace tBound))
+  tDual = placeToDual (crossSpace t (singleSpace sBound))
+  double = doubleSpace sBound tBound
+  regions = regionsOfSpace (range double)
+  cross = map (\x -> crossSpace place (degenSpace x double)) regions
+  dual = map placeToDual cross
+  result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
+  in rabbitSpaceF g n s t result
+ | otherwise = undefined where
+ sBounds = domain s
+ tBounds = domain t
+ [sBound] = sBounds \\ tBounds
+ [tBound] = tBounds \\ sBounds
+ place = subSpace sBound s
 
 -- return given that is linear and contains both given
-rabbitSpaceH :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
-rabbitSpaceH g n s t u = let
+rabbitSpaceF :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [Place] -> (Place,g)
+rabbitSpaceF g n s t u = let
  result = filter (\x -> (isLinear n (range x)) && (isSubSpace x s) && (isSubSpace x t)) u
  in choose g result
 
