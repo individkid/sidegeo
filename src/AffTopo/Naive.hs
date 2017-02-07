@@ -414,14 +414,6 @@ takeRegions s t = let
  tSub = map2 (\x -> sort (shared +\ x)) (placeToDual t)
  in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
 
--- space of just one boundary, assumed more than zero dimensions
-singleSpace :: Boundary -> Place
-singleSpace b = zip [b] [[[0],[1]]]
-
--- space of two boundaries, assumed more than one dimension
-doubleSpace :: Boundary -> Boundary -> Place
-doubleSpace a b = zip [a,b] [[[0,1],[2,3]],[[0,2],[1,3]]]
-
 -- all possible regions
 powerSpace :: [Boundary] -> Place
 powerSpace b = let
@@ -513,7 +505,7 @@ minEquivF b s = let
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- (s,h) = fold' (\z (x,y) -> superSpace y n x (singleSpace z)) (indices m) ([],g)
+ (s,h) = fold' (\z (x,y) -> superSpace y n x (powerSpace [z])) (indices m) ([],g)
  in (range s, h)
 
 -- return all linear spaces given any space to start
@@ -587,7 +579,7 @@ superSpace g n s t
  | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace g n t s
  | ((length shared) == 0) && ((length sBounds) > 1) = let
   (bound,h) = choose g sBounds
-  (sup,i) = superSpace h n (singleSpace bound) t -- sBounds becomes just bound from more than bound 
+  (sup,i) = superSpace h n (powerSpace [bound]) t -- sBounds becomes just bound from more than bound 
   in superSpace i n s sup -- s and sup share bound
  | ((length sOnly) == 1) && ((length tOnly) == 1) = rabbitSpace g n s t -- independent boundary case
  | otherwise = undefined where
@@ -609,9 +601,9 @@ rabbitSpace g n s t
   tSup = concat (map (\x -> divideSpace sBound x t) sSup)
   in rabbitSpaceF h n s t tSup
  | n == 1 = let
-  sDual = placeToDual (crossSpace s (singleSpace tBound))
-  tDual = placeToDual (crossSpace t (singleSpace sBound))
-  double = doubleSpace sBound tBound
+  sDual = placeToDual (crossSpace s (powerSpace [tBound]))
+  tDual = placeToDual (crossSpace t (powerSpace [sBound]))
+  double = powerSpace [sBound, tBound]
   regions = regionsOfSpace (range double)
   cross = map (\x -> crossSpace place (degenSpace x double)) regions
   dual = map placeToDual cross
