@@ -446,10 +446,6 @@ crossSpace s t = let
 mirrorSpace :: Boundary -> Place -> Place
 mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
--- subplace of each other
-isEquSpace :: Place -> Place -> Bool
-isEquSpace s t = (isSubSpace s t) && (isSubSpace t s)
-
 -- each dual region of superspace is superset of some dual region of subspace
 isSubSpace :: Place -> Place -> Bool
 isSubSpace s t = let
