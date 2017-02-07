@@ -410,16 +410,9 @@ takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
  regions = regionsOfSpace (range t)
  shared = (domain s) +\ (domain t)
- sSub = takeRegionsF shared s
- tSub = takeRegionsF shared t
+ sSub = map2 (\x -> sort (shared +\ x)) (placeToDual s)
+ tSub = map2 (\x -> sort (shared +\ x)) (placeToDual t)
  in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
-
-takeRegionsF :: [Boundary] -> Place -> [Pack]
-takeRegionsF shared place = let
- dual = placeToDual place -- region order same as from regionsOfSpace
- packs = dualToPacks dual
- mask = dualToPacksF dual shared
- in map (collapse mask) packs
 
 -- space of just one boundary, assumed more than zero dimensions
 singleSpace :: Boundary -> Place
@@ -496,18 +489,6 @@ dualToPlace s = let
  left = map (\x -> domain (filter (\(_,[y,_]) -> member x y) plual)) bounds
  right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) plual)) bounds
  in zip bounds (map (\(x,y) -> [x,y]) (zip left right))
-
-dualToPacks :: Dual -> [Pack]
-dualToPacks s = map ((dualToPacksF s) . head) s
-
-dualToPacksF :: Dual -> [Boundary] -> Pack
-dualToPacksF s b = let
- bounds = concat (head s)
- limit = length bounds
- count = enumerate bounds
- renum = preimage b count
- bools = intsToBools limit renum
- in boolsToPack bools
 
 --
 -- so far so simple
