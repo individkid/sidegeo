@@ -33,7 +33,6 @@ type Full = [Half] -- assume disjoint covering pair
 type Space = [Full] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,Full)] -- assume one-to-one
-type Pack = Int -- bits indicate membership
 type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 
@@ -45,50 +44,6 @@ boolToInt a = if a then 1 else 0
 
 notOfInt :: Int -> Int
 notOfInt a = boolToInt (not (intToBool a))
-
-packToBools :: Int -> Pack -> [Bool]
-packToBools a b = map (\x -> belongs x b) (indices a)
-
-boolsToPack :: [Bool] -> Pack
-boolsToPack a = fold' (\x y -> (shift y 1) + (boolToInt x)) a 0
-
-intsToPack :: [Int] -> Pack
-intsToPack a = fold' (\x y -> y + (shift 1 x)) (welldef a) 0
-
-packToInts :: Pack -> [Int]
-packToInts a = let
- arith = iterate (1+) 0
- geom = map (flip shift $ 1) arith
- index = fromJust (findIndex (a<) geom)
- in filter (\x -> belongs x a) (take index arith)
-
-intsToBools :: Int -> [Int] -> [Bool]
-intsToBools a b = packToBools a (intsToPack b)
-
-boolsToInts :: [Bool] -> [Int]
-boolsToInts a = packToInts (boolsToPack a)
-
--- pack out masked bits
-collapse :: Pack -> Pack -> Pack
-collapse a b = let
- limit = (maximum ((packToInts a) ++ (packToInts b))) + 1
- zipped = zip (packToBools limit a) (packToBools limit b)
- masked = filter fst zipped
- in boolsToPack (range masked)
-
--- all subsets of non-negative Int less than given
-power :: Int -> [Pack]
-power a = indices (shift 1 a)
-
-polybools :: Int -> [[Bool]]
-polybools a = map (packToBools a) (power a)
-
-polyants :: Int -> [[Side]]
-polyants a = map2 boolToInt (polybools a)
-
--- whether given Int is in given set
-belongs :: Int -> Pack -> Bool
-belongs a b = testBit b a
 
 -- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
@@ -417,12 +372,12 @@ takeRegions s t = let
 -- all possible regions
 powerSpace :: [Boundary] -> Place
 powerSpace b = let
- regions = power (length b)
+ regions = indices (shift 1 (length b))
  in map (\(x,y) -> (y, [powerSpaceF x regions 0, powerSpaceF x regions 1])) (enumerate b)
 
 -- regions indicated by boundary as bit position
-powerSpaceF :: Int -> [Pack] -> Int -> [Region]
-powerSpaceF b r s = filter (\y -> (boolToInt (belongs b y)) == s) r
+powerSpaceF :: Int -> [Int] -> Int -> [Region]
+powerSpaceF b r s = filter (\y -> (boolToInt (testBit y b)) == s) r
 
 -- remove region to produce non-linear space
 degenSpace :: Region -> Place -> Place
@@ -748,7 +703,7 @@ spaceFromPlanesF n m w
   tuples = map (\x -> (m - 1):x) vertices
   points = map (\x -> fromJust (intersectPlanes n (subset x w))) tuples
   -- convert intersection points to sides in each permutation of sides wrt intersection planes
-  perms = polyants (n - 1)
+  perms = undefined
   sides = concat (map (spaceFromPlanesG perms w) (zip vertices points))
   -- convert sides to regions to divide
   divided = welldef (map (\x -> regionOfSides x space) sides)
