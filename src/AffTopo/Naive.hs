@@ -313,27 +313,25 @@ migrateSpaceExists r s = let
 
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Place -> Place
-subSpace b s = let
- (bounds,space) = unzip s
- index = fromJust (elemIndex b bounds)
- in zip (unplace index bounds) (subSpaceF index space)
+subSpace = subSpaceF (flip (\\))
 
-subSpaceF :: Boundary -> Space -> Space
-subSpaceF b s = let
- regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
- in map2 (\x -> x \\ regions) (unplace b s)
+subSpaceF :: ([Region] -> [Region] -> [Region]) -> Boundary -> Place -> Place
+subSpaceF f b s = let
+ (bounds,space) = unzip s
+ bound = fromJust (elemIndex b bounds)
+ section = filter (subSpaceG bound space) (regionsOfSpace space)
+ result = map2 (f section) (unplace bound space)
+ in zip (unplace bound bounds) result
+
+subSpaceG :: Boundary -> Space -> Region -> Bool
+subSpaceG b s r = let
+ x = (regionWrtBoundary b r s) == 0
+ y = oppositeOfRegionExists [b] r s
+ in x && y
 
 -- return space of less dimension homeomorphic to regions attached to given boundary
 sectionSpace :: Boundary -> Place -> Place
-sectionSpace b s = let
- (bounds,space) = unzip s
- index = fromJust (elemIndex b bounds)
- in zip (unplace index bounds) (sectionSpaceF index space)
-
-sectionSpaceF :: Boundary -> Space -> Space
-sectionSpaceF b s = let
- regions = filter (\r -> intToBool (regionWrtBoundary b r s)) (attachedRegions [b] s)
- in map2 (\x -> x +\ regions) (unplace b s)
+sectionSpace = subSpaceF (+\)
 
 -- divide regions of s in t by new boundary b
 divideSpace :: Boundary -> Place -> Place -> [Place]
@@ -731,13 +729,12 @@ planesFromSpace n s
  | m <= n = take m (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
   -- recurse with one fewer boundary
-  bound = m - 1
-  space = subSpaceF bound s
+  space = range (subSpace (m - 1) (enumerate s))
   planes = planesFromSpace n space
   -- find vertices
   vertices = subsets n (indices (length space))
   -- find sides of vertices wrt chosen boundary
-  sides = map (\x -> vertexWrtBoundary bound x s) vertices
+  sides = map (\x -> vertexWrtBoundary (m - 1) x s) vertices
   mirror = map notOfInt sides
   -- interpret vertices as coplanes
   coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) vertices

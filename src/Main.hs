@@ -173,13 +173,13 @@ rename = let
 section :: Maybe String
 section = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- sections = [(x,y,sectionSpaceF y x) | x <- spaces, y <- boundariesOfSpace x]
+ sections = [(x,y,range (sectionSpace y (enumerate x))) | x <- spaces, y <- boundariesOfSpace x]
  in rvb (\(x,y,z) -> rv (isLinear 1 z) (show (x,y,z))) sections
 
 outside :: Maybe String
 outside = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- sections = [sectionSpaceF y x | x <- spaces, y <- boundariesOfSpace x]
+ sections = [range (sectionSpace y (enumerate x)) | x <- spaces, y <- boundariesOfSpace x]
  func x s y = (outsideOfRegionExists y s) && ((regionWrtBoundary x y s) == 0)
  args = [(b,s) | s <- sections, b <- boundariesOfSpace s]
  in rvb (\(b,s) -> rv ((find (func b s) (regionsOfSpace s)) /= Nothing) (show (b,s))) args
@@ -187,7 +187,7 @@ outside = let
 special :: Maybe String
 special = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- sections = [sectionSpaceF y x | x <- spaces, y <- boundariesOfSpace x]
+ sections = [range (sectionSpace y (enumerate x)) | x <- spaces, y <- boundariesOfSpace x]
  places = map enumerate sections
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
