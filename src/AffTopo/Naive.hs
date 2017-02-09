@@ -331,11 +331,11 @@ subSpace = subSpaceF (flip (\\))
 
 subSpaceF :: ([Region] -> [Region] -> [Region]) -> Boundary -> Place -> Place
 subSpaceF f b s = let
- (bounds,space) = unzip s
+ (bounds,space) = unzipPlace s
  bound = fromJust (elemIndex b bounds)
  section = filter (subSpaceG bound space) (regionsOfSpace space)
  result = map2 (f section) (unplace bound space)
- in zip (unplace bound bounds) result
+ in zipPlace (unplace bound bounds) result
 
 subSpaceG :: Boundary -> Space -> Region -> Bool
 subSpaceG b s r = let
@@ -350,8 +350,8 @@ sectionSpace = subSpaceF (+\)
 -- divide regions of s in t by new boundary b
 divideSpace :: Boundary -> Place -> Place -> [Place]
 divideSpace b s t = let
- (bounds,space) = unzip t
- place = zip (b : bounds) (divideSpaceF (takeRegions s t) space)
+ (bounds,space) = unzipPlace t
+ place = zipPlace (b : bounds) (divideSpaceF (takeRegions s t) space)
  in [place, mirrorSpace b place]
 
 -- return space with given regions divided by new boundary
@@ -378,7 +378,7 @@ takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
  shared = (boundariesOfPlace s) +\ (boundariesOfPlace t)
  plual = placeToPlual t
- (regions,dual) = unzip plual
+ (regions,dual) = unzipPlual plual
  sSub = map2 (\x -> sort (shared +\ x)) (placeToDual s)
  tSub = map2 (\x -> sort (shared +\ x)) dual
  in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
@@ -396,14 +396,14 @@ powerSpaceF b r s = filter (\y -> (boolToInt (testBit y b)) == s) r
 -- remove region to produce non-linear space
 degenSpace :: Region -> Place -> Place
 degenSpace r s = let
- (bounds,space) = unzip s
- in zip bounds (map2 (remove r) space)
+ (bounds,space) = unzipPlace s
+ in zipPlace bounds (map2 (remove r) space)
 
 -- divide regions by space into non-linear space
 crossSpace :: Place -> Place -> Place
 crossSpace s t = let
- (sBounds,sSpace) = unzip s
- (tBounds,tSpace) = unzip t
+ (sBounds,sSpace) = unzipPlace s
+ (tBounds,tSpace) = unzipPlace t
  sRegions = regionsOfSpace sSpace
  tRegions = regionsOfSpace tSpace
  sPairs x = [(p,q) | p <- x, q <- tRegions]
@@ -411,7 +411,7 @@ crossSpace s t = let
  regions = enumerate [(x,y) | x <- sRegions, y <- tRegions]
  sCross = map2 (\x -> preimage (sPairs x) regions) sSpace
  tCross = map2 (\x -> preimage (tPairs x) regions) tSpace
- in zip (sBounds Prelude.++ tBounds) (sCross Prelude.++ tCross)
+ in zipPlace (sBounds Prelude.++ tBounds) (sCross Prelude.++ tCross)
 
 -- reverse sidedness of given boundary
 mirrorSpace :: Boundary -> Place -> Place
@@ -465,6 +465,15 @@ placeToSpace = range
 
 plualToDual :: Plual -> Dual
 plualToDual = range
+
+unzipPlace :: Place -> ([Boundary],Space)
+unzipPlace = unzip
+
+zipPlace :: [Boundary] -> Space -> Place
+zipPlace = zip
+
+unzipPlual :: Plual -> ([Region],Dual)
+unzipPlual = unzip
 
 --
 -- so far so simple
