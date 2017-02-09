@@ -27,12 +27,10 @@ import qualified System.Random as Random
 
 newtype Boundary = Boundary Int deriving (Eq, Ord, Show) -- index into Space
 newtype Region = Region Int deriving (Eq, Ord, Show) -- arbitrary identifier
-newtype Side = Side Int deriving (Eq, Ord, Show) -- index into Full
-type Half = [Region] -- assume welldef set
-type Full = [[Region]] -- assume disjoint covering pair
+newtype Side = Side Int deriving (Eq, Ord, Show) -- index into pair of halfspaces
 type Space = [[[Region]]] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
-type Place = [(Boundary,Full)] -- assume one-to-one
+type Place = [(Boundary,[[Region]])] -- assume one-to-one
 type Plual = [(Region,[[Boundary]])] -- dual of place
 type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
@@ -233,7 +231,7 @@ regionsOfPlual :: Plual -> [Region]
 regionsOfPlual = domain
 
 -- element of space
-regionsOfBoundary :: Boundary -> Space -> Full
+regionsOfBoundary :: Boundary -> Space -> [[Region]]
 regionsOfBoundary (Boundary b) s = s !! b
 
 -- side of region with regard to boundary
@@ -311,7 +309,7 @@ outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 migrateSpace :: Region -> Space -> Space
 migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (spaceToPlace s)
 
-migrateSpaceF :: [Boundary] -> Region -> (Boundary,Full) -> Full
+migrateSpaceF :: [Boundary] -> Region -> (Boundary,[[Region]]) -> [[Region]]
 migrateSpaceF b r (a,s)
  | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
  | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
