@@ -74,11 +74,11 @@ rvb :: (a -> Maybe String) -> [a] -> Maybe String
 rvb a b = join (find (\x -> x /= Nothing) (map a b))
 
 empty :: Maybe String
-empty = rv ((regionsOfSpace []) == [0]) (show (regionsOfSpace []))
+empty = rv ((regionsOfSpace []) == [Region 0]) (show (regionsOfSpace []))
 
 simplex :: Maybe String
 simplex = let
- space = foldl' (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]]
+ space = foldl' (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]]
  regions = regionsOfSpace space
  outsides = filter (\r -> outsideOfRegionExists r space) regions
  insides = regions \\ outsides
@@ -104,13 +104,13 @@ extendSpace _ _ = []
 
 antisection :: Maybe String
 antisection = let
- space = foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]]
+ space = foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]]
  spaces = extendSpace 2 space
  in rvb (\x -> rv (isLinear 2 x) (show x)) spaces
 
 migrate :: Maybe String
 migrate = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
+ spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
  migrates = concat (map (\s -> map (\r -> migrateSpace r s) (filter (\r -> migrateSpaceExists r s) (regionsOfSpace s))) spaces)
  in rvb (\s -> rv (isLinear 2 s) (show s)) migrates
 
@@ -149,16 +149,16 @@ powerSets a = concat (map (\x -> subsets x a) (indices (length a)))
 
 meta :: Maybe String
 meta = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- places = map enumerate spaces
+ spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
+ places = map spaceToPlace spaces
  tuples = [(a,b) | a <- places, b <- powerSets (domain a)]
  subs = map (\(a,b) -> (a, subSubPlace b a)) tuples
  in rvb (\(a,b) -> rv (isSubPlaceEquiv b a) (show (a,b))) subs
 
 single :: Maybe String
 single = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- orders = extendSpace 1 (foldl (\x y -> divideSpaceF y x) [] [[0],[0],[0]])
+ spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
+ orders = extendSpace 1 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0],[Region 0]])
  in (rvb (\x -> rv (isLinear 2 x) (show x)) spaces) `rva` (rvb (\x -> rv (isLinear 1 x) (show x)) orders)
 
 equivSpace :: [Region] -> Space -> Space
@@ -166,29 +166,29 @@ equivSpace r s = map (\x -> map (\y -> map (\z -> r !! (fromJust (elemIndex z (r
 
 rename :: Maybe String
 rename = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- regions = map (\x -> x * 3) (indices (defineLinear 2 4))
+ spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
+ regions = map (\x -> Region (x * 3)) (indices (defineLinear 2 4))
  in rvb (\x -> rv ((regionsOfSpace (equivSpace regions x)) == regions) (show (x,regions))) spaces
 
 section :: Maybe String
 section = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- sections = [(x,y,range (sectionSpace y (enumerate x))) | x <- spaces, y <- boundariesOfSpace x]
+ spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
+ sections = [(x,y,range (sectionSpace y (spaceToPlace x))) | x <- spaces, y <- boundariesOfSpace x]
  in rvb (\(x,y,z) -> rv (isLinear 1 z) (show (x,y,z))) sections
 
 outside :: Maybe String
 outside = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- sections = [range (sectionSpace y (enumerate x)) | x <- spaces, y <- boundariesOfSpace x]
- func x s y = (outsideOfRegionExists y s) && ((regionWrtBoundary x y s) == 0)
+ spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
+ sections = [range (sectionSpace y (spaceToPlace x)) | x <- spaces, y <- boundariesOfSpace x]
+ func x s y = (outsideOfRegionExists y s) && ((regionWrtBoundary x y s) == (Side 0))
  args = [(b,s) | s <- sections, b <- boundariesOfSpace s]
  in rvb (\(b,s) -> rv ((find (func b s) (regionsOfSpace s)) /= Nothing) (show (b,s))) args
 
 special :: Maybe String
 special = let
- spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[0],[0,1],[0,1,2]])
- sections = [range (sectionSpace y (enumerate x)) | x <- spaces, y <- boundariesOfSpace x]
- places = map enumerate sections
+ spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
+ sections = [range (sectionSpace y (spaceToPlace x)) | x <- spaces, y <- boundariesOfSpace x]
+ places = map spaceToPlace sections
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
  sups = map (\(d,(a,b,c)) -> (superSpace (Random.mkStdGen d) 1 b c, a, b, c,d)) (enumerate subs)
@@ -203,7 +203,7 @@ general :: Maybe String
 general = let
  complexities = [(n,m) | n <- [3..4], m <- [3..6]]
  spaces = map (\(g,(n,m)) -> (n,anySpace (Random.mkStdGen g) n m)) (enumerate complexities)
- places = map (\(n,(a,_)) -> (n,enumerate a)) spaces
+ places = map (\(n,(a,_)) -> (n,spaceToPlace a)) spaces
  tuples = [(n,a,b,c) | (n,a) <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(n,a,b,c) -> (n, a, subSubPlace b a, subSubPlace c a)) tuples
  sups = map (\(d,(n,a,b,c)) -> (n, superSpace (Debug [] [] (Random.mkStdGen d)) n b c, a, b, c, d)) (enumerate subs)

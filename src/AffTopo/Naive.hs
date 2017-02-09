@@ -25,26 +25,26 @@ import Data.Bits
 import qualified Numeric.LinearAlgebra as Matrix
 import qualified System.Random as Random
 
-type Boundary = Int -- index into Space
-type Region = Int -- arbitrary identifier
-type Side = Int -- index into Full
+newtype Boundary = Boundary Int deriving (Eq, Ord, Show) -- index into Space
+newtype Region = Region Int deriving (Eq, Ord, Show) -- arbitrary identifier
+newtype Side = Side Int deriving (Eq, Ord, Show) -- index into Full
 type Half = [Region] -- assume welldef set
-type Full = [Half] -- assume disjoint covering pair
-type Space = [Full] -- assume equal covers
+type Full = [[Region]] -- assume disjoint covering pair
+type Space = [[[Region]]] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,Full)] -- assume one-to-one
 type Plual = [(Region,[[Boundary]])] -- dual of place
 type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 
-intToBool :: Int -> Bool
-intToBool a = a /= 0
+sideToBool :: Side -> Bool
+sideToBool a = a /= (Side 0)
 
-boolToInt :: Bool -> Int
-boolToInt a = if a then 1 else 0
+boolToSide :: Bool -> Side
+boolToSide a = if a then Side 1 else Side 0
 
-notOfInt :: Int -> Int
-notOfInt a = boolToInt (not (intToBool a))
+notOfSide :: Side -> Side
+notOfSide a = boolToSide (not (sideToBool a))
 
 -- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
@@ -212,7 +212,7 @@ isLinearF n s b = let
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
-boundariesOfSpace s = indices (length s)
+boundariesOfSpace s = map Boundary (indices (length s))
 
 boundariesOfDual :: Dual -> [Boundary]
 boundariesOfDual [] = undefined
@@ -223,18 +223,22 @@ boundariesOfPlace = domain
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
-regionsOfSpace [] = [0]
+regionsOfSpace [] = [Region 0]
 regionsOfSpace s = concat (head s)
 
 regionsOfDual :: Dual -> [Region]
-regionsOfDual s = indices (length s)
+regionsOfDual s = map Region (indices (length s))
 
 regionsOfPlual :: Plual -> [Region]
 regionsOfPlual = domain
 
+-- element of space
+regionsOfBoundary :: Boundary -> Space -> Full
+regionsOfBoundary (Boundary b) s = s !! b
+
 -- side of region with regard to boundary
 regionWrtBoundary :: Boundary -> Region -> Space -> Side
-regionWrtBoundary b r s = fromJust (findIndex (\a -> member r a) (s !! b))
+regionWrtBoundary b r s = Side (fromJust (findIndex (\a -> member r a) (regionsOfBoundary b s)))
 
 -- side of vertex identified by n boundaries
 vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Side
@@ -253,11 +257,11 @@ regionOfSidesExists :: [Side] -> Space -> Bool
 regionOfSidesExists r s = (length (regionOfSidesF r s)) == 1
 
 regionOfSidesF :: [Side] -> Space -> [Region]
-regionOfSidesF r s = fold' (\(b,c) a -> a +\ (c !! b)) (zip r s) (regionsOfSpace s)
+regionOfSidesF r s = fold' (\((Side b),c) a -> a +\ (c !! b)) (zip r s) (regionsOfSpace s)
 
 -- return sidedness with boundaries reversed
 oppositeOfSides :: [Boundary] -> [Side] -> [Side]
-oppositeOfSides b r = fold' (\x y -> replace x (notOfInt (y !! x)) y) b r
+oppositeOfSides b r = fold' (\(Boundary x) y -> replace x (notOfSide (y !! x)) y) b r
 
 -- return neighbor region of given region wrt given boundaries
 oppositeOfRegion :: [Boundary] -> Region -> Space -> Region
@@ -332,14 +336,14 @@ subSpace = subSpaceF (flip (\\))
 subSpaceF :: ([Region] -> [Region] -> [Region]) -> Boundary -> Place -> Place
 subSpaceF f b s = let
  (bounds,space) = unzipPlace s
- bound = fromJust (elemIndex b bounds)
- section = filter (subSpaceG bound space) (regionsOfSpace space)
- result = map2 (f section) (unplace bound space)
- in zipPlace (unplace bound bounds) result
+ index = fromJust (elemIndex b bounds)
+ section = filter (subSpaceG b space) (regionsOfSpace space)
+ result = map2 (f section) (unplace index space)
+ in zipPlace (unplace index bounds) result
 
 subSpaceG :: Boundary -> Space -> Region -> Bool
 subSpaceG b s r = let
- x = (regionWrtBoundary b r s) == 0
+ x = (regionWrtBoundary b r s) == (Side 0)
  y = oppositeOfRegionExists [b] r s
  in x && y
 
@@ -360,7 +364,7 @@ divideSpaceF figure space = let
  whole = regionsOfSpace space
  ground = whole \\ figure
  halfspace = divideSpaceG ground space
- duplicates = holes (length figure) whole
+ duplicates = map Region (holes (length figure) (map (\(Region x) -> x) whole))
  mapping = zip figure duplicates
  withDups = map2 (divideSpaceH mapping figure) space
  newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
@@ -391,7 +395,7 @@ powerSpace b = let
 
 -- regions indicated by boundary as bit position
 powerSpaceF :: Int -> [Int] -> Int -> [Region]
-powerSpaceF b r s = filter (\y -> (boolToInt (testBit y b)) == s) r
+powerSpaceF b r s = map Region (filter (\y -> (boolToSide (testBit y b)) == (Side s)) r)
 
 -- remove region to produce non-linear space
 degenSpace :: Region -> Place -> Place
@@ -408,7 +412,8 @@ crossSpace s t = let
  tRegions = regionsOfSpace tSpace
  sPairs x = [(p,q) | p <- x, q <- tRegions]
  tPairs x = [(p,q) | p <- sRegions, q <- x]
- regions = enumerate [(x,y) | x <- sRegions, y <- tRegions]
+ numbers = enumerate [(x,y) | x <- sRegions, y <- tRegions]
+ regions = map (\(x,(y,z)) -> (Region x,(y,z))) numbers
  sCross = map2 (\x -> preimage (sPairs x) regions) sSpace
  tCross = map2 (\x -> preimage (tPairs x) regions) tSpace
  in zipPlace (sBounds Prelude.++ tBounds) (sCross Prelude.++ tCross)
@@ -452,13 +457,16 @@ placeToDual :: Place -> Dual
 placeToDual = range . placeToPlual
 
 dualToSpace :: Dual -> Space
-dualToSpace = range . plualToPlace . enumerate
+dualToSpace = range . plualToPlace . dualToPlual
 
 dualToPlace :: Dual -> Place
-dualToPlace = plualToPlace . enumerate
+dualToPlace = plualToPlace . dualToPlual
 
 spaceToPlace :: Space -> Place
-spaceToPlace = enumerate
+spaceToPlace s = map (\(x,y) -> (Boundary x,y)) (enumerate s)
+
+dualToPlual :: Dual -> Plual
+dualToPlual s = map (\(x,y) -> (Region x,y)) (enumerate s)
 
 placeToSpace :: Place -> Space
 placeToSpace = range
@@ -491,13 +499,13 @@ minEquiv s = let
 
 minEquivF :: [Boundary] -> Dual -> Dual
 minEquivF b s = let
- perm = map (\x -> map (\y -> map (\z -> fromJust (elemIndex z b)) y) x) s
+ perm = map (\x -> map (\y -> map (\z -> Boundary (fromJust (elemIndex z b))) y) x) s
  in sort (map (\x -> sort (map (\y -> sort y) x)) perm)
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- (s,h) = fold' (\z (x,y) -> superSpace y n x (powerSpace [z])) (indices m) ([],g)
+ (s,h) = fold' (\z (x,y) -> superSpace y n x (powerSpace [z])) (map Boundary (indices m)) ([],g)
  in (placeToSpace s, h)
 
 -- return all linear spaces given any space to start
@@ -731,7 +739,7 @@ isAbovePlane v w = let
 spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n w
  | m == 0 = []
- | n == 0 = replicate m [[0],[]]
+ | n == 0 = replicate m [[Region 0],[]]
  | otherwise = spaceFromPlanesF n m w where
  m = length w
 
@@ -759,9 +767,9 @@ spaceFromPlanesG s w (b, v) = map (spaceFromPlanesH v w 0 b) s
 spaceFromPlanesH :: Point -> [Plane] -> Int -> [Int] -> [Side] -> [Side]
 spaceFromPlanesH v (u:w) a (b:c) (s:t)
  | a == b = s:(spaceFromPlanesH v (u:w) (a+1) c t)
- | otherwise = (boolToInt (isAbovePlane v u)):(spaceFromPlanesH v w (a+1) (b:c) (s:t))
+ | otherwise = (boolToSide (isAbovePlane v u)):(spaceFromPlanesH v w (a+1) (b:c) (s:t))
 spaceFromPlanesH _ [] _ _ (s:t) = s:t
-spaceFromPlanesH v (u:w) _ _ [] = (boolToInt (isAbovePlane v u)):(spaceFromPlanesH v w 0 [] [])
+spaceFromPlanesH v (u:w) _ _ [] = (boolToSide (isAbovePlane v u)):(spaceFromPlanesH v w 0 [] [])
 spaceFromPlanesH _ [] _ _ [] = []
 spaceFromPlanesH _ _ _ _ _ = undefined
 
@@ -772,13 +780,13 @@ planesFromSpace n s
  | m <= n = take m (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
   -- recurse with one fewer boundary
-  space = placeToSpace (subSpace (m - 1) (spaceToPlace s))
+  space = placeToSpace (subSpace (Boundary (m - 1)) (spaceToPlace s))
   planes = planesFromSpace n space
   -- find vertices
   vertices = subsets n (indices (length space))
   -- find sides of vertices wrt chosen boundary
-  sides = map (\x -> vertexWrtBoundary (m - 1) x s) vertices
-  mirror = map notOfInt sides
+  sides = map (\x -> vertexWrtBoundary (Boundary (m - 1)) (map Boundary x) s) vertices
+  mirror = map notOfSide sides
   -- interpret vertices as coplanes
   coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) vertices
   -- convert coplanes to cospace with up-down sidedeness
@@ -801,7 +809,7 @@ planesFromSpace n s
 planesFromSpaceH :: Int -> Region -> Space -> [Plane] -> Point
 planesFromSpaceH n region space planes = let
  corners = attachedFacets n region space
- points = map (\x -> fromJust (intersectPlanes n (subset x planes))) corners
+ points = map (\x -> fromJust (intersectPlanes n (subset (map (\(Boundary y) -> y) x) planes))) corners
  zero = Matrix.fromList (replicate n 0.0)
  in Matrix.scale (1.0 / (fromIntegral (length points))) (fold' (\x y -> Matrix.add x y) points zero)
 
