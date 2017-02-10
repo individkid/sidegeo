@@ -230,13 +230,9 @@ regionsOfDual s = map Region (indices (length s))
 regionsOfPlual :: Plual -> [Region]
 regionsOfPlual = domain
 
--- element of space
-regionsOfBoundary :: Boundary -> Space -> [[Region]]
-regionsOfBoundary (Boundary b) s = s !! b
-
 -- side of region with regard to boundary
 regionWrtBoundary :: Boundary -> Region -> Space -> Side
-regionWrtBoundary b r s = Side (fromJust (findIndex (\a -> member r a) (regionsOfBoundary b s)))
+regionWrtBoundary (Boundary b) r s = Side (fromJust (findIndex (\a -> member r a) (s !! b)))
 
 -- side of vertex identified by n boundaries
 vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Side
