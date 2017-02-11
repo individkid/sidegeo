@@ -165,6 +165,9 @@ fold' = flip . foldr
 map2 :: (a -> b) -> [[a]] -> [[b]]
 map2 = map . map
 
+map3 :: (a -> b) -> [[[a]]] -> [[[b]]]
+map3 = map . map . map
+
 --
 -- now for something new
 --
@@ -448,13 +451,16 @@ placeToPlual s = let
  in map (\((x,y),z) -> (x,[y,z])) (zip left right)
 
 placeToDual :: Place -> Dual
-placeToDual = range . placeToPlual
-
-dualToSpace :: Dual -> Space
-dualToSpace = range . plualToPlace . dualToPlual
+placeToDual = plualToDual . placeToPlual
 
 dualToPlace :: Dual -> Place
 dualToPlace = plualToPlace . dualToPlual
+
+dualToSpace :: Dual -> Space
+dualToSpace = placeToSpace . plualToPlace . dualToPlual
+
+spaceToDual :: Space -> Dual
+spaceToDual = plualToDual . placeToPlual . spaceToPlace
 
 spaceToPlace :: Space -> Place
 spaceToPlace s = map (\(x,y) -> (Boundary x,y)) (enumerate s)
@@ -471,11 +477,11 @@ plualToDual = range
 unzipPlace :: Place -> ([Boundary],Space)
 unzipPlace = unzip
 
-zipPlace :: [Boundary] -> Space -> Place
-zipPlace = zip
-
 unzipPlual :: Plual -> ([Region],Dual)
 unzipPlual = unzip
+
+zipPlace :: [Boundary] -> Space -> Place
+zipPlace = zip
 
 --
 -- so far so simple
@@ -484,17 +490,16 @@ unzipPlual = unzip
 -- optimize this
 minEquiv :: Space -> Space
 minEquiv s = let
- place = spaceToPlace s
- dual = placeToDual place
- perms = permutations (boundariesOfPlace place)
- equivs = map (\x -> minEquivF x dual) perms
+ dual = spaceToDual s
+ perms = permutations (boundariesOfDual dual)
+ equivs = map (minEquivF dual) perms
  equiv = minimum equivs
  in dualToSpace equiv
 
-minEquivF :: [Boundary] -> Dual -> Dual
-minEquivF b s = let
- perm = map (\x -> map (\y -> map (\z -> Boundary (fromJust (elemIndex z b))) y) x) s
- in sort (map (\x -> sort (map (\y -> sort y) x)) perm)
+minEquivF :: Dual -> [Boundary] -> Dual
+minEquivF s b = let
+ perm = map3 (Boundary . fromJust . (flip elemIndex b)) s
+ in (sort . (map sort) . (map2 sort)) perm
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
@@ -592,16 +597,16 @@ rabbitSpace g n s t
   tSect = sectionSpace tBound t
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
   sSup = divideSpace tBound sect sSect
-  tSup = concat (map (\x -> divideSpace sBound x t) sSup)
+  tSup = concat (map ((flip (divideSpace sBound)) t) sSup)
   in rabbitSpaceF h n s t tSup
  | n == 1 = let
   sDual = placeToDual (crossSpace s (powerSpace [tBound]))
   tDual = placeToDual (crossSpace t (powerSpace [sBound]))
   double = powerSpace [sBound, tBound]
   regions = regionsOfSpace (placeToSpace double)
-  cross = map (\x -> crossSpace place (degenSpace x double)) regions
+  cross = map ((crossSpace place) . (flip degenSpace double)) regions
   dual = map placeToDual cross
-  result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
+  result = map (dualToPlace . (sDual +\ tDual +\)) dual
   in rabbitSpaceF g n s t result
  | otherwise = undefined where
  sBounds = boundariesOfPlace s
