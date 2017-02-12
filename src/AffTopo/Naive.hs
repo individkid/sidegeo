@@ -228,6 +228,10 @@ boundariesOfDual s = concat (head s)
 boundariesOfPlace :: Place -> [Boundary]
 boundariesOfPlace = domain
 
+boundariesOfPlual :: Plual -> [Boundary]
+boundariesOfPlual [] = undefined
+boundariesOfPlual s = concat (snd (head s))
+
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
 regionsOfSpace [] = [Region 0]
@@ -235,6 +239,10 @@ regionsOfSpace s = concat (head s)
 
 regionsOfDual :: Dual -> [Region]
 regionsOfDual s = map Region (indices (length s))
+
+regionsOfPlace :: Place -> [Region]
+regionsOfPlace [] = [Region 0]
+regionsOfPlace s = concat (snd (head s))
 
 regionsOfPlual :: Plual -> [Region]
 regionsOfPlual = domain
