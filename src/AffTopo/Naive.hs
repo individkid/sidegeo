@@ -166,7 +166,13 @@ map2 :: (a -> b) -> [[a]] -> [[b]]
 map2 = map . map
 
 map3 :: (a -> b) -> [[[a]]] -> [[[b]]]
-map3 = map . map . map
+map3 = map2 . map
+
+sort2 :: Ord a => [[a]] -> [[a]]
+sort2 a = sort (map sort a)
+
+sort3 :: Ord a => [[[a]]] -> [[[a]]]
+sort3 a = sort (map sort2 a)
 
 --
 -- now for something new
@@ -201,7 +207,7 @@ isLinear n s
  | otherwise = let
   boundaries = boundariesOfSpace s
   sizes = indices (length boundaries)
-  subs = fold' (\a b -> b Prelude.++ (subsets a boundaries)) sizes []
+  subs = fold' (\a b -> b ++ (subsets a boundaries)) sizes []
   in fold' (\a b -> b && (isLinearF n s a)) subs True
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
@@ -413,7 +419,7 @@ crossSpace s t = let
  regions = map (\(x,(y,z)) -> (Region x,(y,z))) numbers
  sCross = map2 (\x -> preimage (sPairs x) regions) sSpace
  tCross = map2 (\x -> preimage (tPairs x) regions) tSpace
- in zipPlace (sBounds Prelude.++ tBounds) (sCross Prelude.++ tCross)
+ in zipPlace (sBounds ++ tBounds) (sCross ++ tCross)
 
 -- reverse sidedness of given boundary
 mirrorSpace :: Boundary -> Place -> Place
@@ -499,7 +505,7 @@ minEquiv s = let
 minEquivF :: Dual -> [Boundary] -> Dual
 minEquivF s b = let
  perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) s
- in sort (map sort (map2 sort perm))
+ in sort3 perm
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
@@ -801,7 +807,7 @@ planesFromSpace n s
   outpoint = planesFromSpaceI n coregion cospace coplanes inpoint
   copoint = if outin then outpoint else inpoint
   -- interpret copoint as plane to add
-  in planes Prelude.++ [copoint] where
+  in planes ++ [copoint] where
  m = length s
 
 -- return average of corners of coregeion
