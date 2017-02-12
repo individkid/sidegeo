@@ -65,13 +65,13 @@ welldefF (a:(b:c))
 welldefF a = a
 
 member :: Eq a => a -> [a] -> Bool
-member a b = (find (\c -> a == c) b) /= Nothing
+member a b = (find (a ==) b) /= Nothing
 
 insert :: Ord a => a -> [a] -> [a]
 insert a b = if elem a b then b else a:b
 
 remove :: Eq a => a -> [a] -> [a]
-remove a b = filter (\c -> c /= a) b
+remove a b = filter (a /=) b
 
 unplace :: Int -> [a] -> [a]
 unplace a b = (take a b) Prelude.++ (drop (a+1) b)
@@ -498,8 +498,8 @@ minEquiv s = let
 
 minEquivF :: Dual -> [Boundary] -> Dual
 minEquivF s b = let
- perm = map3 (Boundary . fromJust . (flip elemIndex b)) s
- in (sort . (map sort) . (map2 sort)) perm
+ perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) s
+ in sort (map sort (map2 sort perm))
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
@@ -604,9 +604,9 @@ rabbitSpace g n s t
   tDual = placeToDual (crossSpace t (powerSpace [sBound]))
   double = powerSpace [sBound, tBound]
   regions = regionsOfSpace (placeToSpace double)
-  cross = map ((crossSpace place) . (flip degenSpace double)) regions
+  cross = map (\x -> crossSpace place (degenSpace x double)) regions
   dual = map placeToDual cross
-  result = map (dualToPlace . (sDual +\ tDual +\)) dual
+  result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
   in rabbitSpaceF g n s t result
  | otherwise = undefined where
  sBounds = boundariesOfPlace s
