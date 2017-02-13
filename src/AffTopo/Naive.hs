@@ -50,6 +50,11 @@ subsets 0 _ = [[]]
 subsets _ [] = []
 subsets n (a:b) = (map (a:) (subsets (n-1) b)) Prelude.++ (subsets n b)
 
+power :: Ord a => [a] -> [[a]]
+power a = let
+ sizes = indices (length a)
+ in fold' (\x y -> y ++ (subsets x a)) sizes []
+
 -- those indexed by list of indices
 subset :: [Int] -> [a] -> [a]
 subset a b = image a (enumerate b)
@@ -206,8 +211,7 @@ isLinear n s
   in valid domains
  | otherwise = let
   boundaries = boundariesOfSpace s
-  sizes = indices (length boundaries)
-  subs = fold' (\a b -> b ++ (subsets a boundaries)) sizes []
+  subs = power boundaries
   in fold' (\a b -> b && (isLinearF n s a)) subs True
 
 isLinearF :: Int -> Space -> [Boundary] -> Bool
@@ -433,6 +437,9 @@ crossSpace s t = let
 mirrorSpace :: Boundary -> Place -> Place
 mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
+prismSpace :: [Boundary] -> Space -> Space
+prismSpace b s = map (\(x,[y,z]) -> if member x b then [z,y] else [y,z]) (spaceToPlace s)
+
 -- each dual region of superspace is superset of some dual region of subspace
 isSubSpace :: Place -> Place -> Bool
 isSubSpace s t = let
@@ -504,15 +511,16 @@ zipPlace = zip
 -- optimize this
 minEquiv :: Space -> Space
 minEquiv s = let
- dual = spaceToDual s
- perms = permutations (boundariesOfDual dual)
- equivs = map (minEquivF dual) perms
- equiv = minimum equivs
- in dualToSpace equiv
+ boundaries = boundariesOfSpace s
+ perms = permutations boundaries
+ mirrors = power boundaries
+ equivs = map (minEquivF s) [(x,y) | x <- perms, y <- mirrors]
+ in dualToSpace (minimum equivs)
 
-minEquivF :: Dual -> [Boundary] -> Dual
-minEquivF s b = let
- perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) s
+minEquivF :: Space -> ([Boundary],[Boundary]) -> Dual
+minEquivF s (b,c) = let
+ dual = spaceToDual (prismSpace c s)
+ perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) dual
  in sort3 perm
 
 -- return space by calling superSpace with singleton space
