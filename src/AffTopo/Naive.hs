@@ -322,6 +322,10 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
+-- return region counts on given sides of given boundaries
+occupyOfPolyant :: [(Boundary,Side)] -> Space -> [Int]
+occupyOfPolyant = undefined
+
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
 migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (spaceToPlace s)
@@ -523,6 +527,31 @@ minEquivF s (b,c) = let
  perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) dual
  in sort3 perm
 
+-- for each of polyants, for each extension of polyant, find occupy
+minEquiv2 :: Random.RandomGen g => Show g => g -> Space -> (Space, g)
+minEquiv2 g s = let
+ boundsides = [(x,y) | x <- boundariesOfSpace s, y <- [Side 0, Side 1]]
+ perms = minEquiv2F [([],boundsides)] s
+ (perm,h) = choose g perms
+ in (map (minEquiv2G s) perm, h)
+
+minEquiv2F :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
+minEquiv2F a s
+ | (length (snd (head a))) == 0 = domain a
+ | otherwise = let
+  candidates = [(x Prelude.++ [z], remove z y) | (x,y) <- a, z <- y]
+  polyants = map fst candidates
+  occupants = map (\x -> occupyOfPolyant x s) polyants
+  votes = zip occupants candidates
+  election = minimum occupants
+  servants = image [election] votes
+  in minEquiv2F servants s
+
+minEquiv2G :: Space -> (Boundary,Side) -> [[Region]]
+minEquiv2G s (Boundary b, Side 0) = s !! b
+minEquiv2G s (Boundary b, Side 1) = reverse (s !! b)
+minEquiv2G _ _ = undefined
+
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
@@ -555,6 +584,7 @@ allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
 
 -- return space that is section of given spaces
+-- given dimensions correspond to given spaces. first two spaces are sections of third place
 subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place,g)
 subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (dim < 0) = undefined
@@ -563,7 +593,7 @@ subSection g p q n s t u
  | q == n = (s,g)
  | dim == 0 = let
   (region,h) = choose g (takeRegions s t)
-  regions = remove region (regionsOfSpace (placeToSpace t))
+  regions = remove region (regionsOfPlace t)
   in (fold' degenSpace regions t, h)
  | dim >= (length u) = (powerSpace (boundariesOfPlace u), g)
  | dim > 0 = let
@@ -585,6 +615,7 @@ subSectionF :: Place -> Place -> Place -> Bool
 subSectionF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
 -- return superspace with given spaces as subspaces
+-- given spaces have given dimension. subspaces by shared regions are equal
 superSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 superSpace g n s t
  | n < 0 = undefined
@@ -612,6 +643,7 @@ superSpace g n s t
  bounds = sBounds ++ tBounds
 
 -- cases where sOnly and tOnly are singletons
+-- like superSpace except one and only one unshared boundary in each space
 rabbitSpace :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> (Place, g)
 rabbitSpace g n s t
  | n >= 2 = let
@@ -619,13 +651,13 @@ rabbitSpace g n s t
   tSect = sectionSpace tBound t
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
   sSup = divideSpace tBound sect sSect
-  tSup = concat (map ((flip (divideSpace sBound)) t) sSup)
+  tSup = concat (map (\x -> divideSpace sBound x t) sSup)
   in rabbitSpaceF h n s t tSup
  | n == 1 = let
   sDual = placeToDual (crossSpace s (powerSpace [tBound]))
   tDual = placeToDual (crossSpace t (powerSpace [sBound]))
   double = powerSpace [sBound, tBound]
-  regions = regionsOfSpace (placeToSpace double)
+  regions = regionsOfPlace double
   cross = map (\x -> crossSpace place (degenSpace x double)) regions
   dual = map placeToDual cross
   result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
