@@ -520,7 +520,7 @@ minEquivF a s
  | otherwise = let
   candidates = [(x Prelude.++ [z], remove z y) | (x,y) <- a, z <- y]
   polyants = map fst candidates
-  ballots = map (minEquivH (regionsOfSpace s) s) polyants
+  ballots = map (minEquivI s) polyants
   votes = zip ballots candidates
   election = minimum ballots
   servants = image [election] votes
@@ -534,38 +534,33 @@ minEquivG _ _ = undefined
 
 -- find permutation of regions that minimizes space permuted as given
 minEquivH :: [Region] -> Space -> [(Boundary,Side)] -> [Region]
+minEquivH [] _ _ = []
 minEquivH r s b = let
- region = minEquivI r s b
+ region = minEquivJ r s b
  in region:(minEquivH (remove region r) s b)
 
--- choose region from nonempty intersection from first halfspaces
-minEquivI :: [Region] -> Space -> [(Boundary,Side)] -> Region
-minEquivI [] _ _ = undefined
-minEquivI (a:[]) _ _ = a
-minEquivI (a:_) _ [] = a
-minEquivI a s ((Boundary b, Side c):d) = let
+-- permute halfspace indicated by last of permutation
+minEquivI :: Space -> [(Boundary,Side)] -> [Region]
+minEquivI s a = let
+ regions = minEquivH (regionsOfSpace s) s a
+ half = head (minEquivG s (a !! ((length a) - 1)))
+ in map (\x -> Region (fromJust (elemIndex x regions))) half
+
+-- choose region from nonempty intersection of first halfspaces
+minEquivJ :: [Region] -> Space -> [(Boundary,Side)] -> Region
+minEquivJ [] _ _ = undefined
+minEquivJ (a:[]) _ _ = a
+minEquivJ (a:_) _ [] = a
+minEquivJ a s ((Boundary b, Side c):d) = let
  regions = a +\ ((s !! b) !! c)
  nonempty = if (length regions) == 0 then a else regions
- in minEquivI nonempty s d
-
-minEquiv2 :: Space -> Space
-minEquiv2 s = let
- boundaries = boundariesOfSpace s
- perms = permutations boundaries
- mirrors = power boundaries
- equivs = map (minEquiv2F s) [(x,y) | x <- perms, y <- mirrors]
- in dualToSpace (minimum equivs)
-
-minEquiv2F :: Space -> ([Boundary],[Boundary]) -> Dual
-minEquiv2F s (b,c) = let
- dual = spaceToDual (prismSpace c s)
- perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) dual
- in sort3 perm
+ in minEquivJ nonempty s d
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- (s,h) = fold' (\z (x,y) -> superSpace y n x (powerSpace [z])) (map Boundary (indices m)) ([],g)
+ bounds = map Boundary (indices m)
+ (s,h) = fold' (\z (x,y) -> superSpace y n x (powerSpace [z])) bounds ([],g)
  in (placeToSpace s, h)
 
 -- return all linear spaces given any space to start
