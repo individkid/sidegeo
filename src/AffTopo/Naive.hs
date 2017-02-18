@@ -322,10 +322,6 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
--- return region counts on given sides of given boundaries
-occupyOfPolyant :: [(Boundary,Side)] -> Space -> [Int]
-occupyOfPolyant = undefined
-
 -- return space with given region changed to its local opposite
 migrateSpace :: Region -> Space -> Space
 migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (spaceToPlace s)
@@ -515,42 +511,58 @@ zipPlace = zip
 -- optimize this
 minEquiv :: Space -> Space
 minEquiv s = let
- boundaries = boundariesOfSpace s
- perms = permutations boundaries
- mirrors = power boundaries
- equivs = map (minEquivF s) [(x,y) | x <- perms, y <- mirrors]
- in dualToSpace (minimum equivs)
-
-minEquivF :: Space -> ([Boundary],[Boundary]) -> Dual
-minEquivF s (b,c) = let
- dual = spaceToDual (prismSpace c s)
- perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) dual
- in sort3 perm
-
--- for each of polyants, for each extension of polyant, find occupy
-minEquiv2 :: Random.RandomGen g => Show g => g -> Space -> (Space, g)
-minEquiv2 g s = let
  boundsides = [(x,y) | x <- boundariesOfSpace s, y <- [Side 0, Side 1]]
- perms = minEquiv2F [([],boundsides)] s
- (perm,h) = choose g perms
- in (map (minEquiv2G s) perm, h)
+ perms = minEquivF [([],boundsides)] s
+ in map (minEquivG s) (head perms)
 
-minEquiv2F :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
-minEquiv2F a s
+-- find permutations that minimize space, given list of partial permutations
+minEquivF :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
+minEquivF a s
  | (length (snd (head a))) == 0 = domain a
  | otherwise = let
   candidates = [(x Prelude.++ [z], remove z y) | (x,y) <- a, z <- y]
   polyants = map fst candidates
-  occupants = map (\x -> occupyOfPolyant x s) polyants
-  votes = zip occupants candidates
-  election = minimum occupants
+  ballots = map (minEquivH (regionsOfSpace s) s) polyants
+  votes = zip ballots candidates
+  election = minimum ballots
   servants = image [election] votes
-  in minEquiv2F servants s
+  in minEquivF servants s
 
-minEquiv2G :: Space -> (Boundary,Side) -> [[Region]]
-minEquiv2G s (Boundary b, Side 0) = s !! b
-minEquiv2G s (Boundary b, Side 1) = reverse (s !! b)
-minEquiv2G _ _ = undefined
+-- return permuted space element
+minEquivG :: Space -> (Boundary,Side) -> [[Region]]
+minEquivG s (Boundary b, Side 0) = s !! b
+minEquivG s (Boundary b, Side 1) = reverse (s !! b)
+minEquivG _ _ = undefined
+
+-- find permutation of regions that minimizes space permuted as given
+minEquivH :: [Region] -> Space -> [(Boundary,Side)] -> [Region]
+minEquivH r s b = let
+ region = minEquivI r s b
+ in region:(minEquivH (remove region r) s b)
+
+-- choose region from nonempty intersection from first halfspaces
+minEquivI :: [Region] -> Space -> [(Boundary,Side)] -> Region
+minEquivI [] _ _ = undefined
+minEquivI (a:[]) _ _ = a
+minEquivI (a:_) _ [] = a
+minEquivI a s ((Boundary b, Side c):d) = let
+ regions = a +\ ((s !! b) !! c)
+ nonempty = if (length regions) == 0 then a else regions
+ in minEquivI nonempty s d
+
+minEquiv2 :: Space -> Space
+minEquiv2 s = let
+ boundaries = boundariesOfSpace s
+ perms = permutations boundaries
+ mirrors = power boundaries
+ equivs = map (minEquiv2F s) [(x,y) | x <- perms, y <- mirrors]
+ in dualToSpace (minimum equivs)
+
+minEquiv2F :: Space -> ([Boundary],[Boundary]) -> Dual
+minEquiv2F s (b,c) = let
+ dual = spaceToDual (prismSpace c s)
+ perm = map3 (\x -> Boundary (fromJust (elemIndex x b))) dual
+ in sort3 perm
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
@@ -654,12 +666,12 @@ rabbitSpace g n s t
   tSup = concat (map (\x -> divideSpace sBound x t) sSup)
   in rabbitSpaceF h n s t tSup
  | n == 1 = let
-  sDual = placeToDual (crossSpace s (powerSpace [tBound]))
-  tDual = placeToDual (crossSpace t (powerSpace [sBound]))
+  sDual = map2 sort (placeToDual (crossSpace s (powerSpace [tBound])))
+  tDual = map2 sort (placeToDual (crossSpace t (powerSpace [sBound])))
   double = powerSpace [sBound, tBound]
   regions = regionsOfPlace double
   cross = map (\x -> crossSpace place (degenSpace x double)) regions
-  dual = map placeToDual cross
+  dual = map (\x -> map2 sort (placeToDual x)) cross
   result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
   in rabbitSpaceF g n s t result
  | otherwise = undefined where
