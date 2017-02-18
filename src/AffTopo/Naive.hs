@@ -199,12 +199,7 @@ isLinear n s
   halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (spaceToPlace s))
   ends = filter (\(_,x) -> (length x) == 1) halves
   dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
-  func x y
-   | (length (y \\ x)) == 0 = GT
-   | (length (x \\ y)) == 0 = LT
-   | otherwise = EQ
-  comp a b = let ((_,x),(_,y)) = (a,b) in func x y
-  sorts = map (\z -> sortBy comp z) dirs
+  sorts = map (sortBy (\y z -> compare (length (snd y)) (length (snd z)))) dirs
   domains = map domain sorts
   valid [x,y] = x == (reverse y)
   valid _ = False
@@ -513,7 +508,10 @@ minEquiv :: Space -> Space
 minEquiv s = let
  boundsides = [(x,y) | x <- boundariesOfSpace s, y <- [Side 0, Side 1]]
  perms = minEquivF [([],boundsides)] s
- in map (minEquivG s) (head perms)
+ perm = head perms
+ space = map (minEquivG s) perm
+ regions = minEquivH (regionsOfSpace s) s perm 
+ in map3 (\x -> Region (fromJust (elemIndex x regions))) space
 
 -- find permutations that minimize space, given list of partial permutations
 minEquivF :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
