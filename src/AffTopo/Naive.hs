@@ -432,9 +432,6 @@ crossSpace s t = let
 mirrorSpace :: Boundary -> Place -> Place
 mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
-prismSpace :: [Boundary] -> Space -> Space
-prismSpace b s = map (\(x,[y,z]) -> if member x b then [z,y] else [y,z]) (spaceToPlace s)
-
 -- each dual region of superspace is superset of some dual region of subspace
 isSubSpace :: Place -> Place -> Bool
 isSubSpace s t = let
@@ -506,12 +503,12 @@ zipPlace = zip
 -- optimize this
 minEquiv :: Space -> Space
 minEquiv s = let
- boundsides = [(x,y) | x <- boundariesOfSpace s, y <- [Side 0, Side 1]]
- perms = minEquivF [([],boundsides)] s
+ ident = [(x,y) | x <- boundariesOfSpace s, y <- [Side 0, Side 1]]
+ perms = minEquivF [([],ident)] s
  perm = head perms
- space = map (minEquivG s) perm
- regions = minEquivH (regionsOfSpace s) s perm 
- in map3 (\x -> Region (fromJust (elemIndex x regions))) space
+ space = map (minEquivI s) perm
+ regions = minEquivG (regionsOfSpace s) s perm 
+ in map3 (minEquivJ regions) space
 
 -- find permutations that minimize space, given list of partial permutations
 minEquivF :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
@@ -520,41 +517,45 @@ minEquivF a s
  | otherwise = let
   candidates = [(x Prelude.++ [z], remove z y) | (x,y) <- a, z <- y]
   polyants = map fst candidates
-  ballots = map (minEquivI s) polyants
+  ballots = map (minEquivK s) polyants
   votes = zip ballots candidates
   election = minimum ballots
   servants = image [election] votes
   in minEquivF servants s
 
--- return permuted space element
-minEquivG :: Space -> (Boundary,Side) -> [[Region]]
-minEquivG s (Boundary b, Side 0) = s !! b
-minEquivG s (Boundary b, Side 1) = reverse (s !! b)
-minEquivG _ _ = undefined
-
 -- find permutation of regions that minimizes space permuted as given
-minEquivH :: [Region] -> Space -> [(Boundary,Side)] -> [Region]
-minEquivH [] _ _ = []
-minEquivH r s b = let
- region = minEquivJ r s b
- in region:(minEquivH (remove region r) s b)
-
--- permute halfspace indicated by last of permutation
-minEquivI :: Space -> [(Boundary,Side)] -> [Region]
-minEquivI s a = let
- regions = minEquivH (regionsOfSpace s) s a
- half = head (minEquivG s (a !! ((length a) - 1)))
- in map (\x -> Region (fromJust (elemIndex x regions))) half
+minEquivG :: [Region] -> Space -> [(Boundary,Side)] -> [Region]
+minEquivG [] _ _ = []
+minEquivG r s b = let
+ region = minEquivH r s b
+ in region : (minEquivG (remove region r) s b)
 
 -- choose region from nonempty intersection of first halfspaces
-minEquivJ :: [Region] -> Space -> [(Boundary,Side)] -> Region
-minEquivJ [] _ _ = undefined
-minEquivJ (a:[]) _ _ = a
-minEquivJ (a:_) _ [] = a
-minEquivJ a s ((Boundary b, Side c):d) = let
+minEquivH :: [Region] -> Space -> [(Boundary,Side)] -> Region
+minEquivH [] _ _ = undefined
+minEquivH (a:[]) _ _ = a
+minEquivH (a:_) _ [] = a
+minEquivH a s ((Boundary b, Side c):d) = let
  regions = a +\ ((s !! b) !! c)
  nonempty = if (length regions) == 0 then a else regions
- in minEquivJ nonempty s d
+ in minEquivH nonempty s d
+
+-- return permuted space element
+minEquivI :: Space -> (Boundary,Side) -> [[Region]]
+minEquivI s (Boundary b, Side 0) = s !! b
+minEquivI s (Boundary b, Side 1) = reverse (s !! b)
+minEquivI _ _ = undefined
+
+-- apply permutation to region
+minEquivJ :: [Region] -> Region -> Region
+minEquivJ a b = Region (fromJust (elemIndex b a))
+
+-- permute halfspace indicated by last of permutation
+minEquivK :: Space -> [(Boundary,Side)] -> [Region]
+minEquivK s a = let
+ regions = minEquivG (regionsOfSpace s) s a
+ half = head (minEquivI s (last a))
+ in map (minEquivJ regions) half
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
