@@ -426,7 +426,7 @@ crossSpace s t = let
  regions = map (\(x,(y,z)) -> (Region x,(y,z))) numbers
  sCross = map2 (\x -> preimage (sPairs x) regions) sSpace
  tCross = map2 (\x -> preimage (tPairs x) regions) tSpace
- in zipPlace (sBounds ++ tBounds) (sCross ++ tCross)
+ in (zipPlace sBounds sCross) ++ (zipPlace tBounds tCross)
 
 -- reverse sidedness of given boundary
 mirrorSpace :: Boundary -> Place -> Place
@@ -703,11 +703,10 @@ randomPlanesF i j k n m (a,g) = let
 
 -- use function to replace choice from given tuple
 randomPlanesG :: Random.RandomGen g => ((Plane, g) -> (Plane, g)) -> ([Plane], g) -> [Int] -> ([Plane], g)
-randomPlanesG i (a,f) b = let
- x = choose f b
- (c,g) = x
- (d,h) = i (a !! c, g)
- in (replace c d a, h)
+randomPlanesG f (a,g) b = let
+ (c,h) = choose g b
+ (d,i) = f (a !! c, h)
+ in (replace c d a, i)
 
 -- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
 randomPlanesH0 :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
@@ -787,11 +786,14 @@ intersectPlanesH n w = let
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
- dim = Matrix.size w
- planeS = Matrix.atIndex w (dim-1)
- pointS = Matrix.atIndex v (dim-1)
- planeV = Matrix.fromList (map (\x -> x - planeS) (Matrix.toList (Matrix.subVector 0 (dim-1) w)))
- pointV = Matrix.subVector 0 (dim-1) v
+ pointL = Matrix.toList v
+ planeL = Matrix.toList w
+ pointS = last pointL
+ planeS = last planeL
+ pointT = take ((length pointL)-1) pointL
+ planeT = take ((length planeL)-1) planeL
+ pointV = Matrix.fromList pointT
+ planeV = Matrix.fromList (map (\x -> x - planeS) planeT)
  in pointS > ((Matrix.dot planeV pointV) + planeS)
 
 -- return space with sidednesses determined by given planes
@@ -804,33 +806,32 @@ spaceFromPlanes n w
 
 spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
 spaceFromPlanesF n m w
- | m <= n = divideSpaceF (regionsOfSpace space) space
+ | m <= n = let
+  anti = divideSpace bound place place
+  -- choose antisection that puts some vertex not on the plane on Side 1 if isAbovePlane
+  in undefined
  | otherwise = let
   -- find intersection points on plane to add
-  vertices = map welldef (subsets (n - 1) (indices (m - 1)))
-  tuples = map (\x -> (m - 1):x) vertices
-  points = map (\x -> fromJust (intersectPlanes n (subset x w))) tuples
-  -- convert intersection points to sides in each permutation of sides wrt intersection planes
-  perms = undefined
-  sides = concat (map (spaceFromPlanesG perms w) (zip vertices points))
-  -- convert sides to regions to divide
-  divided = welldef (map (\x -> regionOfSides x space) sides)
+  vertices = subsets (n-1) (indices (m-1))
+  tuples = map (\x -> (m-1):x) vertices
+  points = map (\x -> fromJust (intersectPlanes n (subset x planes))) tuples
+  -- convert intersection points to sides and take to space
+  regions = concat (map (spaceFromPlanesG planes place) (zip vertices points))
+  sect = undefined -- convert regions to place
   -- return space with found regions divided by new boundary
-  in divideSpaceF divided space where
- planes = take (m - 1) w
+  anti = divideSpace bound sect place
+  -- choose antisection that puts some vertex not on the plane on Side 1 if isAbovePlane
+  in undefined where
+ bound = Boundary (m-1)
+ planes = take (m-1) w
  space = spaceFromPlanes n planes
+ place = spaceToPlace space
 
-spaceFromPlanesG :: [[Side]] -> [Plane] -> ([Int], Point) -> [[Side]]
-spaceFromPlanesG s w (b, v) = map (spaceFromPlanesH v w 0 b) s
-
-spaceFromPlanesH :: Point -> [Plane] -> Int -> [Int] -> [Side] -> [Side]
-spaceFromPlanesH v (u:w) a (b:c) (s:t)
- | a == b = s:(spaceFromPlanesH v (u:w) (a+1) c t)
- | otherwise = (boolToSide (isAbovePlane v u)):(spaceFromPlanesH v w (a+1) (b:c) (s:t))
-spaceFromPlanesH _ [] _ _ (s:t) = s:t
-spaceFromPlanesH v (u:w) _ _ [] = (boolToSide (isAbovePlane v u)):(spaceFromPlanesH v w 0 [] [])
-spaceFromPlanesH _ [] _ _ [] = []
-spaceFromPlanesH _ _ _ _ _ = undefined
+spaceFromPlanesG :: [Plane] -> Place -> ([Int], Point) -> [Region]
+spaceFromPlanesG w s (b, v) = let
+ planes = fold' (\x y -> unplace x y) b w
+ degen = map (\x -> if isAbovePlane v x then [[],[Region 0]] else [[Region 0],[]]) planes
+ in takeRegions (spaceToPlace degen) s
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
