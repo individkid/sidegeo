@@ -806,23 +806,17 @@ spaceFromPlanes n w
 
 spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
 spaceFromPlanesF n m w
- | m <= n = let
-  anti = divideSpace bound place place
-  -- choose antisection that puts some vertex not on the plane on Side 1 if isAbovePlane
-  in undefined
+ | m <= n = spaceFromPlanesH n m w place place
  | otherwise = let
   -- find intersection points on plane to add
-  vertices = subsets (n-1) (indices (m-1))
-  tuples = map (\x -> (m-1):x) vertices
-  points = map (\x -> fromJust (intersectPlanes n (subset x planes))) tuples
+  tuples = subsets (n-1) (indices (m-1))
+  vertices = map (\x -> (m-1):x) tuples
+  points = map (\x -> fromJust (intersectPlanes n (subset x w))) vertices
   -- convert intersection points to sides and take to space
   regions = concat (map (spaceFromPlanesG planes place) (zip vertices points))
-  sect = undefined -- convert regions to place
+  sect = fold' degenSpace ((regionsOfPlace place) \\ regions) place -- convert regions to place
   -- return space with found regions divided by new boundary
-  anti = divideSpace bound sect place
-  -- choose antisection that puts some vertex not on the plane on Side 1 if isAbovePlane
-  in undefined where
- bound = Boundary (m-1)
+  in spaceFromPlanesH n m w sect place where
  planes = take (m-1) w
  space = spaceFromPlanes n planes
  place = spaceToPlace space
@@ -832,6 +826,19 @@ spaceFromPlanesG w s (b, v) = let
  planes = fold' (\x y -> unplace x y) b w
  degen = map (\x -> if isAbovePlane v x then [[],[Region 0]] else [[Region 0],[]]) planes
  in takeRegions (spaceToPlace degen) s
+
+spaceFromPlanesH :: Int -> Int -> [Plane] -> Place -> Place -> Space
+spaceFromPlanesH n m w s t = let
+ bound = Boundary (m-1)
+ plane = last w
+ planes = take n w
+ anti = divideSpace bound s t
+ vertex = map Boundary (indices n)
+ point = fromJust (intersectPlanes n planes)
+ side = vertexWrtBoundary bound vertex (placeToSpace (head anti))
+ valid = (sideToBool side) == (isAbovePlane point plane)
+ place = if valid then head anti else last anti
+ in placeToSpace place
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
