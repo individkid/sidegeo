@@ -868,21 +868,28 @@ planesFromSpace n s
  | n == 0 = replicate m (Matrix.vector [])
  | m <= n = take m (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
+  index = m-1
+  bound = Boundary index
   -- recurse with one fewer boundary
-  space = placeToSpace (subSpace (Boundary (m - 1)) (spaceToPlace s))
+  place = spaceToPlace s
+  sub = subSpace bound place
+  space = placeToSpace sub
   planes = planesFromSpace n space
   -- find vertices
-  vertices = subsets n (indices (length space))
+  indexes = indices index
+  tuples = subsets n indexes
+  vertices = map2 Boundary tuples
   -- find sides of vertices wrt chosen boundary
-  sides = map (\x -> vertexWrtBoundary (Boundary (m - 1)) (map Boundary x) s) vertices
+  sides = map (\x -> vertexWrtBoundary bound x s) vertices
   mirror = map notOfSide sides
   -- construct plane through vertex planes interpreted as copoints
-  copoints = map (\x -> subset x planes) vertices 
+  copoints = map (\x -> subset x planes) tuples 
   coplanes = map (\x -> fromJust (constructPlane n x)) copoints
   -- convert coplanes to cospace with up-down sidedeness
   cospace = spaceFromPlanes n coplanes -- uses isAbovePlane for sidedness in cospace
   -- find sidesOfRegion of each coregion
-  cosides = map (\x -> sidesOfRegion x cospace) (regionsOfSpace cospace)
+  coregions = regionsOfSpace cospace
+  cosides = map (\x -> sidesOfRegion x cospace) coregions
   -- find cosides that matches vertices wrt chosen boundary
   [match] = filter (\x -> (x == sides) || (x == mirror)) cosides
   coregion = regionOfSides match cospace
