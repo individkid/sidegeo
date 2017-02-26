@@ -887,12 +887,10 @@ planesFromSpace n s
   coplanes = map (\x -> fromJust (constructPlane n x)) copoints
   -- convert coplanes to cospace with up-down sidedeness
   cospace = spaceFromPlanes n coplanes -- uses isAbovePlane for sidedness in cospace
-  -- find sidesOfRegion of each coregion
-  coregions = regionsOfSpace cospace
-  cosides = map (\x -> sidesOfRegion x cospace) coregions
   -- find cosides that matches vertices wrt chosen boundary
-  [match] = filter (\x -> (x == sides) || (x == mirror)) cosides
-  coregion = regionOfSides match cospace
+  valid = regionOfSidesExists sides cospace
+  cosides = if valid then sides else mirror
+  coregion = regionOfSides cosides cospace
   -- find copoint in coregion
   outin = outsideOfRegionExists coregion cospace
   inpoint = planesFromSpaceH n coregion cospace coplanes
