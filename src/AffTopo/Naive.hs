@@ -893,25 +893,29 @@ planesFromSpace n s
   coregion = regionOfSides cosides cospace
   -- find copoint in coregion
   outin = outsideOfRegionExists coregion cospace
-  inpoint = planesFromSpaceH n coregion cospace coplanes
-  outpoint = planesFromSpaceI n coregion cospace coplanes inpoint
+  inpoint = planesFromSpaceF n coregion cospace coplanes
+  outpoint = planesFromSpaceG n coregion cospace coplanes inpoint
   copoint = if outin then outpoint else inpoint
   -- interpret copoint as plane to add
   in planes ++ [copoint] where
  m = length s
 
 -- return average of corners of coregeion
-planesFromSpaceH :: Int -> Region -> Space -> [Plane] -> Point
-planesFromSpaceH n region space planes = let
+planesFromSpaceF :: Int -> Region -> Space -> [Plane] -> Point
+planesFromSpaceF n region space planes = let
  corners = attachedFacets n region space
- points = map (\x -> fromJust (intersectPlanes n (subset (map (\(Boundary y) -> y) x) planes))) corners
+ indexes = map2 (\(Boundary x) -> x) corners
+ numeric = map (\x -> subset x planes) indexes
+ points = map (\x -> fromJust (intersectPlanes n x)) numeric
  zero = Matrix.fromList (replicate n 0.0)
- in Matrix.scale (1.0 / (fromIntegral (length points))) (fold' (\x y -> Matrix.add x y) points zero)
+ factor = 1.0 / (fromIntegral (length points))
+ total = fold' (\x y -> Matrix.add x y) points zero
+ in Matrix.scale factor total
 
- -- find point some distance out on line to coregion from other outside
-planesFromSpaceI :: Int -> Region -> Space -> [Plane] -> Point -> Point
-planesFromSpaceI n r s p arrow = let
- feather = planesFromSpaceH n (outsideOfRegion r s) s p
+-- find point some distance out on line to coregion from other outside
+planesFromSpaceG :: Int -> Region -> Space -> [Plane] -> Point -> Point
+planesFromSpaceG n r s p arrow = let
+ feather = planesFromSpaceF n (outsideOfRegion r s) s p
  shaft = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
  factor = 0.1 / (sqrt (Matrix.dot shaft shaft))
  in Matrix.add arrow (Matrix.scale factor shaft)
