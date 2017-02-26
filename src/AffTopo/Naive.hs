@@ -780,9 +780,31 @@ intersectPlanesG w n a = negate (Matrix.atIndex (w !! a) (n - 1))
 -- each row is z0-zm z1-zm ... -1 | -zm
 intersectPlanesH :: Int -> [Plane] -> Maybe Point
 intersectPlanesH n w = let
- square = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
+ lhs = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
  rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
- in fmap Matrix.flatten (Matrix.linearSolve square rhs)
+ in fmap Matrix.flatten (Matrix.linearSolve lhs rhs)
+
+-- z0 = hm + x0*(h0-hm) + y0*(h1-hm) + ...
+-- z1 = hm + x1*(h0-hm) + y1*(h1-hm) + ...
+-- z2 = hm + x2*(h0-hm) + y2*(h1-hm) + ...
+-- ...
+-- z0 = hm + x0*h0 - x0*hm + y0*h1 - y0*hm + ...
+-- ...
+-- z0 = h0*x0 + h1*y0 + ... + hm*(1-x0-y0-...)
+-- z1 = h0*x1 + h1*y1 + ... + hm*(1-x1-y1-...)
+-- z2 = h0*x2 + h1*y2 + ... + hm*(1-x2-y2-...)
+-- ...
+constructPlane :: Int -> [Point] -> Maybe Plane
+constructPlane n v = let
+ lists = map Matrix.toList v
+ lasts = map last lists
+ prefs = map (take (n-1)) lists
+ posts = map (\x -> fold' (\y z -> z - y) x 1.0) prefs
+ rows = map (\(x,y) -> x Prelude.++ [y]) (zip prefs posts)
+ vectors = map Matrix.fromList rows
+ rhs = Matrix.matrix 1 lasts
+ lhs = Matrix.fromRows vectors
+ in fmap Matrix.flatten (Matrix.linearSolve lhs rhs)
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
@@ -840,6 +862,17 @@ spaceFromPlanesH n m w s t = let
  place = if valid then head anti else last anti
  in placeToSpace place
 
+-- xn = an + x0*(a0-an) + x1*(a1-an) + ...
+-- xn = bn + x0*(b0-bn) + x1*(b1-bn) + ...
+-- xn = cn + x0*(c0-cn) + x1*(c1-cn) + ...
+-- ...
+-- x0*a0 + x1*a1 + ... - xn = an*(x0 + x1 + ... - 1)
+-- (x0/xn)*(a0/an) + (x1/xn)*(a1/an) + ... + 1 = x0 + x1 + ... + (1/an)
+-- ...
+-- an = xn + a0*(x0-xn) + a1*(x1-xn) + ...
+-- bn = xn + b0*(x0-xn) + b1*(x1-xn) + ...
+-- cn = xn + c0*(x0-xn) + c1*(x1-xn) + ...
+-- ...
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s
@@ -854,8 +887,8 @@ planesFromSpace n s
   -- find sides of vertices wrt chosen boundary
   sides = map (\x -> vertexWrtBoundary (Boundary (m - 1)) (map Boundary x) s) vertices
   mirror = map notOfSide sides
-  -- interpret vertices as coplanes
-  coplanes = map (\x -> fromJust (intersectPlanes n (subset x planes))) vertices
+  -- interpret vertices as coplanes; construct plane through vertex planes interpreted as copoints
+  coplanes = map undefined vertices
   -- convert coplanes to cospace with up-down sidedeness
   cospace = spaceFromPlanes n coplanes -- uses isAbovePlane for sidedness in cospace
   -- find sidesOfRegion of each coregion
