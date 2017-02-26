@@ -892,10 +892,7 @@ planesFromSpace n s
   cosides = if valid then sides else mirror
   coregion = regionOfSides cosides cospace
   -- find copoint in coregion
-  outin = outsideOfRegionExists coregion cospace
-  inpoint = planesFromSpaceF n coregion cospace coplanes
-  outpoint = planesFromSpaceG n coregion cospace coplanes inpoint
-  copoint = if outin then outpoint else inpoint
+  copoint = planesFromSpaceG n coregion cospace coplanes
   -- interpret copoint as plane to add
   in planes ++ [copoint] where
  m = length s
@@ -912,10 +909,13 @@ planesFromSpaceF n region space planes = let
  total = fold' (\x y -> Matrix.add x y) points zero
  in Matrix.scale factor total
 
--- find point some distance out on line to coregion from other outside
-planesFromSpaceG :: Int -> Region -> Space -> [Plane] -> Point -> Point
-planesFromSpaceG n r s p arrow = let
- feather = planesFromSpaceF n (outsideOfRegion r s) s p
- shaft = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
- factor = 0.1 / (sqrt (Matrix.dot shaft shaft))
- in Matrix.add arrow (Matrix.scale factor shaft)
+-- if outside, find point some distance out on line to coregion from other outside
+planesFromSpaceG :: Int -> Region -> Space -> [Plane] -> Point
+planesFromSpaceG n r s p
+ | outsideOfRegionExists r s = let
+  feather = planesFromSpaceF n (outsideOfRegion r s) s p
+  shaft = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
+  factor = 0.1 / (sqrt (Matrix.dot shaft shaft))
+  in Matrix.add arrow (Matrix.scale factor shaft)
+ | otherwise = arrow where
+ arrow = planesFromSpaceF n r s p
