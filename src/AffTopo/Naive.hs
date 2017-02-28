@@ -760,7 +760,7 @@ intersectPlanes n w = let
  first =  intersectPlanesH n w
  -- return Nothing if not every n-tuple solves to same point
  points = map (\a -> intersectPlanesH n (subset a w)) (subsets n (indices (length w)))
- same = maybe False (\c -> all (\a -> maybe False (\b -> (Matrix.dot c b) < 0.001) a) points) first
+ same = maybe False (\c -> all ((maybe False) (intersectPlanesI c)) points) first
  in if same then first else Nothing
 
 intersectPlanesF :: [Plane] -> Int -> Int -> Int -> Double
@@ -783,6 +783,11 @@ intersectPlanesH n w = let
  lhs = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
  rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
  in fmap Matrix.flatten (Matrix.linearSolve lhs rhs)
+
+intersectPlanesI :: Point -> Point -> Bool
+intersectPlanesI a b = let
+ c = Matrix.add a (Matrix.scale (negate 1.0) b)
+ in (Matrix.dot c c) < 0.001
 
 -- z0 = hm + x0*(h0-hm) + y0*(h1-hm) + ...
 -- z1 = hm + x1*(h0-hm) + y1*(h1-hm) + ...
