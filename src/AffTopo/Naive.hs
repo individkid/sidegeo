@@ -34,6 +34,7 @@ type Place = [(Boundary,[[Region]])] -- assume one-to-one
 type Plual = [(Region,[[Boundary]])] -- dual of place
 type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
+type Vector = Matrix.Vector Double
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
@@ -496,6 +497,18 @@ unzipPlual = unzip
 zipPlace :: [Boundary] -> Space -> Place
 zipPlace = zip
 
+pointToVector :: Point -> Vector
+pointToVector v = v
+
+vectorToPoint :: Vector -> Point
+vectorToPoint v = v
+
+planeToVector :: Plane -> Vector
+planeToVector w = w
+
+vectorToPlane :: Vector -> Plane
+vectorToPlane w = w
+
 --
 -- so far so simple
 --
@@ -719,7 +732,7 @@ randomPlanesI0 (a,g) = let
  in (Matrix.fromList (map (\x -> x - c) b), g)
 
 randomPlanesJ0 :: Maybe Point -> Bool
-randomPlanesJ0 a = maybe False (\b -> any (\c -> c < -1.0 || c > 1.0) (Matrix.toList b)) a
+randomPlanesJ0 a = maybe False (\b -> any (\c -> c < (-1.0) || c > 1.0) (Matrix.toList b)) a
 
 randomPlanesK0 :: Int -> Int
 randomPlanesK0 n = n
@@ -752,42 +765,42 @@ randomPlanesJ2 a = a /= Nothing
 randomPlanesK2 :: Int -> Int
 randomPlanesK2 n = n + 1
 
+solveVectors :: Int -> [Matrix.Vector Double] -> (Int -> [Matrix.Vector Double] -> Int -> Int -> Double) -> (Int -> [Matrix.Vector Double] -> Int -> Double) -> Maybe Point
+solveVectors n w f g = let
+ first = solveVectorsF n w f g
+ -- return Nothing if not every n-tuple solves to same point
+ points = map (\a -> solveVectorsF n (subset a w) f g) (subsets n (indices (length w)))
+ same = maybe False (\a -> all (\b -> maybe False (\c -> solveVectorsG a c) b) points) first
+ in if same then first else Nothing
+
+-- plane is z0, z1, ... zm. equation for plane is z = zm + x*(z0-zm) + y*(z1-zm) + ...
+-- each row is z0-zm z1-zm ... -1 | -zm
+solveVectorsF :: Int -> [Matrix.Vector Double] -> (Int -> [Matrix.Vector Double] -> Int -> Int -> Double) -> (Int -> [Matrix.Vector Double] -> Int -> Double) -> Maybe Point
+solveVectorsF n w f g = let
+ lhs = Matrix.matrix n [f n w a b | a <- (indices n), b <- (indices n)]
+ rhs = Matrix.matrix 1 [g n w a | a <- (indices n)]
+ in fmap Matrix.flatten (Matrix.linearSolve lhs rhs)
+
+solveVectorsG :: Point -> Point -> Bool
+solveVectorsG a b = let
+ c = Matrix.add a (Matrix.scale (-1.0) b)
+ in (Matrix.dot c c) < 0.001
+
 -- assume first rows are distances above points in base plane
 -- assume last row is distances above origin
 -- each column specifies points that a plane passes through
 intersectPlanes :: Int -> [Plane] -> Maybe Point
-intersectPlanes n w = let
- first =  intersectPlanesH n w
- -- return Nothing if not every n-tuple solves to same point
- points = map (\a -> intersectPlanesH n (subset a w)) (subsets n (indices (length w)))
- same = maybe False (\c -> all ((maybe False) (intersectPlanesI c)) points) first
- in if same then first else Nothing
+intersectPlanes n w = fmap vectorToPoint (solveVectors n (map planeToVector w) intersectPlanesF intersectPlanesG)
 
-intersectPlanesF :: [Plane] -> Int -> Int -> Int -> Double
-intersectPlanesF w n a b
- | b == index = -1.0
- | otherwise = let
-  vector = w !! a
-  scalar = Matrix.atIndex vector b
-  origin = Matrix.atIndex vector index
-  in scalar - origin where
+intersectPlanesF :: Int -> [Vector] -> Int -> Int -> Double
+intersectPlanesF n w a b
+ | b == index = (-1.0)
+ | otherwise = (list !! b) - (list !! index) where
  index = n - 1
+ list = Matrix.toList (w !! a)
 
-intersectPlanesG :: [Plane] -> Int -> Int -> Double
-intersectPlanesG w n a = negate (Matrix.atIndex (w !! a) (n - 1))
-
--- plane is z0, z1, ... zm. equation for plane is z = zm + x*(z0-zm) + y*(z1-zm) + ...
--- each row is z0-zm z1-zm ... -1 | -zm
-intersectPlanesH :: Int -> [Plane] -> Maybe Point
-intersectPlanesH n w = let
- lhs = Matrix.matrix n [intersectPlanesF w n a b | a <- (indices n), b <- (indices n)]
- rhs = Matrix.matrix 1 [intersectPlanesG w n a | a <- (indices n)]
- in fmap Matrix.flatten (Matrix.linearSolve lhs rhs)
-
-intersectPlanesI :: Point -> Point -> Bool
-intersectPlanesI a b = let
- c = Matrix.add a (Matrix.scale (negate 1.0) b)
- in (Matrix.dot c c) < 0.001
+intersectPlanesG :: Int -> [Vector] -> Int -> Double
+intersectPlanesG n w a = negate (Matrix.atIndex (w !! a) (n - 1))
 
 -- z0 = hm + x0*(h0-hm) + y0*(h1-hm) + ...
 -- z1 = hm + x1*(h0-hm) + y1*(h1-hm) + ...
@@ -800,16 +813,17 @@ intersectPlanesI a b = let
 -- z2 = h0*x2 + h1*y2 + ... + hm*(1-x2-y2-...)
 -- ...
 constructPlane :: Int -> [Point] -> Maybe Plane
-constructPlane n v = let
- lists = map Matrix.toList v
- lasts = map last lists
- prefs = map (take (n-1)) lists
- posts = map (\x -> fold' (\y z -> z - y) x 1.0) prefs
- rows = map (\(x,y) -> x Prelude.++ [y]) (zip prefs posts)
- vectors = map Matrix.fromList rows
- rhs = Matrix.matrix 1 lasts
- lhs = Matrix.fromRows vectors
- in fmap Matrix.flatten (Matrix.linearSolve lhs rhs)
+constructPlane n v = fmap vectorToPlane (solveVectors n (map pointToVector v) constructPlaneF constructPlaneG)
+
+constructPlaneF :: Int -> [Vector] -> Int -> Int -> Double
+constructPlaneF n v a b
+ | b == index = 1.0 - (fold' (+) (take index list) 0.0)
+ | otherwise = list !! b where
+ index = n - 1
+ list = Matrix.toList (v !! a)
+
+constructPlaneG :: Int -> [Vector] -> Int -> Double
+constructPlaneG n v a = (Matrix.toList (v !! a)) !! (n - 1)
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
@@ -919,7 +933,7 @@ planesFromSpaceG :: Int -> Region -> Space -> [Plane] -> Point
 planesFromSpaceG n r s p
  | outsideOfRegionExists r s = let
   feather = planesFromSpaceF n (outsideOfRegion r s) s p
-  shaft = Matrix.add arrow (Matrix.scale (negate 1.0) feather)
+  shaft = Matrix.add arrow (Matrix.scale (-1.0) feather)
   factor = 0.1 / (sqrt (Matrix.dot shaft shaft))
   in Matrix.add arrow (Matrix.scale factor shaft)
  | otherwise = arrow where
