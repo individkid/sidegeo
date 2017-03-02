@@ -607,7 +607,6 @@ allSpacesH [] done = done
 subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place,g)
 subSection g p q n s t u
  | (p > n) || (q > n) || (n < 0) || (dim < 0) = undefined
- | not (subSectionF s t u) = undefined
  | p == n = (t,g)
  | q == n = (s,g)
  | dim == 0 = let
@@ -625,13 +624,10 @@ subSection g p q n s t u
   uSect = sectionSpace bound u
   (sect,j) = subSection i dim (n-1) n sub uSect uSub
   anti = divideSpace bound sect sub
-  valid = filter (subSectionF s t) anti
+  valid = filter (\x -> (isSectionSpace x s) && (isSectionSpace x t)) anti
   in choose j valid
  | otherwise = undefined where
  dim = (p+q)-n
-
-subSectionF :: Place -> Place -> Place -> Bool
-subSectionF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
 -- return superspace with given spaces as subspaces
 -- given spaces have given dimension. subspaces by shared regions are equal
@@ -765,7 +761,7 @@ randomPlanesJ2 a = a /= Nothing
 randomPlanesK2 :: Int -> Int
 randomPlanesK2 n = n + 1
 
-solveVectors :: Int -> [Matrix.Vector Double] -> (Int -> [Matrix.Vector Double] -> Int -> Int -> Double) -> (Int -> [Matrix.Vector Double] -> Int -> Double) -> Maybe Point
+solveVectors :: Int -> [Vector] -> (Int -> [Vector] -> Int -> Int -> Double) -> (Int -> [Vector] -> Int -> Double) -> Maybe Vector
 solveVectors n w f g = let
  first = solveVectorsF n w f g
  -- return Nothing if not every n-tuple solves to same point
@@ -773,22 +769,19 @@ solveVectors n w f g = let
  same = maybe False (\a -> all (\b -> maybe False (\c -> solveVectorsG a c) b) points) first
  in if same then first else Nothing
 
--- plane is z0, z1, ... zm. equation for plane is z = zm + x*(z0-zm) + y*(z1-zm) + ...
--- each row is z0-zm z1-zm ... -1 | -zm
-solveVectorsF :: Int -> [Matrix.Vector Double] -> (Int -> [Matrix.Vector Double] -> Int -> Int -> Double) -> (Int -> [Matrix.Vector Double] -> Int -> Double) -> Maybe Point
+solveVectorsF :: Int -> [Vector] -> (Int -> [Vector] -> Int -> Int -> Double) -> (Int -> [Vector] -> Int -> Double) -> Maybe Vector
 solveVectorsF n w f g = let
  lhs = Matrix.matrix n [f n w a b | a <- (indices n), b <- (indices n)]
  rhs = Matrix.matrix 1 [g n w a | a <- (indices n)]
  in fmap Matrix.flatten (Matrix.linearSolve lhs rhs)
 
-solveVectorsG :: Point -> Point -> Bool
+solveVectorsG :: Vector -> Vector -> Bool
 solveVectorsG a b = let
  c = Matrix.add a (Matrix.scale (-1.0) b)
  in (Matrix.dot c c) < 0.001
 
--- assume first rows are distances above points in base plane
--- assume last row is distances above origin
--- each column specifies points that a plane passes through
+-- plane is z0, z1, ... zm. equation for plane is z = zm + x*(z0-zm) + y*(z1-zm) + ...
+-- each row is z0-zm z1-zm ... -1 | -zm
 intersectPlanes :: Int -> [Plane] -> Maybe Point
 intersectPlanes n w = fmap vectorToPoint (solveVectors n (map planeToVector w) intersectPlanesF intersectPlanesG)
 
@@ -800,18 +793,10 @@ intersectPlanesF n w a b
  list = Matrix.toList (w !! a)
 
 intersectPlanesG :: Int -> [Vector] -> Int -> Double
-intersectPlanesG n w a = negate (Matrix.atIndex (w !! a) (n - 1))
+intersectPlanesG n w a = negate ((Matrix.toList (w !! a)) !! (n - 1))
 
 -- z0 = hm + x0*(h0-hm) + y0*(h1-hm) + ...
--- z1 = hm + x1*(h0-hm) + y1*(h1-hm) + ...
--- z2 = hm + x2*(h0-hm) + y2*(h1-hm) + ...
--- ...
--- z0 = hm + x0*h0 - x0*hm + y0*h1 - y0*hm + ...
--- ...
 -- z0 = h0*x0 + h1*y0 + ... + hm*(1-x0-y0-...)
--- z1 = h0*x1 + h1*y1 + ... + hm*(1-x1-y1-...)
--- z2 = h0*x2 + h1*y2 + ... + hm*(1-x2-y2-...)
--- ...
 constructPlane :: Int -> [Point] -> Maybe Plane
 constructPlane n v = fmap vectorToPlane (solveVectors n (map pointToVector v) constructPlaneF constructPlaneG)
 
@@ -842,34 +827,31 @@ spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n w
  | m == 0 = []
  | n == 0 = replicate m [[Region 0],[]]
- | otherwise = spaceFromPlanesF n m w where
- m = length w
-
-spaceFromPlanesF :: Int -> Int -> [Plane] -> Space
-spaceFromPlanesF n m w
- | m <= n = spaceFromPlanesH n m w place place
+ | m <= n = spaceFromPlanesG n m w place place
  | otherwise = let
   -- find intersection points on plane to add
-  tuples = subsets (n-1) (indices (m-1))
-  vertices = map (\x -> (m-1):x) tuples
+  tuples = subsets (n-1) (indices index)
+  vertices = map (\x -> index:x) tuples
   points = map (\x -> fromJust (intersectPlanes n (subset x w))) vertices
   -- convert intersection points to sides and take to space
-  regions = concat (map (spaceFromPlanesG planes place) (zip vertices points))
+  regions = concat (map (spaceFromPlanesF planes place) (zip vertices points))
   sect = fold' degenSpace ((regionsOfPlace place) \\ regions) place -- convert regions to place
   -- return space with found regions divided by new boundary
-  in spaceFromPlanesH n m w sect place where
- planes = take (m-1) w
+  in spaceFromPlanesG n m w sect place where
+ m = length w
+ index = m - 1
+ planes = take index w
  space = spaceFromPlanes n planes
  place = spaceToPlace space
 
-spaceFromPlanesG :: [Plane] -> Place -> ([Int], Point) -> [Region]
-spaceFromPlanesG w s (b, v) = let
+spaceFromPlanesF :: [Plane] -> Place -> ([Int], Point) -> [Region]
+spaceFromPlanesF w s (b, v) = let
  planes = fold' (\x y -> unplace x y) b w
  degen = map (\x -> if isAbovePlane v x then [[],[Region 0]] else [[Region 0],[]]) planes
  in takeRegions (spaceToPlace degen) s
 
-spaceFromPlanesH :: Int -> Int -> [Plane] -> Place -> Place -> Space
-spaceFromPlanesH n m w s t = let
+spaceFromPlanesG :: Int -> Int -> [Plane] -> Place -> Place -> Space
+spaceFromPlanesG n m w s t = let
  bound = Boundary (m-1)
  plane = last w
  planes = take n w
