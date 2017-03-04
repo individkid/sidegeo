@@ -133,7 +133,7 @@ generate f a = generateF f a [] []
 
 generateF :: Ord a => (a -> [a]) -> a -> [a] -> [a] -> [a]
 generateF f a todo done
- | (length newTodo) == 0 = newDone
+ | null newTodo = newDone
  | otherwise = generateF f (head newTodo) (tail newTodo) newDone where
  newTodo = remove a (((f a) \\ done) ++ todo)
  newDone = insert a done
@@ -195,7 +195,7 @@ defineLinear n m
 isLinear :: Int -> Space -> Bool
 isLinear n s
  | n < 0 = undefined
- | (n == 0) || ((length s) == 0) = (length (regionsOfSpace s)) == 1
+ | (n == 0) || (null s) = (length (regionsOfSpace s)) == 1
  | n == 1 = let
   halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (spaceToPlace s))
   ends = filter (\(_,x) -> (length x) == 1) halves
@@ -436,7 +436,7 @@ mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 -- each dual region of superspace is superset of some dual region of subspace
 isSubSpace :: Place -> Place -> Bool
 isSubSpace s t = let
- a = (length ((boundariesOfPlace s) \\ (boundariesOfPlace t))) == 0
+ a = null ((boundariesOfPlace s) \\ (boundariesOfPlace t))
  b = (length (takeRegions t s)) == (length (regionsOfSpace (placeToSpace s)))
  c = (length (takeRegions s t)) == (length (regionsOfSpace (placeToSpace t)))
  in a && b && c
@@ -444,8 +444,8 @@ isSubSpace s t = let
 -- subset is section space in dual representation
 isSectionSpace :: Place -> Place -> Bool
 isSectionSpace s t = let
- a = (length ((boundariesOfPlace s) \\ (boundariesOfPlace t))) == 0
- b = (length ((boundariesOfPlace t) \\ (boundariesOfPlace s))) == 0
+ a = null ((boundariesOfPlace s) \\ (boundariesOfPlace t))
+ b = null ((boundariesOfPlace t) \\ (boundariesOfPlace s))
  c = (length (takeRegions s t)) == (length (regionsOfSpace (placeToSpace s)))
  in a && b && c
 
@@ -526,7 +526,7 @@ minEquiv s = let
 -- find permutations that minimize space, given list of partial permutations
 minEquivF :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
 minEquivF a s
- | (length (snd (head a))) == 0 = domain a
+ | null (snd (head a)) = domain a
  | otherwise = let
   candidates = [(x Prelude.++ [z], remove z y) | (x,y) <- a, z <- y]
   polyants = map fst candidates
@@ -550,7 +550,7 @@ minEquivH (a:[]) _ _ = a
 minEquivH (a:_) _ [] = a
 minEquivH a s ((Boundary b, Side c):d) = let
  regions = a +\ ((s !! b) !! c)
- nonempty = if (length regions) == 0 then a else regions
+ nonempty = if null regions then a else regions
  in minEquivH nonempty s d
 
 -- return permuted space element
@@ -827,7 +827,7 @@ spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n w
  | m == 0 = []
  | n == 0 = replicate m [[Region 0],[]]
- | m <= n = spaceFromPlanesG n m w place place
+ | m <= n = spaceFromPlanesG n w place place
  | otherwise = let
   -- find intersection points on plane to add
   tuples = subsets (n-1) (indices index)
@@ -837,7 +837,7 @@ spaceFromPlanes n w
   regions = concat (map (spaceFromPlanesF planes place) (zip vertices points))
   sect = fold' degenSpace ((regionsOfPlace place) \\ regions) place -- convert regions to place
   -- return space with found regions divided by new boundary
-  in spaceFromPlanesG n m w sect place where
+  in spaceFromPlanesG n w sect place where
  m = length w
  index = m - 1
  planes = take index w
@@ -850,13 +850,14 @@ spaceFromPlanesF w s (b, v) = let
  degen = map (\x -> if isAbovePlane v x then [[],[Region 0]] else [[Region 0],[]]) planes
  in takeRegions (spaceToPlace degen) s
 
-spaceFromPlanesG :: Int -> Int -> [Plane] -> Place -> Place -> Space
-spaceFromPlanesG n m w s t = let
- bound = Boundary (m-1)
+spaceFromPlanesG :: Int -> [Plane] -> Place -> Place -> Space
+spaceFromPlanesG n w s t = let
+ bounds = boundariesOfPlace t
+ bound = last bounds
  plane = last w
  planes = take n w
  anti = divideSpace bound s t
- vertex = map Boundary (indices n)
+ vertex = take n bounds
  point = fromJust (intersectPlanes n planes)
  side = vertexWrtBoundary bound vertex (placeToSpace (head anti))
  valid = (sideToBool side) == (isAbovePlane point plane)
