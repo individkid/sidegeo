@@ -36,6 +36,8 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 
+-- data Crace -- crawlspace -- Place with Face decorations
+
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
 
@@ -827,42 +829,42 @@ spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n w
  | m == 0 = []
  | n == 0 = replicate m [[Region 0],[]]
- | m <= n = spaceFromPlanesG n w place place
+ | m <= n = placeToSpace (powerSpace (map Boundary (indices m)))
  | otherwise = let
+  index = m - 1
+  plane = last w
+  planes = take index w
+  space = spaceFromPlanes n planes
+  place = spaceToPlace space
   -- find intersection points on plane to add
   tuples = subsets (n-1) (indices index)
-  vertices = map (\x -> index:x) tuples
-  points = map (\x -> fromJust (intersectPlanes n (subset x w))) vertices
+  vertices = map (\x -> plane:(subset x planes)) tuples
+  points = map (\x -> fromJust (intersectPlanes n x)) vertices
   -- convert intersection points to sides and take to space
-  regions = concat (map (spaceFromPlanesF planes place) (zip vertices points))
-  sect = fold' degenSpace ((regionsOfPlace place) \\ regions) place -- convert regions to place
+  regions = regionsOfPlace place
+  keep = concat (map (spaceFromPlanesF planes place) (zip tuples points))
+  unkeep = regions \\ keep
+  sect = fold' degenSpace unkeep place -- convert regions to place
   -- return space with found regions divided by new boundary
-  in spaceFromPlanesG n w sect place where
+  bounds = boundariesOfPlace place
+  [bound] = map Boundary (holes 1 (map (\(Boundary x) -> x) bounds))
+  sample = take n planes
+  [one,other] = divideSpace bound sect place
+  vertex = take n bounds
+  point = fromJust (intersectPlanes n sample)
+  side = vertexWrtBoundary bound vertex (placeToSpace one)
+  valid = (sideToBool side) == (isAbovePlane point plane)
+  result = if valid then one else other
+  in placeToSpace result where
  m = length w
- index = m - 1
- planes = take index w
- space = spaceFromPlanes n planes
- place = spaceToPlace space
 
+-- return super-region containing point that is intersection of planes with associated indices
+-- assume place has sidedness equal to isAbovePlane of corresponding plane
 spaceFromPlanesF :: [Plane] -> Place -> ([Int], Point) -> [Region]
 spaceFromPlanesF w s (b, v) = let
  planes = fold' (\x y -> unplace x y) b w
  degen = map (\x -> if isAbovePlane v x then [[],[Region 0]] else [[Region 0],[]]) planes
  in takeRegions (spaceToPlace degen) s
-
-spaceFromPlanesG :: Int -> [Plane] -> Place -> Place -> Space
-spaceFromPlanesG n w s t = let
- bounds = boundariesOfPlace t
- bound = last bounds
- plane = last w
- planes = take n w
- anti = divideSpace bound s t
- vertex = take n bounds
- point = fromJust (intersectPlanes n planes)
- side = vertexWrtBoundary bound vertex (placeToSpace (head anti))
- valid = (sideToBool side) == (isAbovePlane point plane)
- place = if valid then head anti else last anti
- in placeToSpace place
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
@@ -870,7 +872,7 @@ planesFromSpace n s
  | n == 0 = replicate m (Matrix.vector [])
  | m <= n = take m (Matrix.toColumns (Matrix.ident n))
  | otherwise = let
-  index = m-1
+  index = m - 1
   bound = Boundary index
   -- recurse with one fewer boundary
   place = spaceToPlace s
