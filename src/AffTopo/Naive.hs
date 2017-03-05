@@ -199,7 +199,7 @@ isLinear n s
  | n < 0 = undefined
  | (n == 0) || (null s) = (length (regionsOfSpace s)) == 1
  | n == 1 = let
-  halves = concat (map (\(x,y) -> map (\z -> (x,z)) y) (spaceToPlace s))
+  halves = concatMap (\(x,y) -> map (\z -> (x,z)) y) (spaceToPlace s)
   ends = filter (\(_,x) -> (length x) == 1) halves
   dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
   sorts = map (sortBy (\y z -> compare (length (snd y)) (length (snd z)))) dirs
@@ -625,9 +625,9 @@ subSection g p q n s t u
   (sub,i) = subSection h p q n sSub tSub uSub
   uSect = sectionSpace bound u
   (sect,j) = subSection i dim (n-1) n sub uSect uSub
-  anti = divideSpace bound sect sub
-  valid = filter (\x -> (isSectionSpace x s) && (isSectionSpace x t)) anti
-  in choose j valid
+  [one,other] = divideSpace bound sect sub
+  valid = (isSectionSpace one s) && (isSectionSpace one t)
+  in (if valid then one else other, j)
  | otherwise = undefined where
  dim = (p+q)-n
 
@@ -668,7 +668,7 @@ rabbitSpace g n s t
   tSect = sectionSpace tBound t
   (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
   sSup = divideSpace tBound sect sSect
-  tSup = concat (map (\x -> divideSpace sBound x t) sSup)
+  tSup = concatMap (\x -> divideSpace sBound x t) sSup
   in rabbitSpaceF h n s t tSup
  | n == 1 = let
   sDual = map2 sort (placeToDual (crossSpace s (powerSpace [tBound])))
@@ -831,34 +831,36 @@ spaceFromPlanes n w
  | n == 0 = replicate m [[Region 0],[]]
  | m <= n = placeToSpace (powerSpace (map Boundary (indices m)))
  | n == 1 = let
-  vectors = map planeToVector w
-  scalars = map (\x -> head (Matrix.toList x)) vectors
-  sorted = sortBy (\x y -> if x < y then LT else GT) scalars
-  indexes = map (\x -> fromJust (elemIndex x sorted)) scalars
-  pairs = map (\x -> (x, indices x)) indexes
-  lists = map (\(x,y) -> [y, map (x+) y]) pairs
-  in map3 Region lists
+  vector = map planeToVector w
+  scalar = map (\x -> head (Matrix.toList x)) vector
+  sorted = sortBy compare scalar
+  index = map (\x -> fromJust (elemIndex x sorted)) scalar
+  left = map (\x -> indices (x+1)) index
+  right = map (\x -> map ((x+1)+) (indices (m-x))) index
+  full = map (\(x,y) -> [x,y]) (zip left right)
+  in map3 Region full
  | otherwise = let
   index = m - 1
   plane = last w
   planes = take index w
-  space = spaceFromPlanes n planes
-  place = spaceToPlace space
+  indexes = indices index
+  bounds = map Boundary indexes
+  space = spaceFromPlanes n planes -- assume one-to-one between space and planes
+  place = zipPlace bounds space
+  sample = take n planes
+  vertex = take n bounds
   -- find intersection points on plane to add
-  tuples = subsets (n-1) (indices index)
+  tuples = subsets (n-1) indexes
   vertices = map (\x -> plane:(subset x planes)) tuples
   points = map (\x -> fromJust (intersectPlanes n x)) vertices
   -- convert intersection points to sides and take to space
   regions = regionsOfPlace place
-  keep = concat (map (spaceFromPlanesF planes place) (zip tuples points))
+  keep = concatMap (spaceFromPlanesF planes place) (zip tuples points)
   unkeep = regions \\ keep
   sect = fold' degenSpace unkeep place -- convert regions to place
   -- return space with found regions divided by new boundary
-  bounds = boundariesOfPlace place
   [bound] = map Boundary (holes 1 (map (\(Boundary x) -> x) bounds))
-  sample = take n planes
   [one,other] = divideSpace bound sect place
-  vertex = take n bounds
   point = fromJust (intersectPlanes n sample)
   side = vertexWrtBoundary bound vertex (placeToSpace one)
   valid = (sideToBool side) == (isAbovePlane point plane)
@@ -881,10 +883,10 @@ planesFromSpace n s
  | m <= n = take m (Matrix.toColumns (Matrix.ident n))
  | n == 1 = let
   [[[region],_]] = filter (\[x,_] -> (length x) == 1) s
-  halves = map (\[x,y] -> if member region x then x else y) s
-  scalars = map (\x -> 1.0 * (fromIntegral (length x))) halves
-  vectors = map (\x -> Matrix.fromList [x]) scalars
-  in map vectorToPlane vectors
+  half = map (\[x,y] -> if member region x then x else y) s
+  scalar = map (\x -> 1.0 * (fromIntegral (length x))) half
+  vector = map (\x -> Matrix.fromList [x]) scalar
+  in map vectorToPlane vector
  | otherwise = let
   index = m - 1
   bound = Boundary index
@@ -901,7 +903,8 @@ planesFromSpace n s
   sides = map (\x -> vertexWrtBoundary bound x s) vertices
   mirror = map notOfSide sides
   -- construct plane through vertex planes interpreted as copoints
-  copoints = map (\x -> subset x planes) tuples 
+  interpret = map (\x -> subset x planes) tuples
+  copoints = map2 (\x -> vectorToPoint (planeToVector x)) interpret
   coplanes = map (\x -> fromJust (constructPlane n x)) copoints
   -- convert coplanes to cospace with up-down sidedeness
   cospace = spaceFromPlanes n coplanes -- uses isAbovePlane for sidedness in cospace
