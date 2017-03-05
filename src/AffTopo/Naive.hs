@@ -830,6 +830,14 @@ spaceFromPlanes n w
  | m == 0 = []
  | n == 0 = replicate m [[Region 0],[]]
  | m <= n = placeToSpace (powerSpace (map Boundary (indices m)))
+ | n == 1 = let
+  vectors = map planeToVector w
+  scalars = map (\x -> head (Matrix.toList x)) vectors
+  sorted = sortBy (\x y -> if x < y then LT else GT) scalars
+  indexes = map (\x -> fromJust (elemIndex x sorted)) scalars
+  pairs = map (\x -> (x, indices x)) indexes
+  lists = map (\(x,y) -> [y, map (x+) y]) pairs
+  in map3 Region lists
  | otherwise = let
   index = m - 1
   plane = last w
@@ -871,6 +879,12 @@ planesFromSpace :: Int -> Space -> [Plane]
 planesFromSpace n s
  | n == 0 = replicate m (Matrix.vector [])
  | m <= n = take m (Matrix.toColumns (Matrix.ident n))
+ | n == 1 = let
+  [[[region],_]] = filter (\[x,_] -> (length x) == 1) s
+  halves = map (\[x,y] -> if member region x then x else y) s
+  scalars = map (\x -> 1.0 * (fromIntegral (length x))) halves
+  vectors = map (\x -> Matrix.fromList [x]) scalars
+  in map vectorToPlane vectors
  | otherwise = let
   index = m - 1
   bound = Boundary index
