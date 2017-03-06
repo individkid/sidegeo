@@ -109,10 +109,10 @@ preimage :: Eq b => [b] -> [(a,b)] -> [a]
 preimage b m = domain (filter (\(_,y) -> member y b) m)
 
 domain :: [(a,b)] -> [a]
-domain m = map (\(x,_) -> x) m
+domain m = map fst m
 
 range :: [(a,b)] -> [b]
-range m = map (\(_,y) -> y) m
+range m = map snd m
 
 -- ++ is as in Data.List except welldef
 (++) :: Ord a => [a] -> [a] -> [a]
@@ -201,22 +201,23 @@ isLinear n s
  | n == 1 = let
   halves = concatMap (\(x,y) -> map (\z -> (x,z)) y) (spaceToPlace s)
   ends = filter (\(_,x) -> (length x) == 1) halves
-  dirs = map (\(_,x) -> filter (\(_,y) -> (length (x \\ y)) == 0) halves) ends
+  dirs = map (\(_,x) -> filter (\(_,y) -> null (x \\ y)) halves) ends
   sorts = map (sortBy (\y z -> compare (length (snd y)) (length (snd z)))) dirs
   domains = map domain sorts
   valid [x,y] = x == (reverse y)
   valid _ = False
   in valid domains
  | otherwise = let
-  boundaries = boundariesOfSpace s
-  subs = power boundaries
-  in fold' (\a b -> b && (isLinearF n s a)) subs True
+  place = spaceToPlace s
+  bounds = boundariesOfPlace place
+  subs = power bounds
+  in fold' (\a b -> b && (isLinearF n place a)) subs True
 
-isLinearF :: Int -> Space -> [Boundary] -> Bool
+isLinearF :: Int -> Place -> [Boundary] -> Bool
 isLinearF n s b = let
- subspace = placeToSpace (fold' subSpace b (spaceToPlace s))
- regions = regionsOfSpace subspace
- boundaries = boundariesOfSpace subspace
+ subspace = fold' subSpace b s
+ regions = regionsOfPlace subspace
+ boundaries = boundariesOfPlace subspace
  in (defineLinear n (length boundaries)) == (length regions)
 
 -- return all boundaries in space
