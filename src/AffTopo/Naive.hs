@@ -292,19 +292,19 @@ oppositeOfRegionExists b r s = let
 oppositesOfRegion :: Region -> Space -> [Region]
 oppositesOfRegion r s = let
  opposite b = oppositeOfRegion [b] r s
- in map (\b -> opposite b) (attachedBoundaries r s)
+ in map opposite (attachedBoundaries r s)
 
 -- return boundaries attached to region
 attachedBoundaries :: Region -> Space -> [Boundary]
 attachedBoundaries r s = let
  opposite b = oppositeOfRegionExists [b] r s
- in filter (\b -> opposite b) (boundariesOfSpace s)
+ in filter opposite (boundariesOfSpace s)
 
 -- return facets attached to region
 attachedFacets :: Int -> Region -> Space -> [[Boundary]]
 attachedFacets n r s = let
  opposite b = oppositeOfRegionExists b r s
- in filter (\b -> opposite b) (subsets n (attachedBoundaries r s))
+ in filter opposite (subsets n (attachedBoundaries r s))
 
 -- return regions in corners of boundaries
 attachedRegions :: [Boundary] -> Space -> [Region]
@@ -377,7 +377,7 @@ divideSpaceF figure space = let
  whole = regionsOfSpace space
  ground = whole \\ figure
  halfspace = divideSpaceG ground space
- duplicates = map Region (holes (length figure) (map (\(Region x) -> x) whole))
+ duplicates = regionHoles (length figure) whole
  mapping = zip figure duplicates
  withDups = map2 (divideSpaceH mapping figure) space
  newBoundary = [halfspace ++ duplicates, whole \\ halfspace]
@@ -510,6 +510,12 @@ planeToVector w = w
 
 vectorToPlane :: Vector -> Plane
 vectorToPlane w = w
+
+boundaryHoles :: Int -> [Boundary] -> [Boundary]
+boundaryHoles m b = map Boundary (holes m (map (\(Boundary x) -> x) b))
+
+regionHoles :: Int -> [Region] -> [Region]
+regionHoles m r = map Region (holes m (map (\(Region x) -> x) r))
 
 --
 -- so far so simple
@@ -859,7 +865,7 @@ spaceFromPlanes n w
   unkeep = regions \\ keep
   sect = fold' degenSpace unkeep place -- convert regions to place
   -- return space with found regions divided by new boundary
-  [bound] = map Boundary (holes 1 (map (\(Boundary x) -> x) bounds))
+  [bound] = boundaryHoles 1 bounds
   [one,other] = divideSpace bound sect place
   point = fromJust (intersectPlanes n sample)
   side = vertexWrtBoundary bound vertex (placeToSpace one)
