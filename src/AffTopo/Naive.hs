@@ -36,8 +36,6 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 
--- data Crace -- crawlspace -- Place with Face decorations
-
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
 
@@ -47,7 +45,6 @@ boolToSide a = if a then Side 1 else Side 0
 notOfSide :: Side -> Side
 notOfSide a = boolToSide (not (sideToBool a))
 
--- all sublists of given size
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets 0 _ = [[]]
 subsets _ [] = []
@@ -58,19 +55,11 @@ power a = let
  sizes = indices (length a)
  in fold' (\x y -> y ++ (subsets x a)) sizes []
 
--- those indexed by list of indices
 subset :: [Int] -> [a] -> [a]
-subset a b = image a (enumerate b)
+subset a b = image a (zip (indices (length b)) b)
 
--- make elements sorted and unique
-welldef :: Ord a => [a] -> [a]
-welldef a = welldefF (sort a)
-
-welldefF :: Ord a => [a] -> [a]
-welldefF (a:(b:c))
- | a == b = welldefF (b:c)
- | otherwise = a:(welldefF (b:c))
-welldefF a = a
+indices :: Num a => Int -> [a]
+indices n = take n (iterate (1+) 0)
 
 member :: Eq a => a -> [a] -> Bool
 member a b = (find (a ==) b) /= Nothing
@@ -95,12 +84,6 @@ choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in ((a !! b), h)
 
 holes :: Ord a => Num a => Int -> [a] -> [a]
 holes n a = take n ((indices ((length a)+n)) \\ a)
-
-indices :: Num a => Int -> [a]
-indices n = take n (iterate (1+) 0)
-
-enumerate :: [a] -> [(Int,a)]
-enumerate a = zip (indices (length a)) a
 
 image :: Eq a => [a] -> [(a,b)] -> [b]
 image a m = range (filter (\(x,_) -> member x a) m)
@@ -150,25 +133,25 @@ catalyzeF f g a = let (b,h) = f g in (b:a,h)
 -- call function for new result until it returns Nothing
 foldMaybe :: (a -> b -> Maybe b) -> [a] -> b -> b
 foldMaybe f (a:b) c = foldMaybeF f b c (f a c)
-foldMaybe _ [] c = c
+foldMaybe _ [] a = a
 
 foldMaybeF :: (a -> b -> Maybe b) -> [a] -> b -> Maybe b -> b
 foldMaybeF f (a:b) _ (Just c) = foldMaybeF f b c (f a c)
 foldMaybeF _ _ a _ = a
 
 -- call function until it returns Just
-findMaybe :: (b -> Maybe a) -> [b] -> Maybe a
-findMaybe f (b:c) = findMaybeF f c (f b)
+findMaybe :: (a -> Maybe b) -> [a] -> Maybe b
+findMaybe f (a:b) = findMaybeF f b (f a)
 findMaybe _ [] = Nothing
 
-findMaybeF :: (b -> Maybe a) -> [b] -> Maybe a -> Maybe a
-findMaybeF _ _ (Just b) = Just b
-findMaybeF f (b:c) Nothing = findMaybeF f c (f b)
+findMaybeF :: (a -> Maybe b) -> [a] -> Maybe b -> Maybe b
+findMaybeF _ _ (Just a) = Just a
+findMaybeF f (a:b) Nothing = findMaybeF f b (f a)
 findMaybeF _ [] Nothing = Nothing
 
 -- modify function taking single to function taking list
 fold' :: (a -> b -> b) -> [a] -> b -> b
-fold' = flip . foldr
+fold' f a b = foldl' (\x y -> f y x) b a
 
 map2 :: (a -> b) -> [[a]] -> [[b]]
 map2 = map . map
@@ -199,19 +182,19 @@ isLinear n s
  | n < 0 = undefined
  | (n == 0) || (null s) = (length (regionsOfSpace s)) == 1
  | n == 1 = let
-  halves = concatMap (\(x,y) -> map (\z -> (x,z)) y) (spaceToPlace s)
+  halves = concatMap (\(x,y) -> map (\z -> (x,z)) y) place
   ends = filter (\(_,x) -> (length x) == 1) halves
   dirs = map (\(_,x) -> filter (\(_,y) -> null (x \\ y)) halves) ends
   sorts = map (sortBy (\y z -> compare (length (snd y)) (length (snd z)))) dirs
   domains = map domain sorts
   valid [x,y] = x == (reverse y)
   valid _ = False
-  in valid domains
+  in (valid domains) && ((length (regionsOfSpace s)) == ((length (boundariesOfSpace s))) + 1)
  | otherwise = let
-  place = spaceToPlace s
   bounds = boundariesOfPlace place
   subs = power bounds
-  in fold' (\a b -> b && (isLinearF n place a)) subs True
+  in fold' (\a b -> b && (isLinearF n place a)) subs True where
+ place = spaceToPlace s
 
 isLinearF :: Int -> Place -> [Boundary] -> Bool
 isLinearF n s b = let
@@ -351,7 +334,7 @@ subSpaceF :: ([Region] -> [Region] -> [Region]) -> Boundary -> Place -> Place
 subSpaceF f b s = let
  (bounds,space) = unzipPlace s
  index = fromJust (elemIndex b bounds)
- section = filter (subSpaceG b space) (regionsOfSpace space)
+ section = filter (subSpaceG (Boundary index) space) (regionsOfSpace space)
  result = map2 (f section) (unplace index space)
  in zipPlace (unplace index bounds) result
 
@@ -404,8 +387,10 @@ takeRegions s t = let
 -- all possible regions
 powerSpace :: [Boundary] -> Place
 powerSpace b = let
- regions = indices (shift 1 (length b))
- in map (\(x,y) -> (y, [powerSpaceF x regions 0, powerSpaceF x regions 1])) (enumerate b)
+ count = length b
+ regions = indices (shift 1 count)
+ boundaries = indices count
+ in map (\(x,y) -> (y, [powerSpaceF x regions 0, powerSpaceF x regions 1])) (zip boundaries b)
 
 -- regions indicated by boundary as bit position
 powerSpaceF :: Int -> [Int] -> Int -> [Region]
@@ -426,10 +411,11 @@ crossSpace s t = let
  tRegions = regionsOfSpace tSpace
  sPairs x = [(p,q) | p <- x, q <- tRegions]
  tPairs x = [(p,q) | p <- sRegions, q <- x]
- numbers = enumerate [(x,y) | x <- sRegions, y <- tRegions]
- regions = map (\(x,(y,z)) -> (Region x,(y,z))) numbers
- sCross = map2 (\x -> preimage (sPairs x) regions) sSpace
- tCross = map2 (\x -> preimage (tPairs x) regions) tSpace
+ pairs = [(x,y) | x <- sRegions, y <- tRegions]
+ regions = regionHoles (length pairs) []
+ mapping = zip pairs regions
+ sCross = map2 (\x -> image (sPairs x) mapping) sSpace
+ tCross = map2 (\x -> image (tPairs x) mapping) tSpace
  in (zipPlace sBounds sCross) ++ (zipPlace tBounds tCross)
 
 -- reverse sidedness of given boundary
@@ -480,10 +466,10 @@ spaceToDual :: Space -> Dual
 spaceToDual = plualToDual . placeToPlual . spaceToPlace
 
 spaceToPlace :: Space -> Place
-spaceToPlace s = map (\(x,y) -> (Boundary x,y)) (enumerate s)
+spaceToPlace s = zip (boundaryHoles (length s) []) s
 
 dualToPlual :: Dual -> Plual
-dualToPlual s = map (\(x,y) -> (Region x,y)) (enumerate s)
+dualToPlual s = zip (regionHoles (length s) []) s
 
 placeToSpace :: Place -> Space
 placeToSpace = range
@@ -582,7 +568,7 @@ minEquivK s a = let
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
 anySpace g n m = let
- bounds = map Boundary (indices m)
+ bounds = boundaryHoles m []
  (s,h) = fold' (\z (x,y) -> superSpace y n x (powerSpace [z])) bounds ([],g)
  in (placeToSpace s, h)
 
@@ -774,7 +760,7 @@ solveVectors :: Int -> [Vector] -> (Int -> [Vector] -> Int -> Int -> Double) -> 
 solveVectors n w f g = let
  first = solveVectorsF n w f g
  -- return Nothing if not every n-tuple solves to same point
- points = map (\a -> solveVectorsF n (subset a w) f g) (subsets n (indices (length w)))
+ points = map (\a -> solveVectorsF n a f g) (subsets n w)
  same = maybe False (\a -> all (\b -> maybe False (\c -> solveVectorsG a c) b) points) first
  in if same then first else Nothing
 
@@ -836,7 +822,7 @@ spaceFromPlanes :: Int -> [Plane] -> Space
 spaceFromPlanes n w
  | m == 0 = []
  | n == 0 = replicate m [[Region 0],[]]
- | m <= n = placeToSpace (powerSpace (map Boundary (indices m)))
+ | m <= n = placeToSpace (powerSpace (boundaryHoles m []))
  | n == 1 = let
   vector = map planeToVector w
   scalar = map (\x -> head (Matrix.toList x)) vector

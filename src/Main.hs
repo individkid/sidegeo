@@ -53,6 +53,9 @@ instance Random.RandomGen g => Random.RandomGen (Debug g) where
  genRange (Debug _ _ d) = Random.genRange d
  split (Debug _ _ d) = let (e,f) = Random.split d in ((Debug [] [] e), (Debug [] [] f))
 
+enumerate :: [a] -> [(Int,a)]
+enumerate a = zip (indices (length a)) a
+
 subSubPlace :: [Boundary] -> Place -> Place
 subSubPlace b s = (fold' subSpace) ((domain s) \\ b) s
 
@@ -124,8 +127,8 @@ higher = let
  unsorted0 = map (generate func0) a
  unsorted1 = map (generate func0) b
  unsorted2 = map (generate func0) c
- sorted0 = map welldef unsorted0
- sorted2 = map welldef unsorted2
+ sorted0 = map sort unsorted0
+ sorted2 = map sort unsorted2
  func1 x = (fromIntegral x,x+1)
  ints :: ([Int],Int)
  ints = catalyze func1 5 5
