@@ -36,6 +36,9 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 
+data Face = Face Boundary Region Side Place Decor Int
+data Decor = Crace [Face] | Surf | Crime -- Surf texture Crime picture
+
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
 
@@ -182,14 +185,17 @@ isLinear n s
  | n < 0 = undefined
  | (n == 0) || (null s) = (length (regionsOfSpace s)) == 1
  | n == 1 = let
-  halves = concatMap (\(x,y) -> map (\z -> (x,z)) y) place
-  ends = filter (\(_,x) -> (length x) == 1) halves
-  dirs = map (\(_,x) -> filter (\(_,y) -> null (x \\ y)) halves) ends
-  sorts = map (sortBy (\y z -> compare (length (snd y)) (length (snd z)))) dirs
+  halves = concatMap (\(x,y) -> map (\z -> (z,x)) y) place
+  ends = filter (\(x,_) -> (length x) == 1) halves
+  filters = map (\(x,_) -> filter (\(y,_) -> null (x \\ y)) halves) ends
+  pairs = map2 (\(x,y) -> (length x, y)) filters
+  sorts = map sort pairs
   domains = map domain sorts
+  ranges = map range sorts
+  indexes = indices (length s)
   valid [x,y] = x == (reverse y)
   valid _ = False
-  in (valid domains) && ((length (regionsOfSpace s)) == ((length (boundariesOfSpace s))) + 1)
+  in (valid ranges) && (all (\(x,y) -> x == y) (zip (repeat indexes) domains))
  | otherwise = let
   bounds = boundariesOfPlace place
   subs = power bounds
@@ -333,11 +339,14 @@ subSpace = subSpaceF (flip (\\))
 subSpaceF :: ([Region] -> [Region] -> [Region]) -> Boundary -> Place -> Place
 subSpaceF f b s = let
  (bounds,space) = unzipPlace s
+ regions = regionsOfSpace space
  index = fromJust (elemIndex b bounds)
- section = filter (subSpaceG (Boundary index) space) (regionsOfSpace space)
+ bound = Boundary index
+ section = filter (subSpaceG bound space) regions
  result = map2 (f section) (unplace index space)
  in zipPlace (unplace index bounds) result
 
+-- attachedRegions will not work here because of recursion
 subSpaceG :: Boundary -> Space -> Region -> Bool
 subSpaceG b s r = let
  x = (regionWrtBoundary b r s) == (Side 0)
