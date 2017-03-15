@@ -36,8 +36,10 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 
-data Face = Face Boundary Region Side Place Decor Int
-data Decor = Crace [Face] | Surf | Crime -- Surf texture Crime picture
+newtype Order = Order Int deriving (Eq, Ord, Show)
+newtype Color = Color Int deriving (Eq, Ord, Show)
+type Polytope = [(Order,Facet)]
+type Facet = ([Order],Color)
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
