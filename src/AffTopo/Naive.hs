@@ -36,10 +36,8 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 
-newtype Order = Order Int deriving (Eq, Ord, Show)
-newtype Color = Color Int deriving (Eq, Ord, Show)
-type Polytope = [(Order,Facet)]
-type Facet = ([Order],Color)
+data Convex = Convex [(Boundary,Convex)] deriving (Eq, Ord, Show)
+data Polytope = Polytope [(Convex,[[Boundary]])] deriving (Eq, Ord, Show)
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
