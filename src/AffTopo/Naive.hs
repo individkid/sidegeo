@@ -694,6 +694,33 @@ rabbitSpaceF g n s t u = let
  result = filter (\x -> (isLinear n (placeToSpace x)) && (isSubSpace x s) && (isSubSpace x t)) u
  in choose g result
 
+-- return Polytope unique up to Boundary permutation and mirror
+embedToPolytope :: [Region] -> Place -> Polytope
+embedToPolytope r s = let
+ -- find subsets of boundaries
+ subbounds = power (boundariesOfPlace s)
+ -- find sub-places
+ subplaces = map (\x -> fold' subSpace x s) subbounds
+ -- find sub-place region taken triples
+ pairs = [(unzipPlace x,y) | x <- subplaces, y <- regionsOfPlace x]
+ -- filter to those that are super-region-places
+ supers = filter (\((x,t),y) -> (attachedBoundaries y t) == x) pairs
+ removes = map (\((x,t),y) -> (zipPlace x t, remove y (regionsOfSpace t))) supers
+ degens = map (\(x,y) -> fold' degenSpace y x) removes
+ triples = map (\x -> takeRegions x s) degens
+ -- filter to those that take to subset of given
+ covered = filter (\x -> null (x \\ r)) triples
+ -- find subsets of super-region-places
+ subsupers = power covered
+ -- find intersection super-region-places of subsets
+ intersects = map (\x -> foldr1 (\+) x) subsupers
+ -- convert super-region-places to list of convex and dual-full
+ in Polytope (map (embedToPolytopeF s) intersects)
+
+-- convert convex set of regions into convex and dual-full
+embedToPolytopeF :: Place -> [Region] -> (Convex,[[Boundary]])
+embedToPolytopeF = undefined 
+
 --
 -- between symbolic and numeric
 --
