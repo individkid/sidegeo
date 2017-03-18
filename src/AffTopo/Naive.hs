@@ -393,6 +393,19 @@ takeRegions s t = let
  tSub = map2 (\x -> sort (shared +\ x)) dual
  in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
 
+-- return boundaries given function on space
+takeBoundaries :: (a -> Space -> [Boundary]) -> a -> Place -> [Boundary]
+takeBoundaries f a s = let
+ (bounds,space) = unzipPlace s
+ indexes = map (\(Boundary x) -> x) (f a space)
+ in map (\x -> bounds !! x) indexes
+
+giveBoundaries :: ([Boundary] -> Space -> a) -> [Boundary] -> Place -> a
+giveBoundaries f b s = let
+ (bounds,space) = unzipPlace s
+ indexes = map (\x -> fromJust (elemIndex x bounds)) b
+ in f (map Boundary indexes) space
+
 -- all possible regions
 powerSpace :: [Boundary] -> Place
 powerSpace b = let
@@ -694,6 +707,10 @@ rabbitSpaceF g n s t u = let
  result = filter (\x -> (isLinear n (placeToSpace x)) && (isSubSpace x s) && (isSubSpace x t)) u
  in choose g result
 
+--
+-- between space and polytope
+--
+
 -- return Polytope unique up to Boundary permutation and mirror
 embedToPolytope :: [Region] -> Place -> Polytope
 embedToPolytope r s = let
@@ -701,25 +718,90 @@ embedToPolytope r s = let
  subbounds = power (boundariesOfPlace s)
  -- find sub-places
  subplaces = map (\x -> fold' subSpace x s) subbounds
- -- find sub-place region taken triples
- pairs = [(unzipPlace x,y) | x <- subplaces, y <- regionsOfPlace x]
+ -- find sub-place region taken
+ pairs = [(x,y) | x <- subplaces, y <- regionsOfPlace x]
  -- filter to those that are super-region-places
- supers = filter (\((x,t),y) -> (attachedBoundaries y t) == x) pairs
- removes = map (\((x,t),y) -> (zipPlace x t, remove y (regionsOfSpace t))) supers
- degens = map (\(x,y) -> fold' degenSpace y x) removes
- triples = map (\x -> takeRegions x s) degens
+ attached = map (\(x,y) -> (x,y,takeBoundaries attachedBoundaries y x)) pairs
+ super = filter (\(x,_,z) -> z == (boundariesOfPlace x)) attached
+ unkeep = map (\(x,y,_) -> (x, remove y (regionsOfPlace x))) super
+ degen = map (\(x,y) -> fold' degenSpace y x) unkeep
+ taken = map (\x -> takeRegions x s) degen
  -- filter to those that take to subset of given
- covered = filter (\x -> null (x \\ r)) triples
+ covered = filter (\x -> null (x \\ r)) taken
  -- find subsets of super-region-places
- subsupers = power covered
+ subsuper = power covered
  -- find intersection super-region-places of subsets
- intersects = map (\x -> foldr1 (\+) x) subsupers
+ sect = map (\x -> foldr1 (\+) x) subsuper
  -- convert super-region-places to list of convex and dual-full
- in Polytope (map (embedToPolytopeF s) intersects)
+ in Polytope (map (\x -> embedToPolytopeF x s) sect)
 
 -- convert convex set of regions into convex and dual-full
-embedToPolytopeF :: Place -> [Region] -> (Convex,[[Boundary]])
-embedToPolytopeF = undefined 
+embedToPolytopeF :: [Region] -> Place -> (Convex,[[Boundary]])
+embedToPolytopeF r s = let
+ pair = embedToPolytopeI r s
+ (region,place) = uncurry embedToPolytopeJ pair
+ convex = embedToPolytopeG region place
+ bounds = boundariesOfPlace place
+ sides = map Side (indices 2)
+ wrt [x] y = regionWrtBoundary x region y
+ wrt _ _ = undefined
+ equ x y = (giveBoundaries wrt [x] place) == y
+ dull = map (\y -> filter (\x -> equ x y) bounds) sides
+ in (convex, dull)
+
+-- return convex from region and place
+embedToPolytopeG :: Region -> Place -> Convex
+embedToPolytopeG r s = let
+ bounds = boundariesOfPlace s
+ convex = map (\x -> embedToPolytopeH x r s) bounds
+ in Convex convex
+
+-- return sub-convex associated with boundary
+embedToPolytopeH :: Boundary -> Region -> Place -> (Boundary,Convex)
+embedToPolytopeH b r s = let
+ section = embedToPolytopeK b r s
+ subspace = uncurry embedToPolytopeJ section
+ convex = uncurry embedToPolytopeG subspace
+ in (b, convex)
+
+-- strip out boundaries separating given regions
+embedToPolytopeI :: [Region] -> Place -> (Region,Place)
+embedToPolytopeI r s = let
+ bounds = boundariesOfPlace s
+ sides = map Side (indices 2)
+ wrt [x] y z = regionWrtBoundary x y z
+ wrt _ _ _ = undefined
+ equ x y z = (giveBoundaries (\b t -> wrt b y t) [x] s) == z
+ unbounds = filter (\x -> all (\z -> any (\y -> equ x y z) r) sides) bounds
+ place = fold' subSpace unbounds s
+ regions = regionsOfPlace s
+ unregions = regions \\ r 
+ degen = fold' degenSpace unregions s
+ [region] = takeRegions degen place
+ in (region,place)
+
+-- strip off boundaries not attached to given region
+embedToPolytopeJ :: Region -> Place -> (Region,Place)
+embedToPolytopeJ r s = let
+ bounds = boundariesOfPlace s
+ attached = takeBoundaries attachedBoundaries r s
+ unbounds = bounds \\ attached
+ place = fold' subSpace unbounds s
+ regions = regionsOfPlace s
+ unregions = remove r regions
+ degen = fold' degenSpace unregions s
+ [region] = takeRegions degen place
+ in (region,place)
+
+-- take section by boundary
+embedToPolytopeK :: Boundary -> Region -> Place -> (Region,Place)
+embedToPolytopeK b r s = let
+ place = sectionSpace b s
+ regions = regionsOfPlace s
+ unregions = remove r regions
+ degen = fold' degenSpace unregions s
+ [region] = takeRegions degen place
+ in (region,place)
 
 --
 -- between symbolic and numeric
