@@ -336,6 +336,9 @@ migrateSpaceExists r s = let
 subSpace :: Boundary -> Place -> Place
 subSpace = subSpaceF (flip (\\))
 
+unsubSpace :: [Boundary] -> Place -> Place
+unsubSpace = unsubSpaceF (flip (\\))
+
 subSpaceF :: ([Region] -> [Region] -> [Region]) -> Boundary -> Place -> Place
 subSpaceF f b s = let
  (bounds,space) = unzipPlace s
@@ -345,6 +348,12 @@ subSpaceF f b s = let
  section = filter (subSpaceG bound space) regions
  result = map2 (f section) (unplace index space)
  in zipPlace (unplace index bounds) result
+
+unsubSpaceF :: ([Region] -> [Region] -> [Region]) -> [Boundary] -> Place -> Place
+unsubSpaceF f b s = let
+ bounds = boundariesOfPlace s
+ unbounds = bounds \\ b
+ in fold' (subSpaceF f) unbounds s
 
 -- attachedRegions will not work here because of recursion
 subSpaceG :: Boundary -> Space -> Region -> Bool
@@ -356,6 +365,9 @@ subSpaceG b s r = let
 -- return space of less dimension homeomorphic to regions attached to given boundary
 sectionSpace :: Boundary -> Place -> Place
 sectionSpace = subSpaceF (+\)
+
+unsectionSpace :: [Boundary] -> Place -> Place
+unsectionSpace = unsubSpaceF (+\)
 
 -- divide regions of s in t by new boundary b
 divideSpace :: Boundary -> Place -> Place -> [Place]
@@ -393,6 +405,9 @@ takeRegions s t = let
  tSub = map2 (\x -> sort (shared +\ x)) dual
  in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
 
+takeEmbed :: [Region] -> Place -> Place -> [Region]
+takeEmbed r s t = takeRegions (embedSpace r s) t
+
 -- return boundaries given function on space
 takeBoundaries :: (a -> Space -> [Boundary]) -> a -> Place -> [Boundary]
 takeBoundaries f a s = let
@@ -423,6 +438,12 @@ degenSpace :: Region -> Place -> Place
 degenSpace r s = let
  (bounds,space) = unzipPlace s
  in zipPlace bounds (map2 (remove r) space)
+
+embedSpace :: [Region] -> Place -> Place
+embedSpace r s = let
+ regions = regionsOfPlace s
+ unregions = regions \\ r
+ in fold' degenSpace unregions s
 
 -- divide regions by space into non-linear space
 crossSpace :: Place -> Place -> Place
@@ -628,8 +649,7 @@ subSection g p q n s t u
  | q == n = (s,g)
  | dim == 0 = let
   (region,h) = choose g (takeRegions s t)
-  regions = remove region (regionsOfPlace t)
-  in (fold' degenSpace regions t, h)
+  in (embedSpace [region] t, h)
  | dim >= (length u) = (powerSpace (boundariesOfPlace u), g)
  | dim > 0 = let
   bounds = boundariesOfPlace u
@@ -723,9 +743,7 @@ embedToPolytope r s = let
  -- filter to those that are super-region-places
  attached = map (\(x,y) -> (x,y,takeBoundaries attachedBoundaries y x)) pairs
  super = filter (\(x,_,z) -> z == (boundariesOfPlace x)) attached
- unkeep = map (\(x,y,_) -> (x, remove y (regionsOfPlace x))) super
- degen = map (\(x,y) -> fold' degenSpace y x) unkeep
- taken = map (\x -> takeRegions x s) degen
+ taken = map (\(x,y,_) -> takeEmbed [y] x s) super
  -- filter to those that take to subset of given
  covered = filter (\x -> null (x \\ r)) taken
  -- find subsets of super-region-places
@@ -774,33 +792,22 @@ embedToPolytopeI r s = let
  equ x y z = (giveBoundaries (\b t -> wrt b y t) [x] s) == z
  unbounds = filter (\x -> all (\z -> any (\y -> equ x y z) r) sides) bounds
  place = fold' subSpace unbounds s
- regions = regionsOfPlace s
- unregions = regions \\ r 
- degen = fold' degenSpace unregions s
- [region] = takeRegions degen place
+ [region] = takeEmbed r s place
  in (region,place)
 
 -- strip off boundaries not attached to given region
 embedToPolytopeJ :: Region -> Place -> (Region,Place)
 embedToPolytopeJ r s = let
- bounds = boundariesOfPlace s
  attached = takeBoundaries attachedBoundaries r s
- unbounds = bounds \\ attached
- place = fold' subSpace unbounds s
- regions = regionsOfPlace s
- unregions = remove r regions
- degen = fold' degenSpace unregions s
- [region] = takeRegions degen place
+ place = unsubSpace attached s
+ [region] = takeEmbed [r] s place
  in (region,place)
 
 -- take section by boundary
 embedToPolytopeK :: Boundary -> Region -> Place -> (Region,Place)
 embedToPolytopeK b r s = let
  place = sectionSpace b s
- regions = regionsOfPlace s
- unregions = remove r regions
- degen = fold' degenSpace unregions s
- [region] = takeRegions degen place
+ [region] = takeEmbed [r] s place
  in (region,place)
 
 --
@@ -965,10 +972,8 @@ spaceFromPlanes n w
   vertices = map (\x -> plane:(subset x planes)) tuples
   points = map (\x -> fromJust (intersectPlanes n x)) vertices
   -- convert intersection points to sides and take to space
-  regions = regionsOfPlace place
   keep = concatMap (spaceFromPlanesF planes place) (zip tuples points)
-  unkeep = regions \\ keep
-  sect = fold' degenSpace unkeep place -- convert regions to place
+  sect = embedSpace keep place -- convert regions to place
   -- return space with found regions divided by new boundary
   [bound] = boundaryHoles 1 bounds
   [one,other] = divideSpace bound sect place
