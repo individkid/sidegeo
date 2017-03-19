@@ -60,7 +60,7 @@ subSubPlace :: [Boundary] -> Place -> Place
 subSubPlace b s = (fold' subSpace) ((domain s) \\ b) s
 
 isSubPlaceEquiv :: Place -> Place -> Bool
-isSubPlaceEquiv a b = (minEquiv (range (subSubPlace (domain a) b))) == (minEquiv (range a))
+isSubPlaceEquiv a b = (equivSpace (range (subSubPlace (domain a) b))) == (equivSpace (range a))
 
 rv :: Bool -> String -> Maybe String
 rv a b = if a then Nothing else Just b
@@ -164,14 +164,15 @@ single = let
  orders = extendSpace 1 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0],[Region 0]])
  in (rvb (\x -> rv (isLinear 2 x) (show x)) spaces) `rva` (rvb (\x -> rv (isLinear 1 x) (show x)) orders)
 
-equivSpace :: [Region] -> Space -> Space
-equivSpace r s = map (\x -> map (\y -> map (\z -> r !! (fromJust (elemIndex z (regionsOfSpace s)))) y) x) s
+minEquiv :: [Region] -> Space -> Space
+minEquiv r s = map (\x -> map (\y -> map (\z -> r !! (fromJust (elemIndex z (regionsOfSpace s)))) y) x) s
 
 rename :: Maybe String
 rename = let
  spaces = extendSpace 2 (foldl (\x y -> divideSpaceF y x) [] [[Region 0],[Region 0,Region 1],[Region 0,Region 1,Region 2]])
  regions = map (\x -> Region (x * 3)) (indices (defineLinear 2 4))
- in rvb (\x -> rv ((regionsOfSpace (equivSpace regions x)) == regions) (show (x,regions))) spaces
+ in rvb (\x -> rv ((regionsOfSpace (minEquiv
+ regions x)) == regions) (show (x,regions))) spaces
 
 section :: Maybe String
 section = let

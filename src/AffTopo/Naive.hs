@@ -552,61 +552,61 @@ regionHoles m r = map Region (holes m (map (\(Region x) -> x) r))
 --
 
 -- optimize this
-minEquiv :: Space -> Space
-minEquiv s = let
+equivSpace :: Space -> Space
+equivSpace s = let
  ident = [(x,y) | x <- boundariesOfSpace s, y <- [Side 0, Side 1]]
- perms = minEquivF [([],ident)] s
+ perms = equivSpaceF [([],ident)] s
  perm = head perms
- space = map (minEquivI s) perm
- regions = minEquivG (regionsOfSpace s) s perm 
- in map3 (minEquivJ regions) space
+ space = map (equivSpaceI s) perm
+ regions = equivSpaceG (regionsOfSpace s) s perm 
+ in map3 (equivSpaceJ regions) space
 
 -- find permutations that minimize space, given list of partial permutations
-minEquivF :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
-minEquivF a s
+equivSpaceF :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
+equivSpaceF a s
  | null (snd (head a)) = domain a
  | otherwise = let
   candidates = [(x Prelude.++ [z], remove z y) | (x,y) <- a, z <- y]
   polyants = map fst candidates
-  ballots = map (minEquivK s) polyants
+  ballots = map (equivSpaceK s) polyants
   votes = zip ballots candidates
   election = minimum ballots
   servants = image [election] votes
-  in minEquivF servants s
+  in equivSpaceF servants s
 
 -- find permutation of regions that minimizes space permuted as given
-minEquivG :: [Region] -> Space -> [(Boundary,Side)] -> [Region]
-minEquivG [] _ _ = []
-minEquivG r s b = let
- region = minEquivH r s b
- in region : (minEquivG (remove region r) s b)
+equivSpaceG :: [Region] -> Space -> [(Boundary,Side)] -> [Region]
+equivSpaceG [] _ _ = []
+equivSpaceG r s b = let
+ region = equivSpaceH r s b
+ in region : (equivSpaceG (remove region r) s b)
 
 -- choose region from nonempty intersection of first halfspaces
-minEquivH :: [Region] -> Space -> [(Boundary,Side)] -> Region
-minEquivH [] _ _ = undefined
-minEquivH (a:[]) _ _ = a
-minEquivH (a:_) _ [] = a
-minEquivH a s ((Boundary b, Side c):d) = let
+equivSpaceH :: [Region] -> Space -> [(Boundary,Side)] -> Region
+equivSpaceH [] _ _ = undefined
+equivSpaceH (a:[]) _ _ = a
+equivSpaceH (a:_) _ [] = a
+equivSpaceH a s ((Boundary b, Side c):d) = let
  regions = a +\ ((s !! b) !! c)
  nonempty = if null regions then a else regions
- in minEquivH nonempty s d
+ in equivSpaceH nonempty s d
 
 -- return permuted space element
-minEquivI :: Space -> (Boundary,Side) -> [[Region]]
-minEquivI s (Boundary b, Side 0) = s !! b
-minEquivI s (Boundary b, Side 1) = reverse (s !! b)
-minEquivI _ _ = undefined
+equivSpaceI :: Space -> (Boundary,Side) -> [[Region]]
+equivSpaceI s (Boundary b, Side 0) = s !! b
+equivSpaceI s (Boundary b, Side 1) = reverse (s !! b)
+equivSpaceI _ _ = undefined
 
 -- apply permutation to region
-minEquivJ :: [Region] -> Region -> Region
-minEquivJ a b = Region (fromJust (elemIndex b a))
+equivSpaceJ :: [Region] -> Region -> Region
+equivSpaceJ a b = Region (fromJust (elemIndex b a))
 
 -- permute halfspace indicated by last of permutation
-minEquivK :: Space -> [(Boundary,Side)] -> [Region]
-minEquivK s a = let
- regions = minEquivG (regionsOfSpace s) s a
- half = head (minEquivI s (last a))
- in map (minEquivJ regions) half
+equivSpaceK :: Space -> [(Boundary,Side)] -> [Region]
+equivSpaceK s a = let
+ regions = equivSpaceG (regionsOfSpace s) s a
+ half = head (equivSpaceI s (last a))
+ in map (equivSpaceJ regions) half
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
@@ -618,14 +618,14 @@ anySpace g n m = let
 -- return all linear spaces given any space to start
 allSpaces :: Space -> [Space]
 allSpaces s = let
- space = minEquiv s
+ space = equivSpace s
  regions = regionsOfSpace space
  in allSpacesF regions space [] []
 
 -- migrate all possible from current space, and go on to next todo
 allSpacesF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
 allSpacesF (p:q) s todo done
- | migrateSpaceExists p s = allSpacesG q s (minEquiv (migrateSpace p s)) todo done
+ | migrateSpaceExists p s = allSpacesG q s (equivSpace (migrateSpace p s)) todo done
  | otherwise = allSpacesF q s todo done
 allSpacesF [] s todo done = allSpacesH todo (insert s done)
 
@@ -639,32 +639,6 @@ allSpacesG r s t todo done
 allSpacesH :: [Space] -> [Space] -> [Space]
 allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
-
--- return space that is section of given spaces
--- given dimensions correspond to given spaces. first two spaces are sections of third place
-subSection :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place,g)
-subSection g p q n s t u
- | (p > n) || (q > n) || (n < 0) || (dim < 0) = undefined
- | p == n = (t,g)
- | q == n = (s,g)
- | dim == 0 = let
-  (region,h) = choose g (takeRegions s t)
-  in (embedSpace [region] t, h)
- | dim >= (length u) = (powerSpace (boundariesOfPlace u), g)
- | dim > 0 = let
-  bounds = boundariesOfPlace u
-  (bound,h) = choose g bounds
-  sSub = subSpace bound s
-  tSub = subSpace bound t
-  uSub = subSpace bound u
-  (sub,i) = subSection h p q n sSub tSub uSub
-  uSect = sectionSpace bound u
-  (sect,j) = subSection i dim (n-1) n sub uSect uSub
-  [one,other] = divideSpace bound sect sub
-  valid = (isSectionSpace one s) && (isSectionSpace one t)
-  in (if valid then one else other, j)
- | otherwise = undefined where
- dim = (p+q)-n
 
 -- return superspace with given spaces as subspaces
 -- given spaces have given dimension. subspaces by shared regions are equal
@@ -701,7 +675,7 @@ rabbitSpace g n s t
  | n >= 2 = let
   sSect = sectionSpace sBound s
   tSect = sectionSpace tBound t
-  (sect,h) = subSection g (n-1) (n-1) n sSect tSect place
+  (sect,h) = snakeSpace g (n-1) (n-1) n sSect tSect place
   sSup = divideSpace tBound sect sSect
   tSup = concatMap (\x -> divideSpace sBound x t) sSup
   in rabbitSpaceF h n s t tSup
@@ -726,6 +700,32 @@ rabbitSpaceF :: Random.RandomGen g => Show g => g -> Int -> Place -> Place -> [P
 rabbitSpaceF g n s t u = let
  result = filter (\x -> (isLinear n (placeToSpace x)) && (isSubSpace x s) && (isSubSpace x t)) u
  in choose g result
+
+-- return space that is section of given spaces
+-- given dimensions correspond to given spaces. first two spaces are sections of third place
+snakeSpace :: Random.RandomGen g => Show g => g -> Int -> Int -> Int -> Place -> Place -> Place -> (Place,g)
+snakeSpace g p q n s t u
+ | (p > n) || (q > n) || (n < 0) || (dim < 0) = undefined
+ | p == n = (t,g)
+ | q == n = (s,g)
+ | dim == 0 = let
+  (region,h) = choose g (takeRegions s t)
+  in (embedSpace [region] t, h)
+ | dim >= (length u) = (powerSpace (boundariesOfPlace u), g)
+ | dim > 0 = let
+  bounds = boundariesOfPlace u
+  (bound,h) = choose g bounds
+  sSub = subSpace bound s
+  tSub = subSpace bound t
+  uSub = subSpace bound u
+  (sub,i) = snakeSpace h p q n sSub tSub uSub
+  uSect = sectionSpace bound u
+  (sect,j) = snakeSpace i dim (n-1) n sub uSect uSub
+  [one,other] = divideSpace bound sect sub
+  valid = (isSectionSpace one s) && (isSectionSpace one t)
+  in (if valid then one else other, j)
+ | otherwise = undefined where
+ dim = (p+q)-n
 
 --
 -- between space and polytope
