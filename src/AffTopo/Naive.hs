@@ -152,6 +152,15 @@ findMaybeF _ _ (Just a) = Just a
 findMaybeF f (a:b) Nothing = findMaybeF f b (f a)
 findMaybeF _ [] Nothing = Nothing
 
+-- O(n*log(n)) nub
+nub' :: Ord a => [a] -> [a]
+nub' = nubF . sort
+
+nubF :: Eq a => [a] -> [a]
+nubF (a:b:c) | a == b = nubF (a:c)
+nubF (a:b:c) | otherwise = a:(nubF (b:c))
+nubF a = a
+
 -- modify function taking single to function taking list
 fold' :: (a -> b -> b) -> [a] -> b -> b
 fold' f a b = foldl' (\x y -> f y x) b a
@@ -734,24 +743,28 @@ snakeSpace g p q n s t u
 -- return Polytope unique up to Boundary permutation and mirror
 embedToPolytope :: [Region] -> Place -> Polytope
 embedToPolytope r s = let
- -- find subsets of boundaries
- subbounds = power (boundariesOfPlace s)
- -- find sub-places
- subplaces = map (\x -> fold' subSpace x s) subbounds
- -- find sub-place region taken
- pairs = [(x,y) | x <- subplaces, y <- regionsOfPlace x]
+ -- find sub-place region pairs
+ subbound = power (boundariesOfPlace s)
+ subplace = map (\x -> fold' subSpace x s) subbound
+ pair = [(x,y) | x <- subplace, y <- regionsOfPlace x]
  -- filter to those that are super-region-places
- attached = map (\(x,y) -> (x,y,takeBoundaries attachedBoundaries y x)) pairs
- super = filter (\(x,_,z) -> z == (boundariesOfPlace x)) attached
- taken = map (\(x,y,_) -> takeEmbed [y] x s) super
+ taker = takeBoundaries attachedBoundaries
+ attached = map (\(x,y) -> (x,y,taker y x)) pair
+ super = filter (\(x,_,z) -> null ((boundariesOfPlace x) \\ z)) attached
  -- filter to those that take to subset of given
- covered = filter (\x -> null (x \\ r)) taken
- -- find subsets of super-region-places
- subsuper = power covered
- -- find intersection super-region-places of subsets
- sect = map (\x -> foldr1 (\+) x) subsuper
- -- convert super-region-places to list of convex and dual-full
- in Polytope (map (\x -> embedToPolytopeF x s) sect)
+ taken = map (\(x,y,_) -> takeEmbed [y] x s) super
+ norep = nub' (map sort taken)
+ covered = filter (\x -> null (x \\ r)) norep
+ -- filter to those not proper to any
+ nosub x y = not (null (x \\ y))
+ rogue x = all (nosub x) (remove x covered)
+ maximal = filter rogue covered
+ -- find intersections of maximal super-region-places
+ subsuper = remove [] (power maximal)
+ sect = [] : (map (\x -> foldr1 (\+) x) subsuper)
+ uniq = nub' (map sort sect)
+ -- convert super-region-places to list
+ in Polytope (map (\x -> embedToPolytopeF x s) uniq)
 
 -- convert convex set of regions into convex and dual-full
 embedToPolytopeF :: [Region] -> Place -> (Convex,[[Boundary]])
@@ -765,7 +778,7 @@ embedToPolytopeF r s = let
  wrt _ _ = undefined
  equ x y = (giveBoundaries wrt [x] place) == y
  dull = map (\y -> filter (\x -> equ x y) bounds) sides
- in (convex, dull)
+ in (convex,dull)
 
 -- return convex from region and place
 embedToPolytopeG :: Region -> Place -> Convex
@@ -780,7 +793,7 @@ embedToPolytopeH b r s = let
  section = embedToPolytopeK b r s
  subspace = uncurry embedToPolytopeJ section
  convex = uncurry embedToPolytopeG subspace
- in (b, convex)
+ in (b,convex)
 
 -- strip out boundaries separating given regions
 embedToPolytopeI :: [Region] -> Place -> (Region,Place)
