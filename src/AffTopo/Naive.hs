@@ -39,6 +39,9 @@ type Vector = Matrix.Vector Double
 data Convex = Convex [(Boundary,Convex)] deriving (Eq, Ord, Show)
 data Polytope = Polytope [(Convex,[[Boundary]])] deriving (Eq, Ord, Show)
 
+type Permute = [[(Boundary,Side)]]
+type Compare = (Permute -> Permute -> Ordering)
+
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
 
@@ -81,6 +84,9 @@ replace a b c = (take a c) Prelude.++ (b : (drop (a+1) c))
 
 emplace :: Int -> a -> [a] -> [a]
 emplace a b c = (take a c) Prelude.++ (b : (drop a c))
+
+append :: a -> [a] -> [a]
+append a b = b Prelude.++ [a]
 
 choose :: Random.RandomGen g => g -> [a] -> (a, g)
 choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in ((a !! b), h)
@@ -563,59 +569,45 @@ regionHoles m r = map Region (holes m (map (\(Region x) -> x) r))
 -- optimize this
 equivSpace :: Space -> Space
 equivSpace s = let
- ident = [(x,y) | x <- boundariesOfSpace s, y <- [Side 0, Side 1]]
- perms = equivSpaceF [([],ident)] s
- perm = head perms
- space = map (equivSpaceI s) perm
- regions = equivSpaceG (regionsOfSpace s) s perm 
- in map3 (equivSpaceJ regions) space
+ bounds = boundariesOfSpace s
+ ident = [map (\x -> (x, Side 0)) bounds, []]
+ perms = equivPart (compareSpace s) ident
+ in permuteSpace s (head perms)
 
--- find permutations that minimize space, given list of partial permutations
-equivSpaceF :: [([(Boundary,Side)],[(Boundary,Side)])] -> Space -> [[(Boundary,Side)]]
-equivSpaceF a s
- | null (snd (head a)) = domain a
- | otherwise = let
-  candidates = [(x Prelude.++ [z], remove z y) | (x,y) <- a, z <- y]
-  polyants = map fst candidates
-  ballots = map (equivSpaceK s) polyants
-  votes = zip ballots candidates
-  election = minimum ballots
-  servants = image [election] votes
-  in equivSpaceF servants s
+compareSpace :: Space -> Permute -> Permute -> Ordering
+compareSpace = undefined
 
--- find permutation of regions that minimizes space permuted as given
-equivSpaceG :: [Region] -> Space -> [(Boundary,Side)] -> [Region]
-equivSpaceG [] _ _ = []
-equivSpaceG r s b = let
- region = equivSpaceH r s b
- in region : (equivSpaceG (remove region r) s b)
+permuteSpace :: Space -> Permute -> Space
+permuteSpace = undefined
 
--- choose region from nonempty intersection of first halfspaces
-equivSpaceH :: [Region] -> Space -> [(Boundary,Side)] -> Region
-equivSpaceH [] _ _ = undefined
-equivSpaceH (a:[]) _ _ = a
-equivSpaceH (a:_) _ [] = a
-equivSpaceH a s ((Boundary b, Side c):d) = let
- regions = a +\ ((s !! b) !! c)
- nonempty = if null regions then a else regions
- in equivSpaceH nonempty s d
+sortSpace :: Space -> Space
+sortSpace = undefined
 
--- return permuted space element
-equivSpaceI :: Space -> (Boundary,Side) -> [[Region]]
-equivSpaceI s (Boundary b, Side 0) = s !! b
-equivSpaceI s (Boundary b, Side 1) = reverse (s !! b)
-equivSpaceI _ _ = undefined
+equivPart :: Compare -> Permute -> [Permute]
+equivPart _ [p,[]] = [[p,[]]]
+equivPart f [p,q] = let
+ refine = equivPartF [p,q]
+ recurse = map (equivPart f) refine
+ flat = concat recurse
+ sorted = equivPartG f flat
+ in equivPartH f sorted
+equivPart _ _ = undefined
 
--- apply permutation to region
-equivSpaceJ :: [Region] -> Region -> Region
-equivSpaceJ a b = Region (fromJust (elemIndex b a))
+-- refine partial permutation
+equivPartF :: Permute -> [Permute]
+equivPartF [a,b] = map (\x -> [append x a, remove x a]) b
+equivPartF _ = undefined
 
--- permute halfspace indicated by last of permutation
-equivSpaceK :: Space -> [(Boundary,Side)] -> [Region]
-equivSpaceK s a = let
- regions = equivSpaceG (regionsOfSpace s) s a
- half = head (equivSpaceI s (last a))
- in map (equivSpaceJ regions) half
+-- sort partial permutations
+equivPartG :: Compare -> [Permute] -> [Permute]
+equivPartG f p = sortBy f p
+
+-- prefix of equivalent partials
+equivPartH :: Compare -> [Permute] -> [Permute]
+equivPartH f (p:(q:r))
+ | (f p q) == EQ = p : (equivPartH f (q:r))
+ | otherwise = [p]
+equivPartH _ p = p
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
