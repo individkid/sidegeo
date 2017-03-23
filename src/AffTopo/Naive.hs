@@ -39,7 +39,7 @@ type Vector = Matrix.Vector Double
 type Pose = (Boundary,Side)
 type Part = [[Pose]]
 type Pace = [([Boundary],[[Boundary]])]
-data Spacer = Spacer Boundary Part Dual Pace
+data Spacer = Spacer Boundary Dual Part Pace
 
 data Vex = Vex [(Boundary,Vex)] deriving (Eq, Ord, Show)
 data Tope = Tope [(Vex,[[Boundary]])] deriving (Eq, Ord, Show)
@@ -49,7 +49,7 @@ class Perm p where
  comparePerm :: p -> p -> Ordering
 
 instance Perm Spacer where
- refinePerm (Spacer b p s t) = map (\(x,y) -> Spacer b y s (refineSpace b x s t)) (refinePart p)
+ refinePerm (Spacer b s p t) = map (\(x,y) -> Spacer b s y (refineSpace b s x t)) (refinePart p)
  comparePerm (Spacer _ _ _ s) (Spacer _ _ _ t) = compare s t
 
 sideToBool :: Side -> Bool
@@ -572,6 +572,9 @@ boundaryHoles m b = map Boundary (holes m (map (\(Boundary x) -> x) b))
 regionHoles :: Int -> [Region] -> [Region]
 regionHoles m r = map Region (holes m (map (\(Region x) -> x) r))
 
+allSides :: [Side]
+allSides = map Side (indices 2)
+
 --
 -- so far so simple
 --
@@ -600,19 +603,19 @@ refinePart [p,q] = let
 refinePart _ = undefined
 
 identPart :: [Boundary] -> Part
-identPart b = [[(x,y) | x <- b, y <- map Side (indices 2)],[]]
+identPart b = [[(x,y) | x <- b, y <- allSides],[]]
 
-refineSpace :: Boundary -> Pose -> Dual -> Pace -> Pace
+refineSpace :: Boundary -> Dual -> Pose -> Pace -> Pace
 refineSpace = undefined
 
 equivSpace :: Space -> Space
 equivSpace s = let
  bounds = boundariesOfSpace s
  term = Boundary (length bounds)
- part = identPart bounds
  orig = spaceToDual s
+ part = identPart bounds
  dummy = [([term],[[]])]
- spacer = Spacer term part orig dummy
+ spacer = Spacer term orig part dummy
  (Spacer _ _ _ pace) = equivPerm spacer
  termed = map (\(x,y) -> x:y) pace
  dual = map2 (\x -> take ((length x) - 1) x) termed
@@ -774,7 +777,7 @@ embedToTopeF r s = let
  (region,place) = uncurry embedToTopeJ pair
  convex = embedToTopeG region place
  bounds = boundariesOfPlace place
- sides = map Side (indices 2)
+ sides = allSides
  wrt [x] y = regionWrtBoundary x region y
  wrt _ _ = undefined
  equ x y = (giveBoundaries wrt [x] place) == y
@@ -800,7 +803,7 @@ embedToTopeH b r s = let
 embedToTopeI :: [Region] -> Place -> (Region,Place)
 embedToTopeI r s = let
  bounds = boundariesOfPlace s
- sides = map Side (indices 2)
+ sides = allSides
  wrt [x] y z = regionWrtBoundary x y z
  wrt _ _ _ = undefined
  equ x y z = (giveBoundaries (\b t -> wrt b y t) [x] s) == z
