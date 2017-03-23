@@ -578,7 +578,17 @@ regionHoles m r = map Region (holes m (map (\(Region x) -> x) r))
 
 -- optimize this
 equivPerm :: Perm p => p -> p
-equivPerm = undefined
+equivPerm p = head (equivPermF p (refinePerm p))
+
+equivPermF :: Perm p => p -> [p] -> [p]
+equivPermF p [] = [p]
+equivPermF _ p = let
+ sorted = sortBy comparePerm p
+ sample = head sorted
+ equal = (EQ ==) . (comparePerm sample)
+ prefix = takeWhile equal sorted
+ refine = concat (map refinePerm prefix)
+ in equivPermF sample refine
 
 refinePart :: Part -> [(Pose,Part)]
 refinePart [_,[]] = []
