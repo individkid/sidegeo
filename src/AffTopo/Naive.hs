@@ -36,11 +36,21 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 
-data Convex = Convex [(Boundary,Convex)] deriving (Eq, Ord, Show)
-data Polytope = Polytope [(Convex,[[Boundary]])] deriving (Eq, Ord, Show)
+type Pose = (Boundary,Side)
+type Part = [[Pose]]
+type Pace = [([Boundary],[[Boundary]])]
+data Spacer = Spacer Boundary Part Dual Pace
 
-type Permute = [[(Boundary,Side)]]
-type Compare = (Permute -> Permute -> Ordering)
+data Vex = Vex [(Boundary,Vex)] deriving (Eq, Ord, Show)
+data Tope = Tope [(Vex,[[Boundary]])] deriving (Eq, Ord, Show)
+
+class Perm p where
+ refinePerm :: p -> [p]
+ comparePerm :: p -> p -> Ordering
+
+instance Perm Spacer where
+ refinePerm (Spacer b p s t) = map (\(x,y) -> Spacer b y s (refineSpace b x s t)) (refinePart p)
+ comparePerm (Spacer _ _ _ s) (Spacer _ _ _ t) = compare s t
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
@@ -567,47 +577,36 @@ regionHoles m r = map Region (holes m (map (\(Region x) -> x) r))
 --
 
 -- optimize this
+equivPerm :: Perm p => p -> p
+equivPerm = undefined
+
+refinePart :: Part -> [(Pose,Part)]
+refinePart [_,[]] = []
+refinePart [p,q] = let
+ done x = append x p
+ todo x = filter (\z -> (fst x) /= (fst z)) q
+ pair x = (x, [done x, todo x])
+ in map pair q
+refinePart _ = undefined
+
+identPart :: [Boundary] -> Part
+identPart b = [[(x,y) | x <- b, y <- map Side (indices 2)],[]]
+
+refineSpace :: Boundary -> Pose -> Dual -> Pace -> Pace
+refineSpace = undefined
+
 equivSpace :: Space -> Space
 equivSpace s = let
  bounds = boundariesOfSpace s
- ident = [map (\x -> (x, Side 0)) bounds, []]
- perms = equivPart (compareSpace s) ident
- in permuteSpace s (head perms)
-
-compareSpace :: Space -> Permute -> Permute -> Ordering
-compareSpace = undefined
-
-permuteSpace :: Space -> Permute -> Space
-permuteSpace = undefined
-
-sortSpace :: Space -> Space
-sortSpace = undefined
-
-equivPart :: Compare -> Permute -> [Permute]
-equivPart _ [p,[]] = [[p,[]]]
-equivPart f [p,q] = let
- refine = equivPartF [p,q]
- recurse = map (equivPart f) refine
- flat = concat recurse
- sorted = equivPartG f flat
- in equivPartH f sorted
-equivPart _ _ = undefined
-
--- refine partial permutation
-equivPartF :: Permute -> [Permute]
-equivPartF [a,b] = map (\x -> [append x a, remove x a]) b
-equivPartF _ = undefined
-
--- sort partial permutations
-equivPartG :: Compare -> [Permute] -> [Permute]
-equivPartG f p = sortBy f p
-
--- prefix of equivalent partials
-equivPartH :: Compare -> [Permute] -> [Permute]
-equivPartH f (p:(q:r))
- | (f p q) == EQ = p : (equivPartH f (q:r))
- | otherwise = [p]
-equivPartH _ p = p
+ term = Boundary (length bounds)
+ part = identPart bounds
+ orig = spaceToDual s
+ dummy = [([term],[[]])]
+ spacer = Spacer term part orig dummy
+ (Spacer _ _ _ pace) = equivPerm spacer
+ termed = map (\(x,y) -> x:y) pace
+ dual = map2 (\x -> take ((length x) - 1) x) termed
+ in dualToSpace dual
 
 -- return space by calling superSpace with singleton space
 anySpace :: Random.RandomGen g => Show g => g -> Int -> Int -> (Space, g)
@@ -732,9 +731,9 @@ snakeSpace g p q n s t u
 -- between space and polytope
 --
 
--- return Polytope unique up to Boundary permutation and mirror
-embedToPolytope :: [Region] -> Place -> Polytope
-embedToPolytope r s = let
+-- return Tope unique up to Boundary permutation and mirror
+embedToTope :: [Region] -> Place -> Tope
+embedToTope r s = let
  -- find sub-place region pairs
  subbound = power (boundariesOfPlace s)
  subplace = map (\x -> fold' subSpace x s) subbound
@@ -756,14 +755,14 @@ embedToPolytope r s = let
  sect = [] : (map (\x -> foldr1 (\+) x) subsuper)
  uniq = nub' (map sort sect)
  -- convert super-region-places to list
- in Polytope (map (\x -> embedToPolytopeF x s) uniq)
+ in Tope (map (\x -> embedToTopeF x s) uniq)
 
 -- convert convex set of regions into convex and dual-full
-embedToPolytopeF :: [Region] -> Place -> (Convex,[[Boundary]])
-embedToPolytopeF r s = let
- pair = embedToPolytopeI r s
- (region,place) = uncurry embedToPolytopeJ pair
- convex = embedToPolytopeG region place
+embedToTopeF :: [Region] -> Place -> (Vex,[[Boundary]])
+embedToTopeF r s = let
+ pair = embedToTopeI r s
+ (region,place) = uncurry embedToTopeJ pair
+ convex = embedToTopeG region place
  bounds = boundariesOfPlace place
  sides = map Side (indices 2)
  wrt [x] y = regionWrtBoundary x region y
@@ -773,23 +772,23 @@ embedToPolytopeF r s = let
  in (convex,dull)
 
 -- return convex from region and place
-embedToPolytopeG :: Region -> Place -> Convex
-embedToPolytopeG r s = let
+embedToTopeG :: Region -> Place -> Vex
+embedToTopeG r s = let
  bounds = boundariesOfPlace s
- convex = map (\x -> embedToPolytopeH x r s) bounds
- in Convex convex
+ convex = map (\x -> embedToTopeH x r s) bounds
+ in Vex convex
 
 -- return sub-convex associated with boundary
-embedToPolytopeH :: Boundary -> Region -> Place -> (Boundary,Convex)
-embedToPolytopeH b r s = let
- section = embedToPolytopeK b r s
- subspace = uncurry embedToPolytopeJ section
- convex = uncurry embedToPolytopeG subspace
+embedToTopeH :: Boundary -> Region -> Place -> (Boundary,Vex)
+embedToTopeH b r s = let
+ section = embedToTopeK b r s
+ subspace = uncurry embedToTopeJ section
+ convex = uncurry embedToTopeG subspace
  in (b,convex)
 
 -- strip out boundaries separating given regions
-embedToPolytopeI :: [Region] -> Place -> (Region,Place)
-embedToPolytopeI r s = let
+embedToTopeI :: [Region] -> Place -> (Region,Place)
+embedToTopeI r s = let
  bounds = boundariesOfPlace s
  sides = map Side (indices 2)
  wrt [x] y z = regionWrtBoundary x y z
@@ -801,16 +800,16 @@ embedToPolytopeI r s = let
  in (region,place)
 
 -- strip off boundaries not attached to given region
-embedToPolytopeJ :: Region -> Place -> (Region,Place)
-embedToPolytopeJ r s = let
+embedToTopeJ :: Region -> Place -> (Region,Place)
+embedToTopeJ r s = let
  attached = takeBoundaries attachedBoundaries r s
  place = unsubSpace attached s
  [region] = takeEmbed [r] s place
  in (region,place)
 
 -- take section by boundary
-embedToPolytopeK :: Boundary -> Region -> Place -> (Region,Place)
-embedToPolytopeK b r s = let
+embedToTopeK :: Boundary -> Region -> Place -> (Region,Place)
+embedToTopeK b r s = let
  place = sectionSpace b s
  [region] = takeEmbed [r] s place
  in (region,place)
