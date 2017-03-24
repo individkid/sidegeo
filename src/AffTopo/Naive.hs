@@ -38,7 +38,11 @@ type Vector = Matrix.Vector Double
 
 type Pose = (Boundary,Side)
 type Part = [[Pose]]
-data Spacer = Spacer Part Dual Dual Dual
+data Spacer = Spacer {
+ partOfSpacer :: Part,
+ origOfSpacer :: Dual,
+ permOfSpacer :: Dual,
+ sortOfSpacer :: Dual}
 
 data Vex = Vex [(Boundary,Vex)] deriving (Eq, Ord, Show)
 data Tope = Tope [(Vex,[[Boundary]])] deriving (Eq, Ord, Show)
@@ -49,7 +53,7 @@ class Perm p where
 
 instance Perm Spacer where
  refinePerm = refineSpace
- comparePerm (Spacer _ _ _ s) (Spacer _ _ _ t) = compare s t
+ comparePerm (Spacer {sortOfSpacer=s}) (Spacer {sortOfSpacer=t}) = compare s t
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
@@ -603,15 +607,17 @@ refinePart [p,q] = let
 refinePart _ = undefined
 
 identPart :: [Boundary] -> Part
-identPart b = [[(x,y) | x <- b, y <- allSides],[]]
+identPart b = [[],[(x,y) | x <- b, y <- allSides]]
 
 refineSpace :: Spacer -> [Spacer]
-refineSpace (Spacer p s t _) = map (refineSpaceF s t) (refinePart p)
+refineSpace (Spacer {partOfSpacer=p, origOfSpacer=s, permOfSpacer=t}) =
+ map (refineSpaceF s t) (refinePart p)
 
 refineSpaceF :: Dual -> Dual -> (Boundary,Boundary,Side,Part) -> Spacer
 refineSpaceF s t (a,b,c,p) = let
  refine = map (refineSpaceG a b c) (zip s t)
- in Spacer p s refine (sort3 refine)
+ sorted = sort3 refine
+ in Spacer {partOfSpacer=p, origOfSpacer=s, permOfSpacer=refine, sortOfSpacer=sorted}
 
 refineSpaceG :: Boundary -> Boundary -> Side -> ([[Boundary]],[[Boundary]]) -> [[Boundary]]
 refineSpaceG a b (Side 0) ([s,t],[u,v])
@@ -631,8 +637,8 @@ equivSpace s = let
  orig = spaceToDual s
  part = identPart bounds
  dummy = replicate (length orig) [[term],[term]]
- spacer = Spacer part orig dummy dummy
- (Spacer _ _ _ termed) = equivPerm spacer
+ spacer = Spacer {partOfSpacer=part, origOfSpacer=orig, permOfSpacer=dummy, sortOfSpacer=dummy}
+ termed = sortOfSpacer (equivPerm spacer)
  dual = map2 (\x -> take ((length x) - 1) x) termed
  in dualToSpace dual
 
