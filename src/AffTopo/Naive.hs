@@ -260,7 +260,11 @@ boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
 boundariesOfTope :: Tope -> [Boundary]
-boundariesOfTope = undefined
+boundariesOfTope [] = []
+boundariesOfTope s = let
+ pairs = map snd s
+ (set:sets) = map concat pairs
+ in fold' (++) sets set
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
