@@ -36,16 +36,12 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 
-type Pose = (Boundary,Side)
-type Part = [[Pose]]
+type Part = [[(Boundary,Side)]]
 data Spacer = Spacer {
  partOfSpacer :: Part,
  origOfSpacer :: Dual,
  permOfSpacer :: Dual,
  sortOfSpacer :: Dual}
-
-data Vex = Vex [(Boundary,Vex)] deriving (Eq, Ord, Show)
-data Tope = Tope [(Vex,[[Boundary]])] deriving (Eq, Ord, Show)
 
 class Perm p where
  refinePerm :: p -> [p]
@@ -54,6 +50,18 @@ class Perm p where
 instance Perm Spacer where
  refinePerm = refineSpace
  comparePerm (Spacer {sortOfSpacer=s}) (Spacer {sortOfSpacer=t}) = compare s t
+
+data Vex = Vex [(Boundary,Vex)] deriving (Eq, Ord, Show)
+data Tope = Tope [(Vex,[[Boundary]])] deriving (Eq, Ord, Show)
+data Toper = Toper {
+ partOfToper :: Part,
+ origOfToper :: Tope,
+ permOfToper :: Tope,
+ sortOfToper :: Tope}
+
+instance Perm Toper where
+ refinePerm = refineTope
+ comparePerm (Toper {sortOfToper=s}) (Toper {sortOfToper=t}) = compare s t
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
@@ -764,6 +772,12 @@ snakeSpace g p q n s t u
 --
 -- between space and polytope
 --
+
+refineTope :: Toper -> [Toper]
+refineTope = undefined
+
+equivTope :: Tope -> Tope
+equivTope = undefined
 
 -- return Tope unique up to Boundary permutation and mirror
 embedToTope :: [Region] -> Place -> Tope
