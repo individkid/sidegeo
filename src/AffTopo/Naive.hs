@@ -38,8 +38,7 @@ type Vector = Matrix.Vector Double
 
 type Pose = (Boundary,Side)
 type Part = [[Pose]]
-type Pace = [([Boundary],[[Boundary]])]
-data Spacer = Spacer Boundary Dual Part Pace
+data Spacer = Spacer Part Dual Dual Dual
 
 data Vex = Vex [(Boundary,Vex)] deriving (Eq, Ord, Show)
 data Tope = Tope [(Vex,[[Boundary]])] deriving (Eq, Ord, Show)
@@ -49,7 +48,7 @@ class Perm p where
  comparePerm :: p -> p -> Ordering
 
 instance Perm Spacer where
- refinePerm (Spacer b s p t) = map (\(x,y) -> Spacer b s y (refineSpace b s x t)) (refinePart p)
+ refinePerm = refineSpace
  comparePerm (Spacer _ _ _ s) (Spacer _ _ _ t) = compare s t
 
 sideToBool :: Side -> Bool
@@ -581,10 +580,10 @@ allSides = map Side (indices 2)
 
 -- optimize this
 equivPerm :: Perm p => p -> p
-equivPerm p = head (equivPermF p (refinePerm p))
+equivPerm p = equivPermF p (refinePerm p)
 
-equivPermF :: Perm p => p -> [p] -> [p]
-equivPermF p [] = [p]
+equivPermF :: Perm p => p -> [p] -> p
+equivPermF p [] = p
 equivPermF _ p = let
  sorted = sortBy comparePerm p
  sample = head sorted
@@ -593,20 +592,37 @@ equivPermF _ p = let
  refine = concat (map refinePerm prefix)
  in equivPermF sample refine
 
-refinePart :: Part -> [(Pose,Part)]
+refinePart :: Part -> [(Boundary,Boundary,Side,Part)]
 refinePart [_,[]] = []
 refinePart [p,q] = let
  done x = append x p
  todo x = filter (\z -> (fst x) /= (fst z)) q
- pair x = (x, [done x, todo x])
- in map pair q
+ part x = [done x, todo x]
+ tuple (x,y) = (Boundary (length p), x, y, part (x,y))
+ in map tuple q
 refinePart _ = undefined
 
 identPart :: [Boundary] -> Part
 identPart b = [[(x,y) | x <- b, y <- allSides],[]]
 
-refineSpace :: Boundary -> Dual -> Pose -> Pace -> Pace
-refineSpace = undefined
+refineSpace :: Spacer -> [Spacer]
+refineSpace (Spacer p s t _) = map (refineSpaceF s t) (refinePart p)
+
+refineSpaceF :: Dual -> Dual -> (Boundary,Boundary,Side,Part) -> Spacer
+refineSpaceF s t (a,b,c,p) = let
+ refine = map (refineSpaceG a b c) (zip s t)
+ in Spacer p s refine (sort3 refine)
+
+refineSpaceG :: Boundary -> Boundary -> Side -> ([[Boundary]],[[Boundary]]) -> [[Boundary]]
+refineSpaceG a b (Side 0) ([s,t],[u,v])
+ | member b s = [a:u,v]
+ | member b t = [u,a:v]
+ | otherwise = [u,v]
+refineSpaceG a b (Side 1) ([s,t],[u,v])
+ | member b s = [u,a:v]
+ | member b t = [a:u,v]
+ | otherwise = [u,v]
+refineSpaceG _ _ _ _ = undefined
 
 equivSpace :: Space -> Space
 equivSpace s = let
@@ -614,10 +630,9 @@ equivSpace s = let
  term = Boundary (length bounds)
  orig = spaceToDual s
  part = identPart bounds
- dummy = [([term],[[]])]
- spacer = Spacer term orig part dummy
- (Spacer _ _ _ pace) = equivPerm spacer
- termed = map (\(x,y) -> x:y) pace
+ dummy = replicate (length orig) [[term],[term]]
+ spacer = Spacer part orig dummy dummy
+ (Spacer _ _ _ termed) = equivPerm spacer
  dual = map2 (\x -> take ((length x) - 1) x) termed
  in dualToSpace dual
 
