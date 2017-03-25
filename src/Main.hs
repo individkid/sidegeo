@@ -195,7 +195,7 @@ special = let
  places = map spaceToPlace sections
  tuples = [(a,b,c) | a <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(a,b,c) -> (a, subSubPlace b a, subSubPlace c a)) tuples
- sups = map (\(d,(a,b,c)) -> (head (superSpace 1 [b, c]), a, b, c,d)) (enumerate subs)
+ sups = map (\(d,(a,b,c)) -> (superSpace 1 b c, a, b, c,d)) (enumerate subs)
  in rvb (\(e,_,b,c,d) -> (rv ((isSubPlaceEquiv b e) && (isSubPlaceEquiv c e)) (show ("left",b,"right",c,"num",d,"super",e)))) sups
 
 disjoint :: Maybe String
@@ -210,7 +210,7 @@ general = let
  places = map (\(n,a) -> (n,spaceToPlace a)) spaces
  tuples = [(n,a,b,c) | (n,a) <- places, b <- powerSets (domain a), c <- powerSets (domain a)]
  subs = map (\(n,a,b,c) -> (n, a, subSubPlace b a, subSubPlace c a)) tuples
- sups = map (\(d,(n,a,b,c)) -> (n, head (superSpace n [b, c]), a, b, c, d)) (enumerate subs)
+ sups = map (\(d,(n,a,b,c)) -> (n, superSpace n b c, a, b, c, d)) (enumerate subs)
  in rvb (\(n,d,a,b,c,h) ->
   (rv (isLinear n (range b)) (show ("left",b))) `rva`
   (rv (isLinear n (range c)) (show ("right",c))) `rva`

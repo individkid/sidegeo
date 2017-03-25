@@ -108,8 +108,8 @@ emplace a b c = (take a c) Prelude.++ (b : (drop a c))
 append :: a -> [a] -> [a]
 append a b = b Prelude.++ [a]
 
-choose :: Random.RandomGen g => g -> [a] -> (a, g)
-choose g a = let (b,h) = Random.randomR (0,(length a)-1) g in ((a !! b), h)
+choose :: [a] -> a
+choose = head
 
 holes :: Ord a => Num a => Int -> [a] -> [a]
 holes n a = take n ((indices ((length a)+n)) \\ a)
@@ -599,7 +599,7 @@ allSides = map Side (indices 2)
 anySpace :: Int -> Int -> Space
 anySpace n m = let
  bounds = boundaryHoles m []
- in placeToSpace (fold' (\x y -> head (superSpace n [y,(powerSpace [x])])) bounds [])
+ in placeToSpace (fold' (\x y -> superSpace n y (powerSpace [x])) bounds [])
 
 -- return all linear spaces given any space to start
 allSpaces :: Space -> [Space]
@@ -628,23 +628,23 @@ allSpacesH [] done = done
 
 -- return superspace with given spaces as subspaces
 -- given spaces have given dimension. subspaces by shared regions are equal
-superSpace :: Int -> [Place] -> [Place]
-superSpace _ [] = []
-superSpace _ [s] = [s]
-superSpace n [s,t]
+superSpace :: Int -> Place -> Place -> Place
+superSpace n s t
  | n < 0 = undefined
  | (n == 0) && (shared /= bounds) = undefined
- | (length tOnly) == 0 = [s]
- | (length sOnly) == 0 = [t]
- | (length bounds) <= n = [powerSpace bounds]
- | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace n [t,s]
+ | (length tOnly) == 0 = s
+ | (length sOnly) == 0 = t
+ | (length bounds) <= n = powerSpace bounds
+ | ((length shared) > 0) && ((length sOnly) == 1) && ((length tOnly) > 1) = superSpace n t s
  | ((length shared) > 0) && ((length sOnly) > 1) = let
-  sup = concatMap (\x -> superSpace n [(subSpace x s), t]) sOnly -- sOnly gets smaller because it is missing bound
-  in concatMap (\x -> superSpace n [s,x]) sup -- sOnly gets smaller because it goes from more than bound to only bound
- | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace n [t,s]
+  bound = choose sOnly
+  sup = superSpace n (subSpace bound s) t -- sOnly gets smaller because it is missing bound
+  in superSpace n s sup -- sOnly gets smaller because it goes from more than bound to only bound
+ | ((length shared) == 0) && ((length sBounds) == 1) && ((length tBounds) > 1) = superSpace n t s
  | ((length shared) == 0) && ((length sBounds) > 1) = let
-  sup = concatMap (\x -> superSpace n [(powerSpace [x]), t]) sBounds -- sBounds becomes just bound from more than bound 
-  in concatMap (\x -> superSpace n [s,x]) sup -- s and sup share bound
+  bound = choose sBounds
+  sup = superSpace n (powerSpace [bound]) t -- sBounds becomes just bound from more than bound 
+  in superSpace n s sup -- s and sup share bound
  | ((length sOnly) == 1) && ((length tOnly) == 1) = rabbitSpace n s t -- independent boundary case
  | otherwise = undefined where
  sBounds = boundariesOfPlace s
@@ -653,26 +653,18 @@ superSpace n [s,t]
  tOnly = tBounds \\ sBounds
  shared = sBounds +\ tBounds
  bounds = sBounds ++ tBounds
-superSpace n (s:t:u) = concatMap (\x -> superSpace n (x:u)) (superSpaceF u (superSpace n [s,t]))
-
-superSpaceF :: [Place] -> [Place] -> [Place]
-superSpaceF s t = let
- shared x y = (boundariesOfPlace x) \+ (boundariesOfPlace y)
- unsub x y = unsubSpace (shared x y) y
- issub x y = isSubSpace (unsub x y) x
- in filter (\x -> all (\y -> issub x y) s) t
 
 -- cases where sOnly and tOnly are singletons
 -- like superSpace except one and only one unshared boundary in each space
-rabbitSpace :: Int -> Place -> Place -> [Place]
+rabbitSpace :: Int -> Place -> Place -> Place
 rabbitSpace n s t
  | n >= 2 = let
   sSect = sectionSpace sBound s
   tSect = sectionSpace tBound t
   sect = snakeSpace (n-1) (n-1) n sSect tSect place
-  sSup = concatMap (\x -> divideSpace tBound x sSect) sect
+  sSup = divideSpace tBound sect sSect 
   tSup = concatMap (\x -> divideSpace sBound x t) sSup
-  in rabbitSpaceF n s t tSup
+  in choose (rabbitSpaceF n s t tSup)
  | n == 1 = let
   sDual = map2 sort (placeToDual (crossSpace s (powerSpace [tBound])))
   tDual = map2 sort (placeToDual (crossSpace t (powerSpace [sBound])))
@@ -681,7 +673,7 @@ rabbitSpace n s t
   cross = map (\x -> crossSpace place (degenSpace x double)) regions
   dual = map (\x -> map2 sort (placeToDual x)) cross
   result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
-  in rabbitSpaceF n s t result
+  in choose (rabbitSpaceF n s t result)
  | otherwise = undefined where
  sBounds = boundariesOfPlace s
  tBounds = boundariesOfPlace t
@@ -695,25 +687,27 @@ rabbitSpaceF n s t u = filter (\x -> (isLinear n (placeToSpace x)) && (isSubSpac
 
 -- return space that is section of given spaces
 -- given dimensions correspond to given spaces. first two spaces are sections of third place
-snakeSpace :: Int -> Int -> Int -> Place -> Place -> Place -> [Place]
+snakeSpace :: Int -> Int -> Int -> Place -> Place -> Place -> Place
 snakeSpace p q n s t u
  | (p > n) || (q > n) || (n < 0) || (dim < 0) = undefined
- | p == n = [t]
- | q == n = [s]
+ | p == n = t
+ | q == n = s
  | dim == 0 = let
   regions = takeRegions s t
-  in map (\x -> embedSpace [x] t) regions
- | dim >= (length u) = [powerSpace (boundariesOfPlace u)]
+  region = choose regions
+  in embedSpace [region] t
+ | dim >= (length u) = powerSpace (boundariesOfPlace u)
  | dim > 0 = let
   bounds = boundariesOfPlace u
-  sSub x = subSpace x s
-  tSub x = subSpace x t
-  uSub x = subSpace x u
-  uSect x = sectionSpace x u
-  sub = [(x,y) | x <- bounds, y <- snakeSpace p q n (sSub x) (tSub x) (uSub x)]
-  sect = [(x,y,z) | (x,y) <- sub, z <- snakeSpace dim (n-1) n y (uSect x) (uSub x)]
-  result = concatMap (\(x,y,z) -> divideSpace x z y) sect
-  in snakeSpaceF s t result
+  bound = choose bounds
+  sSub = subSpace bound s
+  tSub = subSpace bound t
+  uSub = subSpace bound u
+  uSect = sectionSpace bound u
+  sub = snakeSpace p q n sSub tSub uSub
+  sect = snakeSpace dim (n-1) n sub uSect uSub
+  result = divideSpace bound sect sub
+  in choose (snakeSpaceF s t result)
  | otherwise = undefined where
  dim = (p+q)-n
 
@@ -946,9 +940,10 @@ randomPlanesF i j k n m (a,g) = let
 -- use function to replace choice from given tuple
 randomPlanesG :: Random.RandomGen g => ((Plane, g) -> (Plane, g)) -> ([Plane], g) -> [Int] -> ([Plane], g)
 randomPlanesG f (a,g) b = let
- (c,h) = choose g b
- (d,i) = f (a !! c, h)
- in (replace c d a, i)
+ (c,h) = Random.randomR (0,(length b)-1) g
+ d = b !! c
+ (e,i) = f (a !! d, h)
+ in (replace d e a, i)
 
 -- shift by half to origin some plane from some n tuple that intersects outside -1.0 to 1.0 hypercube
 randomPlanesH0 :: Random.RandomGen g => Int -> Int -> ([Plane], g) -> Maybe ([Plane], g)
