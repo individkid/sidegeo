@@ -39,7 +39,7 @@ type Vector = Matrix.Vector Double
 type Part = [[(Boundary,Side)]]
 
 data Face = Face [(Boundary,Face)] deriving (Eq, Ord, Show)
-type Tope = [(Face,[[Boundary]])]
+type Tope = [([[Boundary]],Face)]
 data Spacer = Spacer {
  partOfSpacer :: Part,
  origOfSpacer :: Dual,
@@ -262,8 +262,7 @@ boundariesOfPlual s = concat (snd (head s))
 boundariesOfTope :: Tope -> [Boundary]
 boundariesOfTope [] = []
 boundariesOfTope s = let
- pairs = map snd s
- (set:sets) = map concat pairs
+ (set:sets) = map concat (map fst s)
  in fold' (++) sets set
 
 -- return all regions in space
@@ -745,14 +744,15 @@ identPart b = [[],[(x,y) | x <- b, y <- allSides]]
 -- find representative of the equivalence class of the given space
 equivSpace :: Space -> Space
 equivSpace s = let
- bounds = boundariesOfSpace s
- term = Boundary (length bounds)
  orig = spaceToDual s
+ bounds = boundariesOfDual orig
+ (Boundary bound) = maximum bounds
+ term = Boundary (succ bound)
  part = identPart bounds
  dummy = replicate (length orig) [[term],[term]]
  spacer = Spacer {partOfSpacer=part, origOfSpacer=orig, permOfSpacer=dummy, sortOfSpacer=dummy}
  termed = sortOfSpacer (equivPerm spacer)
- dual = map2 (\x -> take ((length x) - 1) x) termed
+ dual = map2 (\x -> take (pred (length x)) x) termed
  in dualToSpace dual
 
 -- permutation instance of space
@@ -785,16 +785,18 @@ refineSpaceG _ _ _ _ = undefined
 equivTope :: Tope -> Tope
 equivTope s = let
  bounds = boundariesOfTope s
- term = Boundary (length bounds)
+ (Boundary bound) = maximum bounds
+ term = Boundary (succ bound)
  part = identPart bounds
- dummy = [(Face [(term,Face [])], [[term],[term]])]
+ dummy = [([[term],[term]], Face [(term,Face [])])]
  toper = Toper {partOfToper=part, origOfToper=s, permOfToper=dummy, sortOfToper=dummy}
  termed = sortOfToper (equivPerm toper)
- in map (\(x,y) -> (equivTopeF x, map (\z -> take ((length z) - 1) z) y)) termed
+ in map (\(x,y) -> (map (\z -> take (pred (length z)) z) x, equivTopeF y)) termed
 
 equivTopeF :: Face -> Face
+equivTopeF (Face []) = Face []
 equivTopeF (Face s) = let
- prefix = take ((length s) - 1) s
+ prefix = take (pred (length s)) s
  (bounds,termed) = unzip prefix
  in Face (zip bounds (map equivTopeF termed))
 
@@ -809,8 +811,8 @@ refineTopeF s t (a,b,c,p) = let
  sorted = sort (map refineTopeI refine)
  in Toper {partOfToper=p, origOfToper=s, permOfToper=refine, sortOfToper=sorted}
 
-refineTopeG :: Boundary -> Boundary -> Side -> ((Face,[[Boundary]]),(Face,[[Boundary]])) -> (Face,[[Boundary]])
-refineTopeG a b c ((p,s),(q,t)) = (refineTopeH a b p q, refineSpaceG a b c (s,t))
+refineTopeG :: Boundary -> Boundary -> Side -> (([[Boundary]],Face),([[Boundary]],Face)) -> ([[Boundary]],Face)
+refineTopeG a b c ((s,p),(t,q)) = (refineSpaceG a b c (s,t), refineTopeH a b p q)
 
 refineTopeH :: Boundary -> Boundary -> Face -> Face -> Face
 refineTopeH a b (Face s) (Face t)
@@ -823,8 +825,8 @@ refineTopeH a b (Face s) (Face t)
  empty = Face []
  dummy = [last s]
 
-refineTopeI :: (Face,[[Boundary]]) -> (Face,[[Boundary]])
-refineTopeI (p,s) = (refineTopeK p, map sort s)
+refineTopeI :: ([[Boundary]],Face) -> ([[Boundary]],Face)
+refineTopeI (s,p) = (map sort s, refineTopeK p)
 
 refineTopeJ :: (Boundary,Face) -> (Boundary,Face)
 refineTopeJ (b,p) = (b, refineTopeK p)
@@ -859,7 +861,7 @@ embedToTope r s = let
  in map (\x -> embedToTopeF x s) uniq
 
 -- convert convex set of regions into convex and dual-full
-embedToTopeF :: [Region] -> Place -> (Face,[[Boundary]])
+embedToTopeF :: [Region] -> Place -> ([[Boundary]],Face)
 embedToTopeF r s = let
  pair = embedToTopeI r s
  (region,place) = uncurry embedToTopeJ pair
@@ -870,7 +872,7 @@ embedToTopeF r s = let
  wrt _ _ = undefined
  equ x y = (giveBoundaries wrt [x] place) == y
  dull = map (\y -> filter (\x -> equ x y) bounds) sides
- in (convex,dull)
+ in (dull,convex)
 
 -- return convex from region and place
 embedToTopeG :: Region -> Place -> Face
@@ -984,7 +986,7 @@ randomPlanesJ2 :: Maybe Point -> Bool
 randomPlanesJ2 a = a /= Nothing
 
 randomPlanesK2 :: Int -> Int
-randomPlanesK2 n = n + 1
+randomPlanesK2 n = succ n
 
 solveVectors :: Int -> [Vector] -> (Int -> [Vector] -> Int -> Int -> Double) -> (Int -> [Vector] -> Int -> Double) -> Maybe Vector
 solveVectors n w f g = let
@@ -1014,11 +1016,11 @@ intersectPlanesF :: Int -> [Vector] -> Int -> Int -> Double
 intersectPlanesF n w a b
  | b == index = (-1.0)
  | otherwise = (list !! b) - (list !! index) where
- index = n - 1
+ index = pred n
  list = Matrix.toList (w !! a)
 
 intersectPlanesG :: Int -> [Vector] -> Int -> Double
-intersectPlanesG n w a = negate ((Matrix.toList (w !! a)) !! (n - 1))
+intersectPlanesG n w a = negate ((Matrix.toList (w !! a)) !! (pred n))
 
 -- z0 = hm + x0*(h0-hm) + y0*(h1-hm) + ...
 -- z0 = h0*x0 + h1*y0 + ... + hm*(1-x0-y0-...)
@@ -1029,11 +1031,11 @@ constructPlaneF :: Int -> [Vector] -> Int -> Int -> Double
 constructPlaneF n v a b
  | b == index = 1.0 - (fold' (+) (take index list) 0.0)
  | otherwise = list !! b where
- index = n - 1
+ index = pred n
  list = Matrix.toList (v !! a)
 
 constructPlaneG :: Int -> [Vector] -> Int -> Double
-constructPlaneG n v a = (Matrix.toList (v !! a)) !! (n - 1)
+constructPlaneG n v a = (Matrix.toList (v !! a)) !! (pred n)
 
 isAbovePlane :: Point -> Plane -> Bool
 isAbovePlane v w = let
@@ -1063,7 +1065,7 @@ spaceFromPlanes n w
   full = map (\(x,y) -> [x,y]) (zip left right)
   in map3 Region full
  | otherwise = let
-  index = m - 1
+  index = pred m
   plane = last w
   planes = take index w
   indexes = indices index
@@ -1109,7 +1111,7 @@ planesFromSpace n s
   vector = map (\x -> Matrix.fromList [x]) scalar
   in map vectorToPlane vector
  | otherwise = let
-  index = m - 1
+  index = pred m
   bound = Boundary index
   -- recurse with one fewer boundary
   place = spaceToPlace s
