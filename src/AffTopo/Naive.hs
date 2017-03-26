@@ -664,7 +664,7 @@ rabbitSpace n s t
   sect = snakeSpace (n-1) (n-1) n sSect tSect place
   sSup = divideSpace tBound sect sSect 
   tSup = concatMap (\x -> divideSpace sBound x t) sSup
-  in choose (rabbitSpaceF n s t tSup)
+  in choose (filter (rabbitSpaceF n s t) tSup)
  | n == 1 = let
   sDual = map2 sort (placeToDual (crossSpace s (powerSpace [tBound])))
   tDual = map2 sort (placeToDual (crossSpace t (powerSpace [sBound])))
@@ -673,7 +673,7 @@ rabbitSpace n s t
   cross = map (\x -> crossSpace place (degenSpace x double)) regions
   dual = map (\x -> map2 sort (placeToDual x)) cross
   result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
-  in choose (rabbitSpaceF n s t result)
+  in choose (filter (rabbitSpaceF n s t) result)
  | otherwise = undefined where
  sBounds = boundariesOfPlace s
  tBounds = boundariesOfPlace t
@@ -682,8 +682,8 @@ rabbitSpace n s t
  place = subSpace sBound s
 
 -- return given that is linear and contains both given
-rabbitSpaceF :: Int -> Place -> Place -> [Place] -> [Place]
-rabbitSpaceF n s t u = filter (\x -> (isLinear n (placeToSpace x)) && (isSubSpace x s) && (isSubSpace x t)) u
+rabbitSpaceF :: Int -> Place -> Place -> Place -> Bool
+rabbitSpaceF n s t u = (isLinear n (placeToSpace u)) && (isSubSpace u s) && (isSubSpace u t)
 
 -- return space that is section of given spaces
 -- given dimensions correspond to given spaces. first two spaces are sections of third place
@@ -707,12 +707,12 @@ snakeSpace p q n s t u
   sub = snakeSpace p q n sSub tSub uSub
   sect = snakeSpace dim (n-1) n sub uSect uSub
   result = divideSpace bound sect sub
-  in choose (snakeSpaceF s t result)
+  in choose (filter (snakeSpaceF s t) result)
  | otherwise = undefined where
  dim = (p+q)-n
 
-snakeSpaceF :: Place -> Place -> [Place] -> [Place]
-snakeSpaceF s t u = filter (\x -> (isSectionSpace x s) && (isSectionSpace x t)) u
+snakeSpaceF :: Place -> Place -> Place -> Bool
+snakeSpaceF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
 -- optimize this
 equivPerm :: Perm p => p -> p
