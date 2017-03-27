@@ -57,10 +57,10 @@ class Perm p where
 
 instance Perm Spacer where
  refinePerm = refineSpace
- comparePerm (Spacer {sortOfSpacer=s}) (Spacer {sortOfSpacer=t}) = compare s t
+ comparePerm (Spacer {sortOfSpacer = s}) (Spacer {sortOfSpacer = t}) = compare s t
 instance Perm Toper where
  refinePerm = refineTope
- comparePerm (Toper {sortOfToper=s}) (Toper {sortOfToper=t}) = compare s t
+ comparePerm (Toper {sortOfToper = s}) (Toper {sortOfToper = t}) = compare s t
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
@@ -682,7 +682,7 @@ rabbitSpace n s t
  [tBound] = tBounds \\ sBounds
  place = subSpace sBound s
 
--- return given that is linear and contains both given
+-- return whether linear and contains both given
 rabbitSpaceF :: Int -> Place -> Place -> Place -> Bool
 rabbitSpaceF n s t u = (isLinear n (placeToSpace u)) && (isSubSpace u s) && (isSubSpace u t)
 
@@ -712,6 +712,7 @@ snakeSpace p q n s t u
  | otherwise = undefined where
  dim = (p+q)-n
 
+-- return whether section of both
 snakeSpaceF :: Place -> Place -> Place -> Bool
 snakeSpaceF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
@@ -719,16 +720,18 @@ snakeSpaceF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 equivPerm :: Perm p => p -> p
 equivPerm p = equivPermF p (refinePerm p)
 
+-- refine until no more refinements
 equivPermF :: Perm p => p -> [p] -> p
 equivPermF p [] = p
 equivPermF _ p = let
  sorted = sortBy comparePerm p
- sample = head sorted
+ sample = choose sorted
  equal = (EQ ==) . (comparePerm sample)
  prefix = takeWhile equal sorted
  refine = concatMap refinePerm prefix
  in equivPermF sample refine
 
+-- new boundary to change to, old boundary to change from, whether mirrored, new partial
 refinePart :: Part -> [(Boundary,Boundary,Side,Part)]
 refinePart [_,[]] = []
 refinePart [p,q] = let
@@ -739,6 +742,7 @@ refinePart [p,q] = let
  in map tuple q
 refinePart _ = undefined
 
+-- starting partial permutation
 identPart :: [Boundary] -> Part
 identPart b = [[],[(x,y) | x <- b, y <- allSides]]
 
@@ -752,21 +756,21 @@ equivSpace s = let
  part = identPart bounds
  dummy = replicate (length orig) [[term],[term]]
  spacer = Spacer {
-  partOfSpacer=part,
-  origOfSpacer=orig,
-  permOfSpacer=dummy,
-  sortOfSpacer=dummy}
+  partOfSpacer = part,
+  origOfSpacer = orig,
+  permOfSpacer = dummy,
+  sortOfSpacer = dummy}
  termed = sortOfSpacer (equivPerm spacer)
- dual = map2 (\x -> take (pred (length x)) x) termed
+ strip x = take (pred (length x)) x
+ dual = map2 strip termed
  in dualToSpace dual
 
 -- permutation instance of space
 refineSpace :: Spacer -> [Spacer]
 refineSpace (Spacer {
- partOfSpacer=p,
- origOfSpacer=s,
- permOfSpacer=t}) =
- map (refineSpaceF s t) (refinePart p)
+ partOfSpacer = p,
+ origOfSpacer = s,
+ permOfSpacer = t}) = map (refineSpaceF s t) (refinePart p)
 
 -- add transposed boundary to fullspaces
 refineSpaceF :: Dual -> Dual -> (Boundary,Boundary,Side,Part) -> Spacer
@@ -774,10 +778,10 @@ refineSpaceF s t (a,b,c,p) = let
  refine = map (refineSpaceG a b c) (zip s t)
  sorted = sort (map (map sort) refine)
  in Spacer {
-  partOfSpacer=p,
-  origOfSpacer=s,
-  permOfSpacer=refine,
-  sortOfSpacer=sorted}
+  partOfSpacer = p,
+  origOfSpacer = s,
+  permOfSpacer = refine,
+  sortOfSpacer = sorted}
 
 -- add transposed boundary to fullspace
 refineSpaceG :: Boundary -> Boundary -> Side -> ([[Boundary]],[[Boundary]]) -> [[Boundary]]
@@ -807,10 +811,10 @@ equivTope p = let
  pair (_,x) = (full,face x)
  dummy = map pair p
  toper = Toper {
-  partOfToper=part,
-  origOfToper=p,
-  permOfToper=dummy,
-  sortOfToper=dummy}
+  partOfToper = part,
+  origOfToper = p,
+  permOfToper = dummy,
+  sortOfToper = dummy}
  termed = sortOfToper (equivPerm toper)
  strip x = take (pred (length x)) x
  result (x,y) = (map strip x, y)
@@ -823,10 +827,9 @@ equivTopeF b (_, Face p) = (b, Face (map (equivTopeF b) p))
 -- permutation instance of polytope
 refineTope :: Toper -> [Toper]
 refineTope (Toper {
- partOfToper=p,
- origOfToper=s,
- permOfToper=t}) =
- map (refineTopeF s t) (refinePart p)
+ partOfToper = p,
+ origOfToper = s,
+ permOfToper = t}) = map (refineTopeF s t) (refinePart p)
 
 -- apply given permutation refinement from given original to given partial
 refineTopeF :: Tope -> Tope -> (Boundary,Boundary,Side,Part) -> Toper
@@ -834,10 +837,10 @@ refineTopeF s t (a,b,c,p) = let
  refine = map (refineTopeG a b c) (zip s t)
  sorted = sort (map refineTopeI refine)
  in Toper {
-  partOfToper=p,
-  origOfToper=s,
-  permOfToper=refine,
-  sortOfToper=sorted}
+  partOfToper = p,
+  origOfToper = s,
+  permOfToper = refine,
+  sortOfToper = sorted}
 
 -- apply given permutation refinement from/to given concave polytope element
 refineTopeG :: Boundary -> Boundary -> Side -> (([[Boundary]],Face), ([[Boundary]],Face)) -> ([[Boundary]],Face)
@@ -847,7 +850,7 @@ refineTopeG a b c ((s, Face p), (t, Face q)) =
 -- apply given permutation refinement from/to given convex polytope element
 refineTopeH :: Boundary -> Boundary -> ((Boundary,Face), (Boundary,Face)) -> (Boundary,Face)
 refineTopeH a b ((c, Face p), (d, Face q)) =
- (if a == c then b else d, Face (map (refineTopeH a b) (zip p q)))
+ (if b == c then a else d, Face (map (refineTopeH a b) (zip p q)))
 
 -- sort concave polytope element
 refineTopeI :: ([[Boundary]],Face) -> ([[Boundary]],Face)
