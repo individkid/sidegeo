@@ -36,7 +36,7 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 type Part = [(Boundary,Side)]
-data Face = Face [(Boundary,Face)] [(Boundary,Face)] deriving (Eq, Ord, Show)
+data Face = Face [(Boundary,Side)] [(Boundary,Face)] deriving (Eq, Ord, Show)
 data Spacer = Spacer {
  doneOfSpacer :: Part,
  todoOfSpacer :: Part,
@@ -797,8 +797,35 @@ refineSpaceG _ _ _ _ = undefined
 -- between space and polytope
 --
 
+equivFace :: Face -> Face
+equivFace s = let
+ bounds = boundariesOfFace s
+ (Boundary bound) = maximum bounds
+ term = Boundary (succ bound)
+ part = origPart bounds
+ dummy = equivFaceF term s
+ facer = Facer {
+  doneOfFacer = [],
+  todoOfFacer = part,
+  origOfFacer = s,
+  permOfFacer = dummy,
+  sortOfFacer = dummy}
+ in sortOfFacer (equivPerm facer)
+
+equivFaceF :: Boundary -> Face -> Face
+equivFaceF b (Face p q) = let
+ sides = map (\(_,_) -> (b, Side 0)) p
+ faces = map (\(_,x) -> (b, equivFaceF b x)) q
+ in Face sides faces
+
 refineFace :: Facer -> [Facer]
 refineFace = undefined
+
+faceFromDegen :: Space -> Face
+faceFromDegen = undefined
+
+degenFromFace :: Face -> Space
+degenFromFace = undefined
 
 --
 -- between symbolic and numeric
