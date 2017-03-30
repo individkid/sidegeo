@@ -28,7 +28,6 @@ import qualified System.Random as Random
 newtype Boundary = Boundary Int deriving (Eq, Ord, Show) -- index into Space
 newtype Region = Region Int deriving (Eq, Ord, Show) -- arbitrary identifier
 newtype Side = Side Int deriving (Eq, Ord, Show) -- index into pair of halfspaces
-
 type Space = [[[Region]]] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,[[Region]])] -- assume one-to-one
@@ -36,31 +35,29 @@ type Plual = [(Region,[[Boundary]])] -- dual of place
 type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
-type Part = [[(Boundary,Side)]]
-
-data Face = Face [(Boundary,Face)] deriving (Eq, Ord, Show)
-type Tope = [([[Boundary]],Face)]
+type Part = [(Boundary,Side)]
+data Face = Face [(Boundary,Face)] [(Boundary,Face)] deriving (Eq, Ord, Show)
 data Spacer = Spacer {
- partOfSpacer :: Part,
+ doneOfSpacer :: Part,
+ todoOfSpacer :: Part,
  origOfSpacer :: Dual,
  permOfSpacer :: Dual,
  sortOfSpacer :: Dual}
-data Toper = Toper {
- partOfToper :: Part,
- origOfToper :: Tope,
- permOfToper :: Tope,
- sortOfToper :: Tope}
-
+data Facer = Facer {
+ doneOfFacer :: Part,
+ todoOfFacer :: Part,
+ origOfFacer :: Face,
+ permOfFacer :: Face,
+ sortOfFacer :: Face}
 class Perm p where
  refinePerm :: p -> [p]
  comparePerm :: p -> p -> Ordering
-
 instance Perm Spacer where
  refinePerm = refineSpace
  comparePerm (Spacer {sortOfSpacer = s}) (Spacer {sortOfSpacer = t}) = compare s t
-instance Perm Toper where
- refinePerm = refineTope
- comparePerm (Toper {sortOfToper = s}) (Toper {sortOfToper = t}) = compare s t
+instance Perm Facer where
+ refinePerm = refineFace
+ comparePerm (Facer {sortOfFacer = s}) (Facer {sortOfFacer = t}) = compare s t
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
@@ -259,12 +256,8 @@ boundariesOfPlual :: Plual -> [Boundary]
 boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
-boundariesOfTope :: Tope -> [Boundary]
-boundariesOfTope s = fold' (++) (map boundariesOfFace (range s)) []
-
 boundariesOfFace :: Face -> [Boundary]
-boundariesOfFace (Face []) = []
-boundariesOfFace (Face s) = fold' (++) (map boundariesOfFace (range s)) (domain s)
+boundariesOfFace (Face p q) = fold' (++) (map boundariesOfFace (range q)) ((domain p) ++ (domain q))
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -445,7 +438,7 @@ takeRegions s t = let
  (regions,dual) = unzipPlual plual
  sSub = map2 (\x -> sort (shared +\ x)) (placeToDual s)
  tSub = map2 (\x -> sort (shared +\ x)) dual
- in preimage sSub (zip regions tSub) -- welldef because tSub is because regionsOfSpace is because tSpace is
+ in preimage sSub (zipPlual regions tSub)
 
 takeEmbed :: [Region] -> Place -> Place -> [Region]
 takeEmbed r s t = takeRegions (embedSpace r s) t
@@ -570,6 +563,9 @@ unzipPlual = unzip
 
 zipPlace :: [Boundary] -> Space -> Place
 zipPlace = zip
+
+zipPlual :: [Region] -> Dual -> Plual
+zipPlual = zip
 
 pointToVector :: Point -> Vector
 pointToVector v = v
@@ -731,20 +727,19 @@ equivPermF _ p = let
  refine = concatMap refinePerm prefix
  in equivPermF sample refine
 
--- new boundary to change to, old boundary to change from, whether mirrored, new partial
-refinePart :: Part -> [(Boundary,Boundary,Side,Part)]
-refinePart [_,[]] = []
-refinePart [p,q] = let
+-- change to, change from, whether mirrored, done partial, todo partial
+refinePart :: Part -> Part -> [(Boundary,Boundary,Side,Part,Part)]
+refinePart _ [] = []
+refinePart p q = let
+ term = Boundary (length p)
  done x = append x p
  todo x = filter (\z -> (fst x) /= (fst z)) q
- part x = [done x, todo x]
- tuple (x,y) = (Boundary (length p), x, y, part (x,y))
+ tuple (x,y) = (term, x, y, done (x,y), todo (x,y))
  in map tuple q
-refinePart _ = undefined
 
 -- starting partial permutation
-identPart :: [Boundary] -> Part
-identPart b = [[],[(x,y) | x <- b, y <- allSides]]
+origPart :: [Boundary] -> Part
+origPart b = [(x,y) | x <- b, y <- allSides]
 
 -- find representative of the equivalence class of the given space
 equivSpace :: Space -> Space
@@ -753,10 +748,11 @@ equivSpace s = let
  bounds = boundariesOfDual orig
  (Boundary bound) = maximum bounds
  term = Boundary (succ bound)
- part = identPart bounds
+ part = origPart bounds
  dummy = replicate (length orig) [[term],[term]]
  spacer = Spacer {
-  partOfSpacer = part,
+  doneOfSpacer = [],
+  todoOfSpacer = part,
   origOfSpacer = orig,
   permOfSpacer = dummy,
   sortOfSpacer = dummy}
@@ -768,17 +764,19 @@ equivSpace s = let
 -- permutation instance of space
 refineSpace :: Spacer -> [Spacer]
 refineSpace (Spacer {
- partOfSpacer = p,
+ doneOfSpacer = p,
+ todoOfSpacer = q,
  origOfSpacer = s,
- permOfSpacer = t}) = map (refineSpaceF s t) (refinePart p)
+ permOfSpacer = t}) = map (refineSpaceF s t) (refinePart p q)
 
 -- add transposed boundary to fullspaces
-refineSpaceF :: Dual -> Dual -> (Boundary,Boundary,Side,Part) -> Spacer
-refineSpaceF s t (a,b,c,p) = let
+refineSpaceF :: Dual -> Dual -> (Boundary,Boundary,Side,Part,Part) -> Spacer
+refineSpaceF s t (a,b,c,p,q) = let
  refine = map (refineSpaceG a b c) (zip s t)
  sorted = sort (map (map sort) refine)
  in Spacer {
-  partOfSpacer = p,
+  doneOfSpacer = p,
+  todoOfSpacer = q,
   origOfSpacer = s,
   permOfSpacer = refine,
   sortOfSpacer = sorted}
@@ -799,149 +797,8 @@ refineSpaceG _ _ _ _ = undefined
 -- between space and polytope
 --
 
--- find representative of the equivalence class of the given polytope
-equivTope :: Tope -> Tope
-equivTope p = let
- bounds = boundariesOfTope p
- (Boundary bound) = maximum bounds
- term = Boundary (succ bound)
- part = identPart bounds
- full = [[term], [term]]
- face (Face x) = Face (map (equivTopeF term) x)
- pair (_,x) = (full,face x)
- dummy = map pair p
- toper = Toper {
-  partOfToper = part,
-  origOfToper = p,
-  permOfToper = dummy,
-  sortOfToper = dummy}
- termed = sortOfToper (equivPerm toper)
- strip x = take (pred (length x)) x
- result (x,y) = (map strip x, y)
- in map result termed
-
---- replace boundaries by limit boundary
-equivTopeF :: Boundary -> (Boundary,Face) -> (Boundary,Face)
-equivTopeF b (_, Face p) = (b, Face (map (equivTopeF b) p))
-
--- permutation instance of polytope
-refineTope :: Toper -> [Toper]
-refineTope (Toper {
- partOfToper = p,
- origOfToper = s,
- permOfToper = t}) = map (refineTopeF s t) (refinePart p)
-
--- apply given permutation refinement from given original to given partial
-refineTopeF :: Tope -> Tope -> (Boundary,Boundary,Side,Part) -> Toper
-refineTopeF s t (a,b,c,p) = let
- refine = map (refineTopeG a b c) (zip s t)
- sorted = sort (map refineTopeI refine)
- in Toper {
-  partOfToper = p,
-  origOfToper = s,
-  permOfToper = refine,
-  sortOfToper = sorted}
-
--- apply given permutation refinement from/to given concave polytope element
-refineTopeG :: Boundary -> Boundary -> Side -> (([[Boundary]],Face), ([[Boundary]],Face)) -> ([[Boundary]],Face)
-refineTopeG a b c ((s, Face p), (t, Face q)) =
- (refineSpaceG a b c (s,t), Face (map (refineTopeH a b) (zip p q)))
-
--- apply given permutation refinement from/to given convex polytope element
-refineTopeH :: Boundary -> Boundary -> ((Boundary,Face), (Boundary,Face)) -> (Boundary,Face)
-refineTopeH a b ((c, Face p), (d, Face q)) =
- (if b == c then a else d, Face (map (refineTopeH a b) (zip p q)))
-
--- sort concave polytope element
-refineTopeI :: ([[Boundary]],Face) -> ([[Boundary]],Face)
-refineTopeI (s, Face p) = (map sort s, Face (sort (map refineTopeJ p)))
-
--- sort convex polytope element
-refineTopeJ :: (Boundary,Face) -> (Boundary,Face)
-refineTopeJ (b, Face p) = (b, Face (sort (map refineTopeJ p)))
-
--- return Tope unique up to Boundary permutation and mirror
-embedToTope :: [Region] -> Place -> Tope
-embedToTope r s = let
- -- find sub-place region pairs
- subbound = power (boundariesOfPlace s)
- subplace = map (\x -> fold' subSpace x s) subbound
- pair = [(x,y) | x <- subplace, y <- regionsOfPlace x]
- -- filter to those that are super-region-places
- taker = takeBoundaries attachedBoundaries
- attached = map (\(x,y) -> (x,y,taker y x)) pair
- super = filter (\(x,_,z) -> null ((boundariesOfPlace x) \\ z)) attached
- -- filter to those that take to subset of given
- taken = map (\(x,y,_) -> takeEmbed [y] x s) super
- norep = nub' (map sort taken)
- covered = filter (\x -> null (x \\ r)) norep
- -- filter to those not proper to any
- nosub x y = not (null (x \\ y))
- rogue x = all (nosub x) (remove x covered)
- maximal = filter rogue covered
- -- find intersections of maximal super-region-places
- subsuper = remove [] (power maximal)
- sect = [] : (map (\x -> foldr1 (\+) x) subsuper)
- uniq = nub' (map sort sect)
- -- convert super-region-places to list
- in map (\x -> embedToTopeF x s) uniq
-
--- convert convex set of regions into convex and dual-full
-embedToTopeF :: [Region] -> Place -> ([[Boundary]],Face)
-embedToTopeF r s = let
- pair = embedToTopeI r s
- (region,place) = uncurry embedToTopeJ pair
- convex = embedToTopeG region place
- bounds = boundariesOfPlace place
- sides = allSides
- wrt [x] y = regionWrtBoundary x region y
- wrt _ _ = undefined
- equ x y = (giveBoundaries wrt [x] place) == y
- dull = map (\y -> filter (\x -> equ x y) bounds) sides
- in (dull,convex)
-
--- return convex from region and place
-embedToTopeG :: Region -> Place -> Face
-embedToTopeG r s = let
- bounds = boundariesOfPlace s
- convex = map (\x -> embedToTopeH x r s) bounds
- in Face convex
-
--- return sub-convex associated with boundary
-embedToTopeH :: Boundary -> Region -> Place -> (Boundary,Face)
-embedToTopeH b r s = let
- section = embedToTopeK b r s
- subspace = uncurry embedToTopeJ section
- convex = uncurry embedToTopeG subspace
- in (b,convex)
-
--- strip out boundaries separating given regions
-embedToTopeI :: [Region] -> Place -> (Region,Place)
-embedToTopeI r s = let
- bounds = boundariesOfPlace s
- sides = allSides
- wrt [x] y z = regionWrtBoundary x y z
- wrt _ _ _ = undefined
- equ x y z = (giveBoundaries (\b t -> wrt b y t) [x] s) == z
- unbounds = filter (\x -> all (\z -> any (\y -> equ x y z) r) sides) bounds
- place = fold' subSpace unbounds s
- [region] = takeEmbed r s place
- in (region,place)
-
--- strip off boundaries not attached to given region
-embedToTopeJ :: Region -> Place -> (Region,Place)
-embedToTopeJ r s = let
- attached = takeBoundaries attachedBoundaries r s
- place = unsubSpace attached s
- [region] = takeEmbed [r] s place
- in (region,place)
-
--- take section by boundary
-embedToTopeK :: Boundary -> Region -> Place -> (Region,Place)
-embedToTopeK b r s = let
- place = sectionSpace b s
- [region] = takeEmbed [r] s place
- in (region,place)
+refineFace :: Facer -> [Facer]
+refineFace = undefined
 
 --
 -- between symbolic and numeric
