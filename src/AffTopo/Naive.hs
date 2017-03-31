@@ -32,37 +32,37 @@ type Space = [[[Region]]] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,[[Region]])] -- assume one-to-one
 type Plual = [(Region,[[Boundary]])] -- dual of place
-type Plane = Matrix.Vector Double -- distances above base
-type Point = Matrix.Vector Double -- coordinates
-type Vector = Matrix.Vector Double
-type Part = [(Boundary,Side)]
-type Vace = [[(Boundary,Side)]] -- binary matrix, packed regions
 type Vert = [Boundary] -- boundaries through vertex
+type SBr = [[(Boundary,Side)]] -- binary matrix, packed regions
 -- polytope is map from vertex to degenerate vertex space
 -- and to map from boundary through the vertex to
 -- Side 0 vertex and Side 1 vertex
-type Face = [(Vert,(Vace,[(Boundary,[Vert])]))]
+type Tope = [(Vert,SBr,[(Boundary,[Vert])])]
+type Part = [(Boundary,Side)]
 data Spacer = Spacer {
  doneOfSpacer :: Part,
  todoOfSpacer :: Part,
  origOfSpacer :: Dual,
  permOfSpacer :: Dual,
  sortOfSpacer :: Dual}
-data Facer = Facer {
- doneOfFacer :: Part,
- todoOfFacer :: Part,
- origOfFacer :: Face,
- permOfFacer :: Face,
- sortOfFacer :: Face}
+data Toper = Toper {
+ doneOfToper :: Part,
+ todoOfToper :: Part,
+ origOfToper :: Tope,
+ permOfToper :: Tope,
+ sortOfToper :: Tope}
 class Perm p where
  refinePerm :: p -> [p]
  comparePerm :: p -> p -> Ordering
 instance Perm Spacer where
  refinePerm = refineSpace
  comparePerm (Spacer {sortOfSpacer = s}) (Spacer {sortOfSpacer = t}) = compare s t
-instance Perm Facer where
- refinePerm = refineFace
- comparePerm (Facer {sortOfFacer = s}) (Facer {sortOfFacer = t}) = compare s t
+instance Perm Toper where
+ refinePerm = refineTope
+ comparePerm (Toper {sortOfToper = s}) (Toper {sortOfToper = t}) = compare s t
+type Plane = Matrix.Vector Double -- distances above base
+type Point = Matrix.Vector Double -- coordinates
+type Vector = Matrix.Vector Double
 
 sideToBool :: Side -> Bool
 sideToBool a = a /= (Side 0)
@@ -261,8 +261,8 @@ boundariesOfPlual :: Plual -> [Boundary]
 boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
-boundariesOfFace :: Face -> [Boundary]
-boundariesOfFace s = concat (domain s)
+boundariesOfTope :: Tope -> [Boundary]
+boundariesOfTope s = fold' (++) (map (\(x,_,_) -> x) s) []
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -802,32 +802,35 @@ refineSpaceG _ _ _ _ = undefined
 -- between space and polytope
 --
 
-equivFace :: Face -> Face
-equivFace s = let
- bounds = boundariesOfFace s
+equivTope :: Tope -> Tope
+equivTope s = let
+ bounds = boundariesOfTope s
  (Boundary bound) = maximum bounds
  term = Boundary (succ bound)
  part = origPart bounds
- dummy = equivFaceF term s
- facer = Facer {
-  doneOfFacer = [],
-  todoOfFacer = part,
-  origOfFacer = s,
-  permOfFacer = dummy,
-  sortOfFacer = dummy}
- in sortOfFacer (equivPerm facer)
+ dummy = equivTopeF term s
+ toper = Toper {
+  doneOfToper = [],
+  todoOfToper = part,
+  origOfToper = s,
+  permOfToper = dummy,
+  sortOfToper = dummy}
+ in sortOfToper (equivPerm toper)
 
-equivFaceF :: Boundary -> Face -> Face
-equivFaceF = undefined
+equivTopeF :: Boundary -> Tope -> Tope
+equivTopeF = undefined
 
-refineFace :: Facer -> [Facer]
-refineFace = undefined
+refineTope :: Toper -> [Toper]
+refineTope = undefined
 
-faceFromDegen :: Space -> Face
-faceFromDegen = undefined
+topeFromSpace :: [Region] -> Space -> Tope
+topeFromSpace = undefined
 
-degenFromFace :: Face -> Space
-degenFromFace = undefined
+spaceFromTope :: Tope -> Space
+spaceFromTope = undefined
+
+topeRegions :: Tope -> Space -> [Region]
+topeRegions = undefined
 
 --
 -- between symbolic and numeric
