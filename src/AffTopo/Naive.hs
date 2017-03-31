@@ -36,7 +36,12 @@ type Plane = Matrix.Vector Double -- distances above base
 type Point = Matrix.Vector Double -- coordinates
 type Vector = Matrix.Vector Double
 type Part = [(Boundary,Side)]
-data Face = Face [(Boundary,Side)] [(Boundary,Face)] deriving (Eq, Ord, Show)
+type Vace = [[(Boundary,Side)]] -- binary matrix, packed regions
+type Vert = [Boundary] -- boundaries through vertex
+-- polytope is map from vertex to degenerate vertex space
+-- and to map from boundary through the vertex to
+-- Side 0 vertex and Side 1 vertex
+type Face = [(Vert,(Vace,[(Boundary,[Vert])]))]
 data Spacer = Spacer {
  doneOfSpacer :: Part,
  todoOfSpacer :: Part,
@@ -257,7 +262,7 @@ boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
 boundariesOfFace :: Face -> [Boundary]
-boundariesOfFace (Face p q) = fold' (++) (map boundariesOfFace (range q)) ((domain p) ++ (domain q))
+boundariesOfFace s = concat (domain s)
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -813,10 +818,7 @@ equivFace s = let
  in sortOfFacer (equivPerm facer)
 
 equivFaceF :: Boundary -> Face -> Face
-equivFaceF b (Face p q) = let
- sides = map (\(_,_) -> (b, Side 0)) p
- faces = map (\(_,x) -> (b, equivFaceF b x)) q
- in Face sides faces
+equivFaceF = undefined
 
 refineFace :: Facer -> [Facer]
 refineFace = undefined
