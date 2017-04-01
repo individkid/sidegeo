@@ -32,12 +32,11 @@ type Space = [[[Region]]] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,[[Region]])] -- assume one-to-one
 type Plual = [(Region,[[Boundary]])] -- dual of place
-type Vert = [Boundary] -- boundaries through vertex
-type SBr = [[(Boundary,Side)]] -- binary matrix, packed regions
--- polytope is map from vertex to degenerate vertex space
--- and to map from boundary through the vertex to
--- Side 0 vertex and Side 1 vertex
-type Tope = [(Vert,SBr,[(Boundary,[Vert])])]
+type Tope = [[(Boundary,[[Boundary]])]] --
+-- set of map from boundary to per side domain
+data Facet = Facet [(Boundary,Facet)] deriving (Eq, Ord, Show) --
+-- map from boundary to subfacet enclosing facet on
+-- intersection of planes in path to facet
 type Part = [(Boundary,Side)]
 data Spacer = Spacer {
  doneOfSpacer :: Part,
@@ -262,7 +261,7 @@ boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
 boundariesOfTope :: Tope -> [Boundary]
-boundariesOfTope s = fold' (++) (map (\(x,_,_) -> x) s) []
+boundariesOfTope p = concat (map domain p)
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -823,14 +822,47 @@ equivTopeF = undefined
 refineTope :: Toper -> [Toper]
 refineTope = undefined
 
-topeFromSpace :: [Region] -> Space -> Tope
+-- classify embedding with local invariance
+topeFromSpace :: Int -> [Region] -> Space -> Tope
 topeFromSpace = undefined
+-- find 1-dimensional subsections from each n-1 subset of boundaries
+-- take each 1-d region to given space to colorize by embedding quandrant
+-- find where 1-d regions transition between colors
+-- list transitions by from and to vertices identified by boundaries
+-- sort and collect by from vertex
+-- convert collections to maps
 
-spaceFromTope :: Tope -> Space
+-- find sample space that polytope could be embedded in
+spaceFromTope :: Int -> Tope -> Space
 spaceFromTope = undefined
+-- list 2^n possibly redundant regions per vertex
+-- find path from vertex of redundant to boundary
+-- use last ray of path to boundary as redundant wrt boundary
+-- filter out duplicates for possibly degenerate space
 
-topeRegions :: Tope -> Space -> [Region]
+-- add regions until linear
+regenSpace :: Int -> Space -> Space
+regenSpace = undefined
+-- add region until evry n boundary subspace takes to 2^n regions
+
+-- build up facet from vertices and edges
+topeFacet :: Tope -> Facet
+topeFacet = undefined
+-- add all subfacets that share all but one boundary to a new facet
+
+-- find regions attached to top-level facets
+facetRegions :: Facet -> Space -> [Region]
+facetRegions = undefined
+-- consider section by facet base and find facetJoint for it
+-- use jointRegions to fill in the facet in the section
+-- take filled facet to given space for regions attached to facet
+
+-- find inside of double-thick shell together with regions inside of the shell
+topeRegions :: [Region] -> Space -> [Region]
 topeRegions = undefined
+-- start from each outside region and generate to shell
+-- generate in shell so long as outside or attached to generated outside
+-- return complement union of outside and shell generates
 
 --
 -- between symbolic and numeric
