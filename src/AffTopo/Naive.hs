@@ -35,8 +35,8 @@ type Plual = [(Region,[[Boundary]])] -- dual of place
 type Tope = [[(Boundary,[[Boundary]])]] --
 -- set of map from boundary to per side domain
 data Facet = Facet [(Boundary,Facet)] deriving (Eq, Ord, Show) --
--- map from boundary to subfacet enclosing facet on
--- intersection of planes in path to facet
+-- map from boundary to subfacet enclosing facet in
+-- subsection of boundaries in path to facet
 type Part = [(Boundary,Side)]
 data Spacer = Spacer {
  doneOfSpacer :: Part,
@@ -204,6 +204,9 @@ sort2 a = sort (map sort a)
 sort3 :: Ord a => [[[a]]] -> [[[a]]]
 sort3 a = sort (map sort2 a)
 
+zipWith2 :: (a -> b -> c) -> [[a]] -> [[b]] -> [[c]]
+zipWith2 f a b = zipWith (\x y -> zipWith f x y) a b
+
 --
 -- now for something new
 --
@@ -261,7 +264,7 @@ boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
 boundariesOfTope :: Tope -> [Boundary]
-boundariesOfTope p = concat (map domain p)
+boundariesOfTope s = concat (map domain s)
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -817,10 +820,39 @@ equivTope s = let
  in sortOfToper (equivPerm toper)
 
 equivTopeF :: Boundary -> Tope -> Tope
-equivTopeF = undefined
+equivTopeF b s = map2 (\(_,x) -> (b, map2 (\_ -> b) x)) s
 
 refineTope :: Toper -> [Toper]
-refineTope = undefined
+refineTope (Toper {
+ doneOfToper = p,
+ todoOfToper = q,
+ origOfToper = s,
+ permOfToper = t}) = map (refineTopeF s t) (refinePart p q)
+
+-- type Tope = [[(Boundary,[[Boundary]])]]
+-- add transposed boundary to fullspaces
+refineTopeF :: Tope -> Tope -> (Boundary,Boundary,Side,Part,Part) -> Toper
+refineTopeF s t (a,b,c,p,q) = let
+ refine = zipWith2 (refineTopeG a b c) s t
+ sorted = sort2 (map2 (\(x,y) -> (x, map sort y)) refine)
+ in Toper {
+  doneOfToper = p,
+  todoOfToper = q,
+  origOfToper = s,
+  permOfToper = refine,
+  sortOfToper = sorted}
+
+-- add transposed boundary to fullspace
+refineTopeG :: Boundary -> Boundary -> Side -> (Boundary,[[Boundary]]) -> (Boundary,[[Boundary]]) -> (Boundary,[[Boundary]])
+refineTopeG a b e (c,[s,t]) (d,[u,v]) = let
+ key = refineTopeH a b c d
+ left = zipWith (refineTopeH a b) s u
+ right = zipWith (refineTopeH a b) t v
+ in if e == (Side 0) then (key,[left,right]) else (key,[right,left])
+refineTopeG _ _ _ _ _ = undefined
+
+refineTopeH :: Boundary -> Boundary -> Boundary -> Boundary -> Boundary
+refineTopeH a b c d = if b == c then a else d
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Space -> Tope
