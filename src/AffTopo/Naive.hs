@@ -32,10 +32,8 @@ type Space = [[[Region]]] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,[[Region]])] -- assume one-to-one
 type Plual = [(Region,[[Boundary]])] -- dual of place
-type Tope = [[(Boundary,[[Boundary]])]] --
--- set of map from boundary to per side domain
-data Facet = Facet [(Boundary,Facet)] deriving (Eq, Ord, Show) --
--- map from boundary to subfacet enclosing facet in
+data Tope = Tope [(Boundary,(Side,Tope))] deriving (Eq, Ord, Show) --
+-- per-side map from boundary to subfacet enclosing facet in
 -- subsection of boundaries in path to facet
 type Part = [(Boundary,Side)]
 data Spacer = Spacer {
@@ -71,6 +69,9 @@ boolToSide a = if a then Side 1 else Side 0
 
 notOfSide :: Side -> Side
 notOfSide a = boolToSide (not (sideToBool a))
+
+xorOfSide :: Side -> Side -> Side
+xorOfSide a b = boolToSide (xor (sideToBool a) (sideToBool b))
 
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets 0 _ = [[]]
@@ -207,6 +208,9 @@ sort3 a = sort (map sort2 a)
 zipWith2 :: (a -> b -> c) -> [[a]] -> [[b]] -> [[c]]
 zipWith2 f a b = zipWith (\x y -> zipWith f x y) a b
 
+concat2 :: [[[a]]] -> [a]
+concat2 a = concat (map concat a)
+
 --
 -- now for something new
 --
@@ -264,7 +268,7 @@ boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
 boundariesOfTope :: Tope -> [Boundary]
-boundariesOfTope s = concat (map domain s)
+boundariesOfTope (Tope s) = domain s
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -820,7 +824,7 @@ equivTope s = let
  in sortOfToper (equivPerm toper)
 
 equivTopeF :: Boundary -> Tope -> Tope
-equivTopeF b s = map2 (\(_,x) -> (b, map2 (\_ -> b) x)) s
+equivTopeF b (Tope s) = Tope (map (\(_,(x,y)) -> (b, (x, equivTopeF b y))) s)
 
 refineTope :: Toper -> [Toper]
 refineTope (Toper {
@@ -829,30 +833,24 @@ refineTope (Toper {
  origOfToper = s,
  permOfToper = t}) = map (refineTopeF s t) (refinePart p q)
 
--- type Tope = [[(Boundary,[[Boundary]])]]
--- add transposed boundary to fullspaces
 refineTopeF :: Tope -> Tope -> (Boundary,Boundary,Side,Part,Part) -> Toper
-refineTopeF s t (a,b,c,p,q) = let
- refine = zipWith2 (refineTopeG a b c) s t
- sorted = sort2 (map2 (\(x,y) -> (x, map sort y)) refine)
+refineTopeF (Tope s) (Tope t) (a,b,c,p,q) = let
+ refine = zipWith (refineTopeG a b c) s t
+ sorted = sort (map refineTopeH refine)
  in Toper {
   doneOfToper = p,
   todoOfToper = q,
-  origOfToper = s,
-  permOfToper = refine,
-  sortOfToper = sorted}
+  origOfToper = Tope s,
+  permOfToper = Tope refine,
+  sortOfToper = Tope sorted}
 
--- add transposed boundary to fullspace
-refineTopeG :: Boundary -> Boundary -> Side -> (Boundary,[[Boundary]]) -> (Boundary,[[Boundary]]) -> (Boundary,[[Boundary]])
-refineTopeG a b e (c,[s,t]) (d,[u,v]) = let
- key = refineTopeH a b c d
- left = zipWith (refineTopeH a b) s u
- right = zipWith (refineTopeH a b) t v
- in if e == (Side 0) then (key,[left,right]) else (key,[right,left])
-refineTopeG _ _ _ _ _ = undefined
+refineTopeG :: Boundary -> Boundary -> Side -> (Boundary,(Side,Tope)) -> (Boundary,(Side,Tope)) -> (Boundary,(Side,Tope))
+refineTopeG a b e (c, (f, Tope s)) (d, (g, Tope t))
+ | b == c = (a, (xorOfSide e f, Tope (zipWith (refineTopeG a b e) s t)))
+ | otherwise = (d, (g, Tope (zipWith (refineTopeG a b e) s t)))
 
-refineTopeH :: Boundary -> Boundary -> Boundary -> Boundary -> Boundary
-refineTopeH a b c d = if b == c then a else d
+refineTopeH :: (Boundary,(Side,Tope)) -> (Boundary,(Side,Tope))
+refineTopeH (a, (b, Tope s)) = (a, (b, Tope (sort (map refineTopeH s))))
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Space -> Tope
@@ -875,26 +873,16 @@ spaceFromTope = undefined
 -- add regions until linear
 regenSpace :: Int -> Space -> Space
 regenSpace = undefined
--- add region until evry n boundary subspace takes to 2^n regions
-
--- build up facet from vertices and edges
-topeFacet :: Tope -> Facet
-topeFacet = undefined
--- add all subfacets that share all but one boundary to a new facet
+-- add boundaries to empty such that given takes
 
 -- find regions attached to top-level facets
-facetRegions :: Facet -> Space -> [Region]
-facetRegions = undefined
--- consider section by facet base and find facetJoint for it
--- use jointRegions to fill in the facet in the section
--- take filled facet to given space for regions attached to facet
-
--- find inside of double-thick shell together with regions inside of the shell
-topeRegions :: [Region] -> Space -> [Region]
+topeRegions :: Tope -> Space -> [Region]
 topeRegions = undefined
+-- consider section by facet base and find facetJoint for it
 -- start from each outside region and generate to shell
 -- generate in shell so long as outside or attached to generated outside
--- return complement union of outside and shell generates
+-- get filled as complement union of outside and shell generates
+-- take filled facet to given space for regions attached to facet
 
 --
 -- between symbolic and numeric
