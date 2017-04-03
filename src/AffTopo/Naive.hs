@@ -502,9 +502,9 @@ crossSpace s t = let
  tPairs x = [(p,q) | p <- sRegions, q <- x]
  pairs = [(x,y) | x <- sRegions, y <- tRegions]
  regions = regionHoles (length pairs) []
- mapping = zip pairs regions
- sCross = map2 (\x -> image (sPairs x) mapping) sSpace
- tCross = map2 (\x -> image (tPairs x) mapping) tSpace
+ mapping = zip regions pairs
+ sCross = map2 (\x -> preimage (sPairs x) mapping) sSpace
+ tCross = map2 (\x -> preimage (tPairs x) mapping) tSpace
  in (zipPlace sBounds sCross) ++ (zipPlace tBounds tCross)
 
 -- reverse sidedness of given boundary
@@ -853,17 +853,42 @@ refineTopeH :: (Boundary,(Side,Tope)) -> (Boundary,(Side,Tope))
 refineTopeH (a, (b, Tope s)) = (a, (b, Tope (sort (map refineTopeH s))))
 
 -- classify embedding with local invariance
-topeFromSpace :: Int -> [Region] -> Space -> Tope
-topeFromSpace = undefined
--- find 1-dimensional subsections from each n-1 subset of boundaries
--- take each 1-d region to given space to colorize by embedding quandrant
--- find where 1-d regions transition between colors
--- list transitions by from and to vertices identified by boundaries
--- sort and collect by from vertex
--- convert collections to maps
+topeFromSpace :: Int -> [Region] -> Place -> Tope
+topeFromSpace n r s = let
+ bounds = boundariesOfPlace s
+ facets = map (\x -> subsets (x+1) bounds) (indices n)
+ pairs = fold' (topeFromSpaceF r s) (reverse facets) []
+ in Tope (map (\([x],y) -> (x, (topeFromSpaceJ x r s y, y))) pairs)
+
+-- facets associated with boundary sets given subfacets
+topeFromSpaceF :: [Region] -> Place -> [[Boundary]] -> [([Boundary],Tope)] -> [([Boundary],Tope)]
+topeFromSpaceF r s p [] = map (\x -> (x, Tope [])) (topeFromSpaceG r s p)
+topeFromSpaceF r s p q = map (\x -> (x, topeFromSpaceI x r s q)) (topeFromSpaceG r s p)
+
+-- facet boundaries with significant corner regions
+topeFromSpaceG :: [Region] -> Place -> [[Boundary]] -> [[Boundary]]
+topeFromSpaceG r s p = let
+ regions = map (\x -> giveBoundaries attachedRegions x s) p
+ pairs = filter (topeFromSpaceH r s) (zip p regions)
+ in map fst pairs
+
+-- regions are significant
+topeFromSpaceH :: [Region] -> Place -> ([Boundary],[Region]) -> Bool
+topeFromSpaceH = undefined
+
+-- collect facets with supersets of boundaries into subfacets
+topeFromSpaceI :: [Boundary] -> [Region] -> Place -> [([Boundary],Tope)] -> Tope
+topeFromSpaceI b r s p = let
+ facets = filter (\(x,_) -> null (x \\ b)) p
+ pairs = map (\(x,y) -> (head (b \\ x), y)) facets
+ in Tope (map (\(x,y) -> (x, (topeFromSpaceJ x r s y, y))) pairs)
+
+-- find side of regions on-side of facets wrt boundary
+topeFromSpaceJ :: Boundary -> [Region] -> Place -> Tope -> Side
+topeFromSpaceJ = undefined
 
 -- find sample space that polytope could be embedded in
-spaceFromTope :: Int -> Tope -> Space
+spaceFromTope :: Int -> Tope -> Place
 spaceFromTope = undefined
 -- list 2^n possibly redundant regions per vertex
 -- find path from vertex of redundant to boundary
@@ -871,12 +896,12 @@ spaceFromTope = undefined
 -- filter out duplicates for possibly degenerate space
 
 -- add regions until linear
-regenSpace :: Int -> Space -> Space
+regenSpace :: Int -> Place -> Place
 regenSpace = undefined
 -- add boundaries to empty such that given takes
 
 -- find regions attached to top-level facets
-topeRegions :: Tope -> Space -> [Region]
+topeRegions :: Tope -> Place -> [Region]
 topeRegions = undefined
 -- consider section by facet base and find facetJoint for it
 -- start from each outside region and generate to shell
