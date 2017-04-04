@@ -858,33 +858,33 @@ topeFromSpace n r s = let
  bounds = boundariesOfPlace s
  facets = map (\x -> subsets (x+1) bounds) (indices n)
  pairs = fold' (topeFromSpaceF r s) (reverse facets) []
- in Tope (map (\([x],y) -> (x, (topeFromSpaceJ x r s y, y))) pairs)
+ in Tope (map (\([x],z) -> (x, (topeFromSpaceG x [x] r s z, z))) pairs)
 
 -- facets associated with boundary sets given subfacets
 topeFromSpaceF :: [Region] -> Place -> [[Boundary]] -> [([Boundary],Tope)] -> [([Boundary],Tope)]
-topeFromSpaceF r s p [] = map (\x -> (x, Tope [])) (topeFromSpaceG r s p)
-topeFromSpaceF r s p q = map (\x -> (x, topeFromSpaceI x r s q)) (topeFromSpaceG r s p)
+topeFromSpaceF r s p [] = map (\x -> (x, Tope [])) (topeFromSpaceH r s p)
+topeFromSpaceF r s p q = map (\x -> (x, topeFromSpaceI x r s q)) (topeFromSpaceH r s p)
+
+-- find side of regions on-side of facets wrt boundary
+topeFromSpaceG :: Boundary -> [Boundary] -> [Region] -> Place -> Tope -> Side
+topeFromSpaceG = undefined
 
 -- facet boundaries with significant corner regions
-topeFromSpaceG :: [Region] -> Place -> [[Boundary]] -> [[Boundary]]
-topeFromSpaceG r s p = let
+topeFromSpaceH :: [Region] -> Place -> [[Boundary]] -> [[Boundary]]
+topeFromSpaceH r s p = let
  regions = map (\x -> giveBoundaries attachedRegions x s) p
- pairs = filter (topeFromSpaceH r s) (zip p regions)
+ pairs = filter (topeFromSpaceJ r s) (zip p regions)
  in map fst pairs
-
--- regions are significant
-topeFromSpaceH :: [Region] -> Place -> ([Boundary],[Region]) -> Bool
-topeFromSpaceH = undefined
 
 -- collect facets with supersets of boundaries into subfacets
 topeFromSpaceI :: [Boundary] -> [Region] -> Place -> [([Boundary],Tope)] -> Tope
 topeFromSpaceI b r s p = let
  facets = filter (\(x,_) -> null (x \\ b)) p
- pairs = map (\(x,y) -> (head (b \\ x), y)) facets
- in Tope (map (\(x,y) -> (x, (topeFromSpaceJ x r s y, y))) pairs)
+ triples = map (\(x,y) -> (b \\ x, x, y)) facets
+ in Tope (map (\([x],y,z) -> (x, (topeFromSpaceG x y r s z, z))) triples)
 
--- find side of regions on-side of facets wrt boundary
-topeFromSpaceJ :: Boundary -> [Region] -> Place -> Tope -> Side
+-- regions are significant
+topeFromSpaceJ :: [Region] -> Place -> ([Boundary],[Region]) -> Bool
 topeFromSpaceJ = undefined
 
 -- find sample space that polytope could be embedded in
