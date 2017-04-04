@@ -867,14 +867,12 @@ topeFromSpaceF r s p q = map (\x -> (x, topeFromSpaceI x r s q)) (topeFromSpaceH
 
 -- find side of regions on-side of facets wrt boundary
 topeFromSpaceG :: Boundary -> [Boundary] -> [Region] -> Place -> Tope -> Side
-topeFromSpaceG = undefined
+topeFromSpaceG = let
+ in undefined
 
 -- facet boundaries with significant corner regions
 topeFromSpaceH :: [Region] -> Place -> [[Boundary]] -> [[Boundary]]
-topeFromSpaceH r s p = let
- regions = map (\x -> giveBoundaries attachedRegions x s) p
- pairs = filter (topeFromSpaceJ r s) (zip p regions)
- in map fst pairs
+topeFromSpaceH r s p = filter (topeFromSpaceJ r s) p
 
 -- collect facets with supersets of boundaries into subfacets
 topeFromSpaceI :: [Boundary] -> [Region] -> Place -> [([Boundary],Tope)] -> Tope
@@ -883,9 +881,18 @@ topeFromSpaceI b r s p = let
  triples = map (\(x,y) -> (b \\ x, x, y)) facets
  in Tope (map (\([x],y,z) -> (x, (topeFromSpaceG x y r s z, z))) triples)
 
--- regions are significant
-topeFromSpaceJ :: [Region] -> Place -> ([Boundary],[Region]) -> Bool
-topeFromSpaceJ = undefined
+-- regions are significant if in one or all but one polyant, so no kissing facets
+topeFromSpaceJ :: [Region] -> Place -> [Boundary] -> Bool
+topeFromSpaceJ r s b = let
+ corners = giveBoundaries attachedRegions b s
+ insides = corners +\ r
+ subspace = unsubSpace b s
+ polyants = map (\x -> takeEmbed [x] subspace s) (regionsOfPlace subspace)
+ intersects = map (\x -> x +\ insides) polyants
+ empties = filter null intersects
+ concave = (length intersects) - 1
+ count = length empties
+ in (count == 1) || (count == concave)
 
 -- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
