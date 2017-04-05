@@ -859,26 +859,54 @@ refineTopeI a b c (p,k) (q,l)
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
-topeFromSpace = undefined
--- starting with top level polyant of no boundaries
--- for each polyant filter each subpolyant of one more boundary
--- filter by whether mirror polyant wrt extra boundary cancels
--- the mirror polyant cancels if each region's membership in embedding is same as in neighbor wrt extra boundary
+topeFromSpace n r s = until (topeFromSpaceF n) (topeFromSpaceH r s) []
+
+-- polyants of size dimension are vertex corners, so they have no subpolyants
+topeFromSpaceF :: Int -> Tope -> Bool
+topeFromSpaceF n p = (length (head (topeFromSpaceG p))) < n
+
+-- return last subpolyants
+topeFromSpaceG :: Tope -> [Poly]
+topeFromSpaceG [] = [[]]
+topeFromSpaceG p = let
+ sofar = nub' (map sort (concat (range p)))
+ leaf = maximum (map length sofar)
+ in filter (\x -> (length x) == leaf) sofar
+
+-- for each polyant filter subpolyants of one more boundary
+topeFromSpaceH :: [Region] -> Place -> Tope -> Tope
+topeFromSpaceH = undefined
+
+-- filter by whether empty after cancelling by neighbors wrt extra boundary
+topeFromSpaceI :: [Region] -> Place -> (Boundary,Poly) -> Bool
+topeFromSpaceI r s (b,p) = not (null (filter (topeFromSpaceK b r s) (topeFromSpaceJ s p)))
+
+-- return polyant regions in subsection
+topeFromSpaceJ :: Place -> Poly -> [Region]
+topeFromSpaceJ s p = let
+ (bounds,space) = unzipPlace s
+ poly = map (\(x,y) -> (Boundary (fromJust (elemIndex x bounds)), y)) p
+ regions = takeRegions (unsectionSpace (domain p) s) s
+ in filter (\x -> all (\(y,z) -> (regionWrtBoundary y x space) == z) poly) regions
+
+-- the polyant region cancels by embedding membersip xor wrt extra boundary
+topeFromSpaceK :: Boundary -> [Region] -> Place -> Region -> Bool
+topeFromSpaceK = undefined
 
 -- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
 spaceFromTope = undefined
--- add boundary at a time, using vertex regions and edge paths to get partial sidedness information
--- make depth first search when paths lead to both sides of boundary
--- use path sidedness when they lead to only one side of boundary
+ -- add boundary at a time, using vertex regions and edge paths to get partial sidedness information
+ -- make depth first search when paths lead to both sides of boundary
+ -- use path sidedness when they lead to only one side of boundary
 
 -- find regions attached to top-level facets
 topeRegions :: Tope -> Place -> [Region]
 topeRegions = undefined
--- consider section by facet base and find topeRegions for it
--- start from each outside region and generate to shell
--- filter shell by attached to outside
--- return complement of outside and attached to outside
+ -- consider section by facet base and find topeRegions for it
+ -- start from each outside region and generate to shell
+ -- filter shell by attached to outside
+ -- return complement of outside and attached to outside
 
 --
 -- between symbolic and numeric
