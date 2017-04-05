@@ -198,17 +198,11 @@ map2 = map . map
 map3 :: (a -> b) -> [[[a]]] -> [[[b]]]
 map3 = map2 . map
 
-sort2 :: Ord a => [[a]] -> [[a]]
-sort2 a = sort (map sort a)
+elemIndex' :: Eq a => a -> [a] -> Int
+elemIndex' a b = fromJust (elemIndex a b)
 
-sort3 :: Ord a => [[[a]]] -> [[[a]]]
-sort3 a = sort (map sort2 a)
-
-zipWith2 :: (a -> b -> c) -> [[a]] -> [[b]] -> [[c]]
-zipWith2 f a b = zipWith (\x y -> zipWith f x y) a b
-
-concat2 :: [[[a]]] -> [a]
-concat2 a = concat (map concat a)
+findIndex' :: (a -> Bool) -> [a] -> Int
+findIndex' f a = fromJust (findIndex f a)
 
 --
 -- now for something new
@@ -286,7 +280,7 @@ regionsOfPlual = domain
 
 -- side of region with regard to boundary
 regionWrtBoundary :: Boundary -> Region -> Space -> Side
-regionWrtBoundary (Boundary b) r s = Side (fromJust (findIndex (\a -> member r a) (s !! b)))
+regionWrtBoundary (Boundary b) r s = Side (findIndex' (\a -> member r a) (s !! b))
 
 -- side of vertex identified by n boundaries
 vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Side
@@ -388,7 +382,7 @@ subSpaceF :: ([Region] -> [Region] -> [Region]) -> Boundary -> Place -> Place
 subSpaceF f b s = let
  (bounds,space) = unzipPlace s
  regions = regionsOfSpace space
- index = fromJust (elemIndex b bounds)
+ index = elemIndex' b bounds
  bound = Boundary index
  section = filter (subSpaceG bound space) regions
  result = map2 (f section) (unplace index space)
@@ -452,19 +446,6 @@ takeRegions s t = let
 
 takeEmbed :: [Region] -> Place -> Place -> [Region]
 takeEmbed r s t = takeRegions (embedSpace r s) t
-
--- return boundaries given function on space
-takeBoundaries :: (a -> Space -> [Boundary]) -> a -> Place -> [Boundary]
-takeBoundaries f a s = let
- (bounds,space) = unzipPlace s
- indexes = map (\(Boundary x) -> x) (f a space)
- in map (\x -> bounds !! x) indexes
-
-giveBoundaries :: ([Boundary] -> Space -> a) -> [Boundary] -> Place -> a
-giveBoundaries f b s = let
- (bounds,space) = unzipPlace s
- indexes = map (\x -> fromJust (elemIndex x bounds)) b
- in f (map Boundary indexes) space
 
 -- all possible regions
 powerSpace :: [Boundary] -> Place
@@ -859,41 +840,38 @@ refineTopeI a b c (p,k) (q,l)
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
-topeFromSpace n r s = until (topeFromSpaceF n) (topeFromSpaceH r s) []
+topeFromSpace n r s = snd (until (topeFromSpaceF n) (topeFromSpaceG r s) ([[]],[]))
 
 -- polyants of size dimension are vertex corners, so they have no subpolyants
-topeFromSpaceF :: Int -> Tope -> Bool
-topeFromSpaceF n p = (length (head (topeFromSpaceG p))) < n
-
--- return last subpolyants
-topeFromSpaceG :: Tope -> [Poly]
-topeFromSpaceG [] = [[]]
-topeFromSpaceG p = let
- sofar = nub' (map sort (concat (range p)))
- leaf = maximum (map length sofar)
- in filter (\x -> (length x) == leaf) sofar
+topeFromSpaceF :: Int -> ([Poly],Tope) -> Bool
+topeFromSpaceF n (p, _) = (length (head p)) < n
 
 -- for each polyant filter subpolyants of one more boundary
-topeFromSpaceH :: [Region] -> Place -> Tope -> Tope
-topeFromSpaceH = undefined
+topeFromSpaceG :: [Region] -> Place -> ([Poly],Tope) -> ([Poly],Tope)
+topeFromSpaceG r s (p, q) = let
+ tope = map (\x -> (x, topeFromSpaceH r s x)) p
+ poly = nub' (concat (map snd tope))
+ in (poly, tope Prelude.++ q)
 
--- filter by whether empty after cancelling by neighbors wrt extra boundary
+-- filter subpolyants of one more boundary
+topeFromSpaceH :: [Region] -> Place -> Poly -> [Poly]
+topeFromSpaceH r s p = let
+ extra = (boundariesOfPlace s) \\ (domain p)
+ extend = concat (map (\x -> map (\y -> (x, (x, y) : p)) allSides) extra)
+ in map snd (filter (topeFromSpaceI r s) extend)
+
+-- filter by not empty after cancelling by neighbors wrt extra boundary
 topeFromSpaceI :: [Region] -> Place -> (Boundary,Poly) -> Bool
-topeFromSpaceI r s (b,p) = not (null (filter (topeFromSpaceK b r s) (topeFromSpaceJ s p)))
-
--- return polyant regions in subsection
-topeFromSpaceJ :: Place -> Poly -> [Region]
-topeFromSpaceJ s p = let
+topeFromSpaceI r s (b, p) = let
  (bounds,space) = unzipPlace s
- poly = map (\(x,y) -> (Boundary (fromJust (elemIndex x bounds)), y)) p
- regions = takeRegions (unsectionSpace (domain p) s) s
- in filter (\x -> all (\(y,z) -> (regionWrtBoundary y x space) == z) poly) regions
+ bound = Boundary (elemIndex' b bounds)
+ poly = map (\(x,y) -> (Boundary (elemIndex' x bounds), y)) p
+ subsection = takeRegions (unsectionSpace (domain p) s) s
+ corners = filter (\x -> all (\(y,z) -> (regionWrtBoundary y x space) == z) poly) subsection
+ neighbors = map (\x -> oppositeOfRegion [bound] x space) corners
+ in not (null (neighbors \\ r))
 
--- the polyant region cancels by embedding membersip xor wrt extra boundary
-topeFromSpaceK :: Boundary -> [Region] -> Place -> Region -> Bool
-topeFromSpaceK = undefined
-
--- find sample space that polytope could be embedded in
+--- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
 spaceFromTope = undefined
  -- add boundary at a time, using vertex regions and edge paths to get partial sidedness information
@@ -1051,7 +1029,7 @@ spaceFromPlanes n w
   vector = map planeToVector w
   scalar = map (\x -> head (Matrix.toList x)) vector
   sorted = sortBy compare scalar
-  index = map (\x -> fromJust (elemIndex x sorted)) scalar
+  index = map (\x -> elemIndex' x sorted) scalar
   left = map (\x -> indices (x+1)) index
   right = map (\x -> map ((x+1)+) (indices (m-x))) index
   full = map (\(x,y) -> [x,y]) (zip left right)
