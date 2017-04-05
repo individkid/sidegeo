@@ -36,15 +36,15 @@ type Part = [(Boundary,Side)]
 class Perm p where
  refinePerm :: p -> [p]
  comparePerm :: p -> p -> Ordering
-instance Perm Spacer where
- refinePerm = refineSpace
- comparePerm (Spacer {sortOfSpacer = s}) (Spacer {sortOfSpacer = t}) = compare s t
 data Spacer = Spacer {
  doneOfSpacer :: Part,
  todoOfSpacer :: Part,
  origOfSpacer :: Dual,
  permOfSpacer :: Dual,
  sortOfSpacer :: Dual}
+instance Perm Spacer where
+ refinePerm = refineSpace
+ comparePerm (Spacer {sortOfSpacer = s}) (Spacer {sortOfSpacer = t}) = compare s t
 type Poly = [(Boundary,Side)] -- facet is intersection between subsection and polyant
 type Tope = [(Poly,[Poly])] -- polytope is map from facet to set of facet
 data Toper = Toper {
@@ -823,7 +823,10 @@ equivTope s = let
  in sortOfToper (equivPerm toper)
 
 equivTopeF :: Boundary -> Tope -> Tope
-equivTopeF = undefined
+equivTopeF b p = map (\(x,y) -> (equivTopeG b x, map (equivTopeG b) y)) p
+
+equivTopeG :: Boundary -> Poly -> Poly
+equivTopeG b p = map (\(_,x) -> (b,x)) p
 
 refineTope :: Toper -> [Toper]
 refineTope (Toper {
@@ -833,7 +836,26 @@ refineTope (Toper {
  permOfToper = t}) = map (refineTopeF s t) (refinePart p q)
 
 refineTopeF :: Tope -> Tope -> (Boundary,Boundary,Side,Part,Part) -> Toper
-refineTopeF = undefined
+refineTopeF p q (a,b,c,d,e) = let
+ tope = zipWith (refineTopeG a b c) p q
+ sorted = sort (map (\(x,y) -> (sort x, map (\z -> sort z) y)) tope)
+ in Toper {
+  doneOfToper = d,
+  todoOfToper = e,
+  origOfToper = p,
+  permOfToper = tope,
+  sortOfToper = sorted}
+
+refineTopeG :: Boundary -> Boundary -> Side -> (Poly,[Poly]) -> (Poly,[Poly]) -> (Poly,[Poly])
+refineTopeG a b c (p,k) (q,l) = (refineTopeH a b c p q, zipWith (refineTopeH a b c) k l)
+
+refineTopeH :: Boundary -> Boundary -> Side -> Poly -> Poly -> Poly
+refineTopeH a b c p q = zipWith (refineTopeI a b c) p q
+
+refineTopeI :: Boundary -> Boundary -> Side -> (Boundary,Side) -> (Boundary,Side) -> (Boundary,Side)
+refineTopeI a b c (p,k) (q,l)
+ | b == p = (a, xorOfSide c k)
+ | otherwise = (q,l)
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
