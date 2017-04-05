@@ -32,28 +32,27 @@ type Space = [[[Region]]] -- assume equal covers
 type Dual = [[[Boundary]]] -- now Boundary is arbitrary
 type Place = [(Boundary,[[Region]])] -- assume one-to-one
 type Plual = [(Region,[[Boundary]])] -- dual of place
-data Tope = Tope [(Boundary,(Side,Tope))] deriving (Eq, Ord, Show) --
--- per-side map from boundary to subfacet enclosing facet in
--- subsection of boundaries in path to facet
 type Part = [(Boundary,Side)]
-data Spacer = Spacer {
- doneOfSpacer :: Part,
- todoOfSpacer :: Part,
- origOfSpacer :: Dual,
- permOfSpacer :: Dual,
- sortOfSpacer :: Dual}
-data Toper = Toper {
- doneOfToper :: Part,
- todoOfToper :: Part,
- origOfToper :: Tope,
- permOfToper :: Tope,
- sortOfToper :: Tope}
 class Perm p where
  refinePerm :: p -> [p]
  comparePerm :: p -> p -> Ordering
 instance Perm Spacer where
  refinePerm = refineSpace
  comparePerm (Spacer {sortOfSpacer = s}) (Spacer {sortOfSpacer = t}) = compare s t
+data Spacer = Spacer {
+ doneOfSpacer :: Part,
+ todoOfSpacer :: Part,
+ origOfSpacer :: Dual,
+ permOfSpacer :: Dual,
+ sortOfSpacer :: Dual}
+type Poly = [(Boundary,Side)] -- facet is intersection between subsection and polyant
+type Tope = [(Poly,[Poly])] -- polytope is map from facet to set of facet
+data Toper = Toper {
+ doneOfToper :: Part,
+ todoOfToper :: Part,
+ origOfToper :: Tope,
+ permOfToper :: Tope,
+ sortOfToper :: Tope}
 instance Perm Toper where
  refinePerm = refineTope
  comparePerm (Toper {sortOfToper = s}) (Toper {sortOfToper = t}) = compare s t
@@ -268,7 +267,7 @@ boundariesOfPlual [] = undefined
 boundariesOfPlual s = concat (snd (head s))
 
 boundariesOfTope :: Tope -> [Boundary]
-boundariesOfTope (Tope s) = domain s
+boundariesOfTope p = concat (map domain (domain p))
 
 -- return all regions in space
 regionsOfSpace :: Space -> [Region]
@@ -824,7 +823,7 @@ equivTope s = let
  in sortOfToper (equivPerm toper)
 
 equivTopeF :: Boundary -> Tope -> Tope
-equivTopeF b (Tope s) = Tope (map (\(_,(x,y)) -> (b, (x, equivTopeF b y))) s)
+equivTopeF = undefined
 
 refineTope :: Toper -> [Toper]
 refineTope (Toper {
@@ -834,87 +833,30 @@ refineTope (Toper {
  permOfToper = t}) = map (refineTopeF s t) (refinePart p q)
 
 refineTopeF :: Tope -> Tope -> (Boundary,Boundary,Side,Part,Part) -> Toper
-refineTopeF (Tope s) (Tope t) (a,b,c,p,q) = let
- refine = zipWith (refineTopeG a b c) s t
- sorted = sort (map refineTopeH refine)
- in Toper {
-  doneOfToper = p,
-  todoOfToper = q,
-  origOfToper = Tope s,
-  permOfToper = Tope refine,
-  sortOfToper = Tope sorted}
-
-refineTopeG :: Boundary -> Boundary -> Side -> (Boundary,(Side,Tope)) -> (Boundary,(Side,Tope)) -> (Boundary,(Side,Tope))
-refineTopeG a b e (c, (f, Tope s)) (d, (g, Tope t))
- | b == c = (a, (xorOfSide e f, Tope (zipWith (refineTopeG a b e) s t)))
- | otherwise = (d, (g, Tope (zipWith (refineTopeG a b e) s t)))
-
-refineTopeH :: (Boundary,(Side,Tope)) -> (Boundary,(Side,Tope))
-refineTopeH (a, (b, Tope s)) = (a, (b, Tope (sort (map refineTopeH s))))
+refineTopeF = undefined
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
-topeFromSpace n r s = let
- bounds = boundariesOfPlace s
- facets = map (\x -> subsets (x+1) bounds) (indices n)
- pairs = fold' (topeFromSpaceF r s) (reverse facets) []
- in Tope (map (\([x],z) -> (x, (topeFromSpaceG x [x] r s z, z))) pairs)
-
--- facets associated with boundary sets given subfacets
-topeFromSpaceF :: [Region] -> Place -> [[Boundary]] -> [([Boundary],Tope)] -> [([Boundary],Tope)]
-topeFromSpaceF r s p [] = map (\x -> (x, Tope [])) (topeFromSpaceH r s p)
-topeFromSpaceF r s p q = map (\x -> (x, topeFromSpaceI x r s q)) (topeFromSpaceH r s p)
-
--- find side of regions on-side of facets wrt boundary
-topeFromSpaceG :: Boundary -> [Boundary] -> [Region] -> Place -> Tope -> Side
-topeFromSpaceG = let
- in undefined
-
--- facet boundaries with significant corner regions
-topeFromSpaceH :: [Region] -> Place -> [[Boundary]] -> [[Boundary]]
-topeFromSpaceH r s p = filter (topeFromSpaceJ r s) p
-
--- collect facets with supersets of boundaries into subfacets
-topeFromSpaceI :: [Boundary] -> [Region] -> Place -> [([Boundary],Tope)] -> Tope
-topeFromSpaceI b r s p = let
- facets = filter (\(x,_) -> null (x \\ b)) p
- triples = map (\(x,y) -> (b \\ x, x, y)) facets
- in Tope (map (\([x],y,z) -> (x, (topeFromSpaceG x y r s z, z))) triples)
-
--- regions are significant if in one or all but one polyant, so no kissing facets
-topeFromSpaceJ :: [Region] -> Place -> [Boundary] -> Bool
-topeFromSpaceJ r s b = let
- corners = giveBoundaries attachedRegions b s
- insides = corners +\ r
- subspace = unsubSpace b s
- polyants = map (\x -> takeEmbed [x] subspace s) (regionsOfPlace subspace)
- intersects = map (\x -> x +\ insides) polyants
- empties = filter null intersects
- concave = (length intersects) - 1
- count = length empties
- in (count == 1) || (count == concave)
+topeFromSpace = undefined
+-- starting with top level polyant of no boundaries
+-- for each polyant filter each subpolyant of one more boundary
+-- filter by whether mirror polyant wrt extra boundary cancels
+-- the mirror polyant cancels if each region's membership in embedding is same as in neighbor wrt extra boundary
 
 -- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
 spaceFromTope = undefined
--- list 2^n possibly redundant regions per vertex
--- find path from vertex of redundant to boundary
--- use last ray of path to boundary as redundant wrt boundary
--- filter out duplicates for possibly degenerate space
-
--- add regions until linear
-regenSpace :: Int -> Place -> Place
-regenSpace = undefined
--- add boundaries to empty such that given takes
+-- add boundary at a time, using vertex regions and edge paths to get partial sidedness information
+-- make depth first search when paths lead to both sides of boundary
+-- use path sidedness when they lead to only one side of boundary
 
 -- find regions attached to top-level facets
 topeRegions :: Tope -> Place -> [Region]
 topeRegions = undefined
--- consider section by facet base and find facetJoint for it
+-- consider section by facet base and find topeRegions for it
 -- start from each outside region and generate to shell
--- generate in shell so long as outside or attached to generated outside
--- get filled as complement union of outside and shell generates
--- take filled facet to given space for regions attached to facet
+-- filter shell by attached to outside
+-- return complement of outside and attached to outside
 
 --
 -- between symbolic and numeric
