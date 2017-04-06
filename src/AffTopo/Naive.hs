@@ -17,7 +17,6 @@
 module AffTopo.Naive where
 
 import Prelude hiding ((++))
-import qualified Prelude
 import Data.List hiding ((\\), (++), insert)
 import qualified Data.List
 import Data.Maybe
@@ -75,7 +74,7 @@ xorOfSide a b = boolToSide (xor (sideToBool a) (sideToBool b))
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets 0 _ = [[]]
 subsets _ [] = []
-subsets n (a:b) = (map (a:) (subsets (n-1) b)) Prelude.++ (subsets n b)
+subsets n (a:b) = (map (a:) (subsets (n-1) b)) `prepend` (subsets n b)
 
 power :: Ord a => [a] -> [[a]]
 power a = let
@@ -98,16 +97,19 @@ remove :: Eq a => a -> [a] -> [a]
 remove a b = filter (a /=) b
 
 unplace :: Int -> [a] -> [a]
-unplace a b = (take a b) Prelude.++ (drop (a+1) b)
+unplace a b = (take a b) `prepend` (drop (a+1) b)
 
 replace :: Int -> a -> [a] -> [a]
-replace a b c = (take a c) Prelude.++ (b : (drop (a+1) c))
+replace a b c = (take a c) `prepend` (b : (drop (a+1) c))
 
 emplace :: Int -> a -> [a] -> [a]
-emplace a b c = (take a c) Prelude.++ (b : (drop a c))
+emplace a b c = (take a c) `prepend` (b : (drop a c))
 
 append :: a -> [a] -> [a]
-append a b = b Prelude.++ [a]
+append a b = b `prepend` [a]
+
+prepend :: [a] -> [a] -> [a]
+prepend a b = fold' (:) (reverse a) b
 
 choose :: [a] -> a
 choose = head
@@ -129,7 +131,7 @@ range m = map snd m
 
 -- ++ is as in Data.List except welldef
 (++) :: Ord a => [a] -> [a] -> [a]
-a ++ b = a Prelude.++ (b \\ a)
+a ++ b = a `prepend` (b \\ a)
 
 (\\) :: Ord a => [a] -> [a] -> [a]
 a \\ b = a Data.List.\\ b
@@ -840,7 +842,10 @@ refineTopeI a b c (p,k) (q,l)
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
-topeFromSpace n r s = snd (until (topeFromSpaceF n) (topeFromSpaceG r s) ([[]],[]))
+topeFromSpace n r s = let
+ (poly,tope) = until (topeFromSpaceF n) (topeFromSpaceG r s) ([[]],[])
+ verts = map (\x -> (x,[])) poly
+ in verts `prepend` tope
 
 -- polyants of size dimension are vertex corners, so they have no subpolyants
 topeFromSpaceF :: Int -> ([Poly],Tope) -> Bool
@@ -851,7 +856,7 @@ topeFromSpaceG :: [Region] -> Place -> ([Poly],Tope) -> ([Poly],Tope)
 topeFromSpaceG r s (p, q) = let
  tope = map (\x -> (x, topeFromSpaceH r s x)) p
  poly = nub' (concat (map snd tope))
- in (poly, tope Prelude.++ q)
+ in (poly, tope `prepend` q)
 
 -- filter subpolyants of one more boundary
 topeFromSpaceH :: [Region] -> Place -> Poly -> [Poly]
