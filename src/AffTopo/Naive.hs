@@ -18,7 +18,6 @@ module AffTopo.Naive where
 
 import Prelude hiding ((++))
 import Data.List hiding ((\\), (++), insert)
-import qualified Data.List
 import Data.Maybe
 import Data.Bits
 import qualified Numeric.LinearAlgebra as Matrix
@@ -87,9 +86,6 @@ subset a b = image a (zip (indices (length b)) b)
 indices :: Num a => Int -> [a]
 indices n = take n (iterate (1+) 0)
 
-member :: Eq a => a -> [a] -> Bool
-member a b = (find (a ==) b) /= Nothing
-
 insert :: Ord a => a -> [a] -> [a]
 insert a b = if elem a b then b else a:b
 
@@ -118,10 +114,10 @@ holes :: Ord a => Num a => Int -> [a] -> [a]
 holes n a = take n ((indices ((length a)+n)) \\ a)
 
 image :: Eq a => [a] -> [(a,b)] -> [b]
-image a m = range (filter (\(x,_) -> member x a) m)
+image a m = range (filter (\(x,_) -> elem x a) m)
 
 preimage :: Eq b => [b] -> [(a,b)] -> [a]
-preimage b m = domain (filter (\(_,y) -> member y b) m)
+preimage b m = domain (filter (\(_,y) -> elem y b) m)
 
 domain :: [(a,b)] -> [a]
 domain m = map fst m
@@ -134,7 +130,14 @@ range m = map snd m
 a ++ b = a `prepend` (b \\ a)
 
 (\\) :: Ord a => [a] -> [a] -> [a]
-a \\ b = a Data.List.\\ b
+a \\ b = slashSlashF (sort a) (sort b)
+
+slashSlashF :: Ord a => [a] -> [a] -> [a]
+slashSlashF (a:b) (c:d)
+ | a > c = a : (slashSlashF b d)
+ | a == c = slashSlashF b (c:d)
+ | otherwise = undefined
+slashSlashF a _ = a
 
 -- intersection
 (+\) :: Ord a => [a] -> [a] -> [a]
@@ -282,7 +285,7 @@ regionsOfPlual = domain
 
 -- side of region with regard to boundary
 regionWrtBoundary :: Boundary -> Region -> Space -> Side
-regionWrtBoundary (Boundary b) r s = Side (findIndex' (\a -> member r a) (s !! b))
+regionWrtBoundary (Boundary b) r s = Side (findIndex' (\a -> elem r a) (s !! b))
 
 -- side of vertex identified by n boundaries
 vertexWrtBoundary :: Boundary -> [Boundary] -> Space -> Side
@@ -351,28 +354,6 @@ outsideOfRegion r s = oppositeOfRegion (boundariesOfSpace s) r s
 outsideOfRegionExists :: Region -> Space -> Bool
 outsideOfRegionExists r s = oppositeOfRegionExists (boundariesOfSpace s) r s
 
--- return space with given region changed to its local opposite
-migrateSpace :: Region -> Space -> Space
-migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (spaceToPlace s)
-
-migrateSpaceF :: [Boundary] -> Region -> (Boundary,[[Region]]) -> [[Region]]
-migrateSpaceF b r (a,s)
- | (member a b) && (member r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
- | (member a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
- | otherwise = s
-
--- return whether local opposite of given region is empty
--- and all of its oppositeOf regions are non-empty
-migrateSpaceExists :: Region -> Space -> Bool
-migrateSpaceExists r s = let
- boundaries = attachedBoundaries r s
- sides = sidesOfRegion r s
- opposite = oppositeOfSides boundaries sides
- empty = not (regionOfSidesExists opposite s)
- neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
- exists = map (\a -> regionOfSidesExists a s) neighbors
- in fold' (\a b -> a && b) exists empty
-
 -- return space of same dimension with given boundary removed
 subSpace :: Boundary -> Place -> Place
 subSpace = subSpaceF (flip (\\))
@@ -436,6 +417,28 @@ divideSpaceG r s = generate (\a -> r +\ (oppositesOfRegion a s)) (head r)
 divideSpaceH :: [(Region,Region)] -> [Region] -> [Region] -> [Region]
 divideSpaceH m a b = (image (a +\ b) m) ++ b
 
+-- return space with given region changed to its local opposite
+migrateSpace :: Region -> Space -> Space
+migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (spaceToPlace s)
+
+migrateSpaceF :: [Boundary] -> Region -> (Boundary,[[Region]]) -> [[Region]]
+migrateSpaceF b r (a,s)
+ | (elem a b) && (elem r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
+ | (elem a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
+ | otherwise = s
+
+-- return whether local opposite of given region is empty
+-- and all of its oppositeOf regions are non-empty
+migrateSpaceExists :: Region -> Space -> Bool
+migrateSpaceExists r s = let
+ boundaries = attachedBoundaries r s
+ sides = sidesOfRegion r s
+ opposite = oppositeOfSides boundaries sides
+ empty = not (regionOfSidesExists opposite s)
+ neighbors = map (\a -> oppositeOfSides [a] opposite) boundaries
+ exists = map (\a -> regionOfSidesExists a s) neighbors
+ in fold' (\a b -> a && b) exists empty
+
 -- return regions in second homeomorphic to regions in first
 takeRegions :: Place -> Place -> [Region]
 takeRegions s t = let
@@ -446,20 +449,9 @@ takeRegions s t = let
  tSub = map2 (\x -> sort (shared +\ x)) dual
  in preimage sSub (zipPlual regions tSub)
 
-takeEmbed :: [Region] -> Place -> Place -> [Region]
-takeEmbed r s t = takeRegions (embedSpace r s) t
-
--- all possible regions
-powerSpace :: [Boundary] -> Place
-powerSpace b = let
- count = length b
- regions = indices (shift 1 count)
- boundaries = indices count
- in map (\(x,y) -> (y, [powerSpaceF x regions 0, powerSpaceF x regions 1])) (zip boundaries b)
-
--- regions indicated by boundary as bit position
-powerSpaceF :: Int -> [Int] -> Int -> [Region]
-powerSpaceF b r s = map Region (filter (\y -> (boolToSide (testBit y b)) == (Side s)) r)
+-- reverse sidedness of given boundary
+mirrorSpace :: Boundary -> Place -> Place
+mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
 -- remove region to produce non-linear space
 degenSpace :: Region -> Place -> Place
@@ -472,6 +464,18 @@ embedSpace r s = let
  regions = regionsOfPlace s
  unregions = regions \\ r
  in fold' degenSpace unregions s
+
+-- all possible regions
+powerSpace :: [Boundary] -> Place
+powerSpace b = let
+ count = length b
+ regions = indices (shift 1 count)
+ boundaries = indices count
+ in map (\(x,y) -> (y, [powerSpaceF x regions 0, powerSpaceF x regions 1])) (zip boundaries b)
+
+-- regions indicated by boundary as bit position
+powerSpaceF :: Int -> [Int] -> Int -> [Region]
+powerSpaceF b r s = map Region (filter (\y -> (boolToSide (testBit y b)) == (Side s)) r)
 
 -- divide regions by space into non-linear space
 crossSpace :: Place -> Place -> Place
@@ -488,10 +492,6 @@ crossSpace s t = let
  sCross = map2 (\x -> preimage (sPairs x) mapping) sSpace
  tCross = map2 (\x -> preimage (tPairs x) mapping) tSpace
  in (zipPlace sBounds sCross) ++ (zipPlace tBounds tCross)
-
--- reverse sidedness of given boundary
-mirrorSpace :: Boundary -> Place -> Place
-mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 
 -- each dual region of superspace is superset of some dual region of subspace
 isSubSpace :: Place -> Place -> Bool
@@ -513,15 +513,15 @@ isSectionSpace s t = let
 plualToPlace :: Plual -> Place
 plualToPlace s = let
  bounds = boundariesOfDual (plualToDual s)
- left = map (\x -> (x,domain (filter (\(_,[y,_]) -> member x y) s))) bounds
- right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) bounds
+ left = map (\x -> (x,domain (filter (\(_,[y,_]) -> elem x y) s))) bounds
+ right = map (\x -> domain (filter (\(_,[_,y]) -> elem x y) s)) bounds
  in map (\((x,y),z) -> (x,[y,z])) (zip left right)
 
 placeToPlual :: Place -> Plual
 placeToPlual s = let
  regions = regionsOfSpace (placeToSpace s)
- left = map (\x -> (x,domain (filter (\(_,[y,_]) -> member x y) s))) regions
- right = map (\x -> domain (filter (\(_,[_,y]) -> member x y) s)) regions
+ left = map (\x -> (x,domain (filter (\(_,[y,_]) -> elem x y) s))) regions
+ right = map (\x -> domain (filter (\(_,[_,y]) -> elem x y) s)) regions
  in map (\((x,y),z) -> (x,[y,z])) (zip left right)
 
 placeToDual :: Place -> Dual
@@ -608,7 +608,7 @@ allSpacesF [] s todo done = allSpacesH todo (insert s done)
 -- if migration not already done or todo, recurse with migration added to todo
 allSpacesG :: [Region] -> Space -> Space -> [Space] -> [Space] -> [Space]
 allSpacesG r s t todo done
- | (s == t) || (member t todo) || (member t done) = allSpacesF r s todo done
+ | (s == t) || (elem t todo) || (elem t done) = allSpacesF r s todo done
  | otherwise = allSpacesF r s (insert t todo) done
 
 -- recurse with choice removed from todo
@@ -777,12 +777,12 @@ refineSpaceF s t (a,b,c,p,q) = let
 -- add transposed boundary to fullspace
 refineSpaceG :: Boundary -> Boundary -> Side -> ([[Boundary]],[[Boundary]]) -> [[Boundary]]
 refineSpaceG a b (Side 0) ([s,t],[u,v])
- | member b s = [a:u,v]
- | member b t = [u,a:v]
+ | elem b s = [a:u,v]
+ | elem b t = [u,a:v]
  | otherwise = [u,v]
 refineSpaceG a b (Side 1) ([s,t],[u,v])
- | member b s = [u,a:v]
- | member b t = [a:u,v]
+ | elem b s = [u,a:v]
+ | elem b t = [a:u,v]
  | otherwise = [u,v]
 refineSpaceG _ _ _ _ = undefined
 
@@ -1081,7 +1081,7 @@ planesFromSpace n s
  | m <= n = take m (Matrix.toColumns (Matrix.ident n))
  | n == 1 = let
   [[[region],_]] = filter (\[x,_] -> (length x) == 1) s
-  half = map (\[x,y] -> if member region x then x else y) s
+  half = map (\[x,y] -> if elem region x then x else y) s
   scalar = map (\x -> 1.0 * (fromIntegral (length x))) half
   vector = map (\x -> Matrix.fromList [x]) scalar
   in map vectorToPlane vector

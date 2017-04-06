@@ -97,7 +97,7 @@ simplex = let
 extendSpace :: Int -> Space -> [Space]
 extendSpace 1 space = map (\x -> divideSpaceF [x] space) (regionsOfSpace space)
 extendSpace 2 space = let
- func x = map (\y -> map (\z -> filter (\a -> member a x) z) y) space
+ func x = map (\y -> map (\z -> filter (\a -> elem a x) z) y) space
  boundaries = boundariesOfSpace space
  regions = regionsOfSpace space
  num = defineLinear 1 (length boundaries)
