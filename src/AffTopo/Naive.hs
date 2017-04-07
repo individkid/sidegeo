@@ -17,9 +17,9 @@
 module AffTopo.Naive where
 
 import Prelude hiding ((++))
-import Data.List hiding ((\\), (++), insert)
-import Data.Maybe
-import Data.Bits
+import Data.List (sort, sortBy, foldl', elemIndex, findIndex, find)
+import Data.Maybe (fromJust)
+import Data.Bits (xor, shift, testBit)
 import qualified Numeric.LinearAlgebra as Matrix
 import qualified System.Random as Random
 
@@ -73,7 +73,7 @@ xorOfSide a b = boolToSide (xor (sideToBool a) (sideToBool b))
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets 0 _ = [[]]
 subsets _ [] = []
-subsets n (a:b) = (map (a:) (subsets (n-1) b)) `prepend` (subsets n b)
+subsets n (a:b) = (map (a:) (subsets (n-1) b)) `append` (subsets n b)
 
 power :: Ord a => [a] -> [[a]]
 power a = let
@@ -86,26 +86,17 @@ subset a b = image a (zip (indices (length b)) b)
 indices :: Num a => Int -> [a]
 indices n = take n (iterate (1+) 0)
 
-insert :: Ord a => a -> [a] -> [a]
-insert a b = if elem a b then b else a:b
-
-remove :: Eq a => a -> [a] -> [a]
-remove a b = filter (a /=) b
-
 unplace :: Int -> [a] -> [a]
-unplace a b = (take a b) `prepend` (drop (a+1) b)
+unplace a b = (take a b) `append` (drop (a+1) b)
 
 replace :: Int -> a -> [a] -> [a]
-replace a b c = (take a c) `prepend` (b : (drop (a+1) c))
+replace a b c = (take a c) `append` (b : (drop (a+1) c))
 
 emplace :: Int -> a -> [a] -> [a]
-emplace a b c = (take a c) `prepend` (b : (drop a c))
+emplace a b c = (take a c) `append` (b : (drop a c))
 
-append :: a -> [a] -> [a]
-append a b = b `prepend` [a]
-
-prepend :: [a] -> [a] -> [a]
-prepend a b = fold' (:) (reverse a) b
+append :: [a] -> [a] -> [a]
+append a b = fold' (:) (reverse a) b
 
 choose :: [a] -> a
 choose = head
@@ -127,7 +118,7 @@ range m = map snd m
 
 -- ++ is as in Data.List except welldef
 (++) :: Ord a => [a] -> [a] -> [a]
-a ++ b = a `prepend` (b \\ a)
+a ++ b = a `append` (b \\ a)
 
 (\\) :: Ord a => [a] -> [a] -> [a]
 a \\ b = slashSlashF (sort a) (sort b)
@@ -155,8 +146,8 @@ generateF :: Ord a => (a -> [a]) -> a -> [a] -> [a] -> [a]
 generateF f a todo done
  | null newTodo = newDone
  | otherwise = generateF f (head newTodo) (tail newTodo) newDone where
- newTodo = remove a (((f a) \\ done) ++ todo)
- newDone = insert a done
+ newTodo = (((f a) \\ done) ++ todo) \\ [a]
+ newDone = a : done
 
 -- given number of firsts found by calling function on second
 catalyze :: (g -> (a,g)) -> g -> Int -> ([a],g)
@@ -183,15 +174,6 @@ findMaybeF :: (a -> Maybe b) -> [a] -> Maybe b -> Maybe b
 findMaybeF _ _ (Just a) = Just a
 findMaybeF f (a:b) Nothing = findMaybeF f b (f a)
 findMaybeF _ [] Nothing = Nothing
-
--- O(n*log(n)) nub
-nub' :: Ord a => [a] -> [a]
-nub' = nubF . sort
-
-nubF :: Eq a => [a] -> [a]
-nubF (a:b:c) | a == b = nubF (a:c)
-nubF (a:b:c) | otherwise = a:(nubF (b:c))
-nubF a = a
 
 -- modify function taking single to function taking list
 fold' :: (a -> b -> b) -> [a] -> b -> b
@@ -423,8 +405,8 @@ migrateSpace r s = map (migrateSpaceF (attachedBoundaries r s) r) (spaceToPlace 
 
 migrateSpaceF :: [Boundary] -> Region -> (Boundary,[[Region]]) -> [[Region]]
 migrateSpaceF b r (a,s)
- | (elem a b) && (elem r (s !! 0)) = [(remove r (s !! 0)),(insert r (s !! 1))]
- | (elem a b) = [(insert r (s !! 0)),(remove r (s !! 1))]
+ | (elem a b) && (elem r (s !! 0)) = [((s !! 0) \\ [r]), (r : (s !! 1))]
+ | (elem a b) = [(r : (s !! 0)), ((s !! 1) \\ [r])]
  | otherwise = s
 
 -- return whether local opposite of given region is empty
@@ -457,7 +439,7 @@ mirrorSpace b s = map (\(x,[y,z]) -> if x == b then (x,[z,y]) else (x,[y,z])) s
 degenSpace :: Region -> Place -> Place
 degenSpace r s = let
  (bounds,space) = unzipPlace s
- in zipPlace bounds (map2 (remove r) space)
+ in zipPlace bounds (map2 (\x -> x \\ [r]) space)
 
 embedSpace :: [Region] -> Place -> Place
 embedSpace r s = let
@@ -603,13 +585,13 @@ allSpacesF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
 allSpacesF (p:q) s todo done
  | migrateSpaceExists p s = allSpacesG q s (equivSpace (migrateSpace p s)) todo done
  | otherwise = allSpacesF q s todo done
-allSpacesF [] s todo done = allSpacesH todo (insert s done)
+allSpacesF [] s todo done = allSpacesH todo (s : done)
 
 -- if migration not already done or todo, recurse with migration added to todo
 allSpacesG :: [Region] -> Space -> Space -> [Space] -> [Space] -> [Space]
 allSpacesG r s t todo done
  | (s == t) || (elem t todo) || (elem t done) = allSpacesF r s todo done
- | otherwise = allSpacesF r s (insert t todo) done
+ | otherwise = allSpacesF r s (t : todo) done
 
 -- recurse with choice removed from todo
 allSpacesH :: [Space] -> [Space] -> [Space]
@@ -725,7 +707,7 @@ refinePart :: Part -> Part -> [(Boundary,Boundary,Side,Part,Part)]
 refinePart _ [] = []
 refinePart p q = let
  term = Boundary (length p)
- done x = append x p
+ done x = p `append` [x]
  todo x = filter (\z -> (fst x) /= (fst z)) q
  tuple (x,y) = (term, x, y, done (x,y), todo (x,y))
  in map tuple q
@@ -845,7 +827,7 @@ topeFromSpace :: Int -> [Region] -> Place -> Tope
 topeFromSpace n r s = let
  (poly,tope) = until (topeFromSpaceF n) (topeFromSpaceG r s) ([[]],[])
  verts = map (\x -> (x,[])) poly
- in verts `prepend` tope
+ in verts `append` tope
 
 -- polyants of size dimension are vertex corners, so they have no subpolyants
 topeFromSpaceF :: Int -> ([Poly],Tope) -> Bool
@@ -855,14 +837,14 @@ topeFromSpaceF n (p, _) = (length (head p)) < n
 topeFromSpaceG :: [Region] -> Place -> ([Poly],Tope) -> ([Poly],Tope)
 topeFromSpaceG r s (p, q) = let
  tope = map (\x -> (x, topeFromSpaceH r s x)) p
- poly = nub' (concat (map snd tope))
- in (poly, tope `prepend` q)
+ poly = fold' (++) (map snd tope) []
+ in (poly, tope `append` q)
 
 -- filter subpolyants of one more boundary
 topeFromSpaceH :: [Region] -> Place -> Poly -> [Poly]
 topeFromSpaceH r s p = let
  extra = (boundariesOfPlace s) \\ (domain p)
- extend = concat (map (\x -> map (\y -> (x, (x, y) : p)) allSides) extra)
+ extend = concatMap (\x -> map (\y -> (x, (x, y) : p)) allSides) extra
  in map snd (filter (topeFromSpaceI r s) extend)
 
 -- filter by not empty after cancelling by neighbors wrt extra boundary
