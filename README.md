@@ -4,16 +4,16 @@ Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regi
 
 Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The default directory for human readable history and configuration is .sculpt/. The following command line arguments are processed in order.
 
--i start interactive mode  
--e \<metric> start animation that tweaks planes according to a metric  
--d \<directory> changes directory for history and configuration  
--n \<directory> clone history and configuration in new directory  
--o \<file> save polytope in format indicated by file extension  
--f \<file> load polytope in format indicated by file extension  
--l \<shape> replace current polytope by builtin polytope  
--t \<ident> change current polytope to one indicated by timestamp or name  
--s resample current space to planes with same sidedness  
--S resample current polytope to space and planes  
+  * -i start interactive mode  
+  * -e \<metric> start animation that tweaks planes according to a metric  
+  * -d \<directory> changes directory for history and configuration  
+  * -n \<directory> clone history and configuration in new directory  
+  * -o \<file> save polytope in format indicated by file extension  
+  * -f \<file> load polytope in format indicated by file extension  
+  * -l \<shape> replace current polytope by builtin polytope  
+  * -t \<ident> change current polytope to one indicated by timestamp or name  
+  * -s resample current space to planes with same sidedness  
+  * -S resample current polytope to space and planes  
 
 Left mouse button (de)selects pierce point(s). Right mouse button deselects pierce point(s) and changes the mode by menu.
 

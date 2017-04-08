@@ -18,7 +18,7 @@ module AffTopo.Naive where
 
 import Prelude hiding ((++))
 import Data.List (sort, sortBy, foldl', elemIndex, findIndex, find)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Bits (xor, shift, testBit)
 import qualified Numeric.LinearAlgebra as Matrix
 import qualified System.Random as Random
@@ -828,42 +828,49 @@ refineTopeI a b c (p,k) (q,l)
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
 topeFromSpace n r s = let
- (poly,tope) = until (topeFromSpaceF n) (topeFromSpaceG r s) ([[]],[])
- verts = map (\x -> (x,[])) poly
- in verts `append` tope
+ bounds = boundariesOfPlace s
+ poly x y = map (\z -> (z, boolToSide (elem z y))) x
+ ofsize x = [poly y z | y <- (subsets x bounds), z <- power y]
+ bysize = map ofsize (map succ (indices n))
+ (tuple,tope) = fold' topeFromSpaceF bysize ([([],r,s)],[])
+ virt = map (\(x,_,_) -> (x,[])) tuple
+ in virt `append` tope
 
--- polyants of size dimension are vertex corners, so they have no subpolyants
-topeFromSpaceF :: Int -> ([Poly],Tope) -> Bool
-topeFromSpaceF n (p, _) = (length (head p)) < n
+-- given all possible subpolys and info from all superpolys
+topeFromSpaceF :: [Poly] -> ([(Poly,[Region],Place)],Tope) -> ([(Poly,[Region],Place)],Tope)
+topeFromSpaceF sub (sup, p) = let
+ -- for each subpoly, find first superpoly that contains it
+ found = map (\x -> (x, find (\(y,_,_) -> null (y \\ x)) sup)) sub
+ -- find subpoly info from subpoly and superpoly that contains it
+ signif = mapMaybe topeFromSpaceG found
+ -- find maps from superpoly to subpolys
+ tope = map (topeFromSpaceH signif) sup
+ in (signif, tope `append` p)
 
--- for each polyant filter subpolyants of one more boundary
-topeFromSpaceG :: [Region] -> Place -> ([Poly],Tope) -> ([Poly],Tope)
-topeFromSpaceG r s (p, q) = let
- tope = map (\x -> (x, topeFromSpaceH r s x)) p
- poly = fold' (++) (map snd tope) []
- in (poly, tope `append` q)
-
--- filter subpolyants of one more boundary
-topeFromSpaceH :: [Region] -> Place -> Poly -> [Poly]
-topeFromSpaceH r s p = let
- extra = (boundariesOfPlace s) \\ (domain p)
- extend = concatMap (\x -> map (\y -> (x, (x, y) : p)) allSides) extra
- in map snd (filter (topeFromSpaceI r s) extend)
-
--- filter by not empty after cancelling by neighbors wrt extra boundary
-topeFromSpaceI :: [Region] -> Place -> (Boundary,Poly) -> Bool
-topeFromSpaceI r s (b, p) = let
+-- return nothing if there is no superpoly info or all regions are cancelled
+topeFromSpaceG :: (Poly, Maybe (Poly,[Region],Place)) -> Maybe (Poly,[Region],Place)
+topeFromSpaceG (_,Nothing) = Nothing
+topeFromSpaceG (sub, Just (sup, r, s)) = let
  (bounds,space) = unzipPlace s
- bound = Boundary (elemIndex' b bounds)
- poly = map (\(x,y) -> (Boundary (elemIndex' x bounds), y)) p
- subsection = takeRegions (unsectionSpace (domain p) s) s
- onside x (y, z) = (regionWrtBoundary y x space) == z
- onallside x = all (onside x) poly
- corners = filter onallside (subsection +\ r)
- neighbors = map (\x -> oppositeOfRegion [bound] x space) corners
- in not (null (neighbors \\ r))
+ [extra] = (domain sub) \\ (domain sup)
+ bound = Boundary (elemIndex' extra bounds)
+ section = sectionSpace extra s
+ taken = takeRegions section s
+ neighbors = map (\x -> oppositeOfRegion [bound] x space) taken
+ signif (x,y) = (elem x r) && (not (elem y r))
+ pairs = filter signif (zip taken neighbors)
+ degen = embedSpace (domain pairs) s
+ regions = takeRegions degen section
+ in if null regions then Nothing else Just (sub,regions,section)
 
---- find sample space that polytope could be embedded in
+-- filter to subpolys that are supersets of superpoly
+topeFromSpaceH :: [(Poly,[Region],Place)] -> (Poly,[Region],Place) -> (Poly,[Poly])
+topeFromSpaceH sub (sup,_,_) = let
+ filtered = filter (\(x,_,_) -> null (sup \\ x)) sub
+ mapped = map (\(x,_,_) -> x) filtered
+ in (sup, mapped)
+
+---- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
 spaceFromTope = undefined
  -- add boundary at a time, using vertex regions and edge paths to get partial sidedness information
