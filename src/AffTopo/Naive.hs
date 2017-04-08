@@ -73,7 +73,7 @@ xorOfSide a b = boolToSide (xor (sideToBool a) (sideToBool b))
 subsets :: Ord a => Int -> [a] -> [[a]]
 subsets 0 _ = [[]]
 subsets _ [] = []
-subsets n (a:b) = (map (a:) (subsets (n-1) b)) `append` (subsets n b)
+subsets n (a:b) = (map (a:) (subsets (pred n) b)) `append` (subsets n b)
 
 power :: Ord a => [a] -> [[a]]
 power a = let
@@ -87,10 +87,10 @@ indices :: Num a => Int -> [a]
 indices n = take n (iterate (1+) 0)
 
 unplace :: Int -> [a] -> [a]
-unplace a b = (take a b) `append` (drop (a+1) b)
+unplace a b = (take a b) `append` (drop (succ a) b)
 
 replace :: Int -> a -> [a] -> [a]
-replace a b c = (take a c) `append` (b : (drop (a+1) c))
+replace a b c = (take a c) `append` (b : (drop (succ a) c))
 
 emplace :: Int -> a -> [a] -> [a]
 emplace a b c = (take a c) `append` (b : (drop a c))
@@ -121,7 +121,7 @@ range m = map snd m
 a ++ b = a `append` (b \\ a)
 
 (\\) :: Ord a => [a] -> [a] -> [a]
-a \\ b = slashSlashF (sort a) (sort b)
+a \\ b = slashSlashF (checkSort a) (checkSort b)
 
 slashSlashF :: Ord a => [a] -> [a] -> [a]
 slashSlashF (a:b) (c:d)
@@ -133,10 +133,6 @@ slashSlashF a _ = a
 -- intersection
 (+\) :: Ord a => [a] -> [a] -> [a]
 a +\ b = a \\ (a \\ b)
-
--- symmetric difference
-(\+) :: Ord a => [a] -> [a] -> [a]
-a \+ b = (a ++ b) \\ (a +\ b)
 
 -- all connected by given function to given start
 generate :: Ord a => (a -> [a]) -> a -> [a]
@@ -175,6 +171,15 @@ findMaybeF _ _ (Just a) = Just a
 findMaybeF f (a:b) Nothing = findMaybeF f b (f a)
 findMaybeF _ [] Nothing = Nothing
 
+checkSort :: Ord a => [a] -> [a]
+checkSort a = if (checkSortF a) then a else sort a
+
+checkSortF :: Ord a => [a] -> Bool
+checkSortF (a:b:c)
+ | a > b = False
+ | otherwise = checkSortF (b:c)
+checkSortF _ = True
+
 -- modify function taking single to function taking list
 fold' :: (a -> b -> b) -> [a] -> b -> b
 fold' f a b = foldl' (\x y -> f y x) b a
@@ -200,7 +205,7 @@ defineLinear :: Int -> Int -> Int
 defineLinear n m
  | (n < 0) || (m < 0) = undefined
  | (n == 0) || (m == 0) = 1
- | otherwise = (defineLinear n (m-1)) + (defineLinear (n-1) (m-1))
+ | otherwise = (defineLinear n (pred m)) + (defineLinear (pred n) (pred m))
 
 -- return whether all subspaces have correct number of regions
 isLinear :: Int -> Space -> Bool
@@ -427,8 +432,8 @@ takeRegions s t = let
  shared = (boundariesOfPlace s) +\ (boundariesOfPlace t)
  plual = placeToPlual t
  (regions,dual) = unzipPlual plual
- sSub = map2 (\x -> sort (shared +\ x)) (placeToDual s)
- tSub = map2 (\x -> sort (shared +\ x)) dual
+ sSub = map2 (\x -> checkSort (shared +\ x)) (placeToDual s)
+ tSub = map2 (\x -> checkSort (shared +\ x)) dual
  in preimage sSub (zipPlual regions tSub)
 
 -- reverse sidedness of given boundary
@@ -633,7 +638,7 @@ rabbitSpace n s t
  | n >= 2 = let
   sSect = sectionSpace sBound s
   tSect = sectionSpace tBound t
-  sect = snakeSpace (n-1) (n-1) n sSect tSect place
+  sect = snakeSpace (pred n) (pred n) n sSect tSect place
   sSup = divideSpace tBound sect sSect 
   tSup = concatMap (\x -> divideSpace sBound x t) sSup
   in choose (filter (rabbitSpaceF n s t) tSup)
@@ -677,7 +682,7 @@ snakeSpace p q n s t u
   uSub = subSpace bound u
   uSect = sectionSpace bound u
   sub = snakeSpace p q n sSub tSub uSub
-  sect = snakeSpace dim (n-1) n sub uSect uSub
+  sect = snakeSpace dim (pred n) n sub uSect uSub
   result = divideSpace bound sect sub
   in choose (filter (snakeSpaceF s t) result)
  | otherwise = undefined where
@@ -707,9 +712,9 @@ refinePart :: Part -> Part -> [(Boundary,Boundary,Side,Part,Part)]
 refinePart _ [] = []
 refinePart p q = let
  term = Boundary (length p)
- done x = p `append` [x]
- todo x = filter (\z -> (fst x) /= (fst z)) q
- tuple (x,y) = (term, x, y, done (x,y), todo (x,y))
+ done (x,y) = p `append` [(x,y)]
+ todo x = filter (\(y,_) -> x /= y) q
+ tuple (x,y) = (term, x, y, done (x,y), todo x)
  in map tuple q
 
 -- starting partial permutation
@@ -758,14 +763,12 @@ refineSpaceF s t (a,b,c,p,q) = let
 
 -- add transposed boundary to fullspace
 refineSpaceG :: Boundary -> Boundary -> Side -> ([[Boundary]],[[Boundary]]) -> [[Boundary]]
-refineSpaceG a b (Side 0) ([s,t],[u,v])
+refineSpaceG a b (Side 0) ([s,_],[u,v])
  | elem b s = [a:u,v]
- | elem b t = [u,a:v]
- | otherwise = [u,v]
-refineSpaceG a b (Side 1) ([s,t],[u,v])
+ | otherwise = [u,a:v]
+refineSpaceG a b (Side 1) ([s,_],[u,v])
  | elem b s = [u,a:v]
- | elem b t = [a:u,v]
- | otherwise = [u,v]
+ | otherwise = [a:u,v]
 refineSpaceG _ _ _ _ = undefined
 
 --
@@ -854,7 +857,9 @@ topeFromSpaceI r s (b, p) = let
  bound = Boundary (elemIndex' b bounds)
  poly = map (\(x,y) -> (Boundary (elemIndex' x bounds), y)) p
  subsection = takeRegions (unsectionSpace (domain p) s) s
- corners = filter (\x -> all (\(y,z) -> (regionWrtBoundary y x space) == z) poly) subsection
+ onside x (y, z) = (regionWrtBoundary y x space) == z
+ onallside x = all (onside x) poly
+ corners = filter onallside (subsection +\ r)
  neighbors = map (\x -> oppositeOfRegion [bound] x space) corners
  in not (null (neighbors \\ r))
 
@@ -896,7 +901,7 @@ randomPlanesF i j k n m (a,g) = let
 -- use function to replace choice from given tuple
 randomPlanesG :: Random.RandomGen g => ((Plane, g) -> (Plane, g)) -> ([Plane], g) -> [Int] -> ([Plane], g)
 randomPlanesG f (a,g) b = let
- (c,h) = Random.randomR (0,(length b)-1) g
+ (c,h) = Random.randomR (0, pred (length b)) g
  d = b !! c
  (e,i) = f (a !! d, h)
  in (replace d e a, i)
@@ -908,7 +913,7 @@ randomPlanesH0 n m = randomPlanesF randomPlanesI0 randomPlanesJ0 randomPlanesK0 
 randomPlanesI0 :: Random.RandomGen g => (Plane, g) -> (Plane, g)
 randomPlanesI0 (a,g) = let
  b = Matrix.toList a
- c = (b !! ((length b)-1)) / 2.0
+ c = (b !! (pred (length b))) / 2.0
  in (Matrix.fromList (map (\x -> x - c) b), g)
 
 randomPlanesJ0 :: Maybe Point -> Bool
@@ -1000,8 +1005,8 @@ isAbovePlane v w = let
  planeL = Matrix.toList w
  pointS = last pointL
  planeS = last planeL
- pointT = take ((length pointL)-1) pointL
- planeT = take ((length planeL)-1) planeL
+ pointT = take (pred (length pointL)) pointL
+ planeT = take (pred (length planeL)) planeL
  pointV = Matrix.fromList pointT
  planeV = Matrix.fromList (map (\x -> x - planeS) planeT)
  in pointS > ((Matrix.dot planeV pointV) + planeS)
@@ -1017,8 +1022,8 @@ spaceFromPlanes n w
   scalar = map (\x -> head (Matrix.toList x)) vector
   sorted = sortBy compare scalar
   index = map (\x -> elemIndex' x sorted) scalar
-  left = map (\x -> indices (x+1)) index
-  right = map (\x -> map ((x+1)+) (indices (m-x))) index
+  left = map (\x -> indices (succ x)) index
+  right = map (\x -> map ((succ x)+) (indices (m-x))) index
   full = map (\(x,y) -> [x,y]) (zip left right)
   in map3 Region full
  | otherwise = let
@@ -1032,7 +1037,7 @@ spaceFromPlanes n w
   sample = take n planes
   vertex = take n bounds
   -- find intersection points on plane to add
-  tuples = subsets (n-1) indexes
+  tuples = subsets (pred n) indexes
   vertices = map (\x -> plane:(subset x planes)) tuples
   points = map (\x -> fromJust (intersectPlanes n x)) vertices
   -- convert intersection points to sides and take to space
