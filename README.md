@@ -17,16 +17,16 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
 
 Left mouse button (de)selects pierce point(s). Right mouse button deselects pierce point(s) and changes the mode by menu.
 
-' 'Mouse -- submode of Transform for action of mouse motion  
-'  'Rotate -- rotate about pierce point  
-'  'Translate -- slide starting from pierce point  
-'  'Look -- rotate about focal point  
-' 'Roller -- submode of Transform for action of roller button  
-'  'Rotate -- rotate about line on pierce and focal points  
-'  'Scale -- bigger or smaller with pierce point fixed  
-'  'Drive -- move picture plane forward or back  
-' 'Transform -- multiply the model view matrix  
-' 'Refine -- add random boundary through pierce point  
-' 'Additive -- add faces around region above pierce point  
-' 'Subtractive -- remove face of pierce point  
-' 'Drag -- pin first two and move third pierce point by mouse and roller  
+  * Mouse -- submode of Transform for action of mouse motion  
+    * Rotate -- rotate about pierce point  
+    * Translate -- slide starting from pierce point  
+    * Look -- rotate about focal point  
+  * Roller -- submode of Transform for action of roller button  
+    * Rotate -- rotate about line on pierce and focal points  
+    * Scale -- bigger or smaller with pierce point fixed  
+    * Drive -- move picture plane forward or back  
+  * Transform -- multiply the model view matrix  
+  * Refine -- add random boundary through pierce point  
+  * Additive -- add faces around region above pierce point  
+  * Subtractive -- remove face of pierce point  
+  * Drag -- pin first two and move third pierce point by mouse and roller  
