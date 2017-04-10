@@ -44,3 +44,17 @@ executable test
                        random
   hs-source-dirs:      src
   other-modules:       AffTopo.Naive
+
+executable sculpt
+  main-is:             Main.c
+  default-language:    Haskell2010
+  ghc-options:         -Wall /usr/local/lib/libglut.a
+  build-depends:       base >=4.8 && <4.9
+  extra-libraries:     GL,
+                       X11,
+                       Xrandr,
+                       Xxf86vm,
+                       Xi
+  hs-source-dirs:      src
+  other-modules:       AffTopo.Sculpt
+  
