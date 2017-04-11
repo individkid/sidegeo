@@ -18,8 +18,8 @@
 
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
-#include "AffTopo/Sculpt_stub.h"
-extern void __stginit_AffTopoziSculpt(void);
+#include "Main_stub.h"
+extern void __stginit_Main(void);
 #endif
 
 #include <stdio.h>
@@ -48,7 +48,7 @@ int glfw(int arg)
 {
     hs_init(0, 0);
 #ifdef __GLASGOW_HASKELL__
-    hs_add_root(__stginit_AffTopoziSculpt);
+    hs_add_root(__stginit_Main);
 #endif
 
 

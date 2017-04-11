@@ -1,4 +1,4 @@
---    Glfw wrapper start glfw wait loop
+--    Glfw start glfw wait loop
 --    Copyright (C) 2016  Paul Coelho
 --
 --    This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import Foreign.C.Types
 import AffTopo.Sculpt
 
 foreign import ccall "glfw" c_glfw :: CInt -> CInt
+foreign export ccall fibonacci_hs :: CInt -> CInt
 
 main :: IO ()
 main = putStrLn (show (c_glfw 0))

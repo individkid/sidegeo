@@ -14,8 +14,6 @@
 --    You should have received a copy of the GNU General Public License
 --    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE ForeignFunctionInterface #-}
-
 module AffTopo.Sculpt where
 
 import Foreign.C.Types
@@ -27,4 +25,3 @@ fibonacci n = fibs !! n
 fibonacci_hs :: CInt -> CInt
 fibonacci_hs = fromIntegral . fibonacci . fromIntegral
 
-foreign export ccall fibonacci_hs :: CInt -> CInt
