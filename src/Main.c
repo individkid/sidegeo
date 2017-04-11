@@ -23,11 +23,11 @@
 extern void __stginit_AffTopoziSculpt(void);
 #endif
 
-#include <GL/glut.h>
-#include <GL/freeglut_ext.h>
+#include <GLFW/glfw3.h>
 
+int fibonacci_hs(int);
 
-void displayMe(void)
+void displayMe()
 {
     glClear(GL_COLOR_BUFFER_BIT);
     glBegin(GL_POLYGON);
@@ -36,15 +36,12 @@ void displayMe(void)
         glVertex3f(0.5, 0.5, 0.0);
         glVertex3f(0.0, 0.5, 0.0);
     glEnd();
-    glFlush();
 }
 
-void displayVersion(int x, int y)
+void displayPosition(GLFWwindow *window, int x, int y)
 {
-	printf("position %d %d\n", x, y);
+    printf("position %d %d\n", x, y);
 }
-
-int fibonacci_hs(int);
 
 int main(int argc, char *argv[])
 {
@@ -55,15 +52,18 @@ int main(int argc, char *argv[])
 
 	printf("Fibonacci: %d\n", fibonacci_hs(42));
 
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_SINGLE);
-    glutInitWindowSize(300, 300);
-    glutInitWindowPosition(100, 100);
-    glutCreateWindow("Hello world :D");
-    glutDisplayFunc(displayMe);
-    glutPositionFunc(displayVersion);
-    glutMainLoop();
-
+    GLFWwindow* window;
+    if (!glfwInit()) return -1;
+    window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
+    if (!window) {glfwTerminate(); return -1;}
+    glfwSetWindowPosCallback(window, displayPosition);
+    glfwMakeContextCurrent(window);
+    while (!glfwWindowShouldClose(window)) {
+        displayMe();
+        glfwSwapBuffers(window);
+        glfwWaitEvents();}
+    glfwTerminate();
 	hs_exit();
 	return 0;
 }
+
