@@ -35,7 +35,7 @@ library
   hs-source-dirs:      src
 
 executable test
-  main-is:             Main.hs
+  main-is:             Test.hs
   other-modules:       AffTopo.Naive
   default-language:    Haskell2010
   ghc-options:         -Wall
@@ -47,25 +47,26 @@ executable test
   extra-lib-dirs:      /usr/lib
 
 executable sculpt
-  main-is:             Main.c
+  main-is:             Main.hs
   other-modules:       AffTopo.Sculpt
   default-language:    Haskell2010
   ghc-options:         -Wall
   build-depends:       base >=4.8 && <4.9
   hs-source-dirs:      src
+  c-sources:           src/Glfw.c
   if os(linux)
-    extra-libraries:     GLEW,
-                         glfw3,
-                         GL,
-                         X11,
-                         Xi,
-                         Xrandr,
-                         Xxf86vm,
-                         Xinerama,
-                         Xcursor,
-                         rt,
-                         m,
-                         pthread
+    extra-libraries:   GLEW,
+                       glfw3,
+                       GL,
+                       X11,
+                       Xi,
+                       Xrandr,
+                       Xxf86vm,
+                       Xinerama,
+                       Xcursor,
+                       rt,
+                       m,
+                       pthread
   if os(osx)
     extra-libraries:   glfw3
     frameworks:        Cocoa,

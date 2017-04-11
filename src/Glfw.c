@@ -16,12 +16,13 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
-
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
+#include "AffTopo/Sculpt_stub.h"
 extern void __stginit_AffTopoziSculpt(void);
 #endif
+
+#include <stdio.h>
 
 #include <GLFW/glfw3.h>
 
@@ -43,14 +44,21 @@ void displayPosition(GLFWwindow *window, int x, int y)
     printf("position %d %d\n", x, y);
 }
 
-int main(int argc, char *argv[])
+int glfw(int arg)
 {
-	hs_init(&argc, &argv);
+    hs_init(0, 0);
 #ifdef __GLASGOW_HASKELL__
-	hs_add_root(__stginit_AffTopoziSculpt);
+    hs_add_root(__stginit_AffTopoziSculpt);
 #endif
 
-	printf("Fibonacci: %d\n", fibonacci_hs(42));
+
+#ifdef __APPLE__
+    printf("osx\n");    
+#endif
+#ifdef __linux__
+    printf("linux\n");
+#endif
+    printf("Fibonacci: %d\n", fibonacci_hs(42));
 
     GLFWwindow* window;
     if (!glfwInit()) return -1;
@@ -63,7 +71,8 @@ int main(int argc, char *argv[])
         glfwSwapBuffers(window);
         glfwWaitEvents();}
     glfwTerminate();
-	hs_exit();
-	return 0;
+
+    hs_exit();
+    return 0;
 }
 
