@@ -1,5 +1,5 @@
 /*
-*    OpenGL interface for AffTopo
+*    Glfw.c interface to GLFW, OpenGL, and state cache of delta history
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -26,8 +26,6 @@ extern void __stginit_Main(void);
 
 #include <GLFW/glfw3.h>
 
-int fibonacci_hs(int);
-
 void displayMe()
 {
     glClear(GL_COLOR_BUFFER_BIT);
@@ -44,22 +42,8 @@ void displayPosition(GLFWwindow *window, int x, int y)
     printf("position %d %d\n", x, y);
 }
 
-int glfw(int arg)
+int glfw()
 {
-    hs_init(0, 0);
-#ifdef __GLASGOW_HASKELL__
-    hs_add_root(__stginit_Main);
-#endif
-
-
-#ifdef __APPLE__
-    printf("osx\n");    
-#endif
-#ifdef __linux__
-    printf("linux\n");
-#endif
-    printf("Fibonacci: %d\n", fibonacci_hs(42));
-
     GLFWwindow* window;
     if (!glfwInit()) return -1;
     window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
@@ -71,8 +55,34 @@ int glfw(int arg)
         glfwSwapBuffers(window);
         glfwWaitEvents();}
     glfwTerminate();
-
-    hs_exit();
     return 0;
 }
 
+void showInt(char *src, int len, char *dst);
+
+void initialize(int argc, char **argv)
+{
+#ifdef __GLASGOW_HASKELL__
+    hs_add_root(__stginit_Main);
+#endif
+#ifdef __APPLE__
+    printf("osx\n");    
+#endif
+#ifdef __linux__
+    printf("linux\n");
+#endif
+}
+
+void finalize()
+{
+}
+
+int waitForEvent()
+{
+    return -1;
+}
+
+char *commandArg()
+{
+    return 0;
+}

@@ -18,11 +18,49 @@
 
 module Main where
 
+import Data.Char
+import System.Environment
+import Foreign.Ptr
+import Foreign.Marshal.Alloc
+import Foreign.Marshal.Array
 import Foreign.C.Types
+import Foreign.C.String
 import AffTopo.Sculpt
 
-foreign import ccall "glfw" c_glfw :: CInt -> CInt
-foreign export ccall fibonacci_hs :: CInt -> CInt
+foreign export ccall "showIntHs" showInt :: Ptr CChar -> CInt -> Ptr CChar -> IO ()
+
+foreign import ccall "initialize" initializeC :: CInt -> Ptr (Ptr CChar) -> IO ()
+foreign import ccall "finalize" finalizeC :: IO ()
+foreign import ccall "waitForEvent" waitForEventC :: IO CInt
+
+showInt :: Ptr CChar -> CInt -> Ptr CChar -> IO ()
+showInt = undefined
 
 main :: IO ()
-main = putStrLn (show (c_glfw 0))
+main = do
+ args <- getArgs
+ let cargs = map (map castCharToCChar) args
+ let term = castCharToCChar (chr 0)
+ ptrs <- mapM (newArray0 term) cargs
+ ptr <- newArray ptrs
+ initializeC (fromIntegral (length ptrs)) ptr
+ mainF
+ free ptr
+ mapM_ free ptrs
+
+mainF :: IO ()
+mainF = do
+ code <- waitForEventC
+ mainG (fromIntegral code)
+
+mainG :: Int -> IO ()
+mainG 0 = do
+ handleSideband
+ mainF
+mainG 1 = do
+ handleLeft
+ mainF
+mainG 2 = do
+ handleRight
+ mainF
+mainG _ = finalizeC

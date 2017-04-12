@@ -48,11 +48,16 @@ executable test
 
 executable sculpt
   main-is:             Main.hs
-  other-modules:       AffTopo.Sculpt
+  other-modules:       AffTopo.Sculpt,
+                       AffTopo.Naive
   default-language:    Haskell2010
   ghc-options:         -Wall
-  build-depends:       base >=4.8 && <4.9
+  build-depends:       base >=4.8 && <4.9,
+                       containers,
+                       hmatrix,
+                       random
   hs-source-dirs:      src
+  extra-lib-dirs:      /usr/lib
   c-sources:           src/Glfw.c
   if os(linux)
     extra-libraries:   GLEW,

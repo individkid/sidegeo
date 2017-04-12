@@ -14,14 +14,24 @@
 --    You should have received a copy of the GNU General Public License
 --    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-# LANGUAGE ForeignFunctionInterface #-}
+
 module AffTopo.Sculpt where
 
+import Foreign.Ptr
 import Foreign.C.Types
+import AffTopo.Naive
 
-fibonacci :: Int -> Int
-fibonacci n = fibs !! n
-    where fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
+foreign import ccall "commandArg" commandArgC :: IO (Ptr CChar)
 
-fibonacci_hs :: CInt -> CInt
-fibonacci_hs = fromIntegral . fibonacci . fromIntegral
+removeMe :: [Side]
+removeMe = allSides
 
+handleSideband :: IO ()
+handleSideband = undefined
+
+handleLeft :: IO ()
+handleLeft = undefined
+
+handleRight :: IO ()
+handleRight = undefined
