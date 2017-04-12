@@ -17,10 +17,6 @@
 */
 
 #include <HsFFI.h>
-#ifdef __GLASGOW_HASKELL__
-#include "Main_stub.h"
-extern void __stginit_Main(void);
-#endif
 
 #include <stdio.h>
 
@@ -58,13 +54,8 @@ int glfw()
     return 0;
 }
 
-void showInt(char *src, int len, char *dst);
-
 void initialize(int argc, char **argv)
 {
-#ifdef __GLASGOW_HASKELL__
-    hs_add_root(__stginit_Main);
-#endif
 #ifdef __APPLE__
     printf("osx\n");    
 #endif
@@ -82,7 +73,16 @@ int waitForEvent()
     return -1;
 }
 
-char *commandArg()
+char *command()
 {
     return 0;
+}
+
+char *generic(int *indices, int size)
+{
+    return 0;
+}
+
+void history(int *indices)
+{
 }

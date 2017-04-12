@@ -27,14 +27,9 @@ import Foreign.C.Types
 import Foreign.C.String
 import AffTopo.Sculpt
 
-foreign export ccall "showIntHs" showInt :: Ptr CChar -> CInt -> Ptr CChar -> IO ()
-
 foreign import ccall "initialize" initializeC :: CInt -> Ptr (Ptr CChar) -> IO ()
 foreign import ccall "finalize" finalizeC :: IO ()
 foreign import ccall "waitForEvent" waitForEventC :: IO CInt
-
-showInt :: Ptr CChar -> CInt -> Ptr CChar -> IO ()
-showInt = undefined
 
 main :: IO ()
 main = do

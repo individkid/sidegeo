@@ -22,7 +22,9 @@ import Foreign.Ptr
 import Foreign.C.Types
 import AffTopo.Naive
 
-foreign import ccall "commandArg" commandArgC :: IO (Ptr CChar)
+foreign import ccall "command" commandC :: IO (Ptr CChar)
+foreign import ccall "generic" genericC :: Ptr CInt -> CInt -> IO (Ptr CChar)
+foreign import ccall "history" historyC :: Ptr CInt -> IO ()
 
 removeMe :: [Side]
 removeMe = allSides
