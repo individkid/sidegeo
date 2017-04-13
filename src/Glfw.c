@@ -23,9 +23,11 @@ extern void __stginit_Main(void);
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <GLFW/glfw3.h>
 
+/*state modified by command line options*/
 int interactive = 0;
 int configured = 0;
 int mustExist = 0;
@@ -33,22 +35,32 @@ int mustNotExist = 0;
 int historyFd = 0;
 char *metricScript = 0;
 char *directory = 0;
+/*command line data accessed by functions called from Haskell*/
 char *commandData = 0;
 char *argumentData = 0;
-char *genericData = 0;
-char *vertexData = 0;
-char *normalData = 0;
+char **commandLine = 0;
+/*current state modified by functions called from Haskell*/
+double *genericData = 0;
+double *wireFrameData = 0;
+double *vertexData = 0;
+double *normalData = 0;
 int *indexData = 0;
 int *rangeData = 0;
-int *wireFrameData = 0;
-double **modelData = 0;
-double **perspectiveData = 0;
-double **dragData = 0;
+/*maps from vertex/cursor/window modified by functions called from Haskell*/
+double **modelData = 0; // for model transformation
+double **perspectiveData = 0; // for perspective transformation
+double **dragData = 0; // for wireframe vertices
+/*user input data accessed by functions called from Haskell*/
 double **clickData = 0;
-enum {Sideband,Left,Right} eventMode = Sideband;
+enum {Left,Right} clickMode = Left;
 enum {Transform,Refine,Additive,Subractive,Drag} majorMode = Transform;
 enum {Sphere,Translate,Look} mouseMode = Sphere;
 enum {Cylinder,Scale,Drive} rollerMode = Cylinder;
+/*user inputs processed once per call to waitForEvent*/
+enum {Click,Menu,Command,Events} *events = 0;
+/*update functions to call before rendering at start of waitForEvent*/
+enum {Generic,WireFrame,Vertex,Normal,Index,Range,Updates} *updates = 0;
+void **bindings = 0;
 
 int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
 int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*/ *buf);
@@ -92,6 +104,16 @@ int randomize()
 
 int configure()
 {
+    if (configured) return 0;
+    // load light directions and colors
+    // ensure indices are empty on first history line
+    // read format and bytes from first history line
+    // for each subsequent history line,
+        // read indices, find subformat, read bytes
+        // find replaced range and replacement size
+        // replace range by bytes read from history
+    // reopen history for append
+    // perform initial rendering
     return -1;
 }
 
@@ -156,25 +178,26 @@ void initialize(int argc, char **argv)
 #ifdef __linux__
     printf("linux\n");
 #endif
-    for (int i = 0; i < argc; i++) {
-        printf("arg %d is %s\n", i, argv[i]);}
-    // ensure indices are empty on first history line
-    // read format and bytes from first history line
-    // for each subsequent history line,
-        // read indices, find subformat, read bytes
-        // find replaced range and replacement size
-        // replace range by bytes read from history
-    // reopen history for append
+    for (int i = 0; i < argc; i++) printf("arg %d is %s\n", i, argv[i]);
+    if (commandLine == 0) {
+        commandLine = malloc((argc + 1) * sizeof(char *));
+        for (int i = 0; i < argc; i++) commandLine[i] = argv[i];
+        commandLine[argc] = 0;}
+    configure();
 }
 
 void finalize()
 {
+    if (commandLine != 0) free(commandLine);
 }
 
-// uses global args, argCounter, and callback flags
-int waitForEvent()
+void waitForEvent()
 {
-    return -1;
+    // commit and clear updates and bindings
+    // pop from events, if not empty
+    // stage event from command line, if empty and not interactive
+    // process head of event list, if not empty
+    // call glfwWaitEvents, if event list empty
 }
 
 int major()

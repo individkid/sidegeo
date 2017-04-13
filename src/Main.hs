@@ -29,7 +29,7 @@ import AffTopo.Sculpt
 
 foreign import ccall "initialize" initializeC :: CInt -> Ptr (Ptr CChar) -> IO ()
 foreign import ccall "finalize" finalizeC :: IO ()
-foreign import ccall "waitForEvent" waitForEventC :: IO CInt
+foreign import ccall "waitForEvent" waitForEventC :: IO ()
 foreign export ccall "toHumanH" toHuman :: Ptr CChar -> Ptr CChar -> CInt -> Ptr CChar -> IO CInt
 foreign export ccall "fromHumanH" fromHuman :: Ptr CChar -> Ptr CChar -> CInt -> Ptr CChar -> IO CInt
 
@@ -47,20 +47,13 @@ main = do
 
 mainF :: IO ()
 mainF = do
- code <- waitForEventC
- mainG (fromIntegral code)
+ waitForEventC
+ done <- handleEvent
+ mainG done
 
-mainG :: Int -> IO ()
-mainG 0 = do
- handleSideband
- mainF
-mainG 1 = do
- handleLeft
- mainF
-mainG 2 = do
- handleRight
- mainF
-mainG _ = finalizeC
+mainG :: Bool -> IO ()
+mainG False = mainF
+mainG True = finalizeC
 
 toHuman :: Ptr CChar -> Ptr CChar -> CInt -> Ptr CChar -> IO CInt
 toHuman = undefined

@@ -33,11 +33,5 @@ foreign import ccall "history" historyC :: Ptr CInt -> IO ()
 removeMe :: [Side]
 removeMe = allSides
 
-handleSideband :: IO ()
-handleSideband = undefined
-
-handleLeft :: IO ()
-handleLeft = undefined
-
-handleRight :: IO ()
-handleRight = undefined
+handleEvent :: IO Bool
+handleEvent = undefined
