@@ -17,10 +17,17 @@
 */
 
 #include <HsFFI.h>
+#ifdef __GLASGOW_HASKELL__
+#include "Main_stub.h"
+extern void __stginit_Main(void);
+#endif
 
 #include <stdio.h>
 
 #include <GLFW/glfw3.h>
+
+int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
+int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*/ *buf);
 
 void displayMe()
 {
@@ -54,35 +61,101 @@ int glfw()
     return 0;
 }
 
+int partsToLine(char *part[2], int size, char *buf)
+{
+    return -1;
+}
+
+int lineToParts(char *line, int size[2], char *buf[2])
+{
+    return -1;
+}
+
+int partToIndices(char *part, int size, int *buf)
+{
+    return -1;
+}
+
+int indicesToPart(int *indices, int size, char *buf)
+{
+    return -1;
+}
+
+int partToBytes(char *part, char *subformat, int size, char *buf)
+{
+    return -1;
+}
+
+int bytesToPart(char *bytes, int size, int *buf)
+{
+    return -1;
+}
+
+int partToFormat(char *part, int size, int *buf)
+{
+    return -1;
+}
+
+int indicesToFormat(int *indices, char *format, int size, char *buf)
+{
+    return -1;
+}
+
+int bytesToSize(char *bytes, int *size)
+{
+    return -1;
+}
+
+int indicesToRange(int *indices, char *format, char *bytes, int *base, int *limit)
+{
+    return -1;
+}
+
 void initialize(int argc, char **argv)
 {
+#ifdef __GLASGOW_HASKELL__
+    hs_add_root(__stginit_Main);
+#endif
 #ifdef __APPLE__
     printf("osx\n");    
 #endif
 #ifdef __linux__
     printf("linux\n");
 #endif
+    for (int i = 0; i < argc; i++) {
+        printf("arg %d is %s\n", i, argv[i]);}
+    // ensure indices are empty on first history line
+    // read format and bytes from first history line
+    // for each subsequent history line,
+        // read indices, find subformat, read bytes
+        // find replaced range and replacement size
+        // replace range by bytes read from history
+    // reopen history for append
 }
 
 void finalize()
 {
 }
 
+// uses global args, argCounter, and callback flags
 int waitForEvent()
 {
     return -1;
 }
 
+// uses global args and argCounter
 char *command()
 {
     return 0;
 }
 
-char *generic(int *indices, int size)
+// uses global format and bytes
+char *generic(int *indices, int *size)
 {
     return 0;
 }
 
+// uses global format and bytes
 void history(int *indices)
 {
 }
