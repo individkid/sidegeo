@@ -26,6 +26,30 @@ extern void __stginit_Main(void);
 
 #include <GLFW/glfw3.h>
 
+int interactive = 0;
+int configured = 0;
+int mustExist = 0;
+int mustNotExist = 0;
+int historyFd = 0;
+char *metricScript = 0;
+char *directory = 0;
+char *commandData = 0;
+char *argumentData = 0;
+char *genericData = 0;
+char *vertexData = 0;
+char *normalData = 0;
+int *indexData = 0;
+int *rangeData = 0;
+int *wireFrameData = 0;
+double **modelData = 0;
+double **perspectiveData = 0;
+double **dragData = 0;
+double **clickData = 0;
+enum {Sideband,Left,Right} eventMode = Sideband;
+enum {Transform,Refine,Additive,Subractive,Drag} majorMode = Transform;
+enum {Sphere,Translate,Look} mouseMode = Sphere;
+enum {Cylinder,Scale,Drive} rollerMode = Cylinder;
+
 int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
 int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*/ *buf);
 
@@ -59,6 +83,16 @@ int glfw()
         glfwWaitEvents();}
     glfwTerminate();
     return 0;
+}
+
+int randomize()
+{
+    return -1;
+}
+
+int configure()
+{
+    return -1;
 }
 
 int partsToLine(char *part[2], int size, char *buf)
@@ -143,19 +177,36 @@ int waitForEvent()
     return -1;
 }
 
-// uses global args and argCounter
+int major()
+{
+    return -1;
+}
+
+int mouse()
+{
+    return -1;
+}
+
+int roller()
+{
+    return -1;
+}
+
 char *command()
 {
     return 0;
 }
 
-// uses global format and bytes
+char *argument()
+{
+    return 0;
+}
+
 char *generic(int *indices, int *size)
 {
     return 0;
 }
 
-// uses global format and bytes
 void history(int *indices)
 {
 }

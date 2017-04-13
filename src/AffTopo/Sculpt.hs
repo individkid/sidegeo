@@ -22,7 +22,11 @@ import Foreign.Ptr
 import Foreign.C.Types
 import AffTopo.Naive
 
+foreign import ccall "major" majorC :: IO CInt
+foreign import ccall "mouse" mouseC :: IO CInt
+foreign import ccall "roller" rollerC :: IO CInt
 foreign import ccall "command" commandC :: IO (Ptr CChar)
+foreign import ccall "argument" argumentC :: IO (Ptr CChar)
 foreign import ccall "generic" genericC :: Ptr CInt -> CInt -> IO (Ptr CChar)
 foreign import ccall "history" historyC :: Ptr CInt -> IO ()
 
