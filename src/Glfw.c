@@ -24,41 +24,60 @@ extern void __stginit_Main(void);
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ncurses.h>
 
 #include <GLFW/glfw3.h>
 
+/*state captured by initialize function*/
+char **commandLine = 0; // null terminated argv
 /*state modified by command line options*/
-int interactive = 0;
-int configured = 0;
-int mustExist = 0;
-int mustNotExist = 0;
-int historyFd = 0;
-char *metricScript = 0;
-char *directory = 0;
+int interactive = 0; // set by -i
+int configured = 0; // lazy directory open to allow initial -d
+int mustExist = 0; // cannot create if directory does not exist
+int mustNotExist = 0; // cannot create if directory exists
+int historyFd = 0; // for appending generic deltas
+char *metricScript = 0; // animation if nonzero
+char *directory = 0; // for configuration and history files
+char *format = 0; // from first line of history file
 /*command line data accessed by functions called from Haskell*/
-char *commandData = 0;
-char *argumentData = 0;
-char **commandLine = 0;
+char *commandData = 0; // -<char> from command line
+char *argumentData = 0; // word associated with -<char>
 /*current state modified by functions called from Haskell*/
-double *genericData = 0;
-double *wireFrameData = 0;
-double *vertexData = 0;
-double *normalData = 0;
-int *indexData = 0;
-int *rangeData = 0;
-/*maps from vertex/cursor/window modified by functions called from Haskell*/
-double **modelData = 0; // for model transformation
-double **perspectiveData = 0; // for perspective transformation
-double **dragData = 0; // for wireframe vertices
+char *genericData = 0; // sized packet(s) of bytes in format
+double *vertexData = 0; // NaN terminated triples of coordinates
+double *normalData = 0; // NaN terminated triples of coordinates
+int *indexData = 0; // -1 terminated indices into vertex/normal
+int *rangeData = 0; // -1 terminated indices into indexData
+int wireFrameData = 0; // rangeData index for wire frame
+/*vertex/crosshair/window maps modified by functions called from Haskell*/
+double *modelData = 0; // for model transformation; fixed size
+double *perspectiveData = 0; // for perspective transformation; fixed size
+double *dragData = 0; // for wire frame vertices; fixed size
 /*user input data accessed by functions called from Haskell*/
-double **clickData = 0;
-enum {Left,Right} clickMode = Left;
-enum {Transform,Refine,Additive,Subractive,Drag} majorMode = Transform;
+double *clickData = 0; // locations of last left click
+enum {Focus,Left,Right} clickMode = Focus;
+/*Focus: keyboard input comes from ncurses timeout mode
+ *Left: mouse movement affects matrices
+ *Right: mouse movement ignored*/
+enum {Transform,Manual,Refine,Additive,Subractive} majorMode = Transform;
+/*Transform: depending on minor mode, modifies model or perspective
+ *Manual: depending on minor mode, modifies pierced plane
+ *Refine: clickMode always Right, left click adds random plane
+ *Additive: clickMode always Right, left click hollows out region
+ *Subtractive: clickMode always Right, left click fills in region*/
 enum {Sphere,Translate,Look} mouseMode = Sphere;
-enum {Cylinder,Scale,Drive} rollerMode = Cylinder;
+/*Sphere: tilts polytope around pierce point
+ *Translate: slides polytope from pierce point
+ *Look: tilts camera around focal point*/
+enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
+/*Lever: pushes or pulls other end of tilt line from pierce point
+ *Clock: rotate picture plane around perpendicular to pierce point
+ *Cylinder: rotate polytope around tilt line
+ *Scale: grow or shrink polytope from pierce point
+ *Drive: move picture plane forward or back*/
 /*user inputs processed once per call to waitForEvent*/
-enum {Click,Menu,Command,Events} *events = 0;
-/*update functions to call before rendering at start of waitForEvent*/
+enum {Click,Menu,Command,Error,Events} *events = 0;
+/*update functions to call before sleeping in waitForEvent*/
 enum {Generic,WireFrame,Vertex,Normal,Index,Range,Updates} *updates = 0;
 void **bindings = 0;
 
@@ -137,12 +156,12 @@ int indicesToPart(int *indices, int size, char *buf)
     return -1;
 }
 
-int partToBytes(char *part, char *subformat, int size, char *buf)
+int partToBytes(char *part, int size, char *buf)
 {
     return -1;
 }
 
-int bytesToPart(char *bytes, int size, int *buf)
+int bytesToPart(char *bytes, char *format, int size, int *buf)
 {
     return -1;
 }
@@ -157,7 +176,7 @@ int indicesToFormat(int *indices, char *format, int size, char *buf)
     return -1;
 }
 
-int bytesToSize(char *bytes, int *size)
+int bytesToSize(char *bytes, char *format, int *size)
 {
     return -1;
 }
