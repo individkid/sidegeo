@@ -59,21 +59,21 @@ enum {Focus,Left,Right} clickMode = Focus;
 /*Focus: keyboard input comes from ncurses timeout mode
  *Left: mouse movement affects matrices
  *Right: mouse movement ignored*/
-enum {Transform,Manual,Refine,Additive,Subractive} majorMode = Transform;
-/*Transform: depending on minor mode, modifies model or perspective
- *Manual: depending on minor mode, modifies pierced plane
- *Refine: clickMode always Right, left click adds random plane
- *Additive: clickMode always Right, left click hollows out region
- *Subtractive: clickMode always Right, left click fills in region*/
+enum {Transform,Manipulate,Refine,Additive,Subractive} majorMode = Transform;
+/*Transform: modify model or perspective matrix
+ *Manipulate: modify pierced plane
+ *Refine: click adds random plane
+ *Additive: click hollows out region
+ *Subtractive: click fills in region*/
 enum {Sphere,Translate,Look} mouseMode = Sphere;
-/*Sphere: tilts polytope around pierce point
- *Translate: slides polytope from pierce point
- *Look: tilts camera around focal point*/
+/*Sphere: tilt polytope around pierce point
+ *Translate: slide polytope from pierce point
+ *Look: tilt camera around focal point*/
 enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
-/*Lever: pushes or pulls other end of tilt line from pierce point
+/*Lever: push or pull other end of tilt line from pierce point
  *Clock: rotate picture plane around perpendicular to pierce point
  *Cylinder: rotate polytope around tilt line
- *Scale: grow or shrink polytope from pierce point
+ *Scale: grow or shrink polytope with pierce point fixed
  *Drive: move picture plane forward or back*/
 /*user inputs processed once per call to waitForEvent*/
 enum {Click,Menu,Command,Error,Events} *events = 0;

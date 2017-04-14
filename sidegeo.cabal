@@ -58,7 +58,7 @@ executable sculpt
                        random
   hs-source-dirs:      src
   extra-lib-dirs:      /usr/lib
-  c-sources:           src/Glfw.c
+  c-sources:           src/Intf.c
   if os(linux)
     extra-libraries:   GLEW,
                        glfw3,

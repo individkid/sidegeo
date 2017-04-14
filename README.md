@@ -16,18 +16,20 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -s resample current space to planes with same sidedness  
   * -S resample current polytope to space and planes  
 
-Left mouse button (de)selects pierce point(s). Right mouse button deselects pierce point(s) and changes the mode by menu.
+Left mouse button selects pierce point, and activates menu selected action. Right mouse button deselects pierce point, and deactivates action. Keyboard enter selects, and letter or arrow moves to menu entry in console.
 
-  * Mouse -- submode of Transform for action of mouse motion  
-    * Rotate -- rotate about pierce point  
-    * Translate -- slide starting from pierce point  
-    * Look -- rotate about focal point  
-  * Roller -- submode of Transform for action of roller button  
-    * Rotate -- rotate about line on pierce and focal points  
-    * Scale -- bigger or smaller with pierce point fixed  
+  * Mouse -- action of mouse motion in Transform and Manipulate modes  
+    * Rotate -- tilt polytope around pierce point  
+    * Translate -- slide polytope from pierce point  
+    * Look -- tilt camera around focal point  
+  * Roller -- action of roller button in Transform and Manipulate modes  
+    * Lever -- push or pull other end of tilt line from pierce point
+    * Clock -- rotate picture plane around perpendicular to pierce point  
+    * Cylinder -- rotate polytope around tilt line  
+    * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
-  * Transform -- multiply the model view matrix  
-  * Refine -- add random boundary through pierce point  
-  * Additive -- add faces around region above pierce point  
-  * Subtractive -- remove face of pierce point  
-  * Drag -- pin first two and move third pierce point by mouse and roller  
+  * Transform -- modify model or perspective matrix  
+  * Manipulate -- modify pierced plane  
+  * Refine -- click adds random plane  
+  * Additive -- click hollows out region  
+  * Subtractive -- click fills in region  
