@@ -1,5 +1,5 @@
 /*
-*    Glfw.c interface to GLFW, OpenGL, and state cache of delta history
+*    Intf.c interface to GLFW, OpenGL, ncurses, files, data
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
