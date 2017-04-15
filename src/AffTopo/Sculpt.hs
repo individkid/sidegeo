@@ -20,6 +20,7 @@ module AffTopo.Sculpt where
 
 import Foreign.Ptr
 import Foreign.C.Types
+import Foreign.C.String
 import AffTopo.Naive
 
 foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
@@ -35,4 +36,12 @@ removeMe :: [Side]
 removeMe = allSides
 
 handleEvent :: IO Bool
-handleEvent = fmap (4==) eventC
+handleEvent = do
+ event <- eventC
+ case event of
+  3 -> do
+   ptr <- errorC
+   str <- peekCString ptr
+   error str
+  4 -> return True
+  _ -> return False

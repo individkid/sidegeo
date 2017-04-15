@@ -283,7 +283,7 @@ void updateGeneric(void *data)
 
 char *generic(int *indices, int *size)
 {
-    int count = 0; while (indices[count] != 0) count++;
+    int count = 0; while (indices[count]) count++;
     int *binding = malloc((count+1) * sizeof*indices);
     for (int i = 0; i < count; i++) binding[i] = indices[i];
     binding[count] = 0;
@@ -460,22 +460,23 @@ void display()
 
 void finalize()
 {
-    glfwTerminate();
-    if (commands.base != 0) {struct Commands initial = {INITIAL_QUEUE}; free(commands.base); commands = initial;}
-    if (directory != 0) {free(directory); directory = 0;}
-    if (format != 0) {free(format); format = 0;}
-    if (genericData != 0) {free(genericData); genericData = 0;}
-    if (vertexData != 0) {free(vertexData); vertexData = 0;}
-    if (normalData != 0) {free(normalData); normalData = 0;}
-    if (indexData != 0) {free(indexData); indexData = 0;}
-    if (rangeData != 0) {free(rangeData); rangeData = 0;}
-    if (modelData != 0) {free(modelData); modelData = 0;}
-    if (cameraData != 0) {free(cameraData); cameraData = 0;}
-    if (dragData != 0) {free(dragData); dragData = 0;}
-    if (clickData != 0) {free(clickData); clickData = 0;}
-    if (events.base != 0) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
-    if (updates.base != 0) {struct Updates initial = {INITIAL_QUEUE}; free(updates.base); updates = initial;}
-    if (bindings.base != 0) {struct Bindings initial = {INITIAL_QUEUE}; free(bindings.base); bindings = initial;}
+    if (commands.base) {struct Commands initial = {INITIAL_QUEUE}; free(commands.base); commands = initial;}
+    if (window) {glfwTerminate(); window = 0;}
+    if (historyFile) {fclose(historyFile); historyFile = 0;}
+    if (directory) {free(directory); directory = 0;}
+    if (format) {free(format); format = 0;}
+    if (genericData) {free(genericData); genericData = 0;}
+    if (vertexData) {free(vertexData); vertexData = 0;}
+    if (normalData) {free(normalData); normalData = 0;}
+    if (indexData) {free(indexData); indexData = 0;}
+    if (rangeData) {free(rangeData); rangeData = 0;}
+    if (modelData) {free(modelData); modelData = 0;}
+    if (cameraData) {free(cameraData); cameraData = 0;}
+    if (dragData) {free(dragData); dragData = 0;}
+    if (clickData) {free(clickData); clickData = 0;}
+    if (events.base) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
+    if (updates.base) {struct Updates initial = {INITIAL_QUEUE}; free(updates.base); updates = initial;}
+    if (bindings.base) {struct Bindings initial = {INITIAL_QUEUE}; free(bindings.base); bindings = initial;}
     printf("finalize done\n");
 }
 
