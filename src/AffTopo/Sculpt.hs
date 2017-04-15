@@ -22,16 +22,17 @@ import Foreign.Ptr
 import Foreign.C.Types
 import AffTopo.Naive
 
+foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
+foreign import ccall "click" clickC :: IO (Ptr CDouble)
+foreign import ccall "error" errorC :: IO (Ptr CChar)
 foreign import ccall "major" majorC :: IO CInt
 foreign import ccall "mouse" mouseC :: IO CInt
 foreign import ccall "roller" rollerC :: IO CInt
-foreign import ccall "command" commandC :: IO (Ptr CChar)
-foreign import ccall "argument" argumentC :: IO (Ptr CChar)
-foreign import ccall "generic" genericC :: Ptr CInt -> CInt -> IO (Ptr CChar)
-foreign import ccall "history" historyC :: Ptr CInt -> IO ()
+foreign import ccall "state" stateC :: IO CInt
+foreign import ccall "event" eventC :: IO CInt
 
 removeMe :: [Side]
 removeMe = allSides
 
 handleEvent :: IO Bool
-handleEvent = undefined
+handleEvent = fmap (4==) eventC
