@@ -442,7 +442,6 @@ void process()
     if (strcmp(headCommand(&commands), "-d") == 0 ||
         strcmp(headCommand(&commands), "-n") == 0) {
         configured = 0;
-        if (historyFile) fclose(historyFile);
         mustExist = (strcmp(headCommand(&commands), "-d") == 0);
         mustNotExist = !mustExist;
         dequeCommand(&commands);
