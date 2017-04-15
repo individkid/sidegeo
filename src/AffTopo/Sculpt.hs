@@ -26,7 +26,7 @@ import AffTopo.Naive
 foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
 foreign import ccall "click" clickC :: IO (Ptr CDouble)
 foreign import ccall "error" errorC :: IO (Ptr CChar)
-foreign import ccall "major" majorC :: IO CInt
+foreign import ccall "mode" modeC :: IO CInt
 foreign import ccall "mouse" mouseC :: IO CInt
 foreign import ccall "roller" rollerC :: IO CInt
 foreign import ccall "state" stateC :: IO CInt

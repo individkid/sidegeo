@@ -305,7 +305,7 @@ char *error()
     return errorData;
 }
 
-int major()
+int mode()
 {
     switch (majorMode) {
         case (Transform): return 0;

@@ -18,7 +18,7 @@ module AffTopo.Naive where
 
 import Prelude hiding ((++))
 import Data.List (sort, sortBy, foldl', elemIndex, findIndex, find)
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust)
 import Data.Bits (xor, shift, testBit)
 import qualified Numeric.LinearAlgebra as Matrix
 import qualified System.Random as Random
@@ -44,7 +44,7 @@ instance Perm Spacer where
  refinePerm = refineSpace
  comparePerm (Spacer {sortOfSpacer = s}) (Spacer {sortOfSpacer = t}) = compare s t
 type Poly = [(Boundary,Side)] -- facet is intersection between subsection and polyant
-type Tope = [(Poly,[Poly])] -- polytope is map from facet to set of facet
+type Tope = [(Poly,Poly)] -- polytope is map from facet to set of facet
 data Toper = Toper {
  doneOfToper :: Part,
  todoOfToper :: Part,
@@ -195,6 +195,18 @@ elemIndex' a b = fromJust (elemIndex a b)
 
 findIndex' :: (a -> Bool) -> [a] -> Int
 findIndex' f a = fromJust (findIndex f a)
+
+find' :: (a -> Bool) -> [a] -> a
+find' f a = fromJust (find f a)
+
+dup' :: Ord a => [a] -> [a]
+dup' a = dupF (sort a)
+
+dupF :: Eq a => [a] -> [a]
+dupF (a:b:c)
+ | a == b = dupF (b:c)
+ | otherwise = a:(dupF (b:c))
+dupF a = a
 
 --
 -- now for something new
@@ -791,7 +803,7 @@ equivTope s = let
  in sortOfToper (equivPerm toper)
 
 equivTopeF :: Boundary -> Tope -> Tope
-equivTopeF b p = map (\(x,y) -> (equivTopeG b x, map (equivTopeG b) y)) p
+equivTopeF b p = map (\(x,y) -> (equivTopeG b x, equivTopeG b y)) p
 
 equivTopeG :: Boundary -> Poly -> Poly
 equivTopeG b p = map (\(_,x) -> (b,x)) p
@@ -806,7 +818,7 @@ refineTope (Toper {
 refineTopeF :: Tope -> Tope -> (Boundary,Boundary,Side,Part,Part) -> Toper
 refineTopeF p q (a,b,c,d,e) = let
  tope = zipWith (refineTopeG a b c) p q
- sorted = sort (map (\(x,y) -> (sort x, map (\z -> sort z) y)) tope)
+ sorted = sort (map (\(x,y) -> (sort x, sort y)) tope)
  in Toper {
   doneOfToper = d,
   todoOfToper = e,
@@ -814,8 +826,8 @@ refineTopeF p q (a,b,c,d,e) = let
   permOfToper = tope,
   sortOfToper = sorted}
 
-refineTopeG :: Boundary -> Boundary -> Side -> (Poly,[Poly]) -> (Poly,[Poly]) -> (Poly,[Poly])
-refineTopeG a b c (p,k) (q,l) = (refineTopeH a b c p q, zipWith (refineTopeH a b c) k l)
+refineTopeG :: Boundary -> Boundary -> Side -> (Poly,Poly) -> (Poly,Poly) -> (Poly,Poly)
+refineTopeG a b c (p,k) (q,l) = (refineTopeH a b c p q, refineTopeH a b c k l)
 
 refineTopeH :: Boundary -> Boundary -> Side -> Poly -> Poly -> Poly
 refineTopeH a b c p q = zipWith (refineTopeI a b c) p q
@@ -828,47 +840,45 @@ refineTopeI a b c (p,k) (q,l)
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
 topeFromSpace n r s = let
- bounds = boundariesOfPlace s
- poly x y = map (\z -> (z, boolToSide (elem z y))) x
- ofsize x = [poly y z | y <- (subsets x bounds), z <- power y]
- bysize = map ofsize (map succ (indices n))
- (tuple,tope) = fold' topeFromSpaceF bysize ([([],r,s)],[])
- virt = map (\(x,_,_) -> (x,[])) tuple
- in virt `append` tope
+ tuples = fold' topeFromSpaceF (indices n) (topeFromSpaceH r s)
+ tope = map (\(x,y,_,_) -> (x,y)) tuples
+ sorted = map (\(x,y) -> (sort x, sort y)) tope
+ in dup' sorted
 
--- given all possible subpolys and info from all superpolys
-topeFromSpaceF :: [Poly] -> ([(Poly,[Region],Place)],Tope) -> ([(Poly,[Region],Place)],Tope)
-topeFromSpaceF sub (sup, p) = let
- -- for each subpoly, find first superpoly that contains it
- found = map (\x -> (x, find (\(y,_,_) -> null (y \\ x)) sup)) sub
- -- find subpoly info from subpoly and superpoly that contains it
- signif = mapMaybe topeFromSpaceG found
- -- find maps from superpoly to subpolys
- tope = map (topeFromSpaceH signif) sup
- in (signif, tope `append` p)
+topeFromSpaceF :: Int -> [(Poly,Poly,[Region],Place)] -> [(Poly,Poly,[Region],Place)]
+topeFromSpaceF = undefined
 
--- return nothing if there is no superpoly info or all regions are cancelled
-topeFromSpaceG :: (Poly, Maybe (Poly,[Region],Place)) -> Maybe (Poly,[Region],Place)
-topeFromSpaceG (_,Nothing) = Nothing
-topeFromSpaceG (sub, Just (sup, r, s)) = let
+topeFromSpaceG :: [(Poly,Poly,[Region],Place)] -> Poly -> (Poly,Poly,[Region],Place)
+topeFromSpaceG s p = let
+ (poly,_,regions,place) = find' (\(x,_,_,_) -> null ((domain x) \\ (domain p))) s
+ [(bound,side)] = p \\ poly
+ section = sectionSpace bound place
+ opposed = topeFromSpaceI bound regions side place section
+ signif = topeFromSpaceJ opposed section
+ in (p,signif,opposed,section)
+
+topeFromSpaceH :: [Region] -> Place -> [(Poly,Poly,[Region],Place)]
+topeFromSpaceH = undefined
+
+topeFromSpaceI :: Boundary -> [Region] -> Side -> Place -> Place -> [Region]
+topeFromSpaceI b r p s t = let
  (bounds,space) = unzipPlace s
- [extra] = (domain sub) \\ (domain sup)
- bound = Boundary (elemIndex' extra bounds)
- section = sectionSpace extra s
- taken = takeRegions section s
- neighbors = map (\x -> oppositeOfRegion [bound] x space) taken
- signif (x,y) = (elem x r) && (not (elem y r))
- pairs = filter signif (zip taken neighbors)
- degen = embedSpace (domain pairs) s
- regions = takeRegions degen section
- in if null regions then Nothing else Just (sub,regions,section)
+ bound = Boundary (elemIndex' b bounds)
+ taken = takeRegions t s
+ onside = filter (\x -> (regionWrtBoundary bound x space) == p) taken
+ pairs = map (\x -> (x, oppositeOfRegion [bound] x space)) onside
+ signif = domain (filter (\(_,y) -> not (elem y r)) pairs)
+ in takeRegions (embedSpace signif s) t
 
--- filter to subpolys that are supersets of superpoly
-topeFromSpaceH :: [(Poly,[Region],Place)] -> (Poly,[Region],Place) -> (Poly,[Poly])
-topeFromSpaceH sub (sup,_,_) = let
- filtered = filter (\(x,_,_) -> null (sup \\ x)) sub
- mapped = map (\(x,_,_) -> x) filtered
- in (sup, mapped)
+topeFromSpaceJ :: [Region] -> Place -> Poly
+topeFromSpaceJ r s = let
+ (bounds,space) = unzipPlace s
+ poly = [(x,y) | x <- boundariesOfPlace s, y <- allSides]
+ indexed b = Boundary (elemIndex' b bounds)
+ onside i x = filter (\y -> (regionWrtBoundary i y space) == x) (attachedRegions [i] space)
+ signif i x = not (elem (oppositeOfRegion [i] x space) r)
+ func (x,y) = let i = indexed x in any (signif i) (onside i y)
+ in filter func poly
 
 ---- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
