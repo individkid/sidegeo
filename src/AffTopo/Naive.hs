@@ -199,15 +199,6 @@ findIndex' f a = fromJust (findIndex f a)
 find' :: (a -> Bool) -> [a] -> a
 find' f a = fromJust (find f a)
 
-dup' :: Ord a => [a] -> [a]
-dup' a = dupF (sort a)
-
-dupF :: Eq a => [a] -> [a]
-dupF (a:b:c)
- | a == b = dupF (b:c)
- | otherwise = a:(dupF (b:c))
-dupF a = a
-
 --
 -- now for something new
 --
@@ -840,45 +831,29 @@ refineTopeI a b c (p,k) (q,l)
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
 topeFromSpace n r s = let
- tuples = fold' topeFromSpaceF (indices n) (topeFromSpaceH r s)
- tope = map (\(x,y,_,_) -> (x,y)) tuples
- sorted = map (\(x,y) -> (sort x, sort y)) tope
- in dup' sorted
-
-topeFromSpaceF :: Int -> [(Poly,Poly,[Region],Place)] -> [(Poly,Poly,[Region],Place)]
-topeFromSpaceF = undefined
-
-topeFromSpaceG :: [(Poly,Poly,[Region],Place)] -> Poly -> (Poly,Poly,[Region],Place)
-topeFromSpaceG s p = let
- (poly,_,regions,place) = find' (\(x,_,_,_) -> null ((domain x) \\ (domain p))) s
- [(bound,side)] = p \\ poly
- section = sectionSpace bound place
- opposed = topeFromSpaceI bound regions side place section
- signif = topeFromSpaceJ opposed section
- in (p,signif,opposed,section)
-
-topeFromSpaceH :: [Region] -> Place -> [(Poly,Poly,[Region],Place)]
-topeFromSpaceH = undefined
-
-topeFromSpaceI :: Boundary -> [Region] -> Side -> Place -> Place -> [Region]
-topeFromSpaceI b r p s t = let
+ -- find polys representing facets
  (bounds,space) = unzipPlace s
- bound = Boundary (elemIndex' b bounds)
- taken = takeRegions t s
- onside = filter (\x -> (regionWrtBoundary bound x space) == p) taken
- pairs = map (\x -> (x, oppositeOfRegion [bound] x space)) onside
- signif = domain (filter (\(_,y) -> not (elem y r)) pairs)
- in takeRegions (embedSpace signif s) t
+ pairs = [(x,y) | x <- (indices (succ n)), y <- r]
+ cornered = [(y,z) | (x,y) <- pairs, z <- attachedFacets x y space]
+ indexed = map (\(x,y) -> (x,y,map (\z -> Boundary (elemIndex' z bounds)) y)) cornered
+ sided = map (\(x,y,z) -> (x,y,z,map (\w -> regionWrtBoundary w x space) z)) indexed
+ neighbored = map (\(x,y,z,w) -> (y,w,map (\v -> oppositeOfRegion [v] x space) z)) sided
+ filtered = filter (\(_,_,v) -> all (\u -> not (elem u r)) v) neighbored
+ singles = map (\(y,w,_) -> [sort (zip y w)]) filtered
+ facets = fold' (\x y -> x ++ y) singles []
+ -- find map from each facet extensions to subfacets
+ in map (\x -> (x, topeFromSpaceF facets x)) facets
 
-topeFromSpaceJ :: [Region] -> Place -> Poly
-topeFromSpaceJ r s = let
- (bounds,space) = unzipPlace s
- poly = [(x,y) | x <- boundariesOfPlace s, y <- allSides]
- indexed b = Boundary (elemIndex' b bounds)
- onside i x = filter (\y -> (regionWrtBoundary i y space) == x) (attachedRegions [i] space)
- signif i x = not (elem (oppositeOfRegion [i] x space) r)
- func (x,y) = let i = indexed x in any (signif i) (onside i y)
- in filter func poly
+-- given surface regions find perimeter of given polyant subsection
+topeFromSpaceF :: [Poly] -> Poly -> Poly
+topeFromSpaceF p q = let
+ -- find surface polys that are extensions by one of facet poly
+ -- in other words, find polys representing subfacets
+ extensions = filter (\x -> null (q \\ x)) p
+ -- restrict the found polys by given poly
+ restrictions = map (\x -> x \\ q) extensions
+ -- return uniquefy of concat of restricted polys
+ in fold' (++) restrictions []
 
 ---- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
