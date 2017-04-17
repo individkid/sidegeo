@@ -25,6 +25,9 @@ extern void __stginit_Main(void);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <ncurses.h>
 #include <GLFW/glfw3.h>
@@ -182,7 +185,16 @@ ACCESS_QUEUE(Binding,Bindings,void *,bindings)
 
 int copyStrings(char **bufs, int size, char*buf)
 {
-    return -1;
+    for (int i = 0; bufs[i] && size; i++) {
+        for (int j = 0; bufs[i][j] && size; j++) {
+            size--;}}
+    size--;
+    if (size < 0) return -1;
+    for (int i = 0; bufs[i]; i++) {
+        for (int j = 0; bufs[i][j]; j++) {
+            *(buf++) = bufs[i][j];}}
+    *buf = 0;
+    return 0;
 }
 
 int partsToLine(char *part[2], int size, char *buf)
@@ -416,32 +428,46 @@ void initialize(int argc, char **argv)
 
 void configure()
 {
+    if (!validDirectory()) {
+        enqueDirectory(".sculpt");
+        enqueMustExist(0);
+        enqueMustNotExist(0);}
     while (validDirectory()) {
         FILE *file;
         char buf[100];
         char *bufs[3];
+        struct stat st;
+        int exists = (stat(headDirectory(), &st) < 0);
+            bufs[0] = headDirectory();
+            bufs[1] = "/history.txt";
+            bufs[2] = 0;
+            if (copyStrings(bufs, 100, buf) < 0) {
+                enqueError("invalid path for copy");
+                enqueEvent(Error);}
         // check mustExist and mustNotExist
-        // if (stat("/some/directory", &st) == -1) {
-            // mkdir("/some/directory", 0700);
-        // }
-        // load light directions and colors from fopen(strcat(buf,headDirectory()))
-        bufs[0] = headDirectory();
-        bufs[1] = "/history.txt";
-        bufs[2] = 0;
-        if (copyStrings(bufs, 100, buf) < 0) {
-            enqueError("invalid path for copy");
-            enqueEvent(Error);}
-        if (!(file = fopen(buf,"r"))) {
-            enqueError("invalid path for open");
-            enqueEvent(Error);}
-        // ensure indices are empty on first history line
-        // read format and bytes from first history line
-        // for each subsequent history line,
-            // read indices, find subformat, read bytes
-            // find replaced range and replacement size
-            // replace range by bytes read from history
-        // reopen history for append
-        fclose(file);
+        if (!exists && headMustExist()) {
+        }
+        else if (exists && headMustNotExist()) {
+        }
+        else if (!exists && mkdir(headDirectory(), 0700) < 0) {
+        }
+        else if (!exists) {
+            randomize();
+            // save random lighting and default polytope
+        }
+        else {
+            // load light directions and colors from fopen(strcat(buf,headDirectory()))
+            if (!(historyFile = fopen(buf,"r"))) {
+                enqueError("invalid path for open");
+                enqueEvent(Error);}
+            // ensure indices are empty on first history line
+            // read format and bytes from first history line
+            // for each subsequent history line,
+                // read indices, find subformat, read bytes
+                // find replaced range and replacement size
+                // replace range by bytes read from history
+            // reopen history for append
+        }
         if (historyFile) fclose(historyFile);
         historyFile = fopen(buf,"a");
         dequeDirectory();
