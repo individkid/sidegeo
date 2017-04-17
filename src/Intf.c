@@ -38,18 +38,21 @@ extern void __stginit_Main(void);
 #define INITIAL_QUEUE 0,0,0,0
 
 /*state captured by initialize function*/
-struct Commands {DECLARE_QUEUE(char *)} commands = {INITIAL_QUEUE};
-GLFWwindow *window = 0;
+struct Strings {DECLARE_QUEUE(char *)} commands = {INITIAL_QUEUE};
+GLFWwindow *windowHandle = 0;
 /*state modified by command line options*/
 int interactive = 0; // set by -i
 int configured = 0; // lazy directory open to allow initial -d
 int displayed = 0; // whether to redisplay before waiting
-int mustExist = 0; // cannot create if directory does not exist
-int mustNotExist = 0; // cannot create if directory exists
+struct Ints {DECLARE_QUEUE(int)} mustExists = {INITIAL_QUEUE};
+ // cannot create if directory does not exist
+struct Ints mustNotExists = {INITIAL_QUEUE};
+ // cannot create if directory exists
+struct Strings directories = {INITIAL_QUEUE};
+ // for configuration and history files
 FILE *historyFile = 0; // for appending generic deltas
+char *formatString = 0; // from first line of history file
 char *metricScript = 0; // animation if nonzero
-char *directory = 0; // for configuration and history files
-char *format = 0; // from first line of history file
 /*current state modified by functions called from Haskell*/
 char *genericData = 0; // sized packet(s) of bytes in format
 double *vertexData = 0; // NaN terminated triples of coordinates
@@ -63,7 +66,6 @@ double *cameraData = 0; // for perspective transformation; fixed size
 double *dragData = 0; // for wire frame vertices; fixed size
 /*user input data accessed by functions called from Haskell*/
 double *clickData = 0; // location of last left click
-char *errorData = 0; // message to print on error
 enum {Transform,Manipulate,Refine,Additive,Subractive} majorMode = Transform;
 /*Transform: modify model or perspective matrix
  *Manipulate: modify pierced plane
@@ -87,6 +89,7 @@ enum {Right,Left} clickMode = Right;
 /*user inputs processed once per call to waitForEvent*/
 enum Event {Click,Menu,Command,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {INITIAL_QUEUE};
+struct Strings errors = {INITIAL_QUEUE}; // message to print on error
 /*update functions to call before sleeping in waitForEvent*/
 enum Update {Generic,WireFrame,Vertex,Normal,Index,Range};
 struct Updates {DECLARE_QUEUE(enum Update)} updates = {INITIAL_QUEUE};
@@ -128,93 +131,59 @@ int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*
         queue->head = queue->base; \
         queue->tail = queue->base + tail - 10;}
 
+#define ACCESS_QUEUE(SINGULAR,PLURAL,TYPE,INSTANCE) \
+void enque##SINGULAR(TYPE val) \
+{ \
+    struct PLURAL *queue = &INSTANCE; \
+    PUT_VAL_TO_QUEUE \
+} \
+ \
+int valid##SINGULAR() \
+{ \
+    struct PLURAL *queue = &INSTANCE; \
+    ANY_VAL_IN_QUEUE \
+} \
+\
+TYPE head##SINGULAR() \
+{ \
+    struct PLURAL *queue = &INSTANCE; \
+    GET_VAL_IN_QUEUE \
+} \
+\
+void deque##SINGULAR() \
+{ \
+    struct PLURAL *queue = &INSTANCE; \
+    DEL_VAL_FROM_QUEUE \
+}
+
 /*
  * helpers for accessing state
  */
 
-void enqueCommand(char *val, struct Commands *queue)
-{
-    PUT_VAL_TO_QUEUE
-}
+ACCESS_QUEUE(Command,Strings,char *,commands)
 
-int validCommand(struct Commands *queue)
-{
-    ANY_VAL_IN_QUEUE
-}
+ACCESS_QUEUE(MustExist,Ints,int,mustExists)
 
-char *headCommand(struct Commands *queue)
-{
-    GET_VAL_IN_QUEUE
-}
+ACCESS_QUEUE(MustNotExist,Ints,int,mustNotExists)
 
-void dequeCommand(struct Commands *queue)
-{
-    DEL_VAL_FROM_QUEUE
-}
+ACCESS_QUEUE(Directory,Strings,char *,directories)
 
-void enqueEvent(enum Event val, struct Events *queue)
-{
-    PUT_VAL_TO_QUEUE
-}
+ACCESS_QUEUE(Event,Events,enum Event,events)
 
-int validEvent(struct Events *queue)
-{
-    ANY_VAL_IN_QUEUE
-}
+ACCESS_QUEUE(Error,Strings,char *,errors)
 
-enum Event headEvent(struct Events *queue)
-{
-    GET_VAL_IN_QUEUE
-}
+ACCESS_QUEUE(Update,Updates,enum Update,updates)
 
-void dequeEvent(struct Events *queue)
-{
-    DEL_VAL_FROM_QUEUE
-}
-
-void enqueUpdate(enum Update val, struct Updates *queue)
-{
-    PUT_VAL_TO_QUEUE
-}
-
-int validUpdate(struct Updates *queue)
-{
-    ANY_VAL_IN_QUEUE
-}
-
-enum Update headUpdate(struct Updates *queue)
-{
-    GET_VAL_IN_QUEUE
-}
-
-void dequeUpdate(struct Updates *queue)
-{
-    DEL_VAL_FROM_QUEUE
-}
-
-void enqueBinding(void *val, struct Bindings *queue)
-{
-    PUT_VAL_TO_QUEUE
-}
-
-int validBinding(struct Bindings *queue)
-{
-    ANY_VAL_IN_QUEUE
-}
-
-void *headBinding(struct Bindings *queue)
-{
-    GET_VAL_IN_QUEUE
-}
-
-void dequeBinding(struct Bindings *queue)
-{
-    DEL_VAL_FROM_QUEUE
-}
+ACCESS_QUEUE(Binding,Bindings,void *,bindings)
 
 /*
  * helpers for parsing history file
  */
+
+int copyStrings(char **bufs, int size, char*buf)
+{
+    return -1;
+}
 
 int partsToLine(char *part[2], int size, char *buf)
 {
@@ -241,7 +210,7 @@ int partToBytes(char *part, int size, char *buf)
     return -1;
 }
 
-int bytesToPart(char *bytes, char *format, int size, int *buf)
+int bytesToPart(char *bytes, char *format, int size, char *buf)
 {
     return -1;
 }
@@ -261,7 +230,7 @@ int bytesToSize(char *bytes, char *format, int *size)
     return -1;
 }
 
-int indicesToRange(int *indices, char *format, char *bytes, int *base, int *limit)
+int indicesToRange(int *indices, char *format, char *bytes, char **base, char **limit)
 {
     return -1;
 }
@@ -273,7 +242,31 @@ int indicesToRange(int *indices, char *format, char *bytes, int *base, int *limi
 void updateGeneric(void *data)
 {
     int *indices = data;
-    // write delta to history file
+    char *base;
+    char *limit;
+    char buf[100];
+    char buf0[100];
+    char buf1[100];
+    char *part[2] = {buf0,buf1};
+    char line[100];
+    if (indicesToRange(indices, formatString, genericData, &base, &limit) < 0) {
+        enqueError("invalid indices for data");
+        enqueEvent(Error);}
+    if (indicesToFormat(indices, formatString, 100, buf) < 0) {
+        enqueError("invalid indices for format");
+        enqueEvent(Error);}
+    if (bytesToPart(base, buf, 100, part[0]) < 0) {
+        enqueError("invalid indices for bytes");
+        enqueEvent(Error);}
+    if (indicesToPart(indices, 100, part[1]) < 0) {
+        enqueError("invalid indices for part");
+        enqueEvent(Error);}
+    if (partsToLine(part, 100, line) < 0) {
+        enqueError("invalid indices for line");
+        enqueEvent(Error);}
+    if (fprintf(historyFile, "%s\n", line) < 0) {
+        enqueError("invalid indices for file");
+        enqueEvent(Error);}
     free(indices);
 }
 
@@ -287,8 +280,8 @@ char *generic(int *indices, int *size)
     int *binding = malloc((count+1) * sizeof*indices);
     for (int i = 0; i < count; i++) binding[i] = indices[i];
     binding[count] = 0;
-    enqueUpdate(Generic, &updates);
-    enqueBinding(binding, &bindings);
+    enqueUpdate(Generic);
+    enqueBinding(binding);
     // if *size is not zero, resize indicated portion of genericData
     // if *size is zero, change it to size of indicated portion
     // return pointer to indicated portion of genericData
@@ -302,7 +295,8 @@ double *click()
 
 char *error()
 {
-    return errorData;
+    if (!validError()) return 0;
+    return headError();
 }
 
 int mode()
@@ -346,8 +340,8 @@ int state()
 
 int event()
 {
-    if (!validEvent(&events)) return -1;
-    switch (headEvent(&events)) {
+    if (!validEvent()) return -1;
+    switch (headEvent()) {
         case (Click): return 0;
         case (Menu): return 1;
         case (Command): return 2;
@@ -369,7 +363,7 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 
 void displayClose(GLFWwindow* window)
 {
-    enqueEvent(Done, &events);
+    enqueEvent(Done);
 }
 
 void displayRefresh(GLFWwindow* window)
@@ -409,62 +403,100 @@ void initialize(int argc, char **argv)
     printf("linux\n");
 #endif
     for (int i = 0; i < argc; i++) printf("arg %d is %s\n", i, argv[i]);
-    for (int i = 0; i < argc; i++) enqueCommand(argv[i], &commands);
+    for (int i = 0; i < argc; i++) enqueCommand(argv[i]);
     if (!glfwInit()) return;
-    window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
-    if (!window) {glfwTerminate(); return;}
-    glfwSetKeyCallback(window, displayKey);
-    glfwSetWindowCloseCallback(window, displayClose);
-    glfwSetWindowRefreshCallback(window, displayRefresh);
-    glfwMakeContextCurrent(window);
+    windowHandle = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
+    if (!windowHandle) {glfwTerminate(); return;}
+    glfwSetKeyCallback(windowHandle, displayKey);
+    glfwSetWindowCloseCallback(windowHandle, displayClose);
+    glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
+    glfwMakeContextCurrent(windowHandle);
     printf("initialize done\n");
 }
 
 void configure()
 {
-    // load light directions and colors
-    // ensure indices are empty on first history line
-    // read format and bytes from first history line
-    // for each subsequent history line,
-        // read indices, find subformat, read bytes
-        // find replaced range and replacement size
-        // replace range by bytes read from history
-    // reopen history for append
-    // perform initial rendering
+    while (validDirectory()) {
+        FILE *file;
+        char buf[100];
+        char *bufs[3];
+        // check mustExist and mustNotExist
+        // if (stat("/some/directory", &st) == -1) {
+            // mkdir("/some/directory", 0700);
+        // }
+        // load light directions and colors from fopen(strcat(buf,headDirectory()))
+        bufs[0] = headDirectory();
+        bufs[1] = "/history.txt";
+        bufs[2] = 0;
+        if (copyStrings(bufs, 100, buf) < 0) {
+            enqueError("invalid path for copy");
+            enqueEvent(Error);}
+        if (!(file = fopen(buf,"r"))) {
+            enqueError("invalid path for open");
+            enqueEvent(Error);}
+        // ensure indices are empty on first history line
+        // read format and bytes from first history line
+        // for each subsequent history line,
+            // read indices, find subformat, read bytes
+            // find replaced range and replacement size
+            // replace range by bytes read from history
+        // reopen history for append
+        fclose(file);
+        if (historyFile) fclose(historyFile);
+        historyFile = fopen(buf,"a");
+        dequeDirectory();
+        dequeMustExist();
+        dequeMustNotExist();
+    }
     printf("configure done\n");
 }
 
 void process()
 {
-    printf("process %s\n", headCommand(&commands));
-    if (strcmp(headCommand(&commands), "-i") == 0) {
+    printf("process %s\n", headCommand());
+    if (strcmp(headCommand(), "-h") == 0) {
+        printf("-i start interactive mode\n");
+        printf("-e <metric> start animation that tweaks planes according to a metric\n");
+        printf("-d <directory> changes directory for history and configuration\n");
+        printf("-n <directory> copies current state to new directory\n");
+        printf("-o <file> save polytope in format indicated by file extension\n");
+        printf("-f <file> load polytope in format indicated by file extension\n");
+        printf("-l <shape> replace current polytope by builtin polytope\n");
+        printf("-t <ident> change current polytope to one from history\n");
+        printf("-r randomize direction and color of light sourc\n");
+        printf("-s resample current space to planes with same sidedness\n");
+        printf("-S resample current polytope to space and planes\n");}
+    if (strcmp(headCommand(), "-i") == 0) {
         interactive = 1;}
-    if (strcmp(headCommand(&commands), "-d") == 0 ||
-        strcmp(headCommand(&commands), "-n") == 0) {
+    if (strcmp(headCommand(), "-d") == 0 ||
+        strcmp(headCommand(), "-n") == 0) {
+        int dashD = (strcmp(headCommand(), "-d") == 0);
         configured = 0;
-        mustExist = (strcmp(headCommand(&commands), "-d") == 0);
-        mustNotExist = !mustExist;
-        dequeCommand(&commands);
-        if (!validCommand(&commands)) {
-            errorData = "missing file argument";
-            enqueEvent(Error, &events);
+        enqueMustExist(dashD);
+        enqueMustNotExist(!dashD);
+        dequeCommand();
+        if (!validCommand()) {
+            enqueError("missing file argument");
+            enqueEvent(Error);
             return;}
-        directory = headCommand(&commands);}
-    dequeCommand(&commands);
+        enqueDirectory(headCommand());}
+    dequeCommand();
 }
 
 void display()
 {
-    displayRefresh(window);    
+    displayRefresh(windowHandle);    
 }
 
 void finalize()
 {
-    if (commands.base) {struct Commands initial = {INITIAL_QUEUE}; free(commands.base); commands = initial;}
-    if (window) {glfwTerminate(); window = 0;}
+    if (commands.base) {struct Strings initial = {INITIAL_QUEUE}; free(commands.base); commands = initial;}
+    if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (historyFile) {fclose(historyFile); historyFile = 0;}
-    if (directory) {free(directory); directory = 0;}
-    if (format) {free(format); format = 0;}
+    if (mustExists.base) {struct Ints initial = {INITIAL_QUEUE}; free(mustExists.base); mustExists = initial;}
+    if (mustNotExists.base) {struct Ints initial = {INITIAL_QUEUE}; free(mustNotExists.base); mustNotExists = initial;}
+    if (directories.base) {struct Strings initial = {INITIAL_QUEUE}; free(directories.base); directories = initial;}
+    if (formatString) {free(formatString); formatString = 0;}
     if (genericData) {free(genericData); genericData = 0;}
     if (vertexData) {free(vertexData); vertexData = 0;}
     if (normalData) {free(normalData); normalData = 0;}
@@ -475,6 +507,7 @@ void finalize()
     if (dragData) {free(dragData); dragData = 0;}
     if (clickData) {free(clickData); clickData = 0;}
     if (events.base) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
+    if (errors.base) {struct Strings initial = {INITIAL_QUEUE}; free(errors.base); errors = initial;}
     if (updates.base) {struct Updates initial = {INITIAL_QUEUE}; free(updates.base); updates = initial;}
     if (bindings.base) {struct Bindings initial = {INITIAL_QUEUE}; free(bindings.base); bindings = initial;}
     printf("finalize done\n");
@@ -482,19 +515,19 @@ void finalize()
 
 void waitForEvent()
 {
-    while (validUpdate(&updates)) {
-        switch (headUpdate(&updates)) {
-            case (Generic): updateGeneric(headBinding(&bindings)); break;
-            case (WireFrame): /*updateWireFrame(headBinding(&bindings));*/ break;
-            case (Vertex): /*updateVertex(headBinding(&bindings));*/ break;
-            case (Normal): /*updateNormal(headBinding(&bindings));*/ break;
-            case (Index): /*updateIndex(headBinding(&bindings));*/ break;
-            case (Range): /*updateRange(headBinding(&bindings));*/ break;}
-        dequeUpdate(&updates);
-        dequeBinding(&bindings);}
-    if (validEvent(&events)) {
-        dequeEvent(&events);}
-    while (!validEvent(&events) && (interactive || validCommand(&commands))) {
+    while (validUpdate()) {
+        switch (headUpdate()) {
+            case (Generic): updateGeneric(headBinding()); break;
+            case (WireFrame): /*updateWireFrame(headBinding());*/ break;
+            case (Vertex): /*updateVertex(headBinding());*/ break;
+            case (Normal): /*updateNormal(headBinding());*/ break;
+            case (Index): /*updateIndex(headBinding());*/ break;
+            case (Range): /*updateRange(headBinding());*/ break;}
+        dequeUpdate();
+        dequeBinding();}
+    if (validEvent()) {
+        dequeEvent();}
+    while (!validEvent() && (interactive || validCommand())) {
         if (interactive) {
             if (!configured) {
                 configured = 1;
@@ -508,6 +541,6 @@ void waitForEvent()
             // thus state such as generic is available to Haskell accessors
             glfwWaitEvents();} else {
             process();}}
-    if (!validEvent(&events)) {
-        enqueEvent(Done, &events);}
+    if (!validEvent()) {
+        enqueEvent(Done);}
 }

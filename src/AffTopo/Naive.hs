@@ -18,7 +18,7 @@ module AffTopo.Naive where
 
 import Prelude hiding ((++))
 import Data.List (sort, sortBy, foldl', elemIndex, findIndex, find)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Bits (xor, shift, testBit)
 import qualified Numeric.LinearAlgebra as Matrix
 import qualified System.Random as Random
@@ -198,6 +198,19 @@ findIndex' f a = fromJust (findIndex f a)
 
 find' :: (a -> Bool) -> [a] -> a
 find' f a = fromJust (find f a)
+
+justIf :: Bool -> a -> Maybe a
+justIf True a = Just a
+justIf False _ = Nothing
+
+nub' :: Ord a => [a] -> [a]
+nub' a = nubF (checkSort a)
+
+nubF :: Eq a => [a] -> [a]
+nubF (a:b:c)
+ | a == b = nubF (b:c)
+ | otherwise = a:(nubF (b:c))
+nubF a = a
 
 --
 -- now for something new
@@ -550,6 +563,12 @@ zipPlace = zip
 zipPlual :: [Region] -> Dual -> Plual
 zipPlual = zip
 
+unzipBoundary :: Boundary -> [Boundary] -> Boundary
+unzipBoundary a b = Boundary (elemIndex' a b)
+
+unzipBoundaries :: [Boundary] -> [Boundary] -> [Boundary]
+unzipBoundaries a b = map (\x -> unzipBoundary x b) a
+
 pointToVector :: Point -> Vector
 pointToVector v = v
 
@@ -833,27 +852,47 @@ topeFromSpace :: Int -> [Region] -> Place -> Tope
 topeFromSpace n r s = let
  -- find polys representing facets
  (bounds,space) = unzipPlace s
+ pairs :: [(Int,Region)]
  pairs = [(x,y) | x <- (indices (succ n)), y <- r]
+ cornered :: [(Region,[Boundary])]
  cornered = [(y,z) | (x,y) <- pairs, z <- attachedFacets x y space]
- indexed = map (\(x,y) -> (x,y,map (\z -> Boundary (elemIndex' z bounds)) y)) cornered
+ indexed :: [(Region,[Boundary],[Boundary])]
+ indexed = map (\(x,y) -> (x,y,unzipBoundaries y bounds)) cornered
+ sided :: [(Region,[Boundary],[Boundary],[Side])]
  sided = map (\(x,y,z) -> (x,y,z,map (\w -> regionWrtBoundary w x space) z)) indexed
+ neighbored :: [([Boundary],[Side],[Region])]
  neighbored = map (\(x,y,z,w) -> (y,w,map (\v -> oppositeOfRegion [v] x space) z)) sided
- filtered = filter (\(_,_,v) -> all (\u -> not (elem u r)) v) neighbored
- singles = map (\(y,w,_) -> [sort (zip y w)]) filtered
- facets = fold' (\x y -> x ++ y) singles []
+ booled :: [([Boundary],[Side],[Bool])]
+ booled = map (\(y,w,v) -> (y,w,map (\u -> elem u r) v)) neighbored
+ subfacets :: [[(Boundary,Side,Bool)]]
+ subfacets = nub' (mapMaybe (\(y,w,u) -> justIf (any id u) (sort (zip3 y w u))) booled)
+ facets :: [Poly]
+ facets = map2 (\(y,w,_) -> (y,w)) subfacets
  -- find map from each facet extensions to subfacets
- in map (\x -> (x, topeFromSpaceF facets x)) facets
+ in map (\x -> (x, topeFromSpaceF subfacets x)) facets
 
--- given surface regions find perimeter of given polyant subsection
-topeFromSpaceF :: [Poly] -> Poly -> Poly
+-- given all facets with boundary significance
+-- find extenders from given facet to its subfacets
+topeFromSpaceF :: [[(Boundary,Side,Bool)]] -> Poly -> Poly
 topeFromSpaceF p q = let
- -- find surface polys that are extensions by one of facet poly
- -- in other words, find polys representing subfacets
- extensions = filter (\x -> null (q \\ x)) p
+ -- find polys that are one boundary extensions
+ byOne :: [[(Boundary,Side,Bool)]]
+ byOne = filter (\x -> (length x) == (succ (length q))) p
+ isIn :: (Boundary,Side) -> [(Boundary,Side,Bool)] -> Bool
+ isIn x y = any (\(z,w,_) -> (z,w) == x) y
+ isExt :: [(Boundary,Side,Bool)] -> [(Boundary,Side)] -> Bool
+ isExt x y = all (\z -> isIn z x) y
+ extensions :: [[(Boundary,Side,Bool)]]
+ extensions = filter (\x -> isExt x q) byOne
  -- restrict the found polys by given poly
- restrictions = map (\x -> x \\ q) extensions
+ notIn :: (Boundary,Side,Bool) -> Bool
+ notIn (x,y,_) = not (elem (x,y) q)
+ withOut :: [(Boundary,Side,Bool)] -> [(Boundary,Side,Bool)]
+ withOut x = filter notIn x
+ restrictions :: [[(Boundary,Side,Bool)]]
+ restrictions = map withOut extensions
  -- return uniquefy of concat of restricted polys
- in fold' (++) restrictions []
+ in nub' (mapMaybe (\[(x,y,z)] -> justIf z (x,y)) restrictions)
 
 ---- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
