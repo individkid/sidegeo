@@ -58,6 +58,7 @@ struct Chars metrics = {INITIAL_QUEUE};
  // animation if valid
 /*current state modified by functions called from Haskell*/
 struct Chars generics = {INITIAL_QUEUE};
+struct Ints {DECLARE_QUEUE(int)} indices = {INITIAL_QUEUE};
  // sized packet(s) of bytes in format
 double *vertexData = 0; // NaN terminated triples of coordinates
 double *normalData = 0; // NaN terminated triples of coordinates
@@ -96,8 +97,6 @@ struct Events {DECLARE_QUEUE(enum Event)} events = {INITIAL_QUEUE};
 /*update functions to call before sleeping in waitForEvent*/
 enum Update {Generic,WireFrame,Vertex,Normal,Index,Range,Messages,Formats,Metrics};
 struct Updates {DECLARE_QUEUE(enum Update)} updates = {INITIAL_QUEUE};
-union Binding {int intVal; int *intPtr;};
-struct Bindings {DECLARE_QUEUE(union Binding)} bindings = {INITIAL_QUEUE};
 
 #define ACCESS_QUEUE(SINGULAR,PLURAL,TYPE,INSTANCE) \
 void enque##SINGULAR(TYPE val) \
@@ -200,11 +199,11 @@ ACCESS_QUEUE(Metric,Chars,char,metrics)
 
 ACCESS_QUEUE(Generic,Chars,char,generics)
 
+ACCESS_QUEUE(Index,Ints,int,indices)
+
 ACCESS_QUEUE(Event,Events,enum Event,events)
 
 ACCESS_QUEUE(Update,Updates,enum Update,updates)
-
-ACCESS_QUEUE(Binding,Bindings,union Binding,bindings)
 
 void enqueErrnum(const char *str, const char *name)
 {
@@ -212,22 +211,34 @@ void enqueErrnum(const char *str, const char *name)
     char *err = strerror(num);
     int siz = strlen(str) + strlen(name) + strlen(err) + 12;
     char *buf = qallocMessage(siz);
-    if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) {
-        printf("fatal error\n");
-        exit(-1);}
+    if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exit(-1);
     enqueEvent(Error);
+    enqueUpdate(Messages);
 }
 
 void enqueErrstr(const char *str)
 {
-    char *buf = qallocMessage(strlen(str)+1);
-    strcpy(buf, str);
+    strcpy(qallocMessage(strlen(str)+1), str);
     enqueEvent(Error);
+    enqueUpdate(Messages);
 }
 
 /*
  * helpers for parsing history file
  */
+
+int intlen(int *ints)
+{
+    int count = 0;
+    while (*ints >= 0) {ints++; count++;}
+    return count;
+}
+
+void intcpy(int *dst, int *src)
+{
+    while (*src >= 0) {*(dst++) = *(src++);}
+    *dst = *src;
+}
 
 int readLine(FILE *file, int size, char *buf)
 {
@@ -317,7 +328,7 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
  * state changes deferred from Haskell accessors
  */
 
-void updateGeneric(int *indices)
+void updateGeneric()
 {
     char *base;
     char *limit;
@@ -326,13 +337,14 @@ void updateGeneric(int *indices)
     char buf1[100];
     char *part[2] = {buf0,buf1};
     char line[100];
+    int *indices = qheadIndex();
     if (indicesToRange(indices, qheadFormat(), qheadGeneric(), &base, &limit) < 0) enqueErrstr("invalid indices for data");
     if (indicesToFormat(indices, qheadFormat(), 100, buf) < 0) enqueErrstr("invalid indices for format");
     if (bytesToPart(base, buf, 100, part[0]) < 0) enqueErrstr("invalid indices for bytes");
     if (indicesToPart(indices, 100, part[1]) < 0) enqueErrstr("invalid indices for part");
     if (partsToLine(part, 100, line) < 0) enqueErrstr("invalid indices for line");
     if (fprintf(historyFile, "%s\n", line) < 0) enqueErrstr("invalid indices for file");
-    free(indices);
+    qfreeIndex(intlen(indices)+1);
 }
 
 /*
@@ -341,14 +353,8 @@ void updateGeneric(int *indices)
 
 char *generic(int *indices, int *size)
 {
-    int count = 0;
-    union Binding binding;
-    while (indices[count]) count++;
-    binding.intPtr = malloc((count+1) * sizeof*indices);
-    for (int i = 0; i < count; i++) binding.intPtr[i] = indices[i];
-    binding.intPtr[count] = 0;
+    intcpy(qallocIndex(intlen(indices)+1), indices);
     enqueUpdate(Generic);
-    enqueBinding(binding);
     // if *size is not zero, resize indicated portion of generic data
     // if *size is zero, change it to size of indicated portion
     // return pointer to indicated portion of generic data
@@ -362,11 +368,7 @@ double *click()
 
 char *message()
 {
-    union Binding binding;
     if (!validMessage()) return 0;
-    binding.intVal = strlen(qheadMessage());
-    enqueUpdate(Messages);
-    enqueBinding(binding);
     return qheadMessage();
 }
 
@@ -567,6 +569,7 @@ void finalize()
     if (formats.base) {struct Chars initial = {INITIAL_QUEUE}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {INITIAL_QUEUE}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {INITIAL_QUEUE}; free(generics.base); generics = initial;}
+    if (indices.base) {struct Ints initial = {INITIAL_QUEUE}; free(indices.base); indices = initial;}
     if (vertexData) {free(vertexData); vertexData = 0;}
     if (normalData) {free(normalData); normalData = 0;}
     if (indexData) {free(indexData); indexData = 0;}
@@ -577,7 +580,6 @@ void finalize()
     if (clickData) {free(clickData); clickData = 0;}
     if (events.base) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
     if (updates.base) {struct Updates initial = {INITIAL_QUEUE}; free(updates.base); updates = initial;}
-    if (bindings.base) {struct Bindings initial = {INITIAL_QUEUE}; free(bindings.base); bindings = initial;}
     printf("finalize done\n");
 }
 
@@ -585,17 +587,16 @@ void waitForEvent()
 {
     while (validUpdate()) {
         switch (headUpdate()) {
-            case (Generic): updateGeneric(headBinding().intPtr); break;
+            case (Generic): updateGeneric(); break;
             case (WireFrame): /*updateWireFrame(headBinding());*/ break;
             case (Vertex): /*updateVertex(headBinding());*/ break;
             case (Normal): /*updateNormal(headBinding());*/ break;
             case (Index): /*updateIndex(headBinding());*/ break;
             case (Range): /*updateRange(headBinding());*/ break;
-            case (Messages): qfreeMessage(headBinding().intVal); break;
-            case (Formats): qfreeFormat(headBinding().intVal); break;
-            case (Metrics): qfreeMetric(headBinding().intVal); break;}
-        dequeUpdate();
-        dequeBinding();}
+            case (Messages): qfreeMessage(strlen(qheadMessage())+1); break;
+            case (Formats): qfreeFormat(strlen(qheadFormat())+1); break;
+            case (Metrics): qfreeMetric(strlen(qheadMetric())+1); break;}
+        dequeUpdate();}
     if (validEvent()) {
         dequeEvent();}
     while (!validEvent() && (interactive || validCommand())) {
