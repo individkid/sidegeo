@@ -50,7 +50,11 @@ struct Strings {DECLARE_QUEUE(char *)} commands = {INITIAL_QUEUE};
  // command line arguments
 struct Strings directories = {INITIAL_QUEUE};
  // for configuration and history files
-struct Chars {DECLARE_QUEUE(char)} messages = {INITIAL_QUEUE};
+struct Ints {DECLARE_QUEUE(int)} ints = {INITIAL_QUEUE};
+ // scratchpad for int addrys
+struct Chars {DECLARE_QUEUE(char)} chars = {INITIAL_QUEUE};
+ // scratchpad for char arrays
+struct Chars messages = {INITIAL_QUEUE};
  // description of first error
 struct Chars formats = {INITIAL_QUEUE};
  // from first line of history file
@@ -58,8 +62,9 @@ struct Chars metrics = {INITIAL_QUEUE};
  // animation if valid
 /*current state modified by functions called from Haskell*/
 struct Chars generics = {INITIAL_QUEUE};
-struct Ints {DECLARE_QUEUE(int)} indices = {INITIAL_QUEUE};
  // sized packet(s) of bytes in format
+struct Ints indices = {INITIAL_QUEUE};
+ // generic data format indices from haskell call for deferred update of generic
 double *vertexData = 0; // NaN terminated triples of coordinates
 double *normalData = 0; // NaN terminated triples of coordinates
 int *indexData = 0; // -1 terminated indices into vertex/normal
@@ -89,13 +94,12 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
  *Drive: move picture plane forward or back*/
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
- *Left: mouse movement affects matrices
- *Done: user requested terminate*/
+ *Left: mouse movement affects matrices*/
 /*user inputs processed once per call to waitForEvent*/
 enum Event {Click,Menu,Command,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {INITIAL_QUEUE};
 /*update functions to call before sleeping in waitForEvent*/
-enum Update {Generic,WireFrame,Vertex,Normal,Index,Range,Messages,Formats,Metrics};
+enum Update {Generic,WireFrame,Vertex,Normal,Index,Range,Messages};
 struct Updates {DECLARE_QUEUE(enum Update)} updates = {INITIAL_QUEUE};
 
 #define ACCESS_QUEUE(SINGULAR,PLURAL,TYPE,INSTANCE) \
@@ -144,7 +148,7 @@ void deque##SINGULAR() \
         queue->tail = queue->base + tail - 10;} \
 } \
 \
-TYPE *qalloc##SINGULAR(int size) \
+TYPE *alloc##SINGULAR(int size) \
 { \
     struct PLURAL *queue = &INSTANCE; \
     if (queue->base == 0) { \
@@ -164,13 +168,13 @@ TYPE *qalloc##SINGULAR(int size) \
     return queue->tail - size; \
 } \
 \
-TYPE *qhead##SINGULAR() \
+TYPE *array##SINGULAR() \
 { \
     struct PLURAL *queue = &INSTANCE; \
     return queue->head; \
 } \
 \
-void qfree##SINGULAR(int size) \
+void free##SINGULAR(int size) \
 { \
     struct PLURAL *queue = &INSTANCE; \
     if (queue->head + size <= queue->tail) { \
@@ -191,6 +195,10 @@ ACCESS_QUEUE(Command,Strings,char *,commands)
 
 ACCESS_QUEUE(Directory,Strings,char *,directories)
 
+ACCESS_QUEUE(Int,Ints,int,ints)
+
+ACCESS_QUEUE(Char,Chars,char,chars)
+
 ACCESS_QUEUE(Message,Chars,char,messages)
 
 ACCESS_QUEUE(Format,Chars,char,formats)
@@ -210,7 +218,7 @@ void enqueErrnum(const char *str, const char *name)
     int num = errno;
     char *err = strerror(num);
     int siz = strlen(str) + strlen(name) + strlen(err) + 12;
-    char *buf = qallocMessage(siz);
+    char *buf = allocMessage(siz);
     if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exit(-1);
     enqueEvent(Error);
     enqueUpdate(Messages);
@@ -218,7 +226,7 @@ void enqueErrnum(const char *str, const char *name)
 
 void enqueErrstr(const char *str)
 {
-    strcpy(qallocMessage(strlen(str)+1), str);
+    strcpy(allocMessage(strlen(str)+1), str);
     enqueEvent(Error);
     enqueUpdate(Messages);
 }
@@ -240,81 +248,80 @@ void intcpy(int *dst, int *src)
     *dst = *src;
 }
 
-int readLine(FILE *file, int size, char *buf)
+char *readLine(FILE *file) // caller must call freeChar
 {
-    int started = 0;
     int depth = 0;
     int count = 0;
+    char *buf = 0;
+    int chr = 0;
     char nest[100];
-    while ((!started || depth) && depth < 100 && count < size-1 && (buf[count] = fgetc(file)) != EOF) {
-        if (buf[count] == '(') nest[depth++] = ')';
-        else if (buf[count] == '[') {nest[depth++] = ']'; started = 1;}
-        else if (buf[count] == '{') {nest[depth++] = '}'; started = 1;}
-        else if (started && buf[count] == nest[depth-1]) depth--;
-        if (started && isspace(buf[count])) count++;}
-    if (!started || depth) return -1;
-    return 0;
+    while ((!buf || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
+        if (chr == '(') nest[depth++] = ')';
+        else if (chr == '[') nest[depth++] = ']';
+        else if (chr == '{') nest[depth++] = '}';
+        else if (buf && chr == nest[depth-1]) depth--;
+        if (!buf && !isspace(chr)) buf = allocChar(0);
+        if (buf && !isspace(chr)) enqueChar(chr);}
+    enqueChar(0);
+    if (depth) {freeChar(strlen(buf)+1); return 0;}
+    return buf;
 }
 
-int copyStrings(char **bufs, int size, char *buf)
+char *copyStrings(char **bufs) // caller must call freeChar
 {
-    for (int i = 0; bufs[i] && size; i++) {
-        for (int j = 0; bufs[i][j] && size; j++) {
-            size--;}}
-    size--;
-    if (size < 0) return -1;
+    char *buf = allocChar(0);
     for (int i = 0; bufs[i]; i++) {
         for (int j = 0; bufs[i][j]; j++) {
-            *(buf++) = bufs[i][j];}}
-    *buf = 0;
-    return 0;
+            enqueChar(bufs[i][j]);}}
+    enqueChar(0);
+    return buf;
 }
 
 int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
 
 int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*/ *buf);
 
-int partsToLine(char *part[2], int size, char *buf)
+char *partsToLine(char *part[2]) // caller must call freeChar
 {
-    return -1;
+    return 0;
 }
 
-int lineToParts(char *line, int size[2], char *buf[2])
+char *lineToPart(char **line) // caller must call freeChar
 {
-    return -1;
+    return 0;
 }
 
-int partToIndices(char *part, int size, int *buf)
+int *partToIndices(char *part) // caller must call freeInt
 {
-    return -1;
+    return 0;
 }
 
-int indicesToPart(int *indices, int size, char *buf)
+char *indicesToPart(int *indices) // caller must call freeChar
 {
-    return -1;
+    return 0;
 }
 
-int partToBytes(char *part, int size, char *buf)
+char *partToBytes(char *part) // caller must call freeChar
 {
-    return -1;
+    return 0;
 }
 
-int bytesToPart(char *bytes, char *format, int size, char *buf)
+char *bytesToPart(char *bytes, char *format) // caller must call freeChar
 {
-    return -1;
+    return 0;
 }
 
-int partToFormat(char *part, int size, int *buf)
+char *partToFormat(char *part) // caller must call freeChar
 {
-    return -1;
+    return 0;
 }
 
-int indicesToFormat(int *indices, char *format, int size, char *buf)
+char *indicesToFormat(int *indices, char *format) // caller must call freeChar
 {
-    return -1;
+    return 0;
 }
 
-int bytesToSize(char *bytes, char *format, int *size)
+int bytesToSize(char *bytes, char *format)
 {
     return -1;
 }
@@ -332,19 +339,17 @@ void updateGeneric()
 {
     char *base;
     char *limit;
-    char buf[100];
-    char buf0[100];
-    char buf1[100];
-    char *part[2] = {buf0,buf1};
-    char line[100];
-    int *indices = qheadIndex();
-    if (indicesToRange(indices, qheadFormat(), qheadGeneric(), &base, &limit) < 0) enqueErrstr("invalid indices for data");
-    if (indicesToFormat(indices, qheadFormat(), 100, buf) < 0) enqueErrstr("invalid indices for format");
-    if (bytesToPart(base, buf, 100, part[0]) < 0) enqueErrstr("invalid indices for bytes");
-    if (indicesToPart(indices, 100, part[1]) < 0) enqueErrstr("invalid indices for part");
-    if (partsToLine(part, 100, line) < 0) enqueErrstr("invalid indices for line");
+    char *buf;
+    char *part[2];
+    char *line;
+    int *ints = arrayIndex();
+    if (indicesToRange(ints, arrayFormat(), arrayGeneric(), &base, &limit) < 0) enqueErrstr("invalid indices for data");
+    if (!(buf = indicesToFormat(ints, arrayFormat()))) enqueErrstr("invalid indices for format");
+    if (!(part[0] = bytesToPart(base, buf))) enqueErrstr("invalid indices for bytes");
+    if (!(part[1] = indicesToPart(ints))) enqueErrstr("invalid indices for part");
+    if (!(line = partsToLine(part))) enqueErrstr("invalid indices for line");
     if (fprintf(historyFile, "%s\n", line) < 0) enqueErrstr("invalid indices for file");
-    qfreeIndex(intlen(indices)+1);
+    freeIndex(intlen(ints)+1);
 }
 
 /*
@@ -353,7 +358,7 @@ void updateGeneric()
 
 char *generic(int *indices, int *size)
 {
-    intcpy(qallocIndex(intlen(indices)+1), indices);
+    intcpy(allocIndex(intlen(indices)+1), indices);
     enqueUpdate(Generic);
     // if *size is not zero, resize indicated portion of generic data
     // if *size is zero, change it to size of indicated portion
@@ -369,7 +374,7 @@ double *click()
 char *message()
 {
     if (!validMessage()) return 0;
-    return qheadMessage();
+    return arrayMessage();
 }
 
 int mode()
@@ -487,20 +492,20 @@ void randomizeH(); // randomize polytope
 
 void configure()
 {
-    char history[100];
+    char *history;
     if (historyFile && fclose(historyFile) != 0) enqueErrstr("invalid path for close");
     if (!validDirectory()) {
         enqueDirectory(".");}
     while (validDirectory()) {
         FILE *lightingFile;
-        char lighting[100];
+        char *lighting;
         char *bufs[3];
         bufs[0] = headDirectory();
         bufs[1] = "/lighting.cfg";
         bufs[2] = 0;
-        if (copyStrings(bufs, 100, lighting) < 0) enqueErrstr("invalid path for copy");
+        if (!(lighting = copyStrings(bufs))) enqueErrstr("invalid path for copy");
         bufs[1] = "/history.cfg";
-        if (copyStrings(bufs, 100, history) < 0) enqueErrstr("invalid path for copy");
+        if (!(history = copyStrings(bufs))) enqueErrstr("invalid path for copy");
         if ((lightingFile = fopen(lighting, "r"))) {
             // load lighting directions and colors
         }
@@ -524,8 +529,10 @@ void configure()
         }
         else enqueErrnum("invalid path for history", history);
         if (fclose(historyFile) != 0) enqueErrstr("invalid path for close");
+        freeChar(strlen(lighting)+1);
         dequeDirectory();}
     if (!(historyFile = fopen(history,"a"))) enqueErrstr("invalid path for append");
+    freeChar(strlen(history)+1);
     printf("configure done\n");
 }
 
@@ -565,6 +572,8 @@ void finalize()
     if (historyFile) {fclose(historyFile); historyFile = 0;}
     if (commands.base) {struct Strings initial = {INITIAL_QUEUE}; free(commands.base); commands = initial;}
     if (directories.base) {struct Strings initial = {INITIAL_QUEUE}; free(directories.base); directories = initial;}
+    if (ints.base) {struct Ints initial = {INITIAL_QUEUE}; free(ints.base); ints = initial;}
+    if (chars.base) {struct Chars initial = {INITIAL_QUEUE}; free(chars.base); chars = initial;}
     if (messages.base) {struct Chars initial = {INITIAL_QUEUE}; free(messages.base); messages = initial;}
     if (formats.base) {struct Chars initial = {INITIAL_QUEUE}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {INITIAL_QUEUE}; free(metrics.base); metrics = initial;}
@@ -593,9 +602,7 @@ void waitForEvent()
             case (Normal): /*updateNormal(headBinding());*/ break;
             case (Index): /*updateIndex(headBinding());*/ break;
             case (Range): /*updateRange(headBinding());*/ break;
-            case (Messages): qfreeMessage(strlen(qheadMessage())+1); break;
-            case (Formats): qfreeFormat(strlen(qheadFormat())+1); break;
-            case (Metrics): qfreeMetric(strlen(qheadMetric())+1); break;}
+            case (Messages): freeMessage(strlen(arrayMessage())+1); break;}
         dequeUpdate();}
     if (validEvent()) {
         dequeEvent();}

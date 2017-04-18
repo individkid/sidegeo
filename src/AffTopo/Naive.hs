@@ -714,6 +714,14 @@ snakeSpace p q n s t u
 snakeSpaceF :: Place -> Place -> Place -> Bool
 snakeSpaceF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
+-- return all extensions by boundaries
+superSpaces :: [Boundary] -> Place -> [Place]
+superSpaces = undefined
+ -- find paths from some outside region
+ -- add to paths and eliminate possible division points
+ -- by dividing each path in each place
+ -- uniquefy by equivalence
+
 -- optimize this
 equivPerm :: Perm p => p -> p
 equivPerm p = equivPermF p (refinePerm p)
@@ -894,20 +902,17 @@ topeFromSpaceF p q = let
  -- return uniquefy of concat of restricted polys
  in nub' (mapMaybe (\[(x,y,z)] -> justIf z (x,y)) restrictions)
 
----- find sample space that polytope could be embedded in
+-- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
 spaceFromTope = undefined
- -- add boundary at a time, using vertex regions and edge paths to get partial sidedness information
- -- make depth first search when paths lead to both sides of boundary
- -- use path sidedness when they lead to only one side of boundary
+ -- find sidednesses implied by polytope and fold by boundary
+ -- filtering extensions of all sofar by implicit sidednesses
 
 -- find regions attached to top-level facets
 topeRegions :: Tope -> Place -> [Region]
 topeRegions = undefined
- -- consider section by facet base and find topeRegions for it
- -- start from each outside region and generate to shell
- -- filter shell by attached to outside
- -- return complement of outside and attached to outside
+ -- cumulatively starting from ungenerated subfacet regions
+ -- find facet regions by generating without crossing subfacet boundary the wrong way
 
 --
 -- between symbolic and numeric
