@@ -96,7 +96,8 @@ struct Events {DECLARE_QUEUE(enum Event)} events = {INITIAL_QUEUE};
 /*update functions to call before sleeping in waitForEvent*/
 enum Update {Generic,WireFrame,Vertex,Normal,Index,Range,Messages,Formats,Metrics};
 struct Updates {DECLARE_QUEUE(enum Update)} updates = {INITIAL_QUEUE};
-struct Bindings {DECLARE_QUEUE(void *)} bindings = {INITIAL_QUEUE};
+union Binding {int intVal; int *intPtr;};
+struct Bindings {DECLARE_QUEUE(union Binding)} bindings = {INITIAL_QUEUE};
 
 #define ACCESS_QUEUE(SINGULAR,PLURAL,TYPE,INSTANCE) \
 void enque##SINGULAR(TYPE val) \
@@ -203,7 +204,7 @@ ACCESS_QUEUE(Event,Events,enum Event,events)
 
 ACCESS_QUEUE(Update,Updates,enum Update,updates)
 
-ACCESS_QUEUE(Binding,Bindings,void *,bindings)
+ACCESS_QUEUE(Binding,Bindings,union Binding,bindings)
 
 void enqueErrnum(const char *str, const char *name)
 {
@@ -316,9 +317,8 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
  * state changes deferred from Haskell accessors
  */
 
-void updateGeneric(void *data)
+void updateGeneric(int *indices)
 {
-    int *indices = data;
     char *base;
     char *limit;
     char buf[100];
@@ -341,10 +341,12 @@ void updateGeneric(void *data)
 
 char *generic(int *indices, int *size)
 {
-    int count = 0; while (indices[count]) count++;
-    int *binding = malloc((count+1) * sizeof*indices);
-    for (int i = 0; i < count; i++) binding[i] = indices[i];
-    binding[count] = 0;
+    int count = 0;
+    union Binding binding;
+    while (indices[count]) count++;
+    binding.intPtr = malloc((count+1) * sizeof*indices);
+    for (int i = 0; i < count; i++) binding.intPtr[i] = indices[i];
+    binding.intPtr[count] = 0;
     enqueUpdate(Generic);
     enqueBinding(binding);
     // if *size is not zero, resize indicated portion of generic data
@@ -360,9 +362,11 @@ double *click()
 
 char *message()
 {
+    union Binding binding;
     if (!validMessage()) return 0;
+    binding.intVal = strlen(qheadMessage());
     enqueUpdate(Messages);
-    enqueBinding((void*)strlen(qheadMessage()));
+    enqueBinding(binding);
     return qheadMessage();
 }
 
@@ -581,15 +585,15 @@ void waitForEvent()
 {
     while (validUpdate()) {
         switch (headUpdate()) {
-            case (Generic): updateGeneric(headBinding()); break;
+            case (Generic): updateGeneric(headBinding().intPtr); break;
             case (WireFrame): /*updateWireFrame(headBinding());*/ break;
             case (Vertex): /*updateVertex(headBinding());*/ break;
             case (Normal): /*updateNormal(headBinding());*/ break;
             case (Index): /*updateIndex(headBinding());*/ break;
             case (Range): /*updateRange(headBinding());*/ break;
-            case (Messages): qfreeMessage((int)headBinding()); break;
-            case (Formats): qfreeFormat((int)headBinding()); break;
-            case (Metrics): qfreeMetric((int)headBinding()); break;}
+            case (Messages): qfreeMessage(headBinding().intVal); break;
+            case (Formats): qfreeFormat(headBinding().intVal); break;
+            case (Metrics): qfreeMetric(headBinding().intVal); break;}
         dequeUpdate();
         dequeBinding();}
     if (validEvent()) {
