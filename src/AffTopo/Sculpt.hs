@@ -25,12 +25,13 @@ import AffTopo.Naive
 
 foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
 foreign import ccall "click" clickC :: IO (Ptr CDouble)
-foreign import ccall "error" errorC :: IO (Ptr CChar)
+foreign import ccall "message" messageC :: IO (Ptr CChar)
 foreign import ccall "mode" modeC :: IO CInt
 foreign import ccall "mouse" mouseC :: IO CInt
 foreign import ccall "roller" rollerC :: IO CInt
 foreign import ccall "state" stateC :: IO CInt
 foreign import ccall "event" eventC :: IO CInt
+foreign export ccall "randomizeH" randomize :: IO ()
 
 removeMe :: [Side]
 removeMe = allSides
@@ -40,8 +41,11 @@ handleEvent = do
  event <- eventC
  case event of
   3 -> do
-   ptr <- errorC
+   ptr <- messageC
    str <- peekCString ptr
    error str
   4 -> return True
   _ -> return False
+
+randomize :: IO ()
+randomize = undefined
