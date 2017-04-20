@@ -49,12 +49,9 @@ extern void __stginit_Main(void);
 /*state captured by initialize function*/
 GLFWwindow *windowHandle = 0;
 FILE *configFile = 0; // for appending generic deltas
-GLuint shaderProgram = 0;
-GLuint VAO = 0;
-GLfloat vertices[] = {
-    -0.5f, -0.5f, 0.0f,
-     0.5f, -0.5f, 0.0f,
-     0.0f,  0.5f, 0.0f};
+GLuint displayVAO = 0;
+GLuint classVAO = 0;
+GLuint coplaneVAO = 0;
 /*state modified by command line options*/
 int interactive = 0; // set by -i
 int configured = 0; // lazy directory open to allow initial -d
@@ -67,6 +64,8 @@ struct Ints {DECLARE_QUEUE(int)} ints = {INITIAL_QUEUE};
  // scratchpad for int addrys
 struct Chars {DECLARE_QUEUE(char)} chars = {INITIAL_QUEUE};
  // scratchpad for char arrays
+struct Glubytes {DECLARE_QUEUE(GLubyte)} glubytes = {INITIAL_QUEUE};
+ // scratchpad for GLubyte data
 struct Chars messages = {INITIAL_QUEUE};
  // description of first error
 struct Chars formats = {INITIAL_QUEUE};
@@ -78,10 +77,12 @@ struct Chars generics = {INITIAL_QUEUE};
  // sized packet(s) of bytes in format
 struct Ints indices = {INITIAL_QUEUE};
  // generic data format indices from haskell call for deferred update of generic
-struct Ints polygons = {INITIAL_QUEUE};
- // start of face subscripts into planes
 struct Doubles {DECLARE_QUEUE(double)} planes = {INITIAL_QUEUE};
- // triples of planes representing vertices on faces
+ // per boundary triples of distances above base place
+struct Ints vertices = {INITIAL_QUEUE};
+ // per vertex triples of subscripts into planes
+struct Ints polygons = {INITIAL_QUEUE};
+ // per polytope first of subscript triples
 struct Ints subscripts = {INITIAL_QUEUE};
 struct Ints changes = {INITIAL_QUEUE};
  // where and how to change vertex array
@@ -208,6 +209,8 @@ ACCESS_QUEUE(Int,Ints,int,ints)
 
 ACCESS_QUEUE(Char,Chars,char,chars)
 
+ACCESS_QUEUE(Glubyte,Glubytes,GLubyte,glubytes)
+
 ACCESS_QUEUE(Message,Chars,char,messages)
 
 ACCESS_QUEUE(Format,Chars,char,formats)
@@ -217,6 +220,16 @@ ACCESS_QUEUE(Metric,Chars,char,metrics)
 ACCESS_QUEUE(Generic,Chars,char,generics)
 
 ACCESS_QUEUE(Index,Ints,int,indices)
+
+ACCESS_QUEUE(Plane,Doubles,double,planes)
+
+ACCESS_QUEUE(Vertex,Ints,int,vertices)
+
+ACCESS_QUEUE(Polygon,Ints,int,polygons)
+
+ACCESS_QUEUE(Subscript,Ints,int,subscripts)
+
+ACCESS_QUEUE(Change,Ints,int,changes)
 
 ACCESS_QUEUE(Event,Events,enum Event,events)
 
@@ -447,45 +460,138 @@ void displayClose(GLFWwindow* window)
     enqueEvent(Done);
 }
 
+void display(GLFWwindow *window, GLuint VAO);
+
 void displayRefresh(GLFWwindow* window)
 {
-    glClearColor(0.3f, 0.3f, 0.3f, 0.3f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glBindVertexArray(0);
-    glfwSwapBuffers(window);
-    printf("display done\n");
+    display(window, displayVAO);
 }
 
 /*
  * functions called by top level Haskell
  */
 
+void display(GLFWwindow *window, GLuint VAO)
+{
+    glBindVertexArray(VAO);
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glfwSwapBuffers(window);
+    glBindVertexArray(0);
+    printf("display done\n");
+}
+
+int bindProgram(const GLchar *vertexShaderSource, const GLchar *fragmentShaderSource)
+{
+    GLint success;
+    GLchar infoLog[512];
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if(!success) {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        printf("could not compile vertex shader: %s\n", infoLog);
+        return -1;}
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if(!success) {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        printf("could not compile fragment shader: %s\n", infoLog);
+        return -1;}
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if(!success) {
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        printf("could not link shaders: %s\n", infoLog);
+        return -1;}
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    glUseProgram(shaderProgram);
+    return 0;
+}
+
+int bindInput(GLsizeiptr size, GLfloat *triangle)
+{
+    GLuint VBO;
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, size, triangle, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+    return 0;
+}
+
+int bindOutput()
+{
+    GLuint VBO;
+    glGenBuffers(1, &VBO);
+    glReadBuffer(GL_FRONT);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, VBO);
+    glBufferData(GL_PIXEL_PACK_BUFFER, 10000, NULL, GL_STREAM_READ);
+    return 0;
+}
+
+GLubyte *enqueOutput()
+{
+    glReadPixels(0, 0, 100, 100, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+    GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+    if (!ptr) {
+        char *str;
+        switch (glGetError()) {
+            case (GL_INVALID_ENUM): str = "GL_INVALID_ENUM"; break;
+            case (GL_OUT_OF_MEMORY): str = "GL_OUT_OF_MEMORY"; break;
+            case (GL_INVALID_OPERATION): str = "GL_INVALID_OPERATION"; break;
+            case (GL_NO_ERROR): str = "GL_NO_ERROR"; break;
+            default: str = "oops"; break;
+        }
+        printf("map pixel buffer failed %s\n", str);
+        return 0;}
+    for (int i = 0; i < 10000; i++) enqueGlubyte(ptr[i]);
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    return allocGlubyte(0) - 10000;
+}
+
 void initialize(int argc, char **argv)
 {
-    const GLchar *vertexShaderSource = "\
+    const GLchar *displayVertexShaderSource = "\
         #version 330 core\n\
         layout (location = 0) in vec3 position;\n\
         void main()\n\
         {\n\
             gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
         }";
-    const GLchar *fragmentShaderSource = "\
+    const GLchar *displayFragmentShaderSource = "\
         #version 330 core\n\
         out vec4 color;\n\
         void main()\n\
         {\n\
             color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
         }";
-    /*program to find vertex and normal from plane triple.
-    program to find sidedness from plane triple and uniform.
-    program to find vertex from plane triple.*/
-    GLuint VBO = 0;
+     // program to find vertex and normal from plane triple.
+    const GLchar *classVertexShaderSource = displayVertexShaderSource;
+    const GLchar *classFragmentShaderSource = displayFragmentShaderSource;
+     // program to find sidedness from plane triple and uniform.
+    const GLchar *coplaneVertexShaderSource = displayVertexShaderSource;
+    const GLchar *coplaneFragmentShaderSource = displayFragmentShaderSource;
+     // program to find vertex from plane triple.
+    GLfloat triangle[] = {
+        -0.5f, -0.5f, 0.0f,
+         0.5f, -0.5f, 0.0f,
+         0.0f,  0.5f, 0.0f};
+
 #ifdef __GLASGOW_HASKELL__
     hs_add_root(__stginit_Main);
 #endif
-   for (int i = 0; i < argc; i++) enqueCommand(argv[i]);
+
+    for (int i = 0; i < argc; i++) enqueCommand(argv[i]);
+
     if (!glfwInit()) {
         printf("could not initialize glfw\n");
         return;}
@@ -506,6 +612,7 @@ void initialize(int argc, char **argv)
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
     glfwMakeContextCurrent(windowHandle);
+
     struct utsname buf;
     if (uname(&buf) < 0) {
         printf("cannot get kernel info\n");
@@ -525,50 +632,53 @@ void initialize(int argc, char **argv)
 #ifdef __APPLE__
     printf("%s: %s\n", buf.sysname, buf.release);
 #endif
+
     int width, height;
     glfwGetFramebufferSize(windowHandle, &width, &height);
     glViewport(0, 0, width, height);
-    GLint success;
-    GLchar infoLog[512];
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if(!success) {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        printf("could not compile vertex shader: %s\n", infoLog);
+
+    glGenVertexArrays(1, &displayVAO);
+    glBindVertexArray(displayVAO);
+    if (bindProgram(displayVertexShaderSource, displayFragmentShaderSource) < 0) {
+        printf("bind program failed\n");
         glfwTerminate();
         return;}
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if(!success) {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        printf("could not compile fragment shader: %s\n", infoLog);
+    if (bindInput(sizeof(triangle), triangle) < 0) {
+        printf("bind vertex shader data failed\n");
         glfwTerminate();
         return;}
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if(!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        printf("could not link shaders: %s\n", infoLog);
-        glfwTerminate();
-        return;}
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);  
-    glUseProgram(shaderProgram);
     glBindVertexArray(0);
+
+    glGenVertexArrays(1,&classVAO);
+    glBindVertexArray(classVAO);
+    if (bindProgram(displayVertexShaderSource, displayFragmentShaderSource) < 0) {
+        printf("bind program failed\n");
+        glfwTerminate();
+        return;}
+    if (bindInput(sizeof(triangle), triangle) < 0) {
+        printf("bind vertex shader data failed\n");
+        glfwTerminate();
+        return;}
+    if (bindOutput() < 0) {
+        printf("bind pixel pack buffer failed\n");
+        glfwTerminate();
+        return;}
+    glBindVertexArray(0);
+    display(windowHandle, classVAO);    
+    glBindVertexArray(classVAO);
+    GLubyte *ptr = enqueOutput();
+    if (ptr == 0) {
+        printf("read of output from shaders failed]\n");
+        glfwTerminate();
+        return;}
+    printf("process ptr %p\n", ptr);
+    freeGlubyte(10000);
+    glBindVertexArray(0);
+
+    glGenVertexArrays(1,&coplaneVAO);
+    glBindVertexArray(coplaneVAO);
+    glBindVertexArray(0);
+
     printf("initialize done\n");
 }
 
@@ -643,11 +753,6 @@ void process()
     dequeCommand();
 }
 
-void display()
-{
-    displayRefresh(windowHandle);    
-}
-
 void finalize()
 {
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
@@ -656,13 +761,15 @@ void finalize()
     if (filenames.base) {struct Strings initial = {INITIAL_QUEUE}; free(filenames.base); filenames = initial;}
     if (ints.base) {struct Ints initial = {INITIAL_QUEUE}; free(ints.base); ints = initial;}
     if (chars.base) {struct Chars initial = {INITIAL_QUEUE}; free(chars.base); chars = initial;}
+    if (glubytes.base) {struct Glubytes initial = {INITIAL_QUEUE}; free(glubytes.base); glubytes = initial;}
     if (messages.base) {struct Chars initial = {INITIAL_QUEUE}; free(messages.base); messages = initial;}
     if (formats.base) {struct Chars initial = {INITIAL_QUEUE}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {INITIAL_QUEUE}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {INITIAL_QUEUE}; free(generics.base); generics = initial;}
     if (indices.base) {struct Ints initial = {INITIAL_QUEUE}; free(indices.base); indices = initial;}
-    if (polygons.base) {struct Ints initial = {INITIAL_QUEUE}; free(polygons.base); polygons = initial;}
     if (planes.base) {struct Doubles initial = {INITIAL_QUEUE}; free(planes.base); planes = initial;}
+    if (vertices.base) {struct Ints initial = {INITIAL_QUEUE}; free(vertices.base); vertices = initial;}
+    if (polygons.base) {struct Ints initial = {INITIAL_QUEUE}; free(polygons.base); polygons = initial;}
     if (subscripts.base) {struct Ints initial = {INITIAL_QUEUE}; free(subscripts.base); subscripts = initial;}
     if (changes.base) {struct Ints initial = {INITIAL_QUEUE}; free(changes.base); changes = initial;}
     if (events.base) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
@@ -687,7 +794,7 @@ void waitForEvent()
                 configure();}
             if (!displayed) {
                 displayed = 1;
-                display();}
+                display(windowHandle, displayVAO);}
             // enqueEvent only called by callbacks called from glfwWaitEvents
             // so configure called before Haskell gets other than Done
             // thus state such as generic is available to Haskell accessors
