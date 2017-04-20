@@ -523,7 +523,7 @@ void initialize(int argc, char **argv)
         printf("%s: %s; glew: %s\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION));}
 #endif
 #ifdef __APPLE__
-    printf("%s: %s\n", buf.sysname, buf.release);}
+    printf("%s: %s\n", buf.sysname, buf.release);
 #endif
     int width, height;
     glfwGetFramebufferSize(windowHandle, &width, &height);
