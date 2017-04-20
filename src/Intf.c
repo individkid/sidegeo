@@ -27,10 +27,15 @@ extern void __stginit_Main(void);
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <sys/utsname.h>
 
 #include <ncurses.h>
-
+#ifdef __linux__
+#include <GL/glew.h>
+#endif
+#ifdef __APPLE__
 #define GLFW_INCLUDE_GLCOREARB
+#endif
 #include <GLFW/glfw3.h>
 
 #define DECLARE_QUEUE(TYPE) \
@@ -459,39 +464,28 @@ void displayRefresh(GLFWwindow* window)
 
 void initialize(int argc, char **argv)
 {
-    const GLchar *vertexShaderSource = " \
-        #version 330 core \
-        layout (location = 0) in vec3 position; \
-        void main() \
-        { \
-            gl_Position = vec4(position.x, position.y, position.z, 1.0); \
+    const GLchar *vertexShaderSource = "\
+        #version 330 core\n\
+        layout (location = 0) in vec3 position;\n\
+        void main()\n\
+        {\n\
+            gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
         }";
-    const GLchar *fragmentShaderSource = " \
-        #version 330 core \
-        out vec4 color; \
-        void main() \
-        { \
-            color = vec4(1.0f, 0.5f, 0.2f, 1.0f); \
+    const GLchar *fragmentShaderSource = "\
+        #version 330 core\n\
+        out vec4 color;\n\
+        void main()\n\
+        {\n\
+            color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
         }";
     /*program to find vertex and normal from plane triple.
     program to find sidedness from plane triple and uniform.
     program to find vertex from plane triple.*/
-    GLuint vertexShader;
-    GLuint fragmentShader;
-    GLint success;
-    GLchar infoLog[512];
-    GLuint VBO;
-    int width, height;
+    GLuint VBO = 0;
 #ifdef __GLASGOW_HASKELL__
     hs_add_root(__stginit_Main);
 #endif
-#ifdef __APPLE__
-    printf("osx\n");    
-#endif
-#ifdef __linux__
-    printf("linux\n");
-#endif
-    for (int i = 0; i < argc; i++) enqueCommand(argv[i]);
+   for (int i = 0; i < argc; i++) enqueCommand(argv[i]);
     if (!glfwInit()) {
         printf("could not initialize glfw\n");
         return;}
@@ -512,9 +506,31 @@ void initialize(int argc, char **argv)
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
     glfwMakeContextCurrent(windowHandle);
+    struct utsname buf;
+    if (uname(&buf) < 0) {
+        printf("cannot get kernel info\n");
+        return;}
+#ifdef __linux__
+    glewExperimental = GL_TRUE;
+    GLenum err = glewInit();
+    if (GLEW_OK != err) {
+        printf("could not initialize glew: %s\n", glewGetErrorString(err));
+        glfwTerminate();
+        return;}
+    if (GLEW_VERSION_3_3) {
+        printf("%s: %s; glew: %s; OpenGL: 3.3\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION));}
+    else {
+        printf("%s: %s; glew: %s\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION));}
+#endif
+#ifdef __APPLE__
+    printf("%s: %s\n", buf.sysname, buf.release);}
+#endif
+    int width, height;
     glfwGetFramebufferSize(windowHandle, &width, &height);
     glViewport(0, 0, width, height);
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    GLint success;
+    GLchar infoLog[512];
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
     glCompileShader(vertexShader);
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
@@ -523,7 +539,7 @@ void initialize(int argc, char **argv)
         printf("could not compile vertex shader: %s\n", infoLog);
         glfwTerminate();
         return;}
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
@@ -543,7 +559,7 @@ void initialize(int argc, char **argv)
         glfwTerminate();
         return;}
     glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);  
+    glDeleteShader(fragmentShader);
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
     glGenBuffers(1, &VBO);
