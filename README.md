@@ -6,12 +6,11 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
 
   * -i start interactive mode  
   * -e \<metric> start animation that tweaks planes according to a metric  
-  * -d \<directory> changes directory for history and configuration  
-  * -n \<directory> copies current state to new directory  
+  * -c <file> change file for configuration and history  
   * -o \<file> save polytope in format indicated by file extension  
   * -f \<file> load polytope in format indicated by file extension  
-  * -l \<shape> replace current polytope by builtin polytope  
   * -t \<ident> change current polytope to one from history  
+  * -n \<shape> replace current polytope by builtin polytope  
   * -r randomize direction and color of light sources
   * -s resample current space to planes with same sidedness  
   * -S resample current polytope to space and planes  

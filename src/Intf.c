@@ -750,7 +750,7 @@ void process()
         printf("-h print this message\n");
         printf("-i start interactive mode\n");
         printf("-e <metric> start animation that tweaks planes according to a metric\n");
-        printf("-c <file> changes file for config and configuration\n");
+        printf("-c <file> change file for config and configuration\n");
         printf("-o <file> save polytope in format indicated by file extension\n");
         printf("-f <file> load polytope in format indicated by file extension\n");
         printf("-t <ident> change current polytope to one from config\n");
