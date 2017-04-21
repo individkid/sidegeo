@@ -34,6 +34,13 @@ library
                        random
   hs-source-dirs:      src
 
+executable symb
+  main-is:             Symb.hs
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+  build-depends:       base >=4.8 && <4.9
+  hs-source-dirs:      src
+
 executable test
   main-is:             Test.hs
   other-modules:       AffTopo.Naive
