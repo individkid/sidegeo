@@ -473,38 +473,48 @@ void displayRefresh(GLFWwindow *window)
  * functions called by top level Haskell
  */
 
-int bindProgram(const GLchar *vertexShaderSource, const GLchar *fragmentShaderSource)
+int bindProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode)
 {
     GLint success;
     GLchar infoLog[512];
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertex, 1, &vertexCode, NULL);
+    glCompileShader(vertex);
+    glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        glGetShaderInfoLog(vertex, 512, NULL, infoLog);
         printf("could not compile vertex shader: %s\n", infoLog);
         return -1;}
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    GLuint geometry = glCreateShader(GL_GEOMETRY_SHADER);
+    glShaderSource(geometry, 1, &geometryCode, NULL);
+    glCompileShader(geometry);
+    glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
     if(!success) {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        glGetShaderInfoLog(geometry, 512, NULL, infoLog);
+        printf("could not compile geometry shader: %s\n", infoLog);
+        return -1;}
+    GLuint fragment = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragment, 1, &fragmentCode, NULL);
+    glCompileShader(fragment);
+    glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
+    if(!success) {
+        glGetShaderInfoLog(fragment, 512, NULL, infoLog);
         printf("could not compile fragment shader: %s\n", infoLog);
         return -1;}
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertex);
+    glAttachShader(program, geometry);
+    glAttachShader(program, fragment);
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
         printf("could not link shaders: %s\n", infoLog);
         return -1;}
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-    glUseProgram(shaderProgram);
+    glDeleteShader(vertex);
+    glDeleteShader(geometry);
+    glDeleteShader(fragment);
+    glUseProgram(program);
     return 0;
 }
 
@@ -542,14 +552,28 @@ GLubyte *enqueOutput() // add size parameter
 
 void initialize(int argc, char **argv)
 {
-    const GLchar *displayVertexShaderSource = "\
+    const GLchar *vertexCode = "\
         #version 330 core\n\
         layout (location = 0) in vec3 position;\n\
         void main()\n\
         {\n\
             gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
         }";
-    const GLchar *displayFragmentShaderSource = "\
+    const GLchar *geometryCode = "\
+        #version 330 core\n\
+        layout (triangles) in;\n\
+        layout (triangle_strip, max_vertices = 3) out;\n\
+        void main()\n\
+        {\n\
+            gl_Position = gl_in[0].gl_Position;\n\
+            EmitVertex();\n\
+            gl_Position = gl_in[1].gl_Position;\n\
+            EmitVertex();\n\
+            gl_Position = gl_in[2].gl_Position;\n\
+            EmitVertex();\n\
+            EndPrimitive();\n\
+        }";
+    const GLchar *fragmentCode = "\
         #version 330 core\n\
         out vec4 color;\n\
         void main()\n\
@@ -557,11 +581,11 @@ void initialize(int argc, char **argv)
             color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
         }";
      // program to find vertex and normal from plane triple.
-    const GLchar *classVertexShaderSource = displayVertexShaderSource;
-    const GLchar *classFragmentShaderSource = displayFragmentShaderSource;
+    const GLchar *classVertexCode = vertexCode;
+    const GLchar *classFragmentCode = fragmentCode;
      // program to find sidedness from plane triple and uniform.
-    const GLchar *coplaneVertexShaderSource = displayVertexShaderSource;
-    const GLchar *coplaneFragmentShaderSource = displayFragmentShaderSource;
+    const GLchar *coplaneVertexCode = vertexCode;
+    const GLchar *coplaneFragmentCode = fragmentCode;
      // program to find vertex from plane triple.
     GLfloat triangle[] = {
         -0.5f, -0.5f, 0.0f,
@@ -627,7 +651,7 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1,&coplaneVAO);
 
     glBindVertexArray(displayVAO);
-    if (bindProgram(displayVertexShaderSource, displayFragmentShaderSource) < 0) {
+    if (bindProgram(vertexCode, geometryCode, fragmentCode) < 0) {
         printf("bind program failed\n");
         glfwTerminate();
         return;}
@@ -636,7 +660,7 @@ void initialize(int argc, char **argv)
     glEnableVertexAttribArray(0);
 
     glBindVertexArray(classVAO);
-    if (bindProgram(displayVertexShaderSource, displayFragmentShaderSource) < 0) {
+    if (bindProgram(vertexCode, geometryCode, fragmentCode) < 0) {
         printf("bind program failed\n");
         glfwTerminate();
         return;}
