@@ -464,7 +464,7 @@ void displayRefresh(GLFWwindow *window)
 {
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_LINES_ADJACENCY, 0, 8);
     glfwSwapBuffers(window);
     printf("display done\n");
 }
@@ -561,15 +561,15 @@ void initialize(int argc, char **argv)
         }";
     const GLchar *geometryCode = "\
         #version 330 core\n\
-        layout (triangles) in;\n\
+        layout (lines_adjacency) in;\n\
         layout (triangle_strip, max_vertices = 3) out;\n\
         void main()\n\
         {\n\
             gl_Position = gl_in[0].gl_Position;\n\
             EmitVertex();\n\
-            gl_Position = gl_in[1].gl_Position;\n\
-            EmitVertex();\n\
             gl_Position = gl_in[2].gl_Position;\n\
+            EmitVertex();\n\
+            gl_Position = gl_in[3].gl_Position;\n\
             EmitVertex();\n\
             EndPrimitive();\n\
         }";
@@ -590,7 +590,13 @@ void initialize(int argc, char **argv)
     GLfloat triangle[] = {
         -0.5f, -0.5f, 0.0f,
          0.5f, -0.5f, 0.0f,
-         0.0f,  0.5f, 0.0f};
+         0.2f, -0.4f, 0.0f,
+         0.0f, -0.3f, 0.0f,
+        -0.5f, -0.2f, 0.0f,
+         0.2f, -0.1f, 0.0f,
+         0.5f, -0.2f, 0.0f,
+         0.0f,  0.0f, 0.0f,
+    };
 
 #ifdef __GLASGOW_HASKELL__
     hs_add_root(__stginit_Main);
