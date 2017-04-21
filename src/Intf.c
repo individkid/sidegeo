@@ -460,27 +460,18 @@ void displayClose(GLFWwindow* window)
     enqueEvent(Done);
 }
 
-void display(GLFWwindow *window, GLuint VAO);
-
-void displayRefresh(GLFWwindow* window)
+void displayRefresh(GLFWwindow *window)
 {
-    display(window, displayVAO);
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glfwSwapBuffers(window);
+    printf("display done\n");
 }
 
 /*
  * functions called by top level Haskell
  */
-
-void display(GLFWwindow *window, GLuint VAO)
-{
-    glBindVertexArray(VAO);
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glfwSwapBuffers(window);
-    glBindVertexArray(0);
-    printf("display done\n");
-}
 
 int bindProgram(const GLchar *vertexShaderSource, const GLchar *fragmentShaderSource)
 {
@@ -517,28 +508,19 @@ int bindProgram(const GLchar *vertexShaderSource, const GLchar *fragmentShaderSo
     return 0;
 }
 
-int bindInput(GLsizeiptr size, GLfloat *triangle)
+int allocInput(GLuint VBO, GLsizeiptr size, GLfloat *triangle)
 {
-    GLuint VBO;
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, size, triangle, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
     return 0;
 }
 
-int bindOutput()
+int allocOutput(GLuint VBO, GLsizeiptr size)
 {
-    GLuint VBO;
-    glGenBuffers(1, &VBO);
-    glReadBuffer(GL_FRONT);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, VBO);
-    glBufferData(GL_PIXEL_PACK_BUFFER, 10000, NULL, GL_STREAM_READ);
+    glBufferData(GL_PIXEL_PACK_BUFFER, size, NULL, GL_STREAM_READ);
     return 0;
 }
 
-GLubyte *enqueOutput()
+GLubyte *enqueOutput() // add size parameter
 {
     glReadPixels(0, 0, 100, 100, GL_BGRA, GL_UNSIGNED_BYTE, 0);
     GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
@@ -637,47 +619,50 @@ void initialize(int argc, char **argv)
     glfwGetFramebufferSize(windowHandle, &width, &height);
     glViewport(0, 0, width, height);
 
+    GLuint VBO, PBO;
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &PBO);
     glGenVertexArrays(1, &displayVAO);
+    glGenVertexArrays(1,&classVAO);
+    glGenVertexArrays(1,&coplaneVAO);
+
     glBindVertexArray(displayVAO);
     if (bindProgram(displayVertexShaderSource, displayFragmentShaderSource) < 0) {
         printf("bind program failed\n");
         glfwTerminate();
         return;}
-    if (bindInput(sizeof(triangle), triangle) < 0) {
-        printf("bind vertex shader data failed\n");
-        glfwTerminate();
-        return;}
-    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
 
-    glGenVertexArrays(1,&classVAO);
     glBindVertexArray(classVAO);
     if (bindProgram(displayVertexShaderSource, displayFragmentShaderSource) < 0) {
         printf("bind program failed\n");
         glfwTerminate();
         return;}
-    if (bindInput(sizeof(triangle), triangle) < 0) {
-        printf("bind vertex shader data failed\n");
-        glfwTerminate();
-        return;}
-    if (bindOutput() < 0) {
-        printf("bind pixel pack buffer failed\n");
-        glfwTerminate();
-        return;}
-    glBindVertexArray(0);
-    display(windowHandle, classVAO);    
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+    glReadBuffer(GL_FRONT);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO);
+    glBufferData(GL_PIXEL_PACK_BUFFER, 100000, NULL, GL_STREAM_READ);
+    glBindVertexArray(displayVAO);
+
+    glBindVertexArray(coplaneVAO);
+    glBindVertexArray(displayVAO);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
+
     glBindVertexArray(classVAO);
+    displayRefresh(windowHandle);
     GLubyte *ptr = enqueOutput();
+    glBindVertexArray(displayVAO);
     if (ptr == 0) {
         printf("read of output from shaders failed]\n");
         glfwTerminate();
         return;}
     printf("process ptr %p\n", ptr);
     freeGlubyte(10000);
-    glBindVertexArray(0);
-
-    glGenVertexArrays(1,&coplaneVAO);
-    glBindVertexArray(coplaneVAO);
-    glBindVertexArray(0);
 
     printf("initialize done\n");
 }
@@ -794,7 +779,7 @@ void waitForEvent()
                 configure();}
             if (!displayed) {
                 displayed = 1;
-                display(windowHandle, displayVAO);}
+                displayRefresh(windowHandle);}
             // enqueEvent only called by callbacks called from glfwWaitEvents
             // so configure called before Haskell gets other than Done
             // thus state such as generic is available to Haskell accessors
