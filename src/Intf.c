@@ -447,6 +447,16 @@ void configure()
     printf("configure done\n");
 }
 
+void display()
+{
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawArrays(GL_LINES_ADJACENCY, 0, 8);
+    glfwSwapBuffers(windowHandle);
+    displayed = 0;
+    printf("display done\n");
+}
+
 void process()
 {
     printf("process %s\n", headOption());
@@ -464,6 +474,7 @@ void process()
         printf("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
         if (!configured) {enqueCommand(&configure); configured = 1;}
+        if (!displayed) {enqueCommand(&display); displayed = 1;}
         interactive = 1;}
     if (strcmp(headOption(), "-c") == 0) {
         configured = 0;
@@ -471,15 +482,6 @@ void process()
         if (!validOption()) {enqueErrstr("missing file argument"); return;}
         enqueFilename(headOption());}
     dequeOption();
-}
-
-void display()
-{
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_LINES_ADJACENCY, 0, 8);
-    glfwSwapBuffers(windowHandle);
-    printf("display done\n");
 }
 
 /*
@@ -568,7 +570,9 @@ void displayClose(GLFWwindow* window)
 
 void displayRefresh(GLFWwindow *window)
 {
-    enqueCommand(&display);
+    if (!interactive && !validMetric()) return;
+    if (!configured) {enqueCommand(&configure); configured = 1;}
+    if (!displayed) {enqueCommand(&display); displayed = 1;}
 }
 
 /*
@@ -659,9 +663,7 @@ void initialize(int argc, char **argv)
     if (!glfwInit()) {
         printf("could not initialize glfw\n");
         return;}
-#ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -688,12 +690,12 @@ void initialize(int argc, char **argv)
         glfwTerminate();
         return;}
     if (GLEW_VERSION_3_3) {
-        printf("%s: %s; glew: %s; OpenGL: 3.3\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION));}
+        printf("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
     else {
-        printf("%s: %s; glew: %s\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION));}
+        printf("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
 #endif
 #ifdef __APPLE__
-    printf("%s: %s\n", buf.sysname, buf.release);
+    printf("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
 #endif
 
     int width, height;
@@ -751,9 +753,7 @@ void waitForEvent()
         if (!validCommand() && !interactive && !validOption()) {enqueCommand(0); enqueEvent(Done);}
         if (!validCommand() && !interactive && validOption()) enqueCommand(&process);
         if (!validCommand()) glfwWaitEvents();
-#ifndef __APPLE__
         else glfwPollEvents();
-#endif
         if (!validCommand()) continue;
         Command command = headCommand();
         dequeCommand();
