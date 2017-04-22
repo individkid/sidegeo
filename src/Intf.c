@@ -16,6 +16,43 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/*
+The function queue has pointers to command functions.
+A null function pointer indicates a Haskell command from the event queue.
+Each Haskell callback, user callback, commandline option, or IPC puts a command on the function queue and each type of argument has its own queue.
+Commands modify generic, write to history, append plane and/or quads/tris, schedule redraw if not already scheduled.
+Interactive command sends configure and display if not already sent.
+To use GPU for computation, classify and sample commands work on one chunk of plane triples at a time.
+First the event sets up uniforms, starts render to buffer, then requeues itself to read the chunk after other events in the queue.
+Thus, an argument to sample is the state of its state machine.
+A started classify in the queue implies generic is missing a boundary;
+a started sample implies plane is missing; and either implies fragments are out of date.
+Classify cannot start until generic is up to date; sample cannot start until planes are up to date;
+and additive/subtractive cannot start until both generic and planes are up to date.
+Use glMapBufferRange unsynchronized to append to oversized buffers.
+Since EBO may become fragmented, small fragments can be copied one at a time by defragment command.
+If the buffer to be modified is not big enough or a wrap is already issued, reissue the modify command, and initiate wrap if not already issued.
+Wrap command breaks itself into chunks to allow other commands before entire wrap complete.
+Wrap uses new buffer that it binds to active when done.
+Use glfwPollEvents if commands on queue. Use glfwWaitEvents if command queue empty.
+
+In glsl, check if matrix is invertable by dividing each element of its adjoint,
+and checking if those are each larger than the smallest invertible float.
+If so, then find the inverse by transposing the inverses.
+
+The display mode draws base of tetrahedron.
+The vertex shader takes the plane vector and base selector, makes three point plane matrix and transforms once for normal and again for view.
+The geometry shader takes quadruples of plane matrices, makes intersection points, calculates the normal of the first plane to use with each point.
+The fragment shader dots the normal vector with the light uniforms to calculate color.
+
+The classify mode calclulates vertex sidedness.
+The vertex shader passes on three point plane matrix without transformation.
+The geometry shader takes matrix triple, outputs intersection point minus uniform, dotted with uniform.
+
+The coplane calculates vertices.
+The vertex and geometry shaders are same as in class mode, exept geometry shader outputs intersection instead of difference dot.
+*/
+
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
 #include "Main_stub.h"
@@ -46,47 +83,32 @@ extern void __stginit_Main(void);
 
 #define INITIAL_QUEUE 0,0,0,0
 
-/*state captured by initialize function*/
 GLFWwindow *windowHandle = 0;
 FILE *configFile = 0; // for appending generic deltas
-GLuint displayVAO = 0;
-GLuint classVAO = 0;
-GLuint coplaneVAO = 0;
-/*state modified by command line options*/
+struct Buffer {
+    GLuint handle; // for switching between alternate buffers
+    GLintptr head; // for use with glMapBufferRange
+    GLintptr tail; // for use with glMapBufferRange
+    GLsizeiptr size; // remaining; total is tail+size
+};
+struct Buffer tetraEBO = {0,0,0,0};
+struct Buffer triEBO = {0,0,0,0};
+struct Buffer VBO = {0,0,0,0};
+GLuint vertexProgram = 0; // for Vertex shaderMode
+GLuint planeProgram = 0; // for Plane shaderMode
+GLuint coplaneProgram = 0; // for Coplane shaderMode
+GLuint classifyProgram = 0; // for Classify shaderMode
 int interactive = 0; // set by -i
 int configured = 0; // lazy directory open to allow initial -d
 int displayed = 0; // whether to redisplay before waiting
-struct Strings {DECLARE_QUEUE(char *)} commands = {INITIAL_QUEUE};
+struct Strings {DECLARE_QUEUE(char *)} options = {INITIAL_QUEUE};
  // command line arguments
 struct Strings filenames = {INITIAL_QUEUE};
  // for config files
-struct Ints {DECLARE_QUEUE(int)} ints = {INITIAL_QUEUE};
- // scratchpad for int addrys
-struct Chars {DECLARE_QUEUE(char)} chars = {INITIAL_QUEUE};
- // scratchpad for char arrays
-struct Glubytes {DECLARE_QUEUE(GLubyte)} glubytes = {INITIAL_QUEUE};
- // scratchpad for GLubyte data
-struct Chars messages = {INITIAL_QUEUE};
- // description of first error
-struct Chars formats = {INITIAL_QUEUE};
+struct Chars {DECLARE_QUEUE(char)} formats = {INITIAL_QUEUE};
  // from first line of history portion of config file
 struct Chars metrics = {INITIAL_QUEUE};
  // animation if valid
-/*current state modified by functions called from Haskell*/
-struct Chars generics = {INITIAL_QUEUE};
- // sized packet(s) of bytes in format
-struct Ints indices = {INITIAL_QUEUE};
- // generic data format indices from haskell call for deferred update of generic
-struct Doubles {DECLARE_QUEUE(double)} planes = {INITIAL_QUEUE};
- // per boundary triples of distances above base place
-struct Ints vertices = {INITIAL_QUEUE};
- // per vertex triples of subscripts into planes
-struct Ints polygons = {INITIAL_QUEUE};
- // per polytope first of subscript triples
-struct Ints subscripts = {INITIAL_QUEUE};
-struct Ints changes = {INITIAL_QUEUE};
- // where and how to change vertex array
-/*user input data accessed by functions called from Haskell*/
 enum {Transform,Manipulate,Refine,Additive,Subractive} majorMode = Transform;
 /*Transform: modify model or perspective matrix
  *Manipulate: modify pierced plane
@@ -106,156 +128,156 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
-/*user inputs processed once per call to waitForEvent*/
-enum Event {Click,Menu,Command,Error,Done};
+enum {Vertex,Plane,Coplane,Classify} shaderMode = Vertex;
+/*Vertex: draw all faces of tetrahedron specified by it vertices
+ *Plane: draw one face specified by base and sides
+ *Coplane: feedback intersections
+ *Classify: feedback dot products*/
+struct Chars generics = {INITIAL_QUEUE};
+ // sized packet(s) of bytes in format
+struct Doubles {DECLARE_QUEUE(double)} planes = {INITIAL_QUEUE};
+ // per boundary triples of distances above base place
+struct Ints {DECLARE_QUEUE(int)} faces = {INITIAL_QUEUE};
+ // per face quads of subscripts into planes
+struct Ints fragments = {INITIAL_QUEUE};
+ // subscripts into faces for ranges of valid faces
+typedef void (*Command)();
+struct Commands {DECLARE_QUEUE(Command)} commands = {INITIAL_QUEUE};
+ // commands from commandline, user input, Haskell, IPC, etc
+enum Event {Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {INITIAL_QUEUE};
-/*update functions to call before sleeping in waitForEvent*/
-enum Update {Generic,Messages};
-struct Updates {DECLARE_QUEUE(enum Update)} updates = {INITIAL_QUEUE};
+ // event queue for commands to Haskell
+struct Ints ints = {INITIAL_QUEUE};
+ // for scratchpad and arguments
+struct Chars chars = {INITIAL_QUEUE};
+ // for scratchpad and arguments
+struct Glubytes {DECLARE_QUEUE(GLubyte)} glubytes = {INITIAL_QUEUE};
+ // for scratchpad and arguments
+struct Doubles doubles = {INITIAL_QUEUE};
+ // for scratchpad and arguments
 
-#define ACCESS_QUEUE(SINGULAR,PLURAL,TYPE,INSTANCE) \
-void enque##SINGULAR(TYPE val) \
+#define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
+void enque##NAME(TYPE val) \
 { \
-    struct PLURAL *queue = &INSTANCE; \
-    if (queue->base == 0) { \
-        queue->base = malloc(10 * sizeof*queue->base); \
-        queue->limit = queue->base + 10; \
-        queue->head = queue->base; \
-        queue->tail = queue->base;} \
-    if (queue->tail == queue->limit) { \
-        int limit = queue->limit - queue->base; \
-        int head = queue->head - queue->base; \
-        queue->base = realloc(queue->base, (limit+10) * sizeof*queue->base); \
-        queue->limit = queue->base + limit + 10; \
-        queue->head = queue->base + head; \
-        queue->tail = queue->base + limit;} \
-    *queue->tail = val; \
-    queue->tail = queue->tail + 1; \
+    if (INSTANCE.base == 0) { \
+        INSTANCE.base = malloc(10 * sizeof*INSTANCE.base); \
+        INSTANCE.limit = INSTANCE.base + 10; \
+        INSTANCE.head = INSTANCE.base; \
+        INSTANCE.tail = INSTANCE.base;} \
+    if (INSTANCE.tail == INSTANCE.limit) { \
+        int limit = INSTANCE.limit - INSTANCE.base; \
+        int head = INSTANCE.head - INSTANCE.base; \
+        INSTANCE.base = realloc(INSTANCE.base, (limit+10) * sizeof*INSTANCE.base); \
+        INSTANCE.limit = INSTANCE.base + limit + 10; \
+        INSTANCE.head = INSTANCE.base + head; \
+        INSTANCE.tail = INSTANCE.base + limit;} \
+    *INSTANCE.tail = val; \
+    INSTANCE.tail = INSTANCE.tail + 1; \
 } \
 \
-int valid##SINGULAR() \
+int valid##NAME() \
 { \
-    struct PLURAL *queue = &INSTANCE; \
-    return (queue->head != queue->tail); \
+    return (INSTANCE.head != INSTANCE.tail); \
 } \
 \
-TYPE head##SINGULAR() \
+TYPE head##NAME() \
 { \
-    struct PLURAL *queue = &INSTANCE; \
-    return *queue->head; \
+    return *INSTANCE.head; \
 } \
 \
-void deque##SINGULAR() \
+void deque##NAME() \
 { \
-    struct PLURAL *queue = &INSTANCE; \
-    if (queue->head != queue->tail) { \
-        queue->head = queue->head + 1;} \
-    if (queue->head - queue->base == 10) { \
-        int tail = queue->tail - queue->base; \
+    if (INSTANCE.head != INSTANCE.tail) { \
+        INSTANCE.head = INSTANCE.head + 1;} \
+    if (INSTANCE.head - INSTANCE.base == 10) { \
+        int tail = INSTANCE.tail - INSTANCE.base; \
         for (int i = 10; i < tail; i++) { \
-            queue->base[i-10] = queue->base[i];} \
-        queue->head = queue->base; \
-        queue->tail = queue->base + tail - 10;} \
+            INSTANCE.base[i-10] = INSTANCE.base[i];} \
+        INSTANCE.head = INSTANCE.base; \
+        INSTANCE.tail = INSTANCE.base + tail - 10;} \
 } \
 \
-TYPE *alloc##SINGULAR(int size) \
+TYPE *alloc##NAME(int size) \
 { \
-    struct PLURAL *queue = &INSTANCE; \
-    if (queue->base == 0) { \
-        queue->base = malloc(10 * sizeof*queue->base); \
-        queue->limit = queue->base + 10; \
-        queue->head = queue->base; \
-        queue->tail = queue->base;} \
-    while (queue->tail + size >= queue->limit) { \
-        int limit = queue->limit - queue->base; \
-        int head = queue->head - queue->base; \
-        int tail = queue->tail - queue->base; \
-        queue->base = realloc(queue->base, (limit+10) * sizeof*queue->base); \
-        queue->limit = queue->base + limit + 10; \
-        queue->head = queue->base + head; \
-        queue->tail = queue->base + tail;} \
-    queue->tail = queue->tail + size; \
-    return queue->tail - size; \
+    if (INSTANCE.base == 0) { \
+        INSTANCE.base = malloc(10 * sizeof*INSTANCE.base); \
+        INSTANCE.limit = INSTANCE.base + 10; \
+        INSTANCE.head = INSTANCE.base; \
+        INSTANCE.tail = INSTANCE.base;} \
+    while (INSTANCE.tail + size >= INSTANCE.limit) { \
+        int limit = INSTANCE.limit - INSTANCE.base; \
+        int head = INSTANCE.head - INSTANCE.base; \
+        int tail = INSTANCE.tail - INSTANCE.base; \
+        INSTANCE.base = realloc(INSTANCE.base, (limit+10) * sizeof*INSTANCE.base); \
+        INSTANCE.limit = INSTANCE.base + limit + 10; \
+        INSTANCE.head = INSTANCE.base + head; \
+        INSTANCE.tail = INSTANCE.base + tail;} \
+    INSTANCE.tail = INSTANCE.tail + size; \
+    return INSTANCE.tail - size; \
 } \
 \
-TYPE *array##SINGULAR() \
+TYPE *array##NAME() \
 { \
-    struct PLURAL *queue = &INSTANCE; \
-    return queue->head; \
+    return INSTANCE.head; \
 } \
 \
-void free##SINGULAR(int size) \
+void free##NAME(int size) \
 { \
-    struct PLURAL *queue = &INSTANCE; \
-    if (queue->head + size <= queue->tail) { \
-        queue->head = queue->head + size;} \
-    while (queue->head - queue->base >= 10) { \
-        int tail = queue->tail - queue->base; \
+    if (INSTANCE.head + size <= INSTANCE.tail) { \
+        INSTANCE.head = INSTANCE.head + size;} \
+    while (INSTANCE.head - INSTANCE.base >= 10) { \
+        int tail = INSTANCE.tail - INSTANCE.base; \
         for (int i = 10; i < tail; i++) { \
-            queue->base[i-10] = queue->base[i];} \
-        queue->head = queue->base; \
-        queue->tail = queue->base + tail - 10;} \
+            INSTANCE.base[i-10] = INSTANCE.base[i];} \
+        INSTANCE.head = INSTANCE.base; \
+        INSTANCE.tail = INSTANCE.base + tail - 10;} \
+} \
+\
+void dealloc##NAME(int size) \
+{ \
+    if (INSTANCE.tail - size >= INSTANCE.head) { \
+        INSTANCE.tail = INSTANCE.tail - size;} \
 }
 
 /*
  * helpers for accessing state
  */
 
-ACCESS_QUEUE(Command,Strings,char *,commands)
+ACCESS_QUEUE(Option,char *,options)
 
-ACCESS_QUEUE(Directory,Strings,char *,filenames)
+ACCESS_QUEUE(Filename,char *,filenames)
 
-ACCESS_QUEUE(Int,Ints,int,ints)
+ACCESS_QUEUE(Format,char,formats)
 
-ACCESS_QUEUE(Char,Chars,char,chars)
+ACCESS_QUEUE(Metric,char,metrics)
 
-ACCESS_QUEUE(Glubyte,Glubytes,GLubyte,glubytes)
+ACCESS_QUEUE(Generic,char,generics)
 
-ACCESS_QUEUE(Message,Chars,char,messages)
+ACCESS_QUEUE(Plane,double,planes)
 
-ACCESS_QUEUE(Format,Chars,char,formats)
+ACCESS_QUEUE(Face,int,faces)
 
-ACCESS_QUEUE(Metric,Chars,char,metrics)
+ACCESS_QUEUE(Fragment,int,fragments)
 
-ACCESS_QUEUE(Generic,Chars,char,generics)
+ACCESS_QUEUE(Command,Command,commands)
 
-ACCESS_QUEUE(Index,Ints,int,indices)
+ACCESS_QUEUE(Event,enum Event,events)
 
-ACCESS_QUEUE(Plane,Doubles,double,planes)
+ACCESS_QUEUE(Int,int,ints)
 
-ACCESS_QUEUE(Vertex,Ints,int,vertices)
+ACCESS_QUEUE(Char,char,chars)
 
-ACCESS_QUEUE(Polygon,Ints,int,polygons)
+ACCESS_QUEUE(Glubyte,GLubyte,glubytes)
 
-ACCESS_QUEUE(Subscript,Ints,int,subscripts)
-
-ACCESS_QUEUE(Change,Ints,int,changes)
-
-ACCESS_QUEUE(Event,Events,enum Event,events)
-
-ACCESS_QUEUE(Update,Updates,enum Update,updates)
-
-void enqueErrnum(const char *str, const char *name)
-{
-    int num = errno;
-    char *err = strerror(num);
-    int siz = strlen(str) + strlen(name) + strlen(err) + 12;
-    char *buf = allocMessage(siz);
-    if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exit(-1);
-    enqueEvent(Error);
-    enqueUpdate(Messages);
-}
-
-void enqueErrstr(const char *str)
-{
-    strcpy(allocMessage(strlen(str)+1), str);
-    enqueEvent(Error);
-    enqueUpdate(Messages);
-}
+ACCESS_QUEUE(Double,double,doubles)
 
 /*
  * helpers for parsing history portion of config file
  */
+
+int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
+
+int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*/ *buf);
 
 int intlen(int *ints)
 {
@@ -270,7 +292,7 @@ void intcpy(int *dst, int *src)
     *dst = *src;
 }
 
-char *readLine(FILE *file) // caller must call freeChar
+char *readLine(FILE *file) // caller must call deallocChar
 {
     int depth = 0;
     int count = 0;
@@ -284,11 +306,11 @@ char *readLine(FILE *file) // caller must call freeChar
         else if (depth && chr == nest[depth-1]) depth--;
         if (!isspace(chr)) {enqueChar(chr); size++;}}
     enqueChar(0); size++;
-    if (depth) {freeChar(size); return 0;}
+    if (depth) {deallocChar(size); return 0;}
     return allocChar(0) - size;
 }
 
-char *copyStrings(char **bufs) // caller must call freeChar
+char *copyStrings(char **bufs) // caller must call deallocChar
 {
     int size = 0;
     for (int i = 0; bufs[i]; i++) {
@@ -298,16 +320,12 @@ char *copyStrings(char **bufs) // caller must call freeChar
     return allocChar(0) - size;
 }
 
-int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
-
-int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*/ *buf);
-
-char *partsToLine(char *part[2]) // caller must call freeChar
+char *partsToLine(char *part[2]) // caller must call deallocChar
 {
     return 0;
 }
 
-char *lineToPart(char **line) // caller must call freeChar
+char *lineToPart(char **line) // caller must call deallocChar
 {
     return 0;
 }
@@ -317,27 +335,27 @@ int *partToIndices(char *part) // caller must call freeInt
     return 0;
 }
 
-char *indicesToPart(int *indices) // caller must call freeChar
+char *indicesToPart(int *indices) // caller must call deallocChar
 {
     return 0;
 }
 
-char *partToBytes(char *part) // caller must call freeChar
+char *partToBytes(char *part) // caller must call deallocChar
 {
     return 0;
 }
 
-char *bytesToPart(char *bytes, char *format) // caller must call freeChar
+char *bytesToPart(char *bytes, char *format) // caller must call deallocChar
 {
     return 0;
 }
 
-char *partToFormat(char *part) // caller must call freeChar
+char *partToFormat(char *part) // caller must call deallocChar
 {
     return 0;
 }
 
-char *indicesToFormat(int *indices, char *format) // caller must call freeChar
+char *indicesToFormat(int *indices, char *format) // caller must call deallocChar
 {
     return 0;
 }
@@ -353,24 +371,115 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
 }
 
 /*
- * state changes deferred from Haskell accessors
+ * functions put on command queue
  */
 
-void updateGeneric()
+void finishError()
 {
-    char *base;
-    char *limit;
-    char *buf;
-    char *part[2];
-    char *line;
-    int *ints = arrayIndex();
-    if (indicesToRange(ints, arrayFormat(), arrayGeneric(), &base, &limit) < 0) enqueErrstr("invalid indices for data");
-    if (!(buf = indicesToFormat(ints, arrayFormat()))) enqueErrstr("invalid indices for format");
-    if (!(part[0] = bytesToPart(base, buf))) enqueErrstr("invalid indices for bytes");
-    if (!(part[1] = indicesToPart(ints))) enqueErrstr("invalid indices for part");
-    if (!(line = partsToLine(part))) enqueErrstr("invalid indices for line");
-    if (fprintf(configFile, "%s\n", line) < 0) enqueErrstr("invalid indices for file");
-    freeIndex(intlen(ints)+1);
+    if (!validChar()) exit(-1);
+    freeChar(strlen(arrayChar())+1);
+}
+
+void enqueErrnum(const char *str, const char *name)
+{
+    int num = errno;
+    char *err = strerror(num);
+    int siz = strlen(str) + strlen(name) + strlen(err) + 12;
+    char *buf = allocChar(siz);
+    if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exit(-1);
+    enqueCommand(0); enqueEvent(Error); enqueCommand(&finishError);
+}
+
+void enqueErrstr(const char *str)
+{
+    strcpy(allocChar(strlen(str)+1), str);
+    enqueCommand(0); enqueEvent(Error); enqueCommand(&finishError);
+}
+
+void configure()
+{
+    GLfloat triangle[] = {
+        -0.5f, -0.5f, 0.0f,
+         0.5f, -0.5f, 0.0f,
+         0.2f, -0.4f, 0.0f,
+         0.0f, -0.3f, 0.0f,
+        -0.5f, -0.2f, 0.0f,
+         0.2f, -0.1f, 0.0f,
+         0.5f, -0.2f, 0.0f,
+         0.0f,  0.0f, 0.0f,
+    };
+    char *filename = 0;
+    if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close");
+    if (!validFilename()) {
+        enqueFilename(".");}
+    while (validFilename()) {
+        char *bufs[3];
+        bufs[0] = headFilename();
+        bufs[1] = "/sculpt.cfg";
+        bufs[2] = 0;
+        if (filename) deallocChar(strlen(filename)+1);
+        if (!(filename = copyStrings(bufs))) enqueErrstr("invalid path for copy");
+        if ((configFile = fopen(filename, "r"))) {
+            // load lighting directions and colors
+            // ensure indices are empty on first config line
+            // read format and bytes from first config line
+            // for each subsequent config line,
+                // read indices, find subformat, read bytes
+                // find replaced range and replacement size
+                // replace range by bytes read from config
+            // load transformation matrices
+            // ftruncate to before transformation matrices
+            glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
+        }
+        else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
+            glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
+            // randomize();
+            // save lighting directions and colors
+            // randomizeH();
+            // save generic data
+            // save transformation matrices
+        }
+        else enqueErrnum("invalid path for config", filename);
+        if (fclose(configFile) != 0) enqueErrstr("invalid path for close");
+        dequeFilename();}
+    if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append");
+    deallocChar(strlen(filename)+1);
+    printf("configure done\n");
+}
+
+void process()
+{
+    printf("process %s\n", headOption());
+    if (strcmp(headOption(), "-h") == 0) {
+        printf("-h print this message\n");
+        printf("-i start interactive mode\n");
+        printf("-e <metric> start animation that tweaks planes according to a metric\n");
+        printf("-c <file> change file for config and configuration\n");
+        printf("-o <file> save polytope in format indicated by file extension\n");
+        printf("-f <file> load polytope in format indicated by file extension\n");
+        printf("-t <ident> change current polytope to one from config\n");
+        printf("-n <shape> replace current polytope by builtin polytope\n");
+        printf("-r randomize direction and color of light sources\n");
+        printf("-s resample current space to planes with same sidedness\n");
+        printf("-S resample current polytope to space and planes\n");}
+    if (strcmp(headOption(), "-i") == 0) {
+        if (!configured) {enqueCommand(&configure); configured = 1;}
+        interactive = 1;}
+    if (strcmp(headOption(), "-c") == 0) {
+        configured = 0;
+        dequeOption();
+        if (!validOption()) {enqueErrstr("missing file argument"); return;}
+        enqueFilename(headOption());}
+    dequeOption();
+}
+
+void display()
+{
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawArrays(GL_LINES_ADJACENCY, 0, 8);
+    glfwSwapBuffers(windowHandle);
+    printf("display done\n");
 }
 
 /*
@@ -379,8 +488,8 @@ void updateGeneric()
 
 char *generic(int *indices, int *size)
 {
-    intcpy(allocIndex(intlen(indices)+1), indices);
-    enqueUpdate(Generic);
+    // intcpy(allocIndex(intlen(indices)+1), indices);
+    // enqueUpdate(Generic);
     // if *size is not zero, resize indicated portion of generic data
     // if *size is zero, change it to size of indicated portion
     // return pointer to indicated portion of generic data
@@ -389,8 +498,8 @@ char *generic(int *indices, int *size)
 
 char *message()
 {
-    if (!validMessage()) return 0;
-    return arrayMessage();
+    if (!validChar()) return 0;
+    return arrayChar();
 }
 
 int mode()
@@ -436,9 +545,6 @@ int event()
 {
     if (!validEvent()) return -1;
     switch (headEvent()) {
-        case (Click): return 0;
-        case (Menu): return 1;
-        case (Command): return 2;
         case (Error): return 3;
         case (Done): return 4;}
     return -1;
@@ -457,23 +563,19 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 
 void displayClose(GLFWwindow* window)
 {
-    enqueEvent(Done);
+    enqueCommand(0); enqueEvent(Done);
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_LINES_ADJACENCY, 0, 8);
-    glfwSwapBuffers(window);
-    printf("display done\n");
+    enqueCommand(&display);
 }
 
 /*
  * functions called by top level Haskell
  */
 
-int bindProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode)
+GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode)
 {
     GLint success;
     GLchar infoLog[512];
@@ -484,7 +586,7 @@ int bindProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLch
     if(!success) {
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
         printf("could not compile vertex shader: %s\n", infoLog);
-        return -1;}
+        return 0;}
     GLuint geometry = glCreateShader(GL_GEOMETRY_SHADER);
     glShaderSource(geometry, 1, &geometryCode, NULL);
     glCompileShader(geometry);
@@ -492,7 +594,7 @@ int bindProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLch
     if(!success) {
         glGetShaderInfoLog(geometry, 512, NULL, infoLog);
         printf("could not compile geometry shader: %s\n", infoLog);
-        return -1;}
+        return 0;}
     GLuint fragment = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment, 1, &fragmentCode, NULL);
     glCompileShader(fragment);
@@ -500,7 +602,7 @@ int bindProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLch
     if(!success) {
         glGetShaderInfoLog(fragment, 512, NULL, infoLog);
         printf("could not compile fragment shader: %s\n", infoLog);
-        return -1;}
+        return 0;}
     GLuint program = glCreateProgram();
     glAttachShader(program, vertex);
     glAttachShader(program, geometry);
@@ -508,46 +610,13 @@ int bindProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLch
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
-        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        glGetProgramInfoLog(vertexProgram, 512, NULL, infoLog);
         printf("could not link shaders: %s\n", infoLog);
-        return -1;}
+        return 0;}
     glDeleteShader(vertex);
     glDeleteShader(geometry);
     glDeleteShader(fragment);
-    glUseProgram(program);
-    return 0;
-}
-
-int allocInput(GLuint VBO, GLsizeiptr size, GLfloat *triangle)
-{
-    glBufferData(GL_ARRAY_BUFFER, size, triangle, GL_STATIC_DRAW);
-    return 0;
-}
-
-int allocOutput(GLuint VBO, GLsizeiptr size)
-{
-    glBufferData(GL_PIXEL_PACK_BUFFER, size, NULL, GL_STREAM_READ);
-    return 0;
-}
-
-GLubyte *enqueOutput() // add size parameter
-{
-    glReadPixels(0, 0, 100, 100, GL_BGRA, GL_UNSIGNED_BYTE, 0);
-    GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-    if (!ptr) {
-        char *str;
-        switch (glGetError()) {
-            case (GL_INVALID_ENUM): str = "GL_INVALID_ENUM"; break;
-            case (GL_OUT_OF_MEMORY): str = "GL_OUT_OF_MEMORY"; break;
-            case (GL_INVALID_OPERATION): str = "GL_INVALID_OPERATION"; break;
-            case (GL_NO_ERROR): str = "GL_NO_ERROR"; break;
-            default: str = "oops"; break;
-        }
-        printf("map pixel buffer failed %s\n", str);
-        return 0;}
-    for (int i = 0; i < 10000; i++) enqueGlubyte(ptr[i]);
-    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    return allocGlubyte(0) - 10000;
+    return program;
 }
 
 void initialize(int argc, char **argv)
@@ -580,29 +649,12 @@ void initialize(int argc, char **argv)
         {\n\
             color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
         }";
-     // program to find vertex and normal from plane triple.
-    const GLchar *classVertexCode = vertexCode;
-    const GLchar *classFragmentCode = fragmentCode;
-     // program to find sidedness from plane triple and uniform.
-    const GLchar *coplaneVertexCode = vertexCode;
-    const GLchar *coplaneFragmentCode = fragmentCode;
-     // program to find vertex from plane triple.
-    GLfloat triangle[] = {
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f,
-         0.2f, -0.4f, 0.0f,
-         0.0f, -0.3f, 0.0f,
-        -0.5f, -0.2f, 0.0f,
-         0.2f, -0.1f, 0.0f,
-         0.5f, -0.2f, 0.0f,
-         0.0f,  0.0f, 0.0f,
-    };
 
 #ifdef __GLASGOW_HASKELL__
     hs_add_root(__stginit_Main);
 #endif
 
-    for (int i = 0; i < argc; i++) enqueCommand(argv[i]);
+    for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
     if (!glfwInit()) {
         printf("could not initialize glfw\n");
@@ -613,8 +665,7 @@ void initialize(int argc, char **argv)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    // glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-    windowHandle = glfwCreateWindow(800, 600, "Hello World", NULL, NULL);
+    windowHandle = glfwCreateWindow(800, 600, "Sculpt", NULL, NULL);
     if (!windowHandle) {
         glfwTerminate();
         printf("could not create window\n");
@@ -649,172 +700,63 @@ void initialize(int argc, char **argv)
     glfwGetFramebufferSize(windowHandle, &width, &height);
     glViewport(0, 0, width, height);
 
-    GLuint VBO, PBO;
-    glGenBuffers(1, &VBO);
+    vertexProgram = compileProgram(vertexCode, geometryCode, fragmentCode);
+    if (!vertexProgram) {
+        printf("bind program failed\n");
+        glfwTerminate();
+        return;}
+
+    GLuint VAO, PBO;
+    glGenBuffers(1, &VBO.handle);
     glGenBuffers(1, &PBO);
-    glGenVertexArrays(1, &displayVAO);
-    glGenVertexArrays(1,&classVAO);
-    glGenVertexArrays(1,&coplaneVAO);
-
-    glBindVertexArray(displayVAO);
-    if (bindProgram(vertexCode, geometryCode, fragmentCode) < 0) {
-        printf("bind program failed\n");
-        glfwTerminate();
-        return;}
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindVertexArray(classVAO);
-    if (bindProgram(vertexCode, geometryCode, fragmentCode) < 0) {
-        printf("bind program failed\n");
-        glfwTerminate();
-        return;}
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
-    glReadBuffer(GL_FRONT);
+    glGenVertexArrays(1, &VAO);
+    glUseProgram(vertexProgram);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO);
-    glBufferData(GL_PIXEL_PACK_BUFFER, 100000, NULL, GL_STREAM_READ);
-    glBindVertexArray(displayVAO);
+    glReadBuffer(GL_FRONT);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
 
-    glBindVertexArray(coplaneVAO);
-    glBindVertexArray(displayVAO);
-
-    glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
-
-    glBindVertexArray(classVAO);
-    displayRefresh(windowHandle);
-    GLubyte *ptr = enqueOutput();
-    glBindVertexArray(displayVAO);
-    if (ptr == 0) {
-        printf("read of output from shaders failed]\n");
-        glfwTerminate();
-        return;}
-    printf("process ptr %p\n", ptr);
-    freeGlubyte(10000);
+    // attribute EBOs
+    // initialize transform uniforms
+    // initialize mode uniform
 
     printf("initialize done\n");
-}
-
-void randomize()
-{
-    // randomize lighting
-}
-
-void randomizeH(); // randomize polytope
-
-void configure()
-{
-    char *filename = 0;
-    if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close");
-    if (!validDirectory()) {
-        enqueDirectory(".");}
-    while (validDirectory()) {
-        char *bufs[3];
-        bufs[0] = headDirectory();
-        bufs[1] = "/sculpt.cfg";
-        bufs[2] = 0;
-        if (filename) freeChar(strlen(filename)+1);
-        if (!(filename = copyStrings(bufs))) enqueErrstr("invalid path for copy");
-        if ((configFile = fopen(filename, "r"))) {
-            // load lighting directions and colors
-            // ensure indices are empty on first config line
-            // read format and bytes from first config line
-            // for each subsequent config line,
-                // read indices, find subformat, read bytes
-                // find replaced range and replacement size
-                // replace range by bytes read from config
-            // load transformation matrices
-            // ftruncate to before transformation matrices
-        }
-        else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
-            // randomize();
-            // save lighting directions and colors
-            // randomizeH();
-            // save generic data
-            // save transformation matrices
-        }
-        else enqueErrnum("invalid path for config", filename);
-        if (fclose(configFile) != 0) enqueErrstr("invalid path for close");
-        dequeDirectory();}
-    if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append");
-    freeChar(strlen(filename)+1);
-    printf("configure done\n");
-}
-
-void process()
-{
-    printf("process %s\n", headCommand());
-    if (strcmp(headCommand(), "-h") == 0) {
-        printf("-h print this message\n");
-        printf("-i start interactive mode\n");
-        printf("-e <metric> start animation that tweaks planes according to a metric\n");
-        printf("-c <file> change file for config and configuration\n");
-        printf("-o <file> save polytope in format indicated by file extension\n");
-        printf("-f <file> load polytope in format indicated by file extension\n");
-        printf("-t <ident> change current polytope to one from config\n");
-        printf("-n <shape> replace current polytope by builtin polytope\n");
-        printf("-r randomize direction and color of light sources\n");
-        printf("-s resample current space to planes with same sidedness\n");
-        printf("-S resample current polytope to space and planes\n");}
-    if (strcmp(headCommand(), "-i") == 0) {
-        interactive = 1;}
-    if (strcmp(headCommand(), "-c") == 0) {
-        configured = 0;
-        dequeCommand();
-        if (!validCommand()) {enqueErrstr("missing file argument"); return;}
-        enqueDirectory(headCommand());}
-    dequeCommand();
 }
 
 void finalize()
 {
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
-    if (commands.base) {struct Strings initial = {INITIAL_QUEUE}; free(commands.base); commands = initial;}
+    if (options.base) {struct Strings initial = {INITIAL_QUEUE}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {INITIAL_QUEUE}; free(filenames.base); filenames = initial;}
-    if (ints.base) {struct Ints initial = {INITIAL_QUEUE}; free(ints.base); ints = initial;}
-    if (chars.base) {struct Chars initial = {INITIAL_QUEUE}; free(chars.base); chars = initial;}
-    if (glubytes.base) {struct Glubytes initial = {INITIAL_QUEUE}; free(glubytes.base); glubytes = initial;}
-    if (messages.base) {struct Chars initial = {INITIAL_QUEUE}; free(messages.base); messages = initial;}
     if (formats.base) {struct Chars initial = {INITIAL_QUEUE}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {INITIAL_QUEUE}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {INITIAL_QUEUE}; free(generics.base); generics = initial;}
-    if (indices.base) {struct Ints initial = {INITIAL_QUEUE}; free(indices.base); indices = initial;}
     if (planes.base) {struct Doubles initial = {INITIAL_QUEUE}; free(planes.base); planes = initial;}
-    if (vertices.base) {struct Ints initial = {INITIAL_QUEUE}; free(vertices.base); vertices = initial;}
-    if (polygons.base) {struct Ints initial = {INITIAL_QUEUE}; free(polygons.base); polygons = initial;}
-    if (subscripts.base) {struct Ints initial = {INITIAL_QUEUE}; free(subscripts.base); subscripts = initial;}
-    if (changes.base) {struct Ints initial = {INITIAL_QUEUE}; free(changes.base); changes = initial;}
+    if (faces.base) {struct Ints initial = {INITIAL_QUEUE}; free(faces.base); faces = initial;}
+    if (fragments.base) {struct Ints initial = {INITIAL_QUEUE}; free(fragments.base); fragments = initial;}
     if (events.base) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
-    if (updates.base) {struct Updates initial = {INITIAL_QUEUE}; free(updates.base); updates = initial;}
+    if (ints.base) {struct Ints initial = {INITIAL_QUEUE}; free(ints.base); ints = initial;}
+    if (chars.base) {struct Chars initial = {INITIAL_QUEUE}; free(chars.base); chars = initial;}
+    if (glubytes.base) {struct Glubytes initial = {INITIAL_QUEUE}; free(glubytes.base); glubytes = initial;}
+    if (doubles.base) {struct Doubles initial = {INITIAL_QUEUE}; free(doubles.base); doubles = initial;}
     printf("finalize done\n");
 }
 
 void waitForEvent()
 {
-    while (validUpdate()) {
-        switch (headUpdate()) {
-            case (Generic): updateGeneric(); break;
-            case (Messages): freeMessage(strlen(arrayMessage())+1); break;}
-        dequeUpdate();}
-    if (validEvent()) {
-        dequeEvent();}
-    while (!validEvent() && (interactive || validCommand())) {
-        if (interactive) {
-            if (!configured) {
-                configured = 1;
-                displayed = 0;
-                configure();}
-            if (!displayed) {
-                displayed = 1;
-                displayRefresh(windowHandle);}
-            // enqueEvent only called by callbacks called from glfwWaitEvents
-            // so configure called before Haskell gets other than Done
-            // thus state such as generic is available to Haskell accessors
-            glfwWaitEvents();} else {
-            process();}}
-    if (!validEvent()) {
-        enqueEvent(Done);}
+    while (1) {
+        if (!validCommand() && !interactive && !validOption()) {enqueCommand(0); enqueEvent(Done);}
+        if (!validCommand() && !interactive && validOption()) enqueCommand(&process);
+        if (!validCommand()) glfwWaitEvents();
+#ifndef __APPLE__
+        else glfwPollEvents();
+#endif
+        if (!validCommand()) continue;
+        Command command = headCommand();
+        dequeCommand();
+        if (command) (*command)();
+        else break;}
 }
