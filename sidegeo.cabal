@@ -51,6 +51,8 @@ executable test
                        hmatrix,
                        random
   hs-source-dirs:      src
+  if os(osx)
+    extra-lib-dirs:      /usr/lib
 
 executable sculpt
   main-is:             Main.hs
@@ -78,6 +80,7 @@ executable sculpt
                        m,
                        pthread
   if os(osx)
+    extra-lib-dirs:      /usr/lib
     extra-libraries:   glfw3
     frameworks:        Cocoa,
                        OpenGL,
