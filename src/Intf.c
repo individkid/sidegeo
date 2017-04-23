@@ -138,8 +138,10 @@ enum {Vertex,Plane,Coplane,Copoint,Classify} shaderMode = Vertex;
  *Classify: feedback dot products*/
 struct Chars generics = {INITIAL_QUEUE};
  // sized packet(s) of bytes in format
-struct Doubles {DECLARE_QUEUE(double)} planes = {INITIAL_QUEUE};
+struct Floats {DECLARE_QUEUE(float)} planes = {INITIAL_QUEUE};
  // per boundary triples of distances above base place
+struct Floats coplanes = {INITIAL_QUEUE};
+ // shared point per boundary triple
 struct Ints {DECLARE_QUEUE(int)} faces = {INITIAL_QUEUE};
  // per face quads of subscripts into planes
 struct Ints fragments = {INITIAL_QUEUE};
@@ -156,7 +158,9 @@ struct Chars chars = {INITIAL_QUEUE};
  // for scratchpad and arguments
 struct Glubytes {DECLARE_QUEUE(GLubyte)} glubytes = {INITIAL_QUEUE};
  // for scratchpad and arguments
-struct Doubles doubles = {INITIAL_QUEUE};
+struct Floats floats = {INITIAL_QUEUE};
+ // for scratchpad and arguments
+struct Pointers {DECLARE_QUEUE(void *)} pointers = {INITIAL_QUEUE};
  // for scratchpad and arguments
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
@@ -256,7 +260,9 @@ ACCESS_QUEUE(Metric,char,metrics)
 
 ACCESS_QUEUE(Generic,char,generics)
 
-ACCESS_QUEUE(Plane,double,planes)
+ACCESS_QUEUE(Plane,float,planes)
+
+ACCESS_QUEUE(Coplane,float,coplanes)
 
 ACCESS_QUEUE(Face,int,faces)
 
@@ -272,7 +278,9 @@ ACCESS_QUEUE(Char,char,chars)
 
 ACCESS_QUEUE(Glubyte,GLubyte,glubytes)
 
-ACCESS_QUEUE(Double,double,doubles)
+ACCESS_QUEUE(Float,float,floats)
+
+ACCESS_QUEUE(Pointers,void *,pointers)
 
 /*
  * helpers for parsing history portion of config file
@@ -481,6 +489,7 @@ void configure()
 void display()
 {
     glUseProgram(vertexProgram);
+    glDisable(GL_RASTERIZER_DISCARD);
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glDrawArrays(GL_LINES_ADJACENCY, 0, 4);
@@ -491,11 +500,15 @@ void display()
 
 void coplane()
 {
+    GLfloat *feedback = allocCoplane(12);
     // depending on state
+    glEnable(GL_RASTERIZER_DISCARD);
     glUseProgram(coplaneProgram);
-    glBindBuffer(GL_ARRAY_BUFFER, TBO.handle);
-    glBufferData(GL_ARRAY_BUFFER, 4, NULL, GL_STATIC_READ);
-    // render points with each triple from the four planes
+    glBeginTransformFeedback(GL_POINTS);
+    // render points with plane triples from next chunk
+    glEndTransformFeedback();
+    glFlush();
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 12, feedback);
     // requeu to read next chunk
 }
 
@@ -671,37 +684,57 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     return program;
 }
 
+#define vertexCode "\
+    #version 330 core\n\
+    layout (location = 0) in vec3 position;\n\
+    void main()\n\
+    {\n\
+        gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
+    }";
+#define geometryCode "\
+    #version 330 core\n\
+    layout (lines_adjacency) in;\n\
+    layout (triangle_strip, max_vertices = 3) out;\n\
+    void main()\n\
+    {\n\
+        gl_Position = gl_in[0].gl_Position;\n\
+        EmitVertex();\n\
+        gl_Position = gl_in[2].gl_Position;\n\
+        EmitVertex();\n\
+        gl_Position = gl_in[3].gl_Position;\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }";
+#define fragmentCode "\
+    #version 330 core\n\
+    out vec4 color;\n\
+    void main()\n\
+    {\n\
+        color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
+    }";
+
+const GLchar *vertexVertex = vertexCode;
+const GLchar *vertexGeometry = geometryCode;
+const GLchar *vertexFragment = fragmentCode;
+
+const GLchar *planeVertex = vertexCode;
+const GLchar *planeGeometry = geometryCode;
+const GLchar *planeFragment = fragmentCode;
+
+const GLchar *coplaneVertex = vertexCode;
+const GLchar *coplaneGeometry = geometryCode;
+const GLchar *coplaneFragment = fragmentCode;
+
+const GLchar *copointVertex = vertexCode;
+const GLchar *copointGeometry = geometryCode;
+const GLchar *copointFragment = fragmentCode;
+
+const GLchar *classifyVertex = vertexCode;
+const GLchar *classifyGeometry = geometryCode;
+const GLchar *classifyFragment = fragmentCode;
+
 void initialize(int argc, char **argv)
 {
-    const GLchar *vertexCode = "\
-        #version 330 core\n\
-        layout (location = 0) in vec3 position;\n\
-        void main()\n\
-        {\n\
-            gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
-        }";
-    const GLchar *geometryCode = "\
-        #version 330 core\n\
-        layout (lines_adjacency) in;\n\
-        layout (triangle_strip, max_vertices = 3) out;\n\
-        void main()\n\
-        {\n\
-            gl_Position = gl_in[0].gl_Position;\n\
-            EmitVertex();\n\
-            gl_Position = gl_in[2].gl_Position;\n\
-            EmitVertex();\n\
-            gl_Position = gl_in[3].gl_Position;\n\
-            EmitVertex();\n\
-            EndPrimitive();\n\
-        }";
-    const GLchar *fragmentCode = "\
-        #version 330 core\n\
-        out vec4 color;\n\
-        void main()\n\
-        {\n\
-            color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
-        }";
-
 #ifdef __GLASGOW_HASKELL__
     hs_add_root(__stginit_Main);
 #endif
@@ -754,21 +787,24 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    glGenBuffers(1, &TBO.handle);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, TBO.handle);
-
-    // attribute EBOs
-
     glGenBuffers(1, &VBO.handle);
     glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
 
-    vertexProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "vertex");
-    planeProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "plane");
-    coplaneProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "coplane");
-    copointProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "copoint");
-    classifyProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "classify");
+    // attribute EBOs
+
+    glGenBuffers(1, &TBO.handle);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, TBO.handle);
+    glBindBuffer(GL_ARRAY_BUFFER, TBO.handle);
+    glBufferData(GL_ARRAY_BUFFER, 12, NULL, GL_STATIC_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, TBO.handle);
+
+    vertexProgram = compileProgram(vertexVertex, vertexGeometry, vertexFragment, 0, "vertex");
+    planeProgram = compileProgram(planeVertex, planeGeometry, planeFragment, 0, "plane");
+    coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, 0, "coplane");
+    copointProgram = compileProgram(copointVertex, copointGeometry, copointFragment, 0, "copoint");
+    classifyProgram = compileProgram(classifyVertex, classifyGeometry, classifyFragment, 0, "classify");
     if (!classifyProgram) {
         printf("bind classify program failed\n");
         glfwTerminate();
@@ -786,14 +822,18 @@ void finalize()
     if (formats.base) {struct Chars initial = {INITIAL_QUEUE}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {INITIAL_QUEUE}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {INITIAL_QUEUE}; free(generics.base); generics = initial;}
-    if (planes.base) {struct Doubles initial = {INITIAL_QUEUE}; free(planes.base); planes = initial;}
+    if (planes.base) {struct Floats initial = {INITIAL_QUEUE}; free(planes.base); planes = initial;}
+    if (coplanes.base) {struct Floats initial = {INITIAL_QUEUE}; free(coplanes.base); coplanes = initial;}
     if (faces.base) {struct Ints initial = {INITIAL_QUEUE}; free(faces.base); faces = initial;}
     if (fragments.base) {struct Ints initial = {INITIAL_QUEUE}; free(fragments.base); fragments = initial;}
     if (events.base) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
     if (ints.base) {struct Ints initial = {INITIAL_QUEUE}; free(ints.base); ints = initial;}
+
+const GLchar *vertexVertex = vertexCode;
     if (chars.base) {struct Chars initial = {INITIAL_QUEUE}; free(chars.base); chars = initial;}
     if (glubytes.base) {struct Glubytes initial = {INITIAL_QUEUE}; free(glubytes.base); glubytes = initial;}
-    if (doubles.base) {struct Doubles initial = {INITIAL_QUEUE}; free(doubles.base); doubles = initial;}
+    if (floats.base) {struct Floats initial = {INITIAL_QUEUE}; free(floats.base); floats = initial;}
+    if (pointers.base) {struct Pointers initial = {INITIAL_QUEUE}; free(pointers.base); pointers = initial;}
     printf("finalize done\n");
 }
 
