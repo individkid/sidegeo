@@ -23,7 +23,7 @@ Each Haskell callback, user callback, commandline option, or IPC puts a command 
 Commands modify generic, write to history, append plane and/or quads/tris, schedule redraw if not already scheduled.
 Interactive command sends configure and display if not already sent.
 To use GPU for computation, classify and sample commands work on one chunk of plane triples at a time.
-First the event sets up uniforms, starts render to buffer, then requeues itself to read the chunk after other events in the queue.
+First the command sets up uniforms, starts render to buffer, then requeues itself to read the chunk after other events in the queue.
 Thus, an argument to sample is the state of its state machine.
 A started classify in the queue implies generic is missing a boundary;
 a started sample implies plane is missing; and either implies fragments are out of date.
@@ -36,7 +36,7 @@ Wrap command breaks itself into chunks to allow other commands before entire wra
 Wrap uses new buffer that it binds to active when done.
 Use glfwPollEvents if commands on queue. Use glfwWaitEvents if command queue empty.
 
-In glsl, check if matrix is invertable by dividing each element of its adjoint,
+In glsl, check if matrix is invertable by dividing determinant by each element of its adjoint,
 and checking if those are each larger than the smallest invertible float.
 If so, then find the inverse by transposing the inverses.
 
@@ -49,7 +49,7 @@ The classify mode calclulates vertex sidedness.
 The vertex shader passes on three point plane matrix without transformation.
 The geometry shader takes matrix triple, outputs intersection point minus uniform, dotted with uniform.
 
-The coplane calculates vertices.
+The coplane mode calculates vertices.
 The vertex and geometry shaders are same as in class mode, exept geometry shader outputs intersection instead of difference dot.
 */
 
@@ -65,6 +65,7 @@ extern void __stginit_Main(void);
 #include <errno.h>
 #include <ctype.h>
 #include <sys/utsname.h>
+#include <math.h>
 
 #include <ncurses.h>
 #ifdef __linux__
@@ -94,9 +95,11 @@ struct Buffer {
 struct Buffer tetraEBO = {0,0,0,0};
 struct Buffer triEBO = {0,0,0,0};
 struct Buffer VBO = {0,0,0,0};
+struct Buffer TBO = {0,0,0,0};
 GLuint vertexProgram = 0; // for Vertex shaderMode
 GLuint planeProgram = 0; // for Plane shaderMode
 GLuint coplaneProgram = 0; // for Coplane shaderMode
+GLuint copointProgram = 0; // for Copoint shaderMode
 GLuint classifyProgram = 0; // for Classify shaderMode
 int interactive = 0; // set by -i
 int configured = 0; // lazy directory open to allow initial -d
@@ -128,7 +131,7 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
-enum {Vertex,Plane,Coplane,Classify} shaderMode = Vertex;
+enum {Vertex,Plane,Coplane,Copoint,Classify} shaderMode = Vertex;
 /*Vertex: draw all faces of tetrahedron specified by it vertices
  *Plane: draw one face specified by base and sides
  *Coplane: feedback intersections
@@ -398,15 +401,41 @@ void enqueErrstr(const char *str)
 
 void configure()
 {
-    GLfloat triangle[] = {
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f,
-         0.2f, -0.4f, 0.0f,
-         0.0f, -0.3f, 0.0f,
-        -0.5f, -0.2f, 0.0f,
-         0.2f, -0.1f, 0.0f,
-         0.5f, -0.2f, 0.0f,
-         0.0f,  0.0f, 0.0f,
+    // h^2 = 1 - 0.5^2
+    // a + b = h
+    // a > b
+    // a^2 = b^2 + 0.5^2 = (h - a)^2 + 0.5^2 = h^2 - 2ha + a^2 + 0.5^2
+    // 2ha = h^2 + 0.5^2
+    // a = (h^2 + 0.5^2)/(2h)
+    // a^2 = (h^2 + 0.5^2)^2/(4h^2)
+    // i^2 = 1 - a^2
+    // p + q = i
+    // p > q
+    // p^2 = q^2 + 0.5^2 = (i - p)^2 + 0.5^2 = i^2 - 2ip + p^2 + 0.5^2
+    // 2ip = i^2 + 0.5^2
+    // p = (i^2 + 0.5^2)/(2i)
+    GLfloat z = 0.0;
+    GLfloat f = 1.0; // length of edges
+    GLfloat g = f / 2.0; // midpoint on edge from corner
+    GLfloat g2 = g * g;
+    GLfloat h2 = 1.0 - g2;
+    GLfloat h = sqrt(h2); // height of triangle
+    GLfloat n = h2 + g2;
+    GLfloat d = 2.0 * h;
+    GLfloat a = n / d; // distance from corner to center of triangle
+    GLfloat b = h - a; // distance from base to center of triangle
+    GLfloat a2 = a * a;
+    GLfloat i2 = 1.0 - a2;
+    GLfloat i = sqrt(i2); // height of tetrahedron
+    GLfloat u = i2 + g2;
+    GLfloat v = 2.0 * i;
+    GLfloat p = u / v; // distance from vertex to center of tetrahedron
+    GLfloat q = i - p; // distance from base to center of tetrahedron
+    GLfloat tetrahedron[] = {
+        -g,-b,-q,
+         g,-b,-q,
+         z, a,-q,
+         z, z, p,
     };
     char *filename = 0;
     if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close");
@@ -429,15 +458,17 @@ void configure()
                 // replace range by bytes read from config
             // load transformation matrices
             // ftruncate to before transformation matrices
-            glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(tetrahedron), tetrahedron, GL_STATIC_DRAW);
         }
         else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
-            glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
             // randomize();
             // save lighting directions and colors
             // randomizeH();
             // save generic data
             // save transformation matrices
+            glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(tetrahedron), tetrahedron, GL_STATIC_DRAW);
         }
         else enqueErrnum("invalid path for config", filename);
         if (fclose(configFile) != 0) enqueErrstr("invalid path for close");
@@ -449,12 +480,23 @@ void configure()
 
 void display()
 {
+    glUseProgram(vertexProgram);
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_LINES_ADJACENCY, 0, 8);
+    glDrawArrays(GL_LINES_ADJACENCY, 0, 4);
     glfwSwapBuffers(windowHandle);
     displayed = 0;
     printf("display done\n");
+}
+
+void coplane()
+{
+    // depending on state
+    glUseProgram(coplaneProgram);
+    glBindBuffer(GL_ARRAY_BUFFER, TBO.handle);
+    glBufferData(GL_ARRAY_BUFFER, 4, NULL, GL_STATIC_READ);
+    // render points with each triple from the four planes
+    // requeu to read next chunk
 }
 
 void process()
@@ -579,7 +621,7 @@ void displayRefresh(GLFWwindow *window)
  * functions called by top level Haskell
  */
 
-GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode)
+GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *outputCode, const char *name)
 {
     GLint success;
     GLchar infoLog[512];
@@ -589,15 +631,16 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-        printf("could not compile vertex shader: %s\n", infoLog);
+        printf("could not compile vertex shader for program %s: %s\n", name, infoLog);
         return 0;}
+    // initialize transform uniforms
     GLuint geometry = glCreateShader(GL_GEOMETRY_SHADER);
     glShaderSource(geometry, 1, &geometryCode, NULL);
     glCompileShader(geometry);
     glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
     if(!success) {
         glGetShaderInfoLog(geometry, 512, NULL, infoLog);
-        printf("could not compile geometry shader: %s\n", infoLog);
+        printf("could not compile geometry shader for program %s: %s\n", name, infoLog);
         return 0;}
     GLuint fragment = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment, 1, &fragmentCode, NULL);
@@ -605,17 +648,22 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
     if(!success) {
         glGetShaderInfoLog(fragment, 512, NULL, infoLog);
-        printf("could not compile fragment shader: %s\n", infoLog);
+        printf("could not compile fragment shader for program %s: %s\n", name, infoLog);
         return 0;}
     GLuint program = glCreateProgram();
     glAttachShader(program, vertex);
     glAttachShader(program, geometry);
     glAttachShader(program, fragment);
+    if (outputCode) {
+        const GLchar* codeArray[1]; codeArray[0] = outputCode;
+        glTransformFeedbackVaryings(program, 1, codeArray, GL_INTERLEAVED_ATTRIBS);
+        // initialize classify uniforms
+    }
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
         glGetProgramInfoLog(vertexProgram, 512, NULL, infoLog);
-        printf("could not link shaders: %s\n", infoLog);
+        printf("could not link shaders for program %s: %s\n", name, infoLog);
         return 0;}
     glDeleteShader(vertex);
     glDeleteShader(geometry);
@@ -702,27 +750,29 @@ void initialize(int argc, char **argv)
     glfwGetFramebufferSize(windowHandle, &width, &height);
     glViewport(0, 0, width, height);
 
-    vertexProgram = compileProgram(vertexCode, geometryCode, fragmentCode);
-    if (!vertexProgram) {
-        printf("bind program failed\n");
-        glfwTerminate();
-        return;}
-
-    GLuint VAO, PBO;
-    glGenBuffers(1, &VBO.handle);
-    glGenBuffers(1, &PBO);
+    GLuint VAO;
     glGenVertexArrays(1, &VAO);
-    glUseProgram(vertexProgram);
     glBindVertexArray(VAO);
+
+    glGenBuffers(1, &TBO.handle);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, TBO.handle);
+
+    // attribute EBOs
+
+    glGenBuffers(1, &VBO.handle);
     glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, PBO);
-    glReadBuffer(GL_FRONT);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
 
-    // attribute EBOs
-    // initialize transform uniforms
-    // initialize mode uniform
+    vertexProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "vertex");
+    planeProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "plane");
+    coplaneProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "coplane");
+    copointProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "copoint");
+    classifyProgram = compileProgram(vertexCode, geometryCode, fragmentCode, 0, "classify");
+    if (!classifyProgram) {
+        printf("bind classify program failed\n");
+        glfwTerminate();
+        return;}
 
     printf("initialize done\n");
 }
