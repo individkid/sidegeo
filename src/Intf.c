@@ -438,6 +438,10 @@ void configure()
          z, a,-q,
          z, z, p,
     };
+    GLuint indices[] = {
+        0,1,3,
+        1,2,3,
+    };
     char *filename = 0;
     if (configureState <= ConfigureIdle || configureState >= ConfigureStates) {
         exitErrstr("configure command not enqued");}
@@ -460,6 +464,8 @@ void configure()
             // ftruncate to before transformation matrices
             glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
             glBufferData(GL_ARRAY_BUFFER, sizeof(tetrahedron), tetrahedron, GL_STATIC_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cornerSub.base);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
         }
         else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
             // randomize();
@@ -468,6 +474,8 @@ void configure()
             // save generic data
             glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
             glBufferData(GL_ARRAY_BUFFER, sizeof(tetrahedron), tetrahedron, GL_STATIC_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cornerSub.base);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
         }
         else enqueErrnum("invalid path for config", filename);
         if (fclose(configFile) != 0) {
@@ -487,10 +495,10 @@ void display()
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
-    // EBO bind and attrib
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cornerSub.base);
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glfwSwapBuffers(windowHandle);
     displayState = DisplayIdle;
     printf("display done\n");
@@ -820,7 +828,8 @@ void initialize(int argc, char **argv)
 
     glGenBuffers(1, &planeBuf.base);
     glGenBuffers(1, &pointBuf.base);
-    // glGenBuffers for EBOs
+    glGenBuffers(1, &cornerSub.base);
+    glGenBuffers(1, &coplaneSub.base);
 
     displayProgram = compileProgram(displayVertex, displayGeometry, displayFragment, 0, 0, 0, 0, "display");
     coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, 0, 0, 0, 0, "coplane");
