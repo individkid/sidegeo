@@ -100,6 +100,14 @@ struct Buffer coplaneSub = {0,0,0,0}; // every triple of planes
 GLuint displayProgram = 0; // for Display shaderMode
 GLuint coplaneProgram = 0; // for Coplane shaderMode
 GLuint classifyProgram = 0; // for Classify shaderMode
+GLint basisUniform = 0;
+GLint modelUniform = 0;
+GLint normalUniform = 0;
+GLint featherUniform = 0;
+GLint arrowUniform = 0;
+GLint lightUniform = 0;
+GLint extraUniform = 0;
+GLint colorUniform = 0;
 struct Strings {DECLARE_QUEUE(char *)} options = {INITIAL_QUEUE}; // command line arguments
 struct Strings filenames = {INITIAL_QUEUE}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {INITIAL_QUEUE}; // from first line of history portion of config file
@@ -514,11 +522,7 @@ void coplane()
     int count = headInt(); dequeInt();
     glUseProgram(coplaneProgram);
     glEnable(GL_RASTERIZER_DISCARD);
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, 3, NULL, GL_STATIC_READ);
     glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, pointBuf.base);
-    const GLchar* feedbackCode[] = {"vector"};
-    glTransformFeedbackVaryings(coplaneProgram, 1, feedbackCode, GL_INTERLEAVED_ATTRIBS);
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
@@ -526,6 +530,8 @@ void coplane()
     glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 3*sizeof(GLubyte), (GLvoid*)0);
     glEnableVertexAttribArray(1);
     // EBO bind and attrib at (GLvoid*)((GLuint*)0+offset*3)
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, 3, NULL, GL_STATIC_READ);
     glBeginTransformFeedback(GL_POINTS);
     glDrawArrays(GL_TRIANGLES, 0, count*3);
     glEndTransformFeedback();
@@ -852,9 +858,25 @@ void initialize(int argc, char **argv)
     coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "coplane");
     classifyProgram = compileProgram(classifyVertex, classifyGeometry, classifyFragment, "classify");
 
-    enqueCommand(&process);
-    processState = ProcessEnqued;
+    glUseProgram(displayProgram);
+    modelUniform = glGetUniformLocation(displayProgram, "model");
+    normalUniform = glGetUniformLocation(displayProgram, "normal");
+    lightUniform = glGetUniformLocation(displayProgram, "light");
+    extraUniform = glGetUniformLocation(displayProgram, "extra");
+    colorUniform = glGetUniformLocation(displayProgram, "color");
 
+    glUseProgram(coplaneProgram);
+    basisUniform = glGetUniformLocation(displayProgram, "basis");
+    const GLchar* coplaneFeedback[] = {"vector"};
+    glTransformFeedbackVaryings(coplaneProgram, 1, coplaneFeedback, GL_INTERLEAVED_ATTRIBS);
+
+    glUseProgram(classifyProgram);
+    featherUniform = glGetUniformLocation(displayProgram, "feather");
+    arrowUniform = glGetUniformLocation(displayProgram, "arrow");
+    const GLchar* classifyFeedback[] = {"scalar"};
+    glTransformFeedbackVaryings(classifyProgram, 1, classifyFeedback, GL_INTERLEAVED_ATTRIBS);
+
+    enqueCommand(&process); processState = ProcessEnqued;
     printf("initialize done\n");
 }
 
