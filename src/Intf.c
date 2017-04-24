@@ -528,7 +528,7 @@ void coplane()
 
 void process()
 {
-    printf("process %s\n", headOption());
+    printf("process %s\n", (validOption() ? headOption() : "null"));
     if (processState <= ProcessIdle || processState >= ProcessStates) {
         exitErrstr("process command not enqued");}
     if (!validOption()) {
