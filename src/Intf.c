@@ -92,8 +92,9 @@ struct Buffer {
     GLintptr head;
     GLintptr tail;
 }; // for use by *Bind* and *Map*
-struct Buffer pointBuf = {0,0,0,0}; // shared point per boundary triple
 struct Buffer planeBuf = {0,0,0,0}; // per boundary distances above base plane
+struct Buffer versorBuf = {0,0,0,0}; // per boundary base selector
+struct Buffer pointBuf = {0,0,0,0}; // shared point per boundary triple
 struct Buffer cornerSub = {0,0,0,0}; // subscripts into points
 struct Buffer coplaneSub = {0,0,0,0}; // every triple of planes
 GLuint displayProgram = 0; // for Display shaderMode
@@ -515,10 +516,15 @@ void coplane()
     glEnable(GL_RASTERIZER_DISCARD);
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glBufferData(GL_ARRAY_BUFFER, 3, NULL, GL_STATIC_READ);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, pointBuf.base);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, pointBuf.base);
+    const GLchar* feedbackCode[] = {"vector"};
+    glTransformFeedbackVaryings(coplaneProgram, 1, feedbackCode, GL_INTERLEAVED_ATTRIBS);
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
+    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 3*sizeof(GLubyte), (GLvoid*)0);
+    glEnableVertexAttribArray(1);
     // EBO bind and attrib at (GLvoid*)((GLuint*)0+offset*3)
     glBeginTransformFeedback(GL_POINTS);
     glDrawArrays(GL_TRIANGLES, 0, count*3);
@@ -676,8 +682,7 @@ void displayRefresh(GLFWwindow *window)
  * functions called by top level Haskell
  */
 
-GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
- const GLchar *basisCode, const GLchar *transformCode, const GLchar *outputCode0, GLchar *outputCode1, const char *name)
+GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const char *name)
 {
     GLint success;
     GLchar infoLog[512];
@@ -709,16 +714,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glAttachShader(program, vertex);
     glAttachShader(program, geometry);
     glAttachShader(program, fragment);
-    if (basisCode) {
-        // initialize basis uniforms
-    }
-    if (transformCode) {
-        // initialize transform uniforms
-    }
-    if (outputCode0) {
-        const GLchar *arrayCode[2] = {outputCode0,outputCode1};
-        glTransformFeedbackVaryings(program, (outputCode1 ? 2 : 1), arrayCode, GL_INTERLEAVED_ATTRIBS);
-    }
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
@@ -733,31 +728,52 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 
 #define vertexCode "\
     #version 330 core\n\
-    layout (location = 0) in vec3 position;\n\
+    layout (location = 0) in vec3 vertex;\n\
+    layout (location = 1) in uint versor;\n\
+    out vec3 xformed;\n\
+    out vec3 rotated;\n\
+    uniform mat3 basis;\n\
+    uniform mat4 model;\n\
+    uniform mat3 normal;\n\
     void main()\n\
     {\n\
-        gl_Position = vec4(position.x, position.y, position.z, 1.0);\n\
+        xformed = vec3(vertex.x, vertex.y, vertex.z);\n\
+        rotated = vec3(1.0f, 0.5f, 0.2f);\n\
     }";
 #define geometryCode "\
     #version 330 core\n\
     layout (triangles) in;\n\
     layout (triangle_strip, max_vertices = 3) out;\n\
+    in vec3 xformed[3];\n\
+    in vec3 rotated[3];\n\
+    out vec3 vector;\n\
+    out float scalar;\n\
+    uniform vec3 feather;\n\
+    uniform vec3 arrow;\n\
+    uniform mat3 light;\n\
+    uniform vec3 extra; // extra light row\n\
     void main()\n\
     {\n\
-        gl_Position = gl_in[0].gl_Position;\n\
+        gl_Position = vec4(xformed[0], 1.0);\n\
+        vector = vec3(0.0f, 0.0f, 0.0f);\n\
         EmitVertex();\n\
-        gl_Position = gl_in[1].gl_Position;\n\
+        gl_Position = vec4(xformed[1], 1.0);\n\
+        vector = vec3(0.0f, 0.0f, 0.0f);\n\
         EmitVertex();\n\
-        gl_Position = gl_in[2].gl_Position + vec4(0.2,0.0,0.0,0.0);\n\
+        gl_Position = vec4(xformed[2] + vec3(0.2,0.0,0.0), 1.0);\n\
+        vector = rotated[0];\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }";
 #define fragmentCode "\
     #version 330 core\n\
-    out vec4 color;\n\
+    in vec3 vector;\n\
+    in float scalar; // extra light dimension\n\
+    out vec4 result;\n\
+    uniform vec4 color;\n\
     void main()\n\
     {\n\
-        color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
+        result = vec4(vector, 1.0f);\n\
     }";
 
 const GLchar *displayVertex = vertexCode;
@@ -827,13 +843,14 @@ void initialize(int argc, char **argv)
     glBindVertexArray(VAO);
 
     glGenBuffers(1, &planeBuf.base);
+    glGenBuffers(1, &versorBuf.base);
     glGenBuffers(1, &pointBuf.base);
     glGenBuffers(1, &cornerSub.base);
     glGenBuffers(1, &coplaneSub.base);
 
-    displayProgram = compileProgram(displayVertex, displayGeometry, displayFragment, 0, 0, 0, 0, "display");
-    coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, 0, 0, 0, 0, "coplane");
-    classifyProgram = compileProgram(classifyVertex, classifyGeometry, classifyFragment, 0, 0, 0, 0, "classify");
+    displayProgram = compileProgram(displayVertex, displayGeometry, displayFragment, "display");
+    coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "coplane");
+    classifyProgram = compileProgram(classifyVertex, classifyGeometry, classifyFragment, "classify");
 
     enqueCommand(&process);
     processState = ProcessEnqued;
