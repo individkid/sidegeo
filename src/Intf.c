@@ -84,35 +84,26 @@ extern void __stginit_Main(void);
 
 #define INITIAL_QUEUE 0,0,0,0
 
-GLFWwindow *windowHandle = 0;
+GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
 struct Buffer {
-    GLuint handle; // for switching between alternate buffers
-    GLintptr head; // for use with glMapBufferRange
-    GLintptr tail; // for use with glMapBufferRange
-    GLsizeiptr size; // remaining; total is tail+size
-};
-struct Buffer tetraEBO = {0,0,0,0};
-struct Buffer triEBO = {0,0,0,0};
-struct Buffer VBO = {0,0,0,0};
-struct Buffer TBO = {0,0,0,0};
-GLuint vertexProgram = 0; // for Vertex shaderMode
-GLuint planeProgram = 0; // for Plane shaderMode
+    GLuint base;
+    GLintptr limit;
+    GLintptr head;
+    GLintptr tail;
+}; // for use by *Bind* and *Map*
+struct Buffer pointBuf = {0,0,0,0}; // shared point per boundary triple
+struct Buffer planeBuf = {0,0,0,0}; // per boundary distances above base plane
+struct Buffer cornerSub = {0,0,0,0}; // subscripts into points
+struct Buffer coplaneSub = {0,0,0,0}; // every triple of planes
+GLuint displayProgram = 0; // for Display shaderMode
 GLuint coplaneProgram = 0; // for Coplane shaderMode
-GLuint copointProgram = 0; // for Copoint shaderMode
 GLuint classifyProgram = 0; // for Classify shaderMode
-int interactive = 0; // set by -i
-int configured = 0; // lazy directory open to allow initial -d
-int displayed = 0; // whether to redisplay before waiting
-struct Strings {DECLARE_QUEUE(char *)} options = {INITIAL_QUEUE};
- // command line arguments
-struct Strings filenames = {INITIAL_QUEUE};
- // for config files
-struct Chars {DECLARE_QUEUE(char)} formats = {INITIAL_QUEUE};
- // from first line of history portion of config file
-struct Chars metrics = {INITIAL_QUEUE};
- // animation if valid
-enum {Transform,Manipulate,Refine,Additive,Subractive} majorMode = Transform;
+struct Strings {DECLARE_QUEUE(char *)} options = {INITIAL_QUEUE}; // command line arguments
+struct Strings filenames = {INITIAL_QUEUE}; // for config files
+struct Chars {DECLARE_QUEUE(char)} formats = {INITIAL_QUEUE}; // from first line of history portion of config file
+struct Chars metrics = {INITIAL_QUEUE}; // animation if valid
+enum {Transform,Manipulate,Refine,Additive,Subractive} menuMode = Transform;
 /*Transform: modify model or perspective matrix
  *Manipulate: modify pierced plane
  *Refine: click adds random plane
@@ -131,21 +122,17 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
-enum {Vertex,Plane,Coplane,Copoint,Classify} shaderMode = Vertex;
-/*Vertex: draw all faces of tetrahedron specified by it vertices
- *Plane: draw one face specified by base and sides
+enum {Display,Coplane,Classify} shaderMode = Display;
+/*Display: draw face specified by points
  *Coplane: feedback intersections
  *Classify: feedback dot products*/
-struct Chars generics = {INITIAL_QUEUE};
- // sized packet(s) of bytes in format
-struct Floats {DECLARE_QUEUE(float)} planes = {INITIAL_QUEUE};
- // per boundary triples of distances above base place
-struct Floats coplanes = {INITIAL_QUEUE};
- // shared point per boundary triple
-struct Ints {DECLARE_QUEUE(int)} faces = {INITIAL_QUEUE};
- // per face quads of subscripts into planes
-struct Ints fragments = {INITIAL_QUEUE};
- // subscripts into faces for ranges of valid faces
+struct Chars generics = {INITIAL_QUEUE}; // sized formatted packets of bytes
+struct Ints {DECLARE_QUEUE(int)} limits = {INITIAL_QUEUE}; // faces; monotonic index limits; disabled if negative
+enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureStates} configureState = ConfigureIdle;
+enum DisplayState {DisplayIdle,DisplayEnqued,DisplayStates} displayState = DisplayIdle;
+enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneStates} coplaneState = CoplaneIdle;
+enum ClassifyState {ClassifyIdle,ClassifyEnqued,ClassifyStates} classifyState = ClassifyIdle;
+enum ProcessState {ProcessIdle,ProcessEnqued,ProcessStates} processState = ProcessIdle;
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {INITIAL_QUEUE};
  // commands from commandline, user input, Haskell, IPC, etc
@@ -158,7 +145,7 @@ struct Chars chars = {INITIAL_QUEUE};
  // for scratchpad and arguments
 struct Glubytes {DECLARE_QUEUE(GLubyte)} glubytes = {INITIAL_QUEUE};
  // for scratchpad and arguments
-struct Floats floats = {INITIAL_QUEUE};
+struct Floats {DECLARE_QUEUE(float)} floats = {INITIAL_QUEUE};
  // for scratchpad and arguments
 struct Pointers {DECLARE_QUEUE(void *)} pointers = {INITIAL_QUEUE};
  // for scratchpad and arguments
@@ -247,8 +234,15 @@ void dealloc##NAME(int size) \
 }
 
 /*
+ * pure functions including
  * helpers for accessing state
  */
+
+void exitErrstr(const char *str)
+{
+    printf("fatal: %s\n", str);
+    exit(-1);
+}
 
 ACCESS_QUEUE(Option,char *,options)
 
@@ -260,13 +254,7 @@ ACCESS_QUEUE(Metric,char,metrics)
 
 ACCESS_QUEUE(Generic,char,generics)
 
-ACCESS_QUEUE(Plane,float,planes)
-
-ACCESS_QUEUE(Coplane,float,coplanes)
-
-ACCESS_QUEUE(Face,int,faces)
-
-ACCESS_QUEUE(Fragment,int,fragments)
+ACCESS_QUEUE(Limit,int,limits)
 
 ACCESS_QUEUE(Command,Command,commands)
 
@@ -283,6 +271,7 @@ ACCESS_QUEUE(Float,float,floats)
 ACCESS_QUEUE(Pointers,void *,pointers)
 
 /*
+ * pure functions including
  * helpers for parsing history portion of config file
  */
 
@@ -382,7 +371,11 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
 }
 
 /*
- * functions put on command queue
+ * functions put on command queue (except the non-void ones)
+ * to merit being put on the command queue, a function must implement a state machine
+ * however, even a two state machine (*Idle,*Enqued) is a state machine
+ * and, each state machine has a global state variable
+ * so, each void *() below has a corresponding *State variable above
  */
 
 void finishError()
@@ -446,16 +439,15 @@ void configure()
          z, z, p,
     };
     char *filename = 0;
-    if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close");
+    if (configureState <= ConfigureIdle || configureState >= ConfigureStates) {
+        exitErrstr("configure command not enqued");}
+    if (configFile && fclose(configFile) != 0) {
+        enqueErrstr("invalid path for close");}
     if (!validFilename()) {
-        enqueFilename(".");}
+        enqueFilename("./sculpt.cfg");}
     while (validFilename()) {
-        char *bufs[3];
-        bufs[0] = headFilename();
-        bufs[1] = "/sculpt.cfg";
-        bufs[2] = 0;
-        if (filename) deallocChar(strlen(filename)+1);
-        if (!(filename = copyStrings(bufs))) enqueErrstr("invalid path for copy");
+        filename = headFilename();
+        dequeFilename();
         if ((configFile = fopen(filename, "r"))) {
             // load lighting directions and colors
             // ensure indices are empty on first config line
@@ -466,7 +458,7 @@ void configure()
                 // replace range by bytes read from config
             // load transformation matrices
             // ftruncate to before transformation matrices
-            glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
+            glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
             glBufferData(GL_ARRAY_BUFFER, sizeof(tetrahedron), tetrahedron, GL_STATIC_DRAW);
         }
         else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
@@ -474,47 +466,74 @@ void configure()
             // save lighting directions and colors
             // randomizeH();
             // save generic data
-            // save transformation matrices
-            glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
+            glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
             glBufferData(GL_ARRAY_BUFFER, sizeof(tetrahedron), tetrahedron, GL_STATIC_DRAW);
         }
         else enqueErrnum("invalid path for config", filename);
-        if (fclose(configFile) != 0) enqueErrstr("invalid path for close");
-        dequeFilename();}
-    if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append");
-    deallocChar(strlen(filename)+1);
+        if (fclose(configFile) != 0) {
+            enqueErrnum("invalid path for close", filename);}}
+    if (!(configFile = fopen(filename,"a"))) {
+        enqueErrnum("invalid path for append", filename);}
+    configureState = ConfigureIdle;
     printf("configure done\n");
 }
 
 void display()
 {
-    glUseProgram(vertexProgram);
+    if (displayState <= DisplayIdle || displayState >= DisplayStates) {
+        exitErrstr("display command not enqued");}
+    glUseProgram(displayProgram);
     glDisable(GL_RASTERIZER_DISCARD);
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+    // EBO bind and attrib
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_LINES_ADJACENCY, 0, 4);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
     glfwSwapBuffers(windowHandle);
-    displayed = 0;
+    displayState = DisplayIdle;
     printf("display done\n");
 }
 
 void coplane()
 {
-    GLfloat *feedback = allocCoplane(12);
+    if (coplaneState <= CoplaneIdle || coplaneState >= CoplaneStates) {
+        exitErrstr("coplane command not enqued");}
     // depending on state
-    glEnable(GL_RASTERIZER_DISCARD);
+    int offset = headInt(); dequeInt();
+    int count = headInt(); dequeInt();
     glUseProgram(coplaneProgram);
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, 3, NULL, GL_STATIC_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, pointBuf.base);
+    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+    // EBO bind and attrib at (GLvoid*)((GLuint*)0+offset*3)
     glBeginTransformFeedback(GL_POINTS);
-    // render points with plane triples from next chunk
+    glDrawArrays(GL_TRIANGLES, 0, count*3);
     glEndTransformFeedback();
     glFlush();
-    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 12, feedback);
-    // requeu to read next chunk
+    // pointBuf.base is ready to use
+    // glGetBufferSubData is for demonstration only
+    GLfloat feedback[3];
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 3*sizeof*feedback, feedback);
+    for (int i = 0; i < 3; i++) printf("%f\n", feedback[i]);
+    // reque to read next chunk
+    coplaneState = CoplaneIdle;
+    printf("coplane done\n");
 }
 
 void process()
 {
     printf("process %s\n", headOption());
+    if (processState <= ProcessIdle || processState >= ProcessStates) {
+        exitErrstr("process command not enqued");}
+    if (!validOption()) {
+        enqueCommand(0); enqueEvent(Done);
+        processState = ProcessIdle; return;}
     if (strcmp(headOption(), "-h") == 0) {
         printf("-h print this message\n");
         printf("-i start interactive mode\n");
@@ -528,19 +547,35 @@ void process()
         printf("-s resample current space to planes with same sidedness\n");
         printf("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
-        if (!configured) {enqueCommand(&configure); configured = 1;}
-        if (!displayed) {enqueCommand(&display); displayed = 1;}
-        interactive = 1;}
-    if (strcmp(headOption(), "-c") == 0) {
-        configured = 0;
+        if (configureState != ConfigureIdle || coplaneState != CoplaneIdle || displayState != DisplayIdle) {
+            exitErrstr("interactive not idle");}
+        enqueCommand(&configure); configureState = ConfigureEnqued;
+        // TODO: uncomment following line and delete this line when shaders, coplane, and configure done
+        // enqueCommand(&coplane); coplaneState = CoplaneEnqued; enqueInt(0); enqueInt(coplaneSub.limit);
+        enqueCommand(&display); displayState = DisplayEnqued;
         dequeOption();
-        if (!validOption()) {enqueErrstr("missing file argument"); return;}
+        processState = ProcessIdle; return;}
+    if (strcmp(headOption(), "-c") == 0) {
+        dequeOption();
+        if (!validOption()) {
+            enqueErrstr("missing file argument");
+            enqueCommand(0); enqueEvent(Done);
+            processState = ProcessIdle; return;}
         enqueFilename(headOption());}
     dequeOption();
+    enqueCommand(&process); processState = ProcessEnqued;
 }
 
 /*
- * accessors for Haskell to process events
+ * accessors for Haskell to read and modify state
+ * often, changes to state trigger display
+ * as often, changes to state trigger second order state changes
+ * often, second order state changes occur in chunks
+ * as often, second order state changes prevent access from Haskell
+ * so, requests to Haskell must only be enqued by proper commands
+ * in other words, user input must not enque events to Haskell
+ * unless, the event to Haskell is guaranteed not to modify state
+ * for example, the Done event does not modify state
  */
 
 char *generic(int *indices, int *size)
@@ -561,7 +596,7 @@ char *message()
 
 int mode()
 {
-    switch (majorMode) {
+    switch (menuMode) {
         case (Transform): return 0;
         case (Manipulate): return 1;
         case (Refine): return 2;
@@ -613,7 +648,7 @@ int event()
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) interactive = 0;
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS && processState == ProcessIdle) {enqueCommand(&process); processState = ProcessEnqued;}
     if (key == GLFW_KEY_E && action == GLFW_PRESS) printf("key E\n");
     if (key == GLFW_KEY_UP && action == GLFW_PRESS) printf("key up\n");
 }
@@ -625,16 +660,16 @@ void displayClose(GLFWwindow* window)
 
 void displayRefresh(GLFWwindow *window)
 {
-    if (!interactive && !validMetric()) return;
-    if (!configured) {enqueCommand(&configure); configured = 1;}
-    if (!displayed) {enqueCommand(&display); displayed = 1;}
+    if (processState != ProcessIdle) return;
+    if (displayState == DisplayIdle && shaderMode == Display) {enqueCommand(&display); displayState = DisplayEnqued;}
 }
 
 /*
  * functions called by top level Haskell
  */
 
-GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *outputCode, const char *name)
+GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
+ const GLchar *basisCode, const GLchar *transformCode, const GLchar *outputCode0, GLchar *outputCode1, const char *name)
 {
     GLint success;
     GLchar infoLog[512];
@@ -646,7 +681,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
         printf("could not compile vertex shader for program %s: %s\n", name, infoLog);
         return 0;}
-    // initialize transform uniforms
     GLuint geometry = glCreateShader(GL_GEOMETRY_SHADER);
     glShaderSource(geometry, 1, &geometryCode, NULL);
     glCompileShader(geometry);
@@ -667,15 +701,20 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glAttachShader(program, vertex);
     glAttachShader(program, geometry);
     glAttachShader(program, fragment);
-    if (outputCode) {
-        const GLchar* codeArray[1]; codeArray[0] = outputCode;
-        glTransformFeedbackVaryings(program, 1, codeArray, GL_INTERLEAVED_ATTRIBS);
-        // initialize classify uniforms
+    if (basisCode) {
+        // initialize basis uniforms
+    }
+    if (transformCode) {
+        // initialize transform uniforms
+    }
+    if (outputCode0) {
+        const GLchar *arrayCode[2] = {outputCode0,outputCode1};
+        glTransformFeedbackVaryings(program, (outputCode1 ? 2 : 1), arrayCode, GL_INTERLEAVED_ATTRIBS);
     }
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
-        glGetProgramInfoLog(vertexProgram, 512, NULL, infoLog);
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
         printf("could not link shaders for program %s: %s\n", name, infoLog);
         return 0;}
     glDeleteShader(vertex);
@@ -693,15 +732,15 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     }";
 #define geometryCode "\
     #version 330 core\n\
-    layout (lines_adjacency) in;\n\
+    layout (triangles) in;\n\
     layout (triangle_strip, max_vertices = 3) out;\n\
     void main()\n\
     {\n\
         gl_Position = gl_in[0].gl_Position;\n\
         EmitVertex();\n\
-        gl_Position = gl_in[2].gl_Position;\n\
+        gl_Position = gl_in[1].gl_Position;\n\
         EmitVertex();\n\
-        gl_Position = gl_in[3].gl_Position;\n\
+        gl_Position = gl_in[2].gl_Position + vec4(0.2,0.0,0.0,0.0);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }";
@@ -713,21 +752,13 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n\
     }";
 
-const GLchar *vertexVertex = vertexCode;
-const GLchar *vertexGeometry = geometryCode;
-const GLchar *vertexFragment = fragmentCode;
-
-const GLchar *planeVertex = vertexCode;
-const GLchar *planeGeometry = geometryCode;
-const GLchar *planeFragment = fragmentCode;
+const GLchar *displayVertex = vertexCode;
+const GLchar *displayGeometry = geometryCode;
+const GLchar *displayFragment = fragmentCode;
 
 const GLchar *coplaneVertex = vertexCode;
 const GLchar *coplaneGeometry = geometryCode;
 const GLchar *coplaneFragment = fragmentCode;
-
-const GLchar *copointVertex = vertexCode;
-const GLchar *copointGeometry = geometryCode;
-const GLchar *copointFragment = fragmentCode;
 
 const GLchar *classifyVertex = vertexCode;
 const GLchar *classifyGeometry = geometryCode;
@@ -743,7 +774,7 @@ void initialize(int argc, char **argv)
 
     if (!glfwInit()) {
         printf("could not initialize glfw\n");
-        return;}
+        exit(-1);}
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -753,7 +784,7 @@ void initialize(int argc, char **argv)
         glfwTerminate();
         printf("could not create window\n");
         glfwTerminate();
-        return;}
+        exit(-1);}
     glfwSetKeyCallback(windowHandle, displayKey);
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
@@ -762,14 +793,14 @@ void initialize(int argc, char **argv)
     struct utsname buf;
     if (uname(&buf) < 0) {
         printf("cannot get kernel info\n");
-        return;}
+        exit(-1);}
 #ifdef __linux__
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
     if (GLEW_OK != err) {
         printf("could not initialize glew: %s\n", glewGetErrorString(err));
         glfwTerminate();
-        return;}
+        exit(-1);}
     if (GLEW_VERSION_3_3) {
         printf("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
     else {
@@ -787,34 +818,23 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    glGenBuffers(1, &VBO.handle);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO.handle);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
+    glGenBuffers(1, &planeBuf.base);
+    glGenBuffers(1, &pointBuf.base);
+    // glGenBuffers for EBOs
 
-    // attribute EBOs
+    displayProgram = compileProgram(displayVertex, displayGeometry, displayFragment, 0, 0, 0, 0, "display");
+    coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, 0, 0, 0, 0, "coplane");
+    classifyProgram = compileProgram(classifyVertex, classifyGeometry, classifyFragment, 0, 0, 0, 0, "classify");
 
-    glGenBuffers(1, &TBO.handle);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, TBO.handle);
-    glBindBuffer(GL_ARRAY_BUFFER, TBO.handle);
-    glBufferData(GL_ARRAY_BUFFER, 12, NULL, GL_STATIC_READ);
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, TBO.handle);
-
-    vertexProgram = compileProgram(vertexVertex, vertexGeometry, vertexFragment, 0, "vertex");
-    planeProgram = compileProgram(planeVertex, planeGeometry, planeFragment, 0, "plane");
-    coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, 0, "coplane");
-    copointProgram = compileProgram(copointVertex, copointGeometry, copointFragment, 0, "copoint");
-    classifyProgram = compileProgram(classifyVertex, classifyGeometry, classifyFragment, 0, "classify");
-    if (!classifyProgram) {
-        printf("bind classify program failed\n");
-        glfwTerminate();
-        return;}
+    enqueCommand(&process);
+    processState = ProcessEnqued;
 
     printf("initialize done\n");
 }
 
 void finalize()
 {
+    // save transformation matrices
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {INITIAL_QUEUE}; free(options.base); options = initial;}
@@ -822,14 +842,10 @@ void finalize()
     if (formats.base) {struct Chars initial = {INITIAL_QUEUE}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {INITIAL_QUEUE}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {INITIAL_QUEUE}; free(generics.base); generics = initial;}
-    if (planes.base) {struct Floats initial = {INITIAL_QUEUE}; free(planes.base); planes = initial;}
-    if (coplanes.base) {struct Floats initial = {INITIAL_QUEUE}; free(coplanes.base); coplanes = initial;}
-    if (faces.base) {struct Ints initial = {INITIAL_QUEUE}; free(faces.base); faces = initial;}
-    if (fragments.base) {struct Ints initial = {INITIAL_QUEUE}; free(fragments.base); fragments = initial;}
+    if (limits.base) {struct Ints initial = {INITIAL_QUEUE}; free(limits.base); limits = initial;}
+    if (commands.base) {struct Commands initial = {INITIAL_QUEUE}; free(commands.base); commands = initial;}
     if (events.base) {struct Events initial = {INITIAL_QUEUE}; free(events.base); events = initial;}
     if (ints.base) {struct Ints initial = {INITIAL_QUEUE}; free(ints.base); ints = initial;}
-
-const GLchar *vertexVertex = vertexCode;
     if (chars.base) {struct Chars initial = {INITIAL_QUEUE}; free(chars.base); chars = initial;}
     if (glubytes.base) {struct Glubytes initial = {INITIAL_QUEUE}; free(glubytes.base); glubytes = initial;}
     if (floats.base) {struct Floats initial = {INITIAL_QUEUE}; free(floats.base); floats = initial;}
@@ -840,8 +856,6 @@ const GLchar *vertexVertex = vertexCode;
 void waitForEvent()
 {
     while (1) {
-        if (!validCommand() && !interactive && !validOption()) {enqueCommand(0); enqueEvent(Done);}
-        if (!validCommand() && !interactive && validOption()) enqueCommand(&process);
         if (!validCommand()) glfwWaitEvents();
         else glfwPollEvents();
         if (!validCommand()) continue;
