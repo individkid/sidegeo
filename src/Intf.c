@@ -425,54 +425,48 @@ void enqueErrstr(const char *str)
 #ifdef BRINGUP
 void bringup()
 {
-    // h^2 = 1 - 0.5^2
+    // f = 1
+    // h^2 = f^2 - 0.5^2
     // a + b = h
     // a > b
     // a^2 = b^2 + 0.5^2 = (h - a)^2 + 0.5^2 = h^2 - 2ha + a^2 + 0.5^2
     // 2ha = h^2 + 0.5^2
-    // a = (h^2 + 0.5^2)/(2h)
+    // a = (h^2 + 0.5^2)/(2h) = 1/(2h)
     // a^2 = (h^2 + 0.5^2)^2/(4h^2)
-    // i^2 = 1 - a^2
+    // i^2 = f^2 - a^2
     // p + q = i
     // p > q
-    // p^2 = q^2 + 0.5^2 = (i - p)^2 + 0.5^2 = i^2 - 2ip + p^2 + 0.5^2
-    // 2ip = i^2 + 0.5^2
-    // p = (i^2 + 0.5^2)/(2i)
+    // p^2 = q^2 + a^2 = (i - p)^2 + a^2 = i^2 - 2ip + p^2 + a^2
+    // 2ip = i^2 + a^2
+    // p = (i^2 + a^2)/(2i) = 1/(2i)
     GLfloat z = 0.0;
     GLfloat f = 1.0; // length of edges
-    GLfloat g = f / 2.0; // midpoint on edge from corner
-    GLfloat g2 = g * g;
-    GLfloat h2 = 1.0 - g2;
-    GLfloat h = sqrt(h2); // height of triangle
-    GLfloat n = h2 + g2;
-    GLfloat d = 2.0 * h;
-    GLfloat a = n / d; // distance from corner to center of triangle
+    GLfloat g = 0.5; // midpoint on edge from corner
+    GLfloat fs = f * f;
+    GLfloat gs = g * g;
+    GLfloat hs = fs - gs;
+    GLfloat h = sqrt(hs); // height of triangle
+    GLfloat hd = h + h;
+    GLfloat a = fs / hd; // distance from corner to center of triangle
     GLfloat b = h - a; // distance from base to center of triangle
-    GLfloat a2 = a * a;
-    GLfloat i2 = 1.0 - a2;
-    GLfloat i = sqrt(i2); // height of tetrahedron
-    GLfloat u = i2 + g2;
-    GLfloat v = 2.0 * i;
-    GLfloat p = u / v; // distance from vertex to center of tetrahedron
+    GLfloat as = a * a;
+    GLfloat is = fs - as;
+    GLfloat i = sqrt(is); // height of tetrahedron
+    GLfloat id = i + i;
+    GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
+    printf("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
+    GLfloat tetrahedron[] = {
+        -g,-b,-q,
+         g,-b,-q,
+         z, a,-q,
+         z, z, p,
+    };
     GLfloat bringup[] = {
-#ifdef BRINGUP
         0.0,1.0,2.0,
         3.0,4.0,5.0,
         6.0,7.0,8.0,
         9.0,0.1,1.1,
-#else
-            g,-b,-q,
-            g,-b,-q,
-            z, a,-q,
-            z, z, p,
-#endif
-    };
-    GLfloat tetrahedron[] = {
-        -0.5,-0.5,-0.5,
-         0.5,-0.5,-0.5,
-         0.0, 0.5,-0.5,
-         0.0, 0.0, 0.5,
     };
     if (shaderMode == Diplane) {
         glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
