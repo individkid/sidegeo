@@ -153,7 +153,7 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
-enum {Diplane,Dipoint} shaderMode = Dipoint;
+enum {Diplane,Dipoint} shaderMode = Diplane;
 struct Chars generics = {0}; // sized formatted packets of bytes
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureStates} configureState = ConfigureIdle;
 enum DiplaneState {DiplaneIdle,DiplaneEnqued,DiplaneStates} diplaneState = DiplaneIdle;
@@ -589,7 +589,7 @@ void diplane()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceSub.base);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawElements(GL_TRIANGLES, NUM_FACES*FACE_PLANES, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES_ADJACENCY, NUM_FACES*FACE_PLANES, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glDisableVertexAttribArray(VERSOR_LOCATION);
     glDisableVertexAttribArray(PLANE_LOCATION);
@@ -670,13 +670,11 @@ void copoint()
     glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat));
     glEnable(GL_RASTERIZER_DISCARD);
     glBeginTransformFeedback(GL_POINTS);
-    glEnableVertexAttribArray(PLANE_LOCATION);
-    glEnableVertexAttribArray(VERSOR_LOCATION);
+    glEnableVertexAttribArray(POINT_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, constructSub.base);
     glDrawElements(GL_TRIANGLES, NUM_POINTS*POINT_INCIDENCES, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableVertexAttribArray(VERSOR_LOCATION);
-    glDisableVertexAttribArray(PLANE_LOCATION);
+    glDisableVertexAttribArray(POINT_LOCATION);
     glEndTransformFeedback();
     glDisable(GL_RASTERIZER_DISCARD);
     glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
@@ -686,15 +684,15 @@ void copoint()
 
     // planeBuf.base is ready to use
 #ifdef BRINGUP
-    GLfloat feedback[NUM_POINTS*POINT_DIMENSIONS];
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
+    GLfloat feedback[NUM_PLANES*PLANE_DIMENSIONS];
+    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printf("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printf("%f\n", feedback[i]);
 #endif
 
     // reque to read next chunk
-    coplaneState = CoplaneIdle;
+    copointState = CopointIdle;
     printf("copoint done\n");
 }
 
