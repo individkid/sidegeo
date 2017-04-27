@@ -21,7 +21,7 @@ The function queue has pointers to command functions.
 A null function pointer indicates a Haskell command from the event queue.
 Each Haskell callback, user callback, commandline option, or IPC puts a command on the function queue and each type of argument has its own queue.
 Commands modify generic, write to history, append plane and/or quads/tris, schedule redraw if not already scheduled.
-Interactive command sends configure and display if not already sent.
+Interactive command sends configure and dipoint if not already sent.
 To use GPU for computation, classify and sample commands work on one chunk of plane triples at a time.
 First the command sets up uniforms, starts render to buffer, then requeues itself to read the chunk after other events in the queue.
 Thus, an argument to sample is the state of its state machine.
@@ -80,17 +80,17 @@ extern void __stginit_Main(void);
 #ifdef BRINGUP
 #define NUM_PLANES 4
 #define NUM_POINTS 4
-#define NUM_FEEDBACK NUM_POINTS
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
-#define NUM_FACES 4
+#define NUM_FACES 2
 #define FACE_PLANES 6
 #define NUM_POLYGONS 2
 #define POLYGON_POINTS 3
+#define PLANE_INCIDENCES 3
 #define POINT_INCIDENCES 3
 #define PLANE_LOCATION 0
-#define POINT_LOCATION 2
 #define VERSOR_LOCATION 1
+#define POINT_LOCATION 2
 #else
 #endif
 
@@ -117,6 +117,7 @@ struct Buffer pointBuf = {0}; // shared point per boundary triple
 struct Buffer faceSub = {0}; // subscripts into planes
 struct Buffer polygonSub = {0}; // subscripts into points
 struct Buffer vertexSub = {0}; // every triple of planes
+struct Buffer constructSub = {0}; // per plane triple of points
 GLuint diplaneProgram = 0; // display from plane sextuples
 GLuint dipointProgram = 0; // display from point triples
 GLuint coplaneProgram = 0; // find intersections of plane triples
@@ -129,8 +130,6 @@ GLint normalUniform = 0;
 GLint featherUniform = 0;
 GLint arrowUniform = 0;
 GLint lightUniform = 0;
-GLint extraUniform = 0;
-GLint colorUniform = 0;
 struct Strings {DECLARE_QUEUE(char *)} options = {0}; // command line arguments
 struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
@@ -154,15 +153,13 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
-enum {Display,Coplane,Classify} shaderMode = Display;
-/*Display: draw face specified by points
- *Coplane: feedback intersections
- *Classify: feedback dot products*/
+enum {Diplane,Dipoint} shaderMode = Dipoint;
 struct Chars generics = {0}; // sized formatted packets of bytes
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureStates} configureState = ConfigureIdle;
-enum DisplayState {DisplayIdle,DisplayEnqued,DisplayStates} displayState = DisplayIdle;
+enum DiplaneState {DiplaneIdle,DiplaneEnqued,DiplaneStates} diplaneState = DiplaneIdle;
+enum DipointState {DipointIdle,DipointEnqued,DipointStates} dipointState = DipointIdle;
 enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneStates} coplaneState = CoplaneIdle;
-enum ClassifyState {ClassifyIdle,ClassifyEnqued,ClassifyStates} classifyState = ClassifyIdle;
+enum CopointState {CopointIdle,CopointEnqued,CopointStates} copointState = CopointIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued,ProcessStates} processState = ProcessIdle;
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
@@ -471,19 +468,26 @@ void bringup()
             z, z, p,
 #endif
     };
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), bringup);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
     GLfloat tetrahedron[] = {
         -0.5,-0.5,-0.5,
          0.5,-0.5,-0.5,
          0.0, 0.5,-0.5,
          0.0, 0.0, 0.5,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), tetrahedron);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    if (shaderMode == Diplane) {
+        glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), bringup);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    else {
+        glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), tetrahedron);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), bringup);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);}
 
     GLuint versor[] = {
         0,0,0,0,
@@ -493,10 +497,8 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint face[] = {
-        0,1,2,3,2,3,
-        1,2,3,0,3,0,
-        2,3,0,1,0,1,
-        3,0,1,2,1,2,
+        0,1,2,3,3,2,
+        1,2,3,0,0,3,
     };
     glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
     glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_FACES*FACE_PLANES*sizeof(GLuint), face);
@@ -518,6 +520,16 @@ void bringup()
     };
     glBindBuffer(GL_ARRAY_BUFFER, vertexSub.base);
     glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), vertex);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    GLuint construct[] = {
+        0,1,2,
+        1,2,3,
+        2,3,0,
+        3,0,1,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, constructSub.base);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), construct);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 #endif
@@ -566,10 +578,33 @@ void configure()
     printf("configure done\n");
 }
 
-void display()
+void diplane()
 {
-    if (displayState <= DisplayIdle || displayState >= DisplayStates) {
-        exitErrstr("display command not enqued");}
+    if (diplaneState <= DiplaneIdle || diplaneState >= DiplaneStates) {
+        exitErrstr("diplane command not enqued");}
+
+    glUseProgram(diplaneProgram);
+    glEnableVertexAttribArray(PLANE_LOCATION);
+    glEnableVertexAttribArray(VERSOR_LOCATION);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceSub.base);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawElements(GL_TRIANGLES, NUM_FACES*FACE_PLANES, GL_UNSIGNED_INT, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glDisableVertexAttribArray(VERSOR_LOCATION);
+    glDisableVertexAttribArray(PLANE_LOCATION);
+    glUseProgram(0);
+
+    glfwSwapBuffers(windowHandle);
+
+    diplaneState = DiplaneIdle;
+    printf("diplane done\n");
+}
+
+void dipoint()
+{
+    if (dipointState <= DipointIdle || dipointState >= DipointStates) {
+        exitErrstr("dipoint command not enqued");}
 
     glUseProgram(dipointProgram);
     glEnableVertexAttribArray(POINT_LOCATION);
@@ -583,8 +618,8 @@ void display()
 
     glfwSwapBuffers(windowHandle);
 
-    displayState = DisplayIdle;
-    printf("display done\n");
+    dipointState = DipointIdle;
+    printf("dipoint done\n");
 }
 
 void coplane()
@@ -625,6 +660,44 @@ void coplane()
     printf("coplane done\n");
 }
 
+void copoint()
+{
+    if (copointState <= CopointIdle || copointState >= CopointStates) {
+        exitErrstr("copoint command not enqued");}
+
+    // depending on state
+    glUseProgram(copointProgram);
+    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat));
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBeginTransformFeedback(GL_POINTS);
+    glEnableVertexAttribArray(PLANE_LOCATION);
+    glEnableVertexAttribArray(VERSOR_LOCATION);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, constructSub.base);
+    glDrawElements(GL_TRIANGLES, NUM_POINTS*POINT_INCIDENCES, GL_UNSIGNED_INT, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glDisableVertexAttribArray(VERSOR_LOCATION);
+    glDisableVertexAttribArray(PLANE_LOCATION);
+    glEndTransformFeedback();
+    glDisable(GL_RASTERIZER_DISCARD);
+    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
+    glUseProgram(0);
+
+    glFlush();
+
+    // planeBuf.base is ready to use
+#ifdef BRINGUP
+    GLfloat feedback[NUM_POINTS*POINT_DIMENSIONS];
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printf("%f\n", feedback[i]);
+#endif
+
+    // reque to read next chunk
+    coplaneState = CoplaneIdle;
+    printf("copoint done\n");
+}
+
 void process()
 {
     printf("process %s\n", (validOption() ? headOption() : "null"));
@@ -646,11 +719,24 @@ void process()
         printf("-s resample current space to planes with same sidedness\n");
         printf("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
-        if (configureState != ConfigureIdle || coplaneState != CoplaneIdle || displayState != DisplayIdle) {
-            exitErrstr("interactive not idle");}
-        enqueCommand(&configure); configureState = ConfigureEnqued;
-        enqueCommand(&coplane); coplaneState = CoplaneEnqued;
-        enqueCommand(&display); displayState = DisplayEnqued;
+        if (shaderMode == Diplane) {
+            if (configureState != ConfigureIdle || diplaneState != DiplaneIdle) {
+                exitErrstr("interactive not idle");}
+#ifdef BRINGUP
+            if (copointState != CopointIdle) {
+                exitErrstr("interactive not idle");}
+#endif
+            enqueCommand(&configure); configureState = ConfigureEnqued;
+#ifdef BRINGUP
+            enqueCommand(&copoint); copointState = CopointEnqued;
+#endif
+            enqueCommand(&diplane); diplaneState = DiplaneEnqued;}
+        else {
+            if (configureState != ConfigureIdle || coplaneState != CoplaneIdle || dipointState != DipointIdle) {
+                exitErrstr("interactive not idle");}
+            enqueCommand(&configure); configureState = ConfigureEnqued;
+            enqueCommand(&coplane); coplaneState = CoplaneEnqued;
+            enqueCommand(&dipoint); dipointState = DipointEnqued;}
         dequeOption();
         processState = ProcessIdle; return;}
     if (strcmp(headOption(), "-c") == 0) {
@@ -666,7 +752,7 @@ void process()
 
 /*
  * accessors for Haskell to read and modify state
- * often, changes to state trigger display
+ * often, changes to state trigger dipoint
  * as often, changes to state trigger second order state changes
  * often, second order state changes occur in chunks
  * as often, second order state changes prevent access from Haskell
@@ -759,7 +845,8 @@ void displayClose(GLFWwindow* window)
 void displayRefresh(GLFWwindow *window)
 {
     if (processState != ProcessIdle) return;
-    if (displayState == DisplayIdle && shaderMode == Display) {enqueCommand(&display); displayState = DisplayEnqued;}
+    if (dipointState == DipointIdle && shaderMode == Dipoint) {enqueCommand(&dipoint); dipointState = DipointEnqued;}
+    if (diplaneState == DiplaneIdle && shaderMode == Diplane) {enqueCommand(&diplane); diplaneState = DiplaneEnqued;}
 }
 
 /*
@@ -856,10 +943,11 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     void main()\n\
     {\n\
         for (int i = 0; i < "LAYOUT2"; i++) {\n\
-        gl_Position = vec4(xformed[i], 1.0);\n\
-        cross = rotated[i];\n\
-        vector = xpanded[i];\n\
-        scalar = xpanded[i][0];\n\
+        int index = i * "LAYOUT3" / "LAYOUT2";\n\
+        gl_Position = vec4(xformed[index], 1.0);\n\
+        cross = rotated[index];\n\
+        vector = xpanded[index];\n\
+        scalar = xpanded[index][0];\n\
         EmitVertex();}\n\
         EndPrimitive();\n\
     }";
@@ -957,6 +1045,7 @@ void initialize(int argc, char **argv)
     glGenBuffers(1, &faceSub.base);
     glGenBuffers(1, &polygonSub.base);
     glGenBuffers(1, &vertexSub.base);
+    glGenBuffers(1, &constructSub.base);
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
@@ -983,6 +1072,10 @@ void initialize(int argc, char **argv)
 
     glBindBuffer(GL_ARRAY_BUFFER, vertexSub.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, constructSub.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     diplaneProgram = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, "diplane");
