@@ -503,7 +503,7 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint polygon[] = {
-        0,1,2,
+        0,1,3,
         1,2,3,
     };
     glBindBuffer(GL_ARRAY_BUFFER, polygonSub.base);
@@ -568,15 +568,13 @@ void configure()
 
 void display()
 {
-#ifndef BRINGUP
     if (displayState <= DisplayIdle || displayState >= DisplayStates) {
         exitErrstr("display command not enqued");}
-#endif
 
     glUseProgram(dipointProgram);
     glEnableVertexAttribArray(POINT_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polygonSub.base);
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glDrawElements(GL_TRIANGLES, NUM_POLYGONS*POLYGON_POINTS, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -824,29 +822,28 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
     layout (location = 2) in vec3 point;\n\
-    out mat3 xpanded;\n\
     out mat3 xformed;\n\
     out mat3 rotated;\n\
+    out mat3 xpanded;\n\
     uniform mat3 basis;\n\
     uniform mat4 model;\n\
     uniform mat3 normal;\n\
     void main()\n\
     {\n\
-        xpanded = mat3("INPUT",vec3(1.0f,1.1f,1.2f),vec3(2.0f,2.1f,2.2f));\n\
-        xformed = mat3("INPUT",vec3(3.0f,3.1f,3.2f),vec3(4.0f,4.1f,4.2f));\n\
-        rotated = mat3("INPUT",vec3(5.0f,5.1f,5.2f),vec3(6.0f,6.1f,6.2f));\n\
-    }";
+        xpanded = mat3("INPUT",vec3(0,0,0),vec3(0,0,0));\n\
+        xformed = mat3("INPUT",vec3(0,0,0),vec3(0,0,0));\n\
+        rotated = mat3(vec3(1.0f,1.0f,1.0f),vec3(0,0,0),vec3(0,0,0));\n\
+   }";
 #define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
     #version 330 core\n\
     layout ("LAYOUT0") in;\n\
     layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
-    in mat3 xpanded["LAYOUT3"];\n\
     in mat3 xformed["LAYOUT3"];\n\
     in mat3 rotated["LAYOUT3"];\n\
+    in mat3 xpanded["LAYOUT3"];\n\
     out vec3 cross;\n\
     out vec3 vector;\n\
     out float scalar;\n\
-    out uint index;\n\
     uniform mat3 basis;\n\
     uniform vec3 feather;\n\
     uniform vec3 arrow;\n\
@@ -854,7 +851,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     {\n\
         for (int i = 0; i < "LAYOUT2"; i++) {\n\
         gl_Position = vec4(xformed[i][0], 1.0);\n\
-        cross = vec3(0.5f,0.25f,0.125f);\n\
+        cross = rotated[i][0];\n\
         vector = xpanded[i][0];\n\
         scalar = xpanded[i][0][0];\n\
         EmitVertex();}\n\
