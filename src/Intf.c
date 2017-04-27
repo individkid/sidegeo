@@ -823,8 +823,11 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     layout (location = 1) in uint versor;\n\
     layout (location = 2) in vec3 point;\n\
     out vec3 xformed;\n\
+    out uint uiformed;\n\
     out vec3 rotated;\n\
+    out uint uitated;\n\
     out vec3 xpanded;\n\
+    out uint uipanded;\n\
     uniform mat3 basis[3];\n\
     uniform mat4 model;\n\
     uniform mat3 normal;\n\
@@ -839,8 +842,11 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     layout ("LAYOUT0") in;\n\
     layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
     in vec3 xformed["LAYOUT3"];\n\
+    in uint uiformed["LAYOUT3"];\n\
     in vec3 rotated["LAYOUT3"];\n\
+    in uint uitated["LAYOUT3"];\n\
     in vec3 xpanded["LAYOUT3"];\n\
+    in uint uipanded["LAYOUT3"];\n\
     out vec3 cross;\n\
     out vec3 vector;\n\
     out float scalar;\n\
