@@ -822,38 +822,38 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
     layout (location = 2) in vec3 point;\n\
-    out mat3 xformed;\n\
-    out mat3 rotated;\n\
-    out mat3 xpanded;\n\
-    uniform mat3 basis;\n\
+    out vec3 xformed;\n\
+    out vec3 rotated;\n\
+    out vec3 xpanded;\n\
+    uniform mat3 basis[3];\n\
     uniform mat4 model;\n\
     uniform mat3 normal;\n\
     void main()\n\
     {\n\
-        xpanded = mat3("INPUT",vec3(0,0,0),vec3(0,0,0));\n\
-        xformed = mat3("INPUT",vec3(0,0,0),vec3(0,0,0));\n\
-        rotated = mat3(vec3(1.0f,1.0f,1.0f),vec3(0,0,0),vec3(0,0,0));\n\
+        xpanded = "INPUT";\n\
+        xformed = "INPUT";\n\
+        rotated = vec3(1.0f,1.0f,1.0f);\n\
    }";
 #define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
     #version 330 core\n\
     layout ("LAYOUT0") in;\n\
     layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
-    in mat3 xformed["LAYOUT3"];\n\
-    in mat3 rotated["LAYOUT3"];\n\
-    in mat3 xpanded["LAYOUT3"];\n\
+    in vec3 xformed["LAYOUT3"];\n\
+    in vec3 rotated["LAYOUT3"];\n\
+    in vec3 xpanded["LAYOUT3"];\n\
     out vec3 cross;\n\
     out vec3 vector;\n\
     out float scalar;\n\
-    uniform mat3 basis;\n\
+    uniform mat3 basis[3];\n\
     uniform vec3 feather;\n\
     uniform vec3 arrow;\n\
     void main()\n\
     {\n\
         for (int i = 0; i < "LAYOUT2"; i++) {\n\
-        gl_Position = vec4(xformed[i][0], 1.0);\n\
-        cross = rotated[i][0];\n\
-        vector = xpanded[i][0];\n\
-        scalar = xpanded[i][0][0];\n\
+        gl_Position = vec4(xformed[i], 1.0);\n\
+        cross = rotated[i];\n\
+        vector = xpanded[i];\n\
+        scalar = xpanded[i][0];\n\
         EmitVertex();}\n\
         EndPrimitive();\n\
     }";
