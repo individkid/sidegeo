@@ -85,7 +85,7 @@ extern void __stginit_Main(void);
 #define POINT_DIMENSIONS 3
 #define NUM_FACES 4
 #define FACE_PLANES 6
-#define NUM_POLYGONS 4
+#define NUM_POLYGONS 2
 #define POLYGON_POINTS 3
 #define POINT_INCIDENCES 3
 #define PLANE_LOCATION 0
@@ -458,7 +458,7 @@ void bringup()
     GLfloat v = 2.0 * i;
     GLfloat p = u / v; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-    GLfloat tetrahedron[] = {
+    GLfloat bringup[] = {
 #ifdef BRINGUP
         0.0,1.0,2.0,
         3.0,4.0,5.0,
@@ -472,7 +472,24 @@ void bringup()
 #endif
     };
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), tetrahedron);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), bringup);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    GLfloat tetrahedron[] = {
+        -0.5,-0.5,-0.5,
+         0.5,-0.5,-0.5,
+         0.0, 0.5,-0.5,
+         0.0, 0.0, 0.5,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    GLuint versor[] = {
+        0,0,0,0,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*sizeof(GLuint), versor);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint face[] = {
@@ -483,6 +500,14 @@ void bringup()
     };
     glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
     glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_FACES*FACE_PLANES*sizeof(GLuint), face);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    GLuint polygon[] = {
+        0,1,2,
+        1,2,3,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, polygonSub.base);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POLYGONS*POLYGON_POINTS*sizeof(GLuint), polygon);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint vertex[] = {
@@ -795,12 +820,11 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 #define vertexCode(INPUT) "\
     #version 330 core\n\
     layout (location = 0) in vec3 plane;\n\
-    layout (location = 1) in ubyte versor;\n\
+    layout (location = 1) in uint versor;\n\
     layout (location = 2) in vec3 point;\n\
     out mat3 xpanded;\n\
     out mat3 xformed;\n\
     out mat3 rotated;\n\
-    out ubyte ignore;\n\
     uniform mat3 basis;\n\
     uniform mat4 model;\n\
     uniform mat3 normal;\n\
@@ -809,7 +833,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         xpanded = mat3("INPUT",vec3(1.0f,1.1f,1.2f),vec3(2.0f,2.1f,2.2f));\n\
         xformed = mat3("INPUT",vec3(3.0f,3.1f,3.2f),vec3(4.0f,4.1f,4.2f));\n\
         rotated = mat3("INPUT",vec3(5.0f,5.1f,5.2f),vec3(6.0f,6.1f,6.2f));\n\
-        ignore = (versor >= 3);\n\
     }";
 #define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
     #version 330 core\n\
@@ -818,7 +841,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     in mat3 xpanded["LAYOUT3"];\n\
     in mat3 xformed["LAYOUT3"];\n\
     in mat3 rotated["LAYOUT3"];\n\
-    int uint ignore["LAYOUT3"];\n\
     out vec3 cross;\n\
     out vec3 vector;\n\
     out float scalar;\n\
@@ -933,17 +955,17 @@ void initialize(int argc, char **argv)
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glVertexAttribPointer(PLANE_LOCATION, PLANE_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLubyte), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 3*sizeof(GLubyte), (GLvoid*)0);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
+    glVertexAttribPointer(VERSOR_LOCATION, 1, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glVertexAttribPointer(POINT_LOCATION, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);

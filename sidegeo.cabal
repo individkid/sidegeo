@@ -118,5 +118,3 @@ executable demo
                        OpenGL,
                        IOKit,
                        CoreVideo
-
--- gcc -L /usr/lib -l glfw3 -framework Cocoa -framework OpenGL -framework IOKit -framework CoreVideo -o demo src/Demo.c
