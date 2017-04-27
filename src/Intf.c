@@ -471,8 +471,8 @@ void bringup()
             z, z, p,
 #endif
     };
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), bringup);
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), bringup);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLfloat tetrahedron[] = {
@@ -481,8 +481,8 @@ void bringup()
          0.0, 0.5,-0.5,
          0.0, 0.0, 0.5,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron);
+    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), tetrahedron);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint versor[] = {
@@ -568,8 +568,10 @@ void configure()
 
 void display()
 {
+#ifndef BRINGUP
     if (displayState <= DisplayIdle || displayState >= DisplayStates) {
         exitErrstr("display command not enqued");}
+#endif
 
     glUseProgram(dipointProgram);
     glEnableVertexAttribArray(POINT_LOCATION);
@@ -1018,8 +1020,9 @@ void initialize(int argc, char **argv)
     featherUniform = glGetUniformLocation(adpointProgram, "feather");
     arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
- 
+
     enqueCommand(&process); processState = ProcessEnqued;
+
     printf("initialize done\n");
 }
 
