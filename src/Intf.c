@@ -77,6 +77,22 @@ extern void __stginit_Main(void);
 #include <GLFW/glfw3.h>
 
 #define BRINGUP
+#ifdef BRINGUP
+#define NUM_PLANES 4
+#define NUM_POINTS 4
+#define NUM_FEEDBACK NUM_POINTS
+#define PLANE_DIMENSIONS 3
+#define POINT_DIMENSIONS 3
+#define NUM_FACES 4
+#define FACE_PLANES 6
+#define NUM_POLYGONS 4
+#define POLYGON_POINTS 3
+#define POINT_INCIDENCES 3
+#define PLANE_LOCATION 0
+#define POINT_LOCATION 2
+#define VERSOR_LOCATION 1
+#else
+#endif
 
 #define DECLARE_QUEUE(TYPE) \
     TYPE *base; \
@@ -86,21 +102,27 @@ extern void __stginit_Main(void);
 
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
+enum Flag {OutOfDateFlag,InUseFlag,LockedFlag,FlagsFlag};
 struct Buffer {
     GLuint base;
     GLintptr limit;
-    GLintptr head;
-    GLintptr tail;
+    GLintptr todo;
+    GLintptr ready;
+    GLintptr done;
+    int lock; // -1 not readable; >0 not writable
 }; // for use by *Bind* and *Map*
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
 struct Buffer versorBuf = {0}; // per boundary base selector
 struct Buffer pointBuf = {0}; // shared point per boundary triple
-struct Buffer feedbackBuf = {0}; // shared point per boundary triple
+struct Buffer faceSub = {0}; // subscripts into planes
 struct Buffer polygonSub = {0}; // subscripts into points
 struct Buffer vertexSub = {0}; // every triple of planes
-GLuint displayProgram = 0; // for Display shaderMode
-GLuint coplaneProgram = 0; // for Coplane shaderMode
-GLuint classifyProgram = 0; // for Classify shaderMode
+GLuint diplaneProgram = 0; // display from plane sextuples
+GLuint dipointProgram = 0; // display from point triples
+GLuint coplaneProgram = 0; // find intersections of plane triples
+GLuint copointProgram = 0; // construct planes from point triples
+GLuint adplaneProgram = 0; // find plane triples wrt feather and arrow
+GLuint adpointProgram = 0; // find point singles wrt feather and arrow
 GLint basisUniform = 0;
 GLint modelUniform = 0;
 GLint normalUniform = 0;
@@ -137,7 +159,6 @@ enum {Display,Coplane,Classify} shaderMode = Display;
  *Coplane: feedback intersections
  *Classify: feedback dot products*/
 struct Chars generics = {0}; // sized formatted packets of bytes
-struct Ints {DECLARE_QUEUE(int)} limits = {0}; // faces; monotonic index limits; disabled if negative
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureStates} configureState = ConfigureIdle;
 enum DisplayState {DisplayIdle,DisplayEnqued,DisplayStates} displayState = DisplayIdle;
 enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneStates} coplaneState = CoplaneIdle;
@@ -149,15 +170,13 @@ struct Commands {DECLARE_QUEUE(Command)} commands = {0};
 enum Event {Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-struct Ints ints = {0};
+struct Ints {DECLARE_QUEUE(int)} ints = {0};
  // for scratchpad and arguments
 struct Chars chars = {0};
  // for scratchpad and arguments
-struct Glubytes {DECLARE_QUEUE(GLubyte)} glubytes = {0};
- // for scratchpad and arguments
 struct Floats {DECLARE_QUEUE(float)} floats = {0};
  // for scratchpad and arguments
-struct Pointers {DECLARE_QUEUE(void *)} pointers = {0};
+struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
  // for scratchpad and arguments
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
@@ -264,8 +283,6 @@ ACCESS_QUEUE(Metric,char,metrics)
 
 ACCESS_QUEUE(Generic,char,generics)
 
-ACCESS_QUEUE(Limit,int,limits)
-
 ACCESS_QUEUE(Command,Command,commands)
 
 ACCESS_QUEUE(Event,enum Event,events)
@@ -274,11 +291,9 @@ ACCESS_QUEUE(Int,int,ints)
 
 ACCESS_QUEUE(Char,char,chars)
 
-ACCESS_QUEUE(Glubyte,GLubyte,glubytes)
-
 ACCESS_QUEUE(Float,float,floats)
 
-ACCESS_QUEUE(Pointers,void *,pointers)
+ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
 
 /*
  * pure functions including
@@ -444,31 +459,40 @@ void bringup()
     GLfloat p = u / v; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
     GLfloat tetrahedron[] = {
+#ifdef BRINGUP
+        0.0,1.0,2.0,
+        3.0,4.0,5.0,
+        6.0,7.0,8.0,
+        9.0,0.1,1.1,
+#else
             g,-b,-q,
             g,-b,-q,
             z, a,-q,
             z, z, p,
+#endif
     };
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, 4*3*sizeof(GLfloat), tetrahedron);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), tetrahedron);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    GLuint polygon[] = {
-        0,1,2,
-        1,2,3,
+    GLuint face[] = {
+        0,1,2,3,2,3,
+        1,2,3,0,3,0,
+        2,3,0,1,0,1,
+        3,0,1,2,1,2,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, polygonSub.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, 2*3*sizeof(GLuint), polygon);
+    glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_FACES*FACE_PLANES*sizeof(GLuint), face);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint vertex[] = {
         0,1,2,
-        0,1,3,
-        0,2,3,
         1,2,3,
+        2,3,0,
+        3,0,1,
     };
     glBindBuffer(GL_ARRAY_BUFFER, vertexSub.base);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, 4*3*sizeof(GLuint), vertex);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), vertex);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 #endif
@@ -522,15 +546,15 @@ void display()
     if (displayState <= DisplayIdle || displayState >= DisplayStates) {
         exitErrstr("display command not enqued");}
 
-    glUseProgram(displayProgram);
-
-    glEnableVertexAttribArray(0);
+    glUseProgram(dipointProgram);
+    glEnableVertexAttribArray(POINT_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polygonSub.base);
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLES, 0, 2);
+    glDrawElements(GL_TRIANGLES, NUM_POLYGONS*POLYGON_POINTS, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(POINT_LOCATION);
+    glUseProgram(0);
 
     glfwSwapBuffers(windowHandle);
 
@@ -545,30 +569,30 @@ void coplane()
 
     // depending on state
     glUseProgram(coplaneProgram);
-
-    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, pointBuf.head, 0, 4*3*sizeof(GLfloat));
+    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, pointBuf.base, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat));
     glEnable(GL_RASTERIZER_DISCARD);
-    glBeginTransformFeedback(GL_TRIANGLES);
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
+    glBeginTransformFeedback(GL_POINTS);
+    glEnableVertexAttribArray(PLANE_LOCATION);
+    glEnableVertexAttribArray(VERSOR_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexSub.base);
-    glDrawArrays(GL_TRIANGLES, 0, 4);
+    glDrawElements(GL_TRIANGLES, NUM_POINTS*POINT_INCIDENCES, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(VERSOR_LOCATION);
+    glDisableVertexAttribArray(PLANE_LOCATION);
     glEndTransformFeedback();
     glDisable(GL_RASTERIZER_DISCARD);
     glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
+    glUseProgram(0);
 
     glFlush();
 
     // pointBuf.base is ready to use
 #ifdef BRINGUP
-    GLfloat feedback[12];
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.head);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, 4*3*sizeof(GLfloat), feedback);
+    GLfloat feedback[NUM_POINTS*POINT_DIMENSIONS];
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < 12; i++) printf("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printf("%f\n", feedback[i]);
 #endif
 
     // reque to read next chunk
@@ -721,6 +745,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 {
     GLint success;
     GLchar infoLog[512];
+    GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex, 1, &vertexCode, NULL);
     glCompileShader(vertex);
@@ -729,26 +754,29 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
         printf("could not compile vertex shader for program %s: %s\n", name, infoLog);
         return 0;}
-    GLuint geometry = glCreateShader(GL_GEOMETRY_SHADER);
-    glShaderSource(geometry, 1, &geometryCode, NULL);
-    glCompileShader(geometry);
-    glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
-    if(!success) {
-        glGetShaderInfoLog(geometry, 512, NULL, infoLog);
-        printf("could not compile geometry shader for program %s: %s\n", name, infoLog);
-        return 0;}
-    GLuint fragment = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment, 1, &fragmentCode, NULL);
-    glCompileShader(fragment);
-    glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
-    if(!success) {
-        glGetShaderInfoLog(fragment, 512, NULL, infoLog);
-        printf("could not compile fragment shader for program %s: %s\n", name, infoLog);
-        return 0;}
-    GLuint program = glCreateProgram();
     glAttachShader(program, vertex);
-    glAttachShader(program, geometry);
-    glAttachShader(program, fragment);
+    GLuint geometry = 0;
+    if (geometryCode) {
+        geometry = glCreateShader(GL_GEOMETRY_SHADER);
+        glShaderSource(geometry, 1, &geometryCode, NULL);
+        glCompileShader(geometry);
+        glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
+        if(!success) {
+            glGetShaderInfoLog(geometry, 512, NULL, infoLog);
+            printf("could not compile geometry shader for program %s: %s\n", name, infoLog);
+            return 0;}
+        glAttachShader(program, geometry);}
+    GLuint fragment = 0;
+    if (fragmentCode) {
+        fragment = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragment, 1, &fragmentCode, NULL);
+        glCompileShader(fragment);
+        glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
+        if(!success) {
+            glGetShaderInfoLog(fragment, 512, NULL, infoLog);
+            printf("could not compile fragment shader for program %s: %s\n", name, infoLog);
+            return 0;}
+        glAttachShader(program, fragment);}
     if (feedback) {
         const GLchar* feedbacks[1]; feedbacks[0] = feedback;
         glTransformFeedbackVaryings(program, 1, feedbacks, GL_INTERLEAVED_ATTRIBS);}
@@ -759,75 +787,88 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         printf("could not link shaders for program %s: %s\n", name, infoLog);
         return 0;}
     glDeleteShader(vertex);
-    glDeleteShader(geometry);
-    glDeleteShader(fragment);
+    if (geometryCode) glDeleteShader(geometry);
+    if (fragmentCode) glDeleteShader(fragment);
     return program;
 }
 
-#define vertexCode "\
+#define vertexCode(INPUT) "\
     #version 330 core\n\
-    layout (location = 0) in vec3 vertex;\n\
-    layout (location = 1) in uint versor;\n\
-    out vec3 xformed;\n\
-    out vec3 rotated;\n\
+    layout (location = 0) in vec3 plane;\n\
+    layout (location = 1) in ubyte versor;\n\
+    layout (location = 2) in vec3 point;\n\
+    out mat3 xpanded;\n\
+    out mat3 xformed;\n\
+    out mat3 rotated;\n\
+    out ubyte ignore;\n\
     uniform mat3 basis;\n\
     uniform mat4 model;\n\
     uniform mat3 normal;\n\
     void main()\n\
     {\n\
-        xformed = vec3(vertex.x, vertex.y, vertex.z);\n\
-        rotated = vec3(1.0f, 0.5f, 0.2f);\n\
+        xpanded = mat3("INPUT",vec3(1.0f,1.1f,1.2f),vec3(2.0f,2.1f,2.2f));\n\
+        xformed = mat3("INPUT",vec3(3.0f,3.1f,3.2f),vec3(4.0f,4.1f,4.2f));\n\
+        rotated = mat3("INPUT",vec3(5.0f,5.1f,5.2f),vec3(6.0f,6.1f,6.2f));\n\
+        ignore = (versor >= 3);\n\
     }";
-#define geometryCode "\
+#define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
     #version 330 core\n\
-    layout (triangles) in;\n\
-    layout (triangle_strip, max_vertices = 3) out;\n\
-    in vec3 xformed[3];\n\
-    in vec3 rotated[3];\n\
+    layout ("LAYOUT0") in;\n\
+    layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
+    in mat3 xpanded["LAYOUT3"];\n\
+    in mat3 xformed["LAYOUT3"];\n\
+    in mat3 rotated["LAYOUT3"];\n\
+    int uint ignore["LAYOUT3"];\n\
+    out vec3 cross;\n\
     out vec3 vector;\n\
     out float scalar;\n\
+    out uint index;\n\
+    uniform mat3 basis;\n\
     uniform vec3 feather;\n\
     uniform vec3 arrow;\n\
-    uniform mat3 light;\n\
-    uniform vec3 extra; // extra light row\n\
     void main()\n\
     {\n\
-        gl_Position = vec4(xformed[0], 1.0);\n\
-        vector = vec3(0.0f, 0.0f, 0.0f);\n\
-        scalar = 0.1;\n\
-        EmitVertex();\n\
-        gl_Position = vec4(xformed[1], 1.0);\n\
-        vector = vec3(0.0f, 0.0f, 0.0f);\n\
-        scalar = 0.2;\n\
-        EmitVertex();\n\
-        gl_Position = vec4(xformed[2] + vec3(0.2,0.0,0.0), 1.0);\n\
-        vector = rotated[0];\n\
-        scalar = 0.3;\n\
-        EmitVertex();\n\
+        for (int i = 0; i < "LAYOUT2"; i++) {\n\
+        gl_Position = vec4(xformed[i][0], 1.0);\n\
+        cross = vec3(0.5f,0.25f,0.125f);\n\
+        vector = xpanded[i][0];\n\
+        scalar = xpanded[i][0][0];\n\
+        EmitVertex();}\n\
         EndPrimitive();\n\
     }";
 #define fragmentCode "\
     #version 330 core\n\
-    in vec3 vector;\n\
-    in float scalar; // extra light dimension\n\
+    in vec3 cross;\n\
     out vec4 result;\n\
-    uniform vec4 color;\n\
+    uniform vec4 light;\n\
     void main()\n\
     {\n\
-        result = vec4(vector, 1.0f);\n\
+        result = vec4(cross, 1.0f);\n\
     }";
 
-const GLchar *displayVertex = vertexCode;
-const GLchar *displayGeometry = geometryCode;
-const GLchar *displayFragment = fragmentCode;
+const GLchar *diplaneVertex = vertexCode("plane");
+const GLchar *diplaneGeometry = geometryCode("triangles_adjacency", "6", "triangle_strip", "3");
+const GLchar *diplaneFragment = fragmentCode;
 
-const GLchar *coplaneVertex = vertexCode;
-const GLchar *coplaneGeometry = geometryCode;
-const GLchar *coplaneFragment = fragmentCode;
+const GLchar *dipointVertex = vertexCode("point");
+const GLchar *dipointGeometry = geometryCode("triangles", "3", "triangle_strip", "3");
+const GLchar *dipointFragment = fragmentCode;
 
-const GLchar *classifyVertex = vertexCode;
-const GLchar *classifyGeometry = geometryCode;
-const GLchar *classifyFragment = fragmentCode;
+const GLchar *coplaneVertex = vertexCode("plane");
+const GLchar *coplaneGeometry = geometryCode("triangles", "3", "points", "1");
+const GLchar *coplaneFragment = 0;
+
+const GLchar *copointVertex = vertexCode("point");
+const GLchar *copointGeometry = geometryCode("triangles", "3", "points", "1");
+const GLchar *copointFragment = 0;
+
+const GLchar *adplaneVertex = vertexCode("plane");
+const GLchar *adplaneGeometry = geometryCode("triangles", "3", "points", "1");
+const GLchar *adplaneFragment = 0;
+
+const GLchar *adpointVertex = vertexCode("point");
+const GLchar *adpointGeometry = geometryCode("points", "1", "points", "1");
+const GLchar *adpointFragment = 0;
 
 void initialize(int argc, char **argv)
 {
@@ -886,50 +927,75 @@ void initialize(int argc, char **argv)
     glGenBuffers(1, &planeBuf.base);
     glGenBuffers(1, &versorBuf.base);
     glGenBuffers(1, &pointBuf.base);
-    glGenBuffers(1, &feedbackBuf.base);
+    glGenBuffers(1, &faceSub.base);
     glGenBuffers(1, &polygonSub.base);
     glGenBuffers(1, &vertexSub.base);
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLubyte), NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLubyte), NULL, GL_STATIC_DRAW);
     glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 3*sizeof(GLubyte), (GLvoid*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, polygonSub.base);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLuint), NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POLYGONS*POLYGON_POINTS*sizeof(GLuint), NULL, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, vertexSub.base);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLuint), NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    displayProgram = compileProgram(displayVertex, displayGeometry, displayFragment, 0, "display");
+    diplaneProgram = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, "diplane");
+    dipointProgram = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, "dipoint");
     coplaneProgram = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "vector", "coplane");
-    classifyProgram = compileProgram(classifyVertex, classifyGeometry, classifyFragment, "scalar", "classify");
+    copointProgram = compileProgram(copointVertex, copointGeometry, copointFragment, "vector", "copoint");
+    adplaneProgram = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, "scalar", "adplane");
+    adpointProgram = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", "adpoint");
 
-    glUseProgram(displayProgram);
-    modelUniform = glGetUniformLocation(displayProgram, "model");
-    normalUniform = glGetUniformLocation(displayProgram, "normal");
-    lightUniform = glGetUniformLocation(displayProgram, "light");
-    extraUniform = glGetUniformLocation(displayProgram, "extra");
-    colorUniform = glGetUniformLocation(displayProgram, "color");
+    glUseProgram(diplaneProgram);
+    basisUniform = glGetUniformLocation(diplaneProgram, "basis");
+    modelUniform = glGetUniformLocation(diplaneProgram, "model");
+    normalUniform = glGetUniformLocation(diplaneProgram, "normal");
+    lightUniform = glGetUniformLocation(diplaneProgram, "light");
+    glUseProgram(0);
+
+    glUseProgram(dipointProgram);
+    modelUniform = glGetUniformLocation(dipointProgram, "model");
+    normalUniform = glGetUniformLocation(dipointProgram, "normal");
+    lightUniform = glGetUniformLocation(dipointProgram, "light");
+    glUseProgram(0);
 
     glUseProgram(coplaneProgram);
-    basisUniform = glGetUniformLocation(displayProgram, "basis");
+    basisUniform = glGetUniformLocation(coplaneProgram, "basis");
+    glUseProgram(0);
 
-    glUseProgram(classifyProgram);
-    featherUniform = glGetUniformLocation(displayProgram, "feather");
-    arrowUniform = glGetUniformLocation(displayProgram, "arrow");
+    glUseProgram(copointProgram);
+    basisUniform = glGetUniformLocation(copointProgram, "basis");
+    glUseProgram(0);
+
+    glUseProgram(adplaneProgram);
+    basisUniform = glGetUniformLocation(adplaneProgram, "basis");
+    featherUniform = glGetUniformLocation(adplaneProgram, "feather");
+    arrowUniform = glGetUniformLocation(adplaneProgram, "arrow");
+    glUseProgram(0);
+ 
+    glUseProgram(adpointProgram);
+    featherUniform = glGetUniformLocation(adpointProgram, "feather");
+    arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
+    glUseProgram(0);
  
     enqueCommand(&process); processState = ProcessEnqued;
     printf("initialize done\n");
@@ -945,14 +1011,12 @@ void finalize()
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
-    if (limits.base) {struct Ints initial = {0}; free(limits.base); limits = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
     if (events.base) {struct Events initial = {0}; free(events.base); events = initial;}
     if (ints.base) {struct Ints initial = {0}; free(ints.base); ints = initial;}
     if (chars.base) {struct Chars initial = {0}; free(chars.base); chars = initial;}
-    if (glubytes.base) {struct Glubytes initial = {0}; free(glubytes.base); glubytes = initial;}
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
-    if (pointers.base) {struct Pointers initial = {0}; free(pointers.base); pointers = initial;}
+    if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
     printf("finalize done\n");
 }
 

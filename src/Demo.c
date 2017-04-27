@@ -16,7 +16,18 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <HsFFI.h>
+#ifdef __GLASGOW_HASKELL__
+#include "Main_stub.h"
+extern void __stginit_Main(void);
+#endif
+
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <ctype.h>
+#include <sys/utsname.h>
 #include <math.h>
 
 #ifdef __linux__
@@ -27,7 +38,16 @@
 #endif
 #include <GLFW/glfw3.h>
 
-int main(int argc, char *argv[])
+#define NUM_PLANES 4
+#define NUM_POINTS 4
+#define NUM_FEEDBACK NUM_POINTS
+#define PLANE_DIMENSIONS 3
+#define POINT_DIMENSIONS 3
+#define NUM_FACES 4
+#define FACE_PLANES 6
+#define POINT_INCIDENCES 3
+
+void initialize(int argc, char **argv)
 {
     glfwInit();
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -52,33 +72,47 @@ int main(int argc, char *argv[])
     glGenBuffers(1, &vertexSub);
 
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, POINT_DIMENSIONS*sizeof(GLfloat), (GLvoid*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(GLfloat), (GLvoid*)0);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, PLANE_DIMENSIONS*sizeof(GLfloat), (GLvoid*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, polygonSub);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLuint), NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, vertexSub);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLuint), NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     const GLchar *vertexCode = "\
     #version 330 core\n\
-    layout (location = 0) in vec3 vertex;\n\
-    out float xformed;\n\
+    layout (location = 0) in vec3 plane;\n\
+    out vec3 xformed;\n\
     void main()\n\
     {\n\
-        xformed = 9.0;\n\
+        xformed = plane;\n\
+    }";
+    const GLchar *geometryCode = "\
+    #version 330 core\n\
+    layout (triangles_adjacency) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in vec3 xformed[6];\n\
+    out vec3 vector;\n\
+    void main()\n\
+    {\n\
+        for (int i = 0; i < 3; i++) {\n\
+            vector[i] = xformed[i*2][1];}\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
     }";
     GLint success;
     GLchar infoLog[512];
+    GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex, 1, &vertexCode, NULL);
     glCompileShader(vertex);
@@ -86,29 +120,27 @@ int main(int argc, char *argv[])
     if(!success) {
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
         printf("could not compile vertex shader for program: %s\n", infoLog);
-        return 0;}
-    GLuint program = glCreateProgram();
+        return;}
     glAttachShader(program, vertex);
-    const GLchar* feedbacks[1]; feedbacks[0] = "xformed";
+    GLuint geometry = glCreateShader(GL_GEOMETRY_SHADER);
+    glShaderSource(geometry, 1, &geometryCode, NULL);
+    glCompileShader(geometry);
+    glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
+    if(!success) {
+        glGetShaderInfoLog(geometry, 512, NULL, infoLog);
+        printf("could not compile geometry shader for program: %s\n", infoLog);
+        return;}
+    glAttachShader(program, geometry);
+    const GLchar* feedbacks[1]; feedbacks[0] = "vector";
     glTransformFeedbackVaryings(program, 1, feedbacks, GL_INTERLEAVED_ATTRIBS);
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
         glGetProgramInfoLog(program, 512, NULL, infoLog);
         printf("could not link shaders for program: %s\n", infoLog);
-        return 0;}
+        return;}
     glDeleteShader(vertex);
-    glUseProgram(program);
-
-    GLuint polygon[] = {
-        0,1,2,
-        0,1,3,
-        0,2,3,
-        1,2,3,
-    };
-    glBindBuffer(GL_ARRAY_BUFFER, polygonSub);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLuint), polygon, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glDeleteShader(geometry);
 
     // h^2 = 1 - 0.5^2
     // a + b = h
@@ -140,35 +172,71 @@ int main(int argc, char *argv[])
     GLfloat v = 2.0 * i;
     GLfloat p = u / v; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
+/*
     GLfloat tetrahedron[] = {
         -g,-b,-q,
          g,-b,-q,
          z, a,-q,
          z, z, p,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf);
-    glBufferData(GL_ARRAY_BUFFER, 4*3*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
+*/
+    GLfloat tetrahedron[] = {
+        0,1,2,   // 0
+        3,4,5,   // 1
+        6,7,8,   // 2
+        9,10,9,  // 3
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, planeBuf);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf, 0, 4*3*sizeof(GLfloat));
+    GLuint polygon[] = {
+        0,1,2,3,2,3,
+        1,2,3,0,3,0,
+        2,3,0,1,0,1,
+        3,0,1,2,1,2,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, polygonSub);
+    glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), polygon, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glUseProgram(program);
+    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, pointBuf, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat));
     glEnable(GL_RASTERIZER_DISCARD);
     glBeginTransformFeedback(GL_POINTS);
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polygonSub);
-    glDrawArrays(GL_POINTS, 0, 4);
+    glDrawElements(GL_TRIANGLES_ADJACENCY, NUM_FACES*FACE_PLANES, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glDisableVertexAttribArray(0);
     glEndTransformFeedback();
     glDisable(GL_RASTERIZER_DISCARD);
     glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
+    glUseProgram(0);
 
     glFlush();
 
-    GLfloat feedback[12];
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, 4*1*sizeof(GLfloat), feedback);
+    GLfloat feedback[NUM_POINTS*POINT_DIMENSIONS];
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < 4; i++) printf("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printf("%f\n", feedback[i]);
+}
 
-    return 0;
+void finalize()
+{
+}
+
+void waitForEvent()
+{
+}
+
+char *message()
+{
+    return "done";
+}
+
+int event()
+{
+    return 4;
 }

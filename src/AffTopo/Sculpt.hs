@@ -23,12 +23,12 @@ import Foreign.C.Types
 import Foreign.C.String
 import AffTopo.Naive
 
-foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
+-- foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
 foreign import ccall "message" messageC :: IO (Ptr CChar)
-foreign import ccall "mode" modeC :: IO CInt
-foreign import ccall "mouse" mouseC :: IO CInt
-foreign import ccall "roller" rollerC :: IO CInt
-foreign import ccall "state" stateC :: IO CInt
+-- foreign import ccall "mode" modeC :: IO CInt
+-- foreign import ccall "mouse" mouseC :: IO CInt
+-- foreign import ccall "roller" rollerC :: IO CInt
+-- foreign import ccall "state" stateC :: IO CInt
 foreign import ccall "event" eventC :: IO CInt
 foreign export ccall "randomizeH" randomize :: IO ()
 

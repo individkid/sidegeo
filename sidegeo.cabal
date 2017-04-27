@@ -86,4 +86,37 @@ executable sculpt
                        IOKit,
                        CoreVideo
 
+executable demo
+  main-is:             Main.hs
+  other-modules:       AffTopo.Sculpt,
+                       AffTopo.Naive
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+  build-depends:       base >=4.8 && <4.9,
+                       containers,
+                       hmatrix,
+                       random
+  hs-source-dirs:      src
+  c-sources:           src/Demo.c
+  if os(linux)
+    extra-libraries:   GLEW,
+                       glfw3,
+                       GL,
+                       X11,
+                       Xi,
+                       Xrandr,
+                       Xxf86vm,
+                       Xinerama,
+                       Xcursor,
+                       rt,
+                       m,
+                       pthread
+  if os(osx)
+    extra-lib-dirs:    /usr/lib
+    extra-libraries:   glfw3
+    frameworks:        Cocoa,
+                       OpenGL,
+                       IOKit,
+                       CoreVideo
+
 -- gcc -L /usr/lib -l glfw3 -framework Cocoa -framework OpenGL -framework IOKit -framework CoreVideo -o demo src/Demo.c
