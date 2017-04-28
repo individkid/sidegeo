@@ -259,6 +259,26 @@ void dealloc##NAME(int size) \
         INSTANCE.tail = INSTANCE.tail - size;} \
 }
 
+#define CHECK0(command,Command) \
+    if (command##State == Command##Idle) exitErrstr(#command" command not enqued");
+
+#define EVENT0(Event) \
+    enqueCommand(0); enqueEvent(Event);
+
+#define ENQUE0(command,Command) \
+    if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
+    enqueCommand(&command); command##State = Command##Enqued;
+
+#define MAYBE0(command,Command) \
+    if (command##State == Command##Idle) { \
+        enqueCommand(&command); command##State = Command##Enqued;}
+
+#define REQUE0(command,Command,state) \
+    enqueCommand(&command); command##State = Command##state;
+
+#define DEQUE0(command,Command) \
+    command##State = Command##Idle;
+
 /*
  * pure functions including
  * helpers for accessing state
@@ -413,13 +433,13 @@ void enqueErrnum(const char *str, const char *name)
     int siz = strlen(str) + strlen(name) + strlen(err) + 12;
     char *buf = allocChar(siz);
     if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exit(-1);
-    enqueCommand(0); enqueEvent(Error); enqueCommand(&finishError);
+    EVENT0(Error); enqueCommand(&finishError);
 }
 
 void enqueErrstr(const char *str)
 {
     strcpy(allocChar(strlen(str)+1), str);
-    enqueCommand(0); enqueEvent(Error); enqueCommand(&finishError);
+    EVENT0(Error); enqueCommand(&finishError);
 }
 
 #ifdef BRINGUP
@@ -531,8 +551,7 @@ void bringup()
 void configure()
 {
     char *filename = 0;
-    if (configureState <= ConfigureIdle || configureState >= ConfigureStates) {
-        exitErrstr("configure command not enqued");}
+    CHECK0(configure,Configure)
     if (configFile && fclose(configFile) != 0) {
         enqueErrstr("invalid path for close");}
     if (!validFilename()) {
@@ -568,14 +587,13 @@ void configure()
             enqueErrnum("invalid path for close", filename);}}
     if (!(configFile = fopen(filename,"a"))) {
         enqueErrnum("invalid path for append", filename);}
-    configureState = ConfigureIdle;
+    DEQUE0(configure,Configure)
     printf("configure done\n");
 }
 
 void diplane()
 {
-    if (diplaneState <= DiplaneIdle || diplaneState >= DiplaneStates) {
-        exitErrstr("diplane command not enqued");}
+    CHECK0(diplane,Diplane)
 
     glUseProgram(diplaneProgram);
     glEnableVertexAttribArray(PLANE_LOCATION);
@@ -597,8 +615,7 @@ void diplane()
 
 void dipoint()
 {
-    if (dipointState <= DipointIdle || dipointState >= DipointStates) {
-        exitErrstr("dipoint command not enqued");}
+    CHECK0(dipoint,Dipoint)
 
     glUseProgram(dipointProgram);
     glEnableVertexAttribArray(POINT_LOCATION);
@@ -618,8 +635,7 @@ void dipoint()
 
 void coplane()
 {
-    if (coplaneState <= CoplaneIdle || coplaneState >= CoplaneStates) {
-        exitErrstr("coplane command not enqued");}
+    CHECK0(coplane,Coplane)
 
     // depending on state
     glUseProgram(coplaneProgram);
@@ -656,8 +672,7 @@ void coplane()
 
 void copoint()
 {
-    if (copointState <= CopointIdle || copointState >= CopointStates) {
-        exitErrstr("copoint command not enqued");}
+    CHECK0(copoint,Copoint)
 
     // depending on state
     glUseProgram(copointProgram);
@@ -693,11 +708,9 @@ void copoint()
 void process()
 {
     printf("process %s\n", (validOption() ? headOption() : "null"));
-    if (processState <= ProcessIdle || processState >= ProcessStates) {
-        exitErrstr("process command not enqued");}
+    CHECK0(process,Process)
     if (!validOption()) {
-        enqueCommand(0); enqueEvent(Done);
-        processState = ProcessIdle; return;}
+        EVENT0(Done) processState = ProcessIdle; return;}
     if (strcmp(headOption(), "-h") == 0) {
         printf("-h print this message\n");
         printf("-i start interactive mode\n");
@@ -712,34 +725,24 @@ void process()
         printf("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == Diplane) {
-            if (configureState != ConfigureIdle || diplaneState != DiplaneIdle) {
-                exitErrstr("interactive not idle");}
+            ENQUE0(configure,Configure)
 #ifdef BRINGUP
-            if (copointState != CopointIdle) {
-                exitErrstr("interactive not idle");}
+            ENQUE0(copoint,Copoint)
 #endif
-            enqueCommand(&configure); configureState = ConfigureEnqued;
-#ifdef BRINGUP
-            enqueCommand(&copoint); copointState = CopointEnqued;
-#endif
-            enqueCommand(&diplane); diplaneState = DiplaneEnqued;}
+            ENQUE0(diplane,Diplane)}
         else {
-            if (configureState != ConfigureIdle || coplaneState != CoplaneIdle || dipointState != DipointIdle) {
-                exitErrstr("interactive not idle");}
-            enqueCommand(&configure); configureState = ConfigureEnqued;
-            enqueCommand(&coplane); coplaneState = CoplaneEnqued;
-            enqueCommand(&dipoint); dipointState = DipointEnqued;}
+            ENQUE0(configure,Configure)
+            ENQUE0(coplane,Coplane)
+            ENQUE0(dipoint,Dipoint)}
         dequeOption();
         processState = ProcessIdle; return;}
     if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
         if (!validOption()) {
-            enqueErrstr("missing file argument");
-            enqueCommand(0); enqueEvent(Done);
-            processState = ProcessIdle; return;}
+            enqueErrstr("missing file argument"); return;}
         enqueFilename(headOption());}
     dequeOption();
-    enqueCommand(&process); processState = ProcessEnqued;
+    REQUE0(process,Process,Enqued)
 }
 
 /*
