@@ -953,23 +953,37 @@ const GLchar *contractCode = "\
             for (int j = 1; j < 3; j++) {\n\
                 mini = min(mini,points[j][i]);\n\
                 maxi = max(maxi,points[j][i]);}\n\
-            delata[i] = maxi - mini;}\n\
+            delta[i] = maxi - mini;}\n\
         float mini = delta[0];\n\
-        versor = 0;\n\
+        versor = uint(0);\n\
         for (int i = 1; i < 3; i++) if (delta[i] < mini) {\n\
             mini = delta[i];\n\
-            versor = i;}\n\
+            versor = uint(i);}\n\
+        for (int i = 0; i < 3; i++) {\n\
+            mat2 system;\n\
+            vec2 augment;\n\
+            for (int j = 0; j < 2; j++) {\n\
+                int index = j;\n\
+                if (j >= int(versor)) index++;\n\
+                system[0][j] = points[1][index] - points[0][index];\n\
+                system[1][j] = points[2][index] - points[0][index];\n\
+                augment[j] = basis[versor][i][index];}\n\
+            vec2 solution = inverse(system)*augment;\n\
+            vec2 difference;\n\
+            difference[0] = points[1][versor] - points[0][versor];\n\
+            difference[1] = points[2][versor] - points[0][versor];\n\
+            plane[i] = dot(solution,difference) + points[0][versor];}\n\
     }\n";
 
 GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *feedback, const char *name)
 {
     GLint success = 0;
     GLchar infoLog[512];
-    const GLchar *code[5] = {0};
+    const GLchar *code[4] = {0};
     GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[0] = uniformCode; code[1] = expandCode; code[2] = vertexCode;
-    glShaderSource(vertex, 3, code, NULL);
+    code[0] = uniformCode; code[1] = expandCode; code[2] = contractCode; code[3] = vertexCode;
+    glShaderSource(vertex, 4, code, NULL);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
@@ -980,7 +994,8 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     GLuint geometry = 0;
     if (geometryCode) {
         geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        glShaderSource(geometry, 1, &geometryCode, NULL);
+        code[3] = geometryCode;
+        glShaderSource(geometry, 4, code, NULL);
         glCompileShader(geometry);
         glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
         if(!success) {
@@ -991,7 +1006,8 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     GLuint fragment = 0;
     if (fragmentCode) {
         fragment = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragment, 1, &fragmentCode, NULL);
+        code[3] = fragmentCode;
+        glShaderSource(fragment, 4, code, NULL);
         glCompileShader(fragment);
         glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
         if(!success) {
@@ -1033,7 +1049,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         rotated = vec3(1.0f,1.0f,1.0f);\n\
    }\n";
 #define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
-    #version 330 core\n\
     layout ("LAYOUT0") in;\n\
     layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
     in vec3 xformed["LAYOUT3"];\n\
@@ -1045,7 +1060,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     out vec3 cross;\n\
     out vec3 vector;\n\
     out float scalar;\n\
-    uniform mat3 basis[3];\n\
     uniform vec3 feather;\n\
     uniform vec3 arrow;\n\
     void main()\n\
@@ -1060,7 +1074,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         EndPrimitive();\n\
     }\n";
 #define fragmentCode "\
-    #version 330 core\n\
     in vec3 cross;\n\
     out vec4 result;\n\
     uniform vec4 light;\n\
