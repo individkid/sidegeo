@@ -110,6 +110,7 @@ struct Buffer {
     GLintptr ready;
     GLintptr done;
     int lock; // -1 not readable; >0 not writable
+    GLuint query;
 }; // for use by *Bind* and *Map*
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
 struct Buffer versorBuf = {0}; // per boundary base selector
@@ -155,12 +156,12 @@ enum {Right,Left} clickMode = Right;
  *Left: mouse movement affects matrices*/
 enum {Diplane,Dipoint} shaderMode = Diplane;
 struct Chars generics = {0}; // sized formatted packets of bytes
-enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureStates} configureState = ConfigureIdle;
-enum DiplaneState {DiplaneIdle,DiplaneEnqued,DiplaneStates} diplaneState = DiplaneIdle;
-enum DipointState {DipointIdle,DipointEnqued,DipointStates} dipointState = DipointIdle;
-enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneStates} coplaneState = CoplaneIdle;
-enum CopointState {CopointIdle,CopointEnqued,CopointStates} copointState = CopointIdle;
-enum ProcessState {ProcessIdle,ProcessEnqued,ProcessStates} processState = ProcessIdle;
+enum ConfigureState {ConfigureIdle,ConfigureWait,ConfigureEnqued} configureState = ConfigureIdle;
+enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
+enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
+enum CoplaneState {CoplaneIdle,CoplaneWait,CoplaneEnqued} coplaneState = CoplaneIdle;
+enum CopointState {CopointIdle,CopointWait,CopointEnqued} copointState = CopointIdle;
+enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 int linkCheck = 0;
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
@@ -266,8 +267,7 @@ void dealloc##NAME(int size) \
     enqueCommand(0); enqueEvent(event);
 
 #define EVENT1(event,argument,Argument) \
-    enque##Argument(argument); \
-    EVENT0(event)
+    enque##Argument(argument); EVENT0(event)
 
 #define LINK0(command) \
     enqueCommand(&command);
@@ -275,21 +275,14 @@ void dealloc##NAME(int size) \
 #define LINK1(command,argument,Argument) \
     enqueCommand(&command); enque##Argument(argument);
 
-#define REQUE0(command,Command) \
-    enqueCommand(&command); return;
-
-#define REQUE1(command,Command,argument,Argument) \
-    enque##Argument(argument); \
-    REQUE0(command,Command)
-
 #define CHECK0(command,Command) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
-    if (linkCheck) {linkCheck = 0; REQUE0(command,Command)}
+    if (linkCheck) {linkCheck = 0; enqueCommand(&command); return;}
 
 #define CHECK1(command,Command,type,argument,Argument) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
     type argument = head##Argument(); deque##Argument(); \
-    if (linkCheck) {linkCheck = 0; REQUE1(command,Command,argument,Argument)}
+    if (linkCheck) {linkCheck = 0; enque##Argument(argument); enqueCommand(&command); return;}
 
 #define ENQUE0(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
@@ -301,8 +294,13 @@ void dealloc##NAME(int size) \
 
 #define MAYBE1(command,Command,argument,Argument) \
     if (command##State == Command##Idle) { \
-        enque##Argument(argument); \
-        enqueCommand(&command); command##State = Command##Enqued;}
+        enque##Argument(argument);enqueCommand(&command); command##State = Command##Enqued;}
+
+#define REQUE0(command,Command) \
+    enqueCommand(&command); return;
+
+#define REQUE1(command,Command,argument,Argument) \
+    enque##Argument(argument); REQUE0(command,Command)
 
 #define DEQUE0(command,Command) \
     command##State = Command##Idle; return;
@@ -311,8 +309,7 @@ void dealloc##NAME(int size) \
     DEQUE0(command,Command)
 
 #define CHECKS0(command,Command) \
-    Command##State command##State = head##Command(); deque##Command(); \
-    CHECK0(command,Command)
+    Command##State command##State = head##Command(); deque##Command(); CHECK0(command,Command)
 
 #define CHECKS1(command,Command,type,argument,Argument) \
     Command##State command##State = head##Command(); deque##Command(); \
@@ -325,12 +322,10 @@ void dealloc##NAME(int size) \
     enque##Argument(argument); ENQUES0(command,Command)
 
 #define REQUES0(command,Command) \
-    enque##Command(command##State); \
-    REQUE0(command,Command)
+    enque##Command(command##State); REQUE0(command,Command)
 
 #define REQUES1(command,Command,argument,Argument) \
-    enque##Command(command##State); \
-    REQUE1(command,Command,argument,Argument)
+    enque##Command(command##State); REQUE1(command,Command,argument,Argument)
 
 #define DEQUES0(command,Command) \
     DEQUE0(command,Command)
@@ -434,28 +429,28 @@ char *readLine(FILE *file) // caller must call deallocChar
 {
     int depth = 0;
     int count = 0;
-    int size = 0;
     int chr = 0;
     char nest[100];
-    while ((!size || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
+    char *buf = allocChar(0);
+    while ((buf == allocChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
         if (chr == '(') nest[depth++] = ')';
         else if (chr == '[') nest[depth++] = ']';
         else if (chr == '{') nest[depth++] = '}';
         else if (depth && chr == nest[depth-1]) depth--;
-        if (!isspace(chr)) {enqueChar(chr); size++;}}
-    enqueChar(0); size++;
-    if (depth) {deallocChar(size); return 0;}
-    return allocChar(0) - size;
+        if (!isspace(chr)) enqueChar(chr);}
+    enqueChar(0);
+    if (depth) {deallocChar(strlen(buf)); return 0;}
+    return buf;
 }
 
 char *copyStrings(char **bufs) // caller must call deallocChar
 {
-    int size = 0;
+    char *buf = allocChar(0);
     for (int i = 0; bufs[i]; i++) {
         for (int j = 0; bufs[i][j]; j++) {
-            enqueChar(bufs[i][j]); size++;}}
-    enqueChar(0); size++;
-    return allocChar(0) - size;
+            enqueChar(bufs[i][j]);}}
+    enqueChar(0);
+    return buf;
 }
 
 char *partsToLine(char *part[2]) // caller must call deallocChar
@@ -652,41 +647,43 @@ void configure()
 {
     char *filename = 0;
     CHECK0(configure,Configure)
-    if (configFile && fclose(configFile) != 0) {
-        enqueErrstr("invalid path for close");}
-    if (!validFilename()) {
-        enqueFilename("./sculpt.cfg");}
-    while (validFilename()) {
-        filename = headFilename();
-        dequeFilename();
-        if ((configFile = fopen(filename, "r"))) {
-            // load lighting directions and colors
-            // ensure indices are empty on first config line
-            // read format and bytes from first config line
-            // for each subsequent config line,
-                // read indices, find subformat, read bytes
-                // find replaced range and replacement size
-                // replace range by bytes read from config
-            // load transformation matrices
-            // ftruncate to before transformation matrices
+    if (configureState == ConfigureEnqued) {
+        if (configFile && fclose(configFile) != 0) {
+            enqueErrstr("invalid path for close");}
+        if (!validFilename()) {
+            enqueFilename("./sculpt.cfg");}
+        while (validFilename()) {
+            filename = headFilename();
+            dequeFilename();
+            if ((configFile = fopen(filename, "r"))) {
+                // load lighting directions and colors
+                // ensure indices are empty on first config line
+                // read format and bytes from first config line
+                // for each subsequent config line,
+                    // read indices, find subformat, read bytes
+                    // find replaced range and replacement size
+                    // replace range by bytes read from config
+                // load transformation matrices
+                // ftruncate to before transformation matrices
 #ifdef BRINGUP
-            bringup();
+                bringup();
 #endif
-        }
-        else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
-            // randomize();
-            // save lighting directions and colors
-            // randomizeH();
-            // save generic data
+            }
+            else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
+                // randomize();
+                // save lighting directions and colors
+                // randomizeH();
+                // save generic data
 #ifdef BRINGUP
-            bringup();
+                bringup();
 #endif
-        }
-        else enqueErrnum("invalid path for config", filename);
-        if (fclose(configFile) != 0) {
-            enqueErrnum("invalid path for close", filename);}}
-    if (!(configFile = fopen(filename,"a"))) {
-        enqueErrnum("invalid path for append", filename);}
+            }
+            else enqueErrnum("invalid path for config", filename);
+            if (fclose(configFile) != 0) {
+                enqueErrnum("invalid path for close", filename);}}
+        if (!(configFile = fopen(filename,"a"))) {
+            enqueErrnum("invalid path for append", filename);}
+        configureState = ConfigureWait; REQUE0(configure,Configure)}
 #ifdef BRINGUP
     printf("configure done\n");
 #endif
@@ -760,7 +757,11 @@ void coplane()
     glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
     glUseProgram(0);
 
-    glFlush();
+    if (coplaneState == CoplaneWait) {
+        GLuint count = 0;
+        glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_NO_WAIT, &count);
+        if (count < NUM_PLANES) {REQUE0(coplane,Coplane)}
+        coplaneState = CoplaneIdle;}
 
     // pointBuf.base is ready to use
 #ifdef BRINGUP
@@ -783,38 +784,39 @@ void copoint()
 {
     CHECK0(copoint,Copoint)
 
-    // depending on state
-    glUseProgram(copointProgram);
-    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat));
-    glEnable(GL_RASTERIZER_DISCARD);
-    glBeginTransformFeedback(GL_POINTS);
-    glEnableVertexAttribArray(POINT_LOCATION);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, constructSub.base);
-    glDrawElements(GL_TRIANGLES, NUM_POINTS*POINT_INCIDENCES, GL_UNSIGNED_INT, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableVertexAttribArray(POINT_LOCATION);
-    glEndTransformFeedback();
-    glDisable(GL_RASTERIZER_DISCARD);
-    glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
-    glUseProgram(0);
+    if (copointState == CopointEnqued) {
+        glUseProgram(copointProgram);
+        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, planeBuf.query);
+        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat));
+        glEnable(GL_RASTERIZER_DISCARD);
+        glBeginTransformFeedback(GL_POINTS);
+        glEnableVertexAttribArray(POINT_LOCATION);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, constructSub.base);
+        glDrawElements(GL_TRIANGLES, NUM_POINTS*POINT_INCIDENCES, GL_UNSIGNED_INT, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glDisableVertexAttribArray(POINT_LOCATION);
+        glEndTransformFeedback();
+        glDisable(GL_RASTERIZER_DISCARD);
+        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
+        glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+        glUseProgram(0);
+        copointState = CopointWait;}
 
-    glFlush();
+    if (copointState == CopointWait) {
+        GLuint count = 0;
+        glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_NO_WAIT, &count);
+        if (count < NUM_PLANES) {REQUE0(copoint,Copoint)}
+        copointState = CopointIdle;}
 
-    // planeBuf.base is ready to use
 #ifdef BRINGUP
     GLfloat feedback[NUM_PLANES*PLANE_DIMENSIONS];
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printf("%f\n", feedback[i]);
-#endif
-
-    // reque to read next chunk
-
-#ifdef BRINGUP
     printf("copoint done\n");
 #endif
-    DEQUE0(copoint,Copoint)
+    DEQUE0(copoint,Copoint) 
 }
 
 void process()
@@ -840,8 +842,10 @@ void process()
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == Diplane) {
             ENQUE0(configure,Configure)
+            LINK1(link,&configure,Link)
 #ifdef BRINGUP
             ENQUE0(copoint,Copoint)
+            LINK1(link,&copoint,Link)
 #endif
             ENQUE0(diplane,Diplane)}
         else {
@@ -909,6 +913,11 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 void displayClose(GLFWwindow* window)
 {
     EVENT0(Done);
+}
+
+void displaySize(GLFWwindow *window, int width, int height)
+{
+    glViewport(0, 0, width, height);
 }
 
 void displayRefresh(GLFWwindow *window)
@@ -1107,6 +1116,7 @@ void initialize(int argc, char **argv)
         exit(-1);}
     glfwSetKeyCallback(windowHandle, displayKey);
     glfwSetWindowCloseCallback(windowHandle, displayClose);
+    glfwSetWindowSizeCallback(windowHandle, displaySize);
     glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
     glfwMakeContextCurrent(windowHandle);
 
@@ -1138,13 +1148,13 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    glGenBuffers(1, &planeBuf.base);
-    glGenBuffers(1, &versorBuf.base);
-    glGenBuffers(1, &pointBuf.base);
-    glGenBuffers(1, &faceSub.base);
-    glGenBuffers(1, &polygonSub.base);
-    glGenBuffers(1, &vertexSub.base);
-    glGenBuffers(1, &constructSub.base);
+    glGenBuffers(1, &planeBuf.base); glGenQueries(1, &planeBuf.query);
+    glGenBuffers(1, &versorBuf.base); glGenQueries(1, &versorBuf.query);
+    glGenBuffers(1, &pointBuf.base); glGenQueries(1, &pointBuf.query);
+    glGenBuffers(1, &faceSub.base); glGenQueries(1, &faceSub.query);
+    glGenBuffers(1, &polygonSub.base); glGenQueries(1, &polygonSub.query);
+    glGenBuffers(1, &vertexSub.base); glGenQueries(1, &vertexSub.query);
+    glGenBuffers(1, &constructSub.base); glGenQueries(1, &constructSub.query);
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
@@ -1246,7 +1256,7 @@ void waitForEvent()
 {
     while (1) {
         if (!validCommand()) glfwWaitEvents();
-        else glfwPollEvents();
+        else glfwWaitEventsTimeout(0.000001);
         if (!validCommand()) continue;
         Command command = headCommand();
         dequeCommand();
