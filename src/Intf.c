@@ -161,6 +161,7 @@ enum DipointState {DipointIdle,DipointEnqued,DipointStates} dipointState = Dipoi
 enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneStates} coplaneState = CoplaneIdle;
 enum CopointState {CopointIdle,CopointEnqued,CopointStates} copointState = CopointIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued,ProcessStates} processState = ProcessIdle;
+int linkCheck = 0;
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
@@ -175,6 +176,8 @@ struct Floats {DECLARE_QUEUE(float)} floats = {0};
  // for scratchpad and arguments
 struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
  // for scratchpad and arguments
+struct Commands links = {0};
+ // for prelink link postline commands
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
 void enque##NAME(TYPE val) \
@@ -200,21 +203,26 @@ int valid##NAME() \
     return (INSTANCE.head != INSTANCE.tail); \
 } \
 \
+TYPE *array##NAME() \
+{ \
+    while (INSTANCE.head - INSTANCE.base >= 10) { \
+        int tail = INSTANCE.tail - INSTANCE.base; \
+        for (int i = 10; i < tail; i++) { \
+            INSTANCE.base[i-10] = INSTANCE.base[i];} \
+        INSTANCE.head = INSTANCE.base; \
+        INSTANCE.tail = INSTANCE.base + tail - 10;} \
+    return INSTANCE.head; \
+} \
+\
 TYPE head##NAME() \
 { \
-    return *INSTANCE.head; \
+    return *array##NAME(); \
 } \
 \
 void deque##NAME() \
 { \
     if (INSTANCE.head != INSTANCE.tail) { \
         INSTANCE.head = INSTANCE.head + 1;} \
-    if (INSTANCE.head - INSTANCE.base == 10) { \
-        int tail = INSTANCE.tail - INSTANCE.base; \
-        for (int i = 10; i < tail; i++) { \
-            INSTANCE.base[i-10] = INSTANCE.base[i];} \
-        INSTANCE.head = INSTANCE.base; \
-        INSTANCE.tail = INSTANCE.base + tail - 10;} \
 } \
 \
 TYPE *alloc##NAME(int size) \
@@ -236,11 +244,6 @@ TYPE *alloc##NAME(int size) \
     return INSTANCE.tail - size; \
 } \
 \
-TYPE *array##NAME() \
-{ \
-    return INSTANCE.head; \
-} \
-\
 void free##NAME(int size) \
 { \
     if (INSTANCE.head + size <= INSTANCE.tail) { \
@@ -259,11 +262,34 @@ void dealloc##NAME(int size) \
         INSTANCE.tail = INSTANCE.tail - size;} \
 }
 
-#define CHECK0(command,Command) \
-    if (command##State == Command##Idle) exitErrstr(#command" command not enqued");
+#define EVENT0(event) \
+    enqueCommand(0); enqueEvent(event);
 
-#define EVENT0(Event) \
-    enqueCommand(0); enqueEvent(Event);
+#define EVENT1(event,argument,Argument) \
+    enque##Argument(argument); \
+    EVENT0(event)
+
+#define LINK0(command) \
+    enqueCommand(&command);
+
+#define LINK1(command,argument,Argument) \
+    enqueCommand(&command); enque##Argument(argument);
+
+#define REQUE0(command,Command) \
+    enqueCommand(&command); return;
+
+#define REQUE1(command,Command,argument,Argument) \
+    enque##Argument(argument); \
+    REQUE0(command,Command)
+
+#define CHECK0(command,Command) \
+    if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
+    if (linkCheck) {linkCheck = 0; REQUE0(command,Command)}
+
+#define CHECK1(command,Command,type,argument,Argument) \
+    if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
+    type argument = head##Argument(); deque##Argument(); \
+    if (linkCheck) {linkCheck = 0; REQUE1(command,Command,argument,Argument)}
 
 #define ENQUE0(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
@@ -273,11 +299,79 @@ void dealloc##NAME(int size) \
     if (command##State == Command##Idle) { \
         enqueCommand(&command); command##State = Command##Enqued;}
 
-#define REQUE0(command,Command,state) \
-    enqueCommand(&command); command##State = Command##state;
+#define MAYBE1(command,Command,argument,Argument) \
+    if (command##State == Command##Idle) { \
+        enque##Argument(argument); \
+        enqueCommand(&command); command##State = Command##Enqued;}
 
 #define DEQUE0(command,Command) \
-    command##State = Command##Idle;
+    command##State = Command##Idle; return;
+
+#define DEQUE1(command,Command,argument,Argument) \
+    DEQUE0(command,Command)
+
+#define CHECKS0(command,Command) \
+    Command##State command##State = head##Command(); deque##Command(); \
+    CHECK0(command,Command)
+
+#define CHECKS1(command,Command,type,argument,Argument) \
+    Command##State command##State = head##Command(); deque##Command(); \
+    CHECK1(command,Command,type,argument,Argument)
+
+#define ENQUES0(command,Command) \
+    enque##Command(command##Enqued); enqueCommand(command);
+
+#define ENQUES1(command,Command,argument,Argument) \
+    enque##Argument(argument); ENQUES0(command,Command)
+
+#define REQUES0(command,Command) \
+    enque##Command(command##State); \
+    REQUE0(command,Command)
+
+#define REQUES1(command,Command,argument,Argument) \
+    enque##Command(command##State); \
+    REQUE1(command,Command,argument,Argument)
+
+#define DEQUES0(command,Command) \
+    DEQUE0(command,Command)
+
+#define DEQUES1(command,Command,argument,Argument) \
+    DEQUE1(command,Command,argument,Argument)
+
+#define READ0(command,Command,buffer,Before,After) \
+    if (command##State == Command##Before) { \
+        if (buffer.lock < 0) {REQUE0(command,Command)} \
+        buffer.lock++; command##State = Command##After;}
+
+#define WRITE0(command,Command,buffer,Before,After) \
+    if (command##State == Command##Before) { \
+        if (buffer.lock != 0) {REQUE0(command,Command)} \
+        buffer.lock--; command##State = Command##After;}
+
+#define ROAD0(buffer) \
+    buffer.lock--;
+
+#define WROTE0(buffer) \
+    buffer.lock++;
+
+// deadlocks if buffer is write locked by current command, because wrap needs read lock
+#define TODO0(command,Command,buffer,size,Before,Wrap,After) \
+    if (command##State == Command##Before) { \
+        if (buffer.done != buffer.todo) {REQUE0(command,Command)} \
+        if ((buffer.todo += size) > buffer.limit) {ENQUES1(wrap,Wrap,&buffer,Buffer)} \
+        command##State = Command##Wrap;} \
+    if (command##State == Command##Wrap) { \
+        if (buffer.todo > buffer.limit) {REQUE0(command,Command)} \
+        command##State = Command##After;}
+
+#define READY0(command,Command,buffer,size,Before,After) \
+    if (command##State == Command##Before) { \
+        if (buffer.done != buffer.ready) {REQUE0(command,Command)} \
+        if ((buffer.ready += size) > buffer.todo) exitErrstr(#command" command too ready"); \
+        command##State = Command##After;}
+
+#define DONE0(command,Command,buffer,size) \
+    if ((buffer.done += size) > buffer.ready) exitErrstr(#command" command too done");
 
 /*
  * pure functions including
@@ -311,6 +405,8 @@ ACCESS_QUEUE(Char,char,chars)
 ACCESS_QUEUE(Float,float,floats)
 
 ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
+
+ACCESS_QUEUE(Link,Command,links)
 
 /*
  * pure functions including
@@ -420,12 +516,6 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
  * so, each void *() below has a corresponding *State variable above
  */
 
-void finishError()
-{
-    if (!validChar()) exit(-1);
-    freeChar(strlen(arrayChar())+1);
-}
-
 void enqueErrnum(const char *str, const char *name)
 {
     int num = errno;
@@ -433,13 +523,23 @@ void enqueErrnum(const char *str, const char *name)
     int siz = strlen(str) + strlen(name) + strlen(err) + 12;
     char *buf = allocChar(siz);
     if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exit(-1);
-    EVENT0(Error); enqueCommand(&finishError);
+    EVENT0(Error);
 }
 
 void enqueErrstr(const char *str)
 {
     strcpy(allocChar(strlen(str)+1), str);
-    EVENT0(Error); enqueCommand(&finishError);
+    EVENT0(Error);
+}
+
+void link()
+{
+    for (int i = 0; i < commands.tail - commands.head; i++) {
+        if (commands.head[i] == headLink()) {linkCheck = 1; break;}}
+    if (linkCheck) {
+        enqueCommand(&link);
+        enqueLink(headLink());}
+    dequeLink();
 }
 
 #ifdef BRINGUP
@@ -587,8 +687,10 @@ void configure()
             enqueErrnum("invalid path for close", filename);}}
     if (!(configFile = fopen(filename,"a"))) {
         enqueErrnum("invalid path for append", filename);}
-    DEQUE0(configure,Configure)
+#ifdef BRINGUP
     printf("configure done\n");
+#endif
+    DEQUE0(configure,Configure)
 }
 
 void diplane()
@@ -609,8 +711,10 @@ void diplane()
 
     glfwSwapBuffers(windowHandle);
 
-    diplaneState = DiplaneIdle;
+#ifdef BRINGUP
     printf("diplane done\n");
+#endif
+    DEQUE0(diplane,Diplane)
 }
 
 void dipoint()
@@ -629,8 +733,10 @@ void dipoint()
 
     glfwSwapBuffers(windowHandle);
 
-    dipointState = DipointIdle;
+#ifdef BRINGUP
     printf("dipoint done\n");
+#endif
+    DEQUE0(dipoint,Dipoint)
 }
 
 void coplane()
@@ -666,8 +772,11 @@ void coplane()
 #endif
 
     // reque to read next chunk
-    coplaneState = CoplaneIdle;
+
+#ifdef BRINGUP
     printf("coplane done\n");
+#endif
+    DEQUE0(coplane,Coplane)
 }
 
 void copoint()
@@ -701,16 +810,21 @@ void copoint()
 #endif
 
     // reque to read next chunk
-    copointState = CopointIdle;
+
+#ifdef BRINGUP
     printf("copoint done\n");
+#endif
+    DEQUE0(copoint,Copoint)
 }
 
 void process()
 {
+#ifdef BRINGUP
     printf("process %s\n", (validOption() ? headOption() : "null"));
+#endif
     CHECK0(process,Process)
     if (!validOption()) {
-        EVENT0(Done) processState = ProcessIdle; return;}
+        EVENT0(Done) DEQUE0(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         printf("-h print this message\n");
         printf("-i start interactive mode\n");
@@ -732,17 +846,19 @@ void process()
             ENQUE0(diplane,Diplane)}
         else {
             ENQUE0(configure,Configure)
+            LINK1(link,&configure,Link)
             ENQUE0(coplane,Coplane)
+            LINK1(link,&coplane,Link)
             ENQUE0(dipoint,Dipoint)}
         dequeOption();
-        processState = ProcessIdle; return;}
+        DEQUE0(process,Process)}
     if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
         if (!validOption()) {
             enqueErrstr("missing file argument"); return;}
         enqueFilename(headOption());}
     dequeOption();
-    REQUE0(process,Process,Enqued)
+    REQUE0(process,Process)
 }
 
 /*
@@ -757,12 +873,9 @@ void process()
  * for example, the Done event does not modify state
  */
 
-char *generic(int *indices, int *size)
+char *generic(int *indices, int size)
 {
-    // intcpy(allocIndex(intlen(indices)+1), indices);
-    // enqueUpdate(Generic);
-    // if *size is not zero, resize indicated portion of generic data
-    // if *size is zero, change it to size of indicated portion
+    // if size is not zero, resize indicated portion of generic data
     // return pointer to indicated portion of generic data
     return 0;
 }
@@ -771,45 +884,6 @@ char *message()
 {
     if (!validChar()) return 0;
     return arrayChar();
-}
-
-int mode()
-{
-    switch (menuMode) {
-        case (Transform): return 0;
-        case (Manipulate): return 1;
-        case (Refine): return 2;
-        case (Additive): return 3;
-        case (Subractive): return 4;}
-    return -1;
-}
-
-int mouse()
-{
-    switch (mouseMode) {
-        case (Sphere): return 0;
-        case (Translate): return 1;
-        case (Look): return 2;}
-    return -1;
-}
-
-int roller()
-{
-    switch (rollerMode) {
-        case (Lever): return 0;
-        case (Clock): return 1;
-        case (Cylinder): return 2;
-        case (Scale): return 3;
-        case (Drive): return 4;}
-    return -1;
-}
-
-int state()
-{
-    switch (clickMode) {
-        case (Right) : return 0;
-        case (Left) : return 1;}
-    return -1;
 }
 
 int event()
@@ -827,34 +901,66 @@ int event()
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS && processState == ProcessIdle) {enqueCommand(&process); processState = ProcessEnqued;}
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
     if (key == GLFW_KEY_E && action == GLFW_PRESS) printf("key E\n");
     if (key == GLFW_KEY_UP && action == GLFW_PRESS) printf("key up\n");
 }
 
 void displayClose(GLFWwindow* window)
 {
-    enqueCommand(0); enqueEvent(Done);
+    EVENT0(Done);
 }
 
 void displayRefresh(GLFWwindow *window)
 {
     if (processState != ProcessIdle) return;
-    if (dipointState == DipointIdle && shaderMode == Dipoint) {enqueCommand(&dipoint); dipointState = DipointEnqued;}
-    if (diplaneState == DiplaneIdle && shaderMode == Diplane) {enqueCommand(&diplane); diplaneState = DiplaneEnqued;}
+    if (shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+    if (shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
 }
 
 /*
  * functions called by top level Haskell
  */
 
+const GLchar *uniformCode = "\
+    #version 330 core\n\
+    uniform mat3 basis[3];\n";
+
+const GLchar *expandCode = "\
+    void expand(in vec3 plane, in uint versor, out mat3 result)\n\
+    {\n\
+        uint index = uint(abs(versor));\n\
+        result = basis[index];\n\
+        for (int i = 0; i < 3; i++) result[i][index] = plane[i];\n\
+    }\n";
+
+const GLchar *contractCode = "\
+    void contract(in mat3 points, out vec3 plane, out uint versor)\n\
+    {\n\
+        float delta[3];\n\
+        for (int i = 0; i < 3; i++) {\n\
+            float mini = points[0][i];\n\
+            float maxi = points[0][i];\n\
+            for (int j = 1; j < 3; j++) {\n\
+                mini = min(mini,points[j][i]);\n\
+                maxi = max(maxi,points[j][i]);}\n\
+            delata[i] = maxi - mini;}\n\
+        float mini = delta[0];\n\
+        versor = 0;\n\
+        for (int i = 1; i < 3; i++) if (delta[i] < mini) {\n\
+            mini = delta[i];\n\
+            versor = i;}\n\
+    }\n";
+
 GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *feedback, const char *name)
 {
-    GLint success;
+    GLint success = 0;
     GLchar infoLog[512];
+    const GLchar *code[5] = {0};
     GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex, 1, &vertexCode, NULL);
+    code[0] = uniformCode; code[1] = expandCode; code[2] = vertexCode;
+    glShaderSource(vertex, 3, code, NULL);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
@@ -900,7 +1006,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 }
 
 #define vertexCode(INPUT) "\
-    #version 330 core\n\
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
     layout (location = 2) in vec3 point;\n\
@@ -910,7 +1015,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     out uint uitated;\n\
     out vec3 xpanded;\n\
     out uint uipanded;\n\
-    uniform mat3 basis[3];\n\
     uniform mat4 model;\n\
     uniform mat3 normal;\n\
     void main()\n\
@@ -918,7 +1022,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         xpanded = "INPUT";\n\
         xformed = "INPUT";\n\
         rotated = vec3(1.0f,1.0f,1.0f);\n\
-   }";
+   }\n";
 #define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
     #version 330 core\n\
     layout ("LAYOUT0") in;\n\
@@ -945,7 +1049,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         scalar = xpanded[index][0];\n\
         EmitVertex();}\n\
         EndPrimitive();\n\
-    }";
+    }\n";
 #define fragmentCode "\
     #version 330 core\n\
     in vec3 cross;\n\
@@ -954,7 +1058,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     void main()\n\
     {\n\
         result = vec4(cross, 1.0f);\n\
-    }";
+    }\n";
 
 const GLchar *diplaneVertex = vertexCode("plane");
 const GLchar *diplaneGeometry = geometryCode("triangles_adjacency", "6", "triangle_strip", "3");
@@ -1112,9 +1216,10 @@ void initialize(int argc, char **argv)
     arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
 
-    enqueCommand(&process); processState = ProcessEnqued;
-
+#ifdef BRINGUP
     printf("initialize done\n");
+#endif
+    ENQUE0(process,Process);
 }
 
 void finalize()
@@ -1133,6 +1238,7 @@ void finalize()
     if (chars.base) {struct Chars initial = {0}; free(chars.base); chars = initial;}
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
     if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
+    if (links.base) {struct Commands initial = {0}; free(links.base); links = initial;}
     printf("finalize done\n");
 }
 
