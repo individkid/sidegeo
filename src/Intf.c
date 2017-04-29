@@ -759,7 +759,9 @@ void coplane()
 
     if (coplaneState == CoplaneWait) {
         GLuint count = 0;
-        glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_NO_WAIT, &count);
+        glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_AVAILABLE, &count);
+        if (count == GL_FALSE) count = 0;
+        else glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT, &count);
         if (count < NUM_PLANES) {REQUE0(coplane,Coplane)}
         coplaneState = CoplaneIdle;}
 
@@ -804,7 +806,9 @@ void copoint()
 
     if (copointState == CopointWait) {
         GLuint count = 0;
-        glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_NO_WAIT, &count);
+        glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_AVAILABLE, &count);
+        if (count == GL_FALSE) count = 0;
+        else glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT, &count);
         if (count < NUM_PLANES) {REQUE0(copoint,Copoint)}
         copointState = CopointIdle;}
 
