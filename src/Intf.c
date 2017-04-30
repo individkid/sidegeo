@@ -125,6 +125,7 @@ GLuint coplaneProgram = 0; // find intersections of plane triples
 GLuint copointProgram = 0; // construct planes from point triples
 GLuint adplaneProgram = 0; // find plane triples wrt feather and arrow
 GLuint adpointProgram = 0; // find point singles wrt feather and arrow
+GLint invalidUniform = 0;
 GLint basisUniform = 0;
 GLint modelUniform = 0;
 GLint normalUniform = 0;
@@ -937,14 +938,15 @@ void displayRefresh(GLFWwindow *window)
 
 const GLchar *uniformCode = "\
     #version 330 core\n\
-    uniform mat3 basis[3];\n";
+    uniform mat3 basis[3];\n\
+    uniform float invalid;\n";
 
 const GLchar *expandCode = "\
-    void expand(in vec3 plane, in uint versor, out mat3 result)\n\
+    void expand(in vec3 plane, in uint versor, out mat3 points)\n\
     {\n\
         uint index = uint(abs(versor));\n\
-        result = basis[index];\n\
-        for (int i = 0; i < 3; i++) result[i][index] = plane[i];\n\
+        points = basis[index];\n\
+        for (int i = 0; i < 3; i++) points[i][index] = plane[i];\n\
     }\n";
 
 const GLchar *constructCode = "\
@@ -1010,7 +1012,6 @@ const GLchar *intersectCode = "\
         float q = I - points[2][1][2];\n\
         float r = I - points[2][2][2];\n\
         mat3 system;\n\
-        vec3 augment;\n\
         system[0][0] = ((-q/m)+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(-o/m)));\n\
         system[0][1] = ((-e/a)+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(-c/a)));\n\
         system[0][2] = ((-k/g)+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(-i/g)));\n\
@@ -1020,10 +1021,28 @@ const GLchar *intersectCode = "\
         system[2][0] = 1.0;\n\
         system[2][1] = 1.0;\n\
         system[2][2] = 1.0;\n\
+        mat3 cofactor;\n\
+        float sig = 1.0;\n\
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {\n\
+            mat2 minor;\n\
+            int k, l, m, n;\n\
+            for (k = m = 0; k < 2; k++, m++) {\n\
+                if (m == i) m++;\n\
+                for (l = n = 0; l < 2; l++, n++) {\n\
+                    if (n == j) n++;\n\
+                    minor[k][l] = system[m][n];}}\n\
+            cofactor[i][j] = sig*determinant(minor);\n\
+            sig = sign(-sig);}\n\
+        vec3 augment;\n\
         augment[0] = ((I+((-q/m)*G))+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(H+((-o/m)*G))));\n\
         augment[1] = ((C+((-e/a)*A))+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(B+((-c/a)*A))));\n\
         augment[2] = ((F+((-k/g)*D))+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(E+((-i/g)*D))));\n\
-        point = inverse(system)*augment;\n\
+        point = transpose(cofactor)*augment;\n\
+        float det = dot(system[0],cofactor[0]);\n\
+        float recip = 1.0/invalid;\n\
+        if (det/point[0] <= recip || det/point[1] <= recip || det/point[2] <= recip)\n\
+            point = vec3(invalid,invalid,invalid); else\n\
+            point = point/det;\n\
     }\n";
 
 GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *feedback, const char *name)
@@ -1099,6 +1118,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         xformed = "INPUT";\n\
         rotated = vec3(1.0f,1.0f,1.0f);\n\
    }\n";
+
 #define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
     layout ("LAYOUT0") in;\n\
     layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
@@ -1124,6 +1144,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         EmitVertex();}\n\
         EndPrimitive();\n\
     }\n";
+
 #define fragmentCode "\
     in vec3 cross;\n\
     out vec4 result;\n\
@@ -1259,6 +1280,7 @@ void initialize(int argc, char **argv)
     adpointProgram = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", "adpoint");
 
     glUseProgram(diplaneProgram);
+    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
     basisUniform = glGetUniformLocation(diplaneProgram, "basis");
     modelUniform = glGetUniformLocation(diplaneProgram, "model");
     normalUniform = glGetUniformLocation(diplaneProgram, "normal");
@@ -1272,14 +1294,17 @@ void initialize(int argc, char **argv)
     glUseProgram(0);
 
     glUseProgram(coplaneProgram);
+    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
     basisUniform = glGetUniformLocation(coplaneProgram, "basis");
     glUseProgram(0);
 
     glUseProgram(copointProgram);
+    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
     basisUniform = glGetUniformLocation(copointProgram, "basis");
     glUseProgram(0);
 
     glUseProgram(adplaneProgram);
+    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
     basisUniform = glGetUniformLocation(adplaneProgram, "basis");
     featherUniform = glGetUniformLocation(adplaneProgram, "feather");
     arrowUniform = glGetUniformLocation(adplaneProgram, "arrow");
