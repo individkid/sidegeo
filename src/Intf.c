@@ -159,11 +159,13 @@ enum {Right,Left} clickMode = Right;
  *Left: mouse movement affects matrices*/
 enum {Diplane,Dipoint} shaderMode = Diplane;
 struct Chars generics = {0}; // sized formatted packets of bytes
-enum ConfigureState {ConfigureIdle,ConfigureWait,ConfigureEnqued} configureState = ConfigureIdle;
+enum WrapState {WrapEnqued,WrapWait};
+struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps;
+enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureWait} configureState = ConfigureIdle;
 enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
 enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
-enum CoplaneState {CoplaneIdle,CoplaneWait,CoplaneEnqued} coplaneState = CoplaneIdle;
-enum CopointState {CopointIdle,CopointWait,CopointEnqued} copointState = CopointIdle;
+enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneWait} coplaneState = CoplaneIdle;
+enum CopointState {CopointIdle,CopointEnqued,CopointWait} copointState = CopointIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 int linkCheck = 0;
 int sequenceNumber = 0;
@@ -186,56 +188,6 @@ struct Commands links = {0};
  // for prelink link postline commands
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
-void enque##NAME(TYPE val) \
-{ \
-    if (INSTANCE.base == 0) { \
-        INSTANCE.base = malloc(10 * sizeof*INSTANCE.base); \
-        INSTANCE.limit = INSTANCE.base + 10; \
-        INSTANCE.head = INSTANCE.base; \
-        INSTANCE.tail = INSTANCE.base;} \
-    if (INSTANCE.tail == INSTANCE.limit) { \
-        int limit = INSTANCE.limit - INSTANCE.base; \
-        int head = INSTANCE.head - INSTANCE.base; \
-        INSTANCE.base = realloc(INSTANCE.base, (limit+10) * sizeof*INSTANCE.base); \
-        INSTANCE.limit = INSTANCE.base + limit + 10; \
-        INSTANCE.head = INSTANCE.base + head; \
-        INSTANCE.tail = INSTANCE.base + limit;} \
-    *INSTANCE.tail = val; \
-    INSTANCE.tail = INSTANCE.tail + 1; \
-} \
-\
-int valid##NAME() \
-{ \
-    return (INSTANCE.head != INSTANCE.tail); \
-} \
-\
-int size##NAME() \
-{ \
-    return INSTANCE.tail - INSTANCE.head; \
-} \
-\
-TYPE *array##NAME() \
-{ \
-    while (INSTANCE.head - INSTANCE.base >= 10) { \
-        int tail = INSTANCE.tail - INSTANCE.base; \
-        for (int i = 10; i < tail; i++) { \
-            INSTANCE.base[i-10] = INSTANCE.base[i];} \
-        INSTANCE.head = INSTANCE.base; \
-        INSTANCE.tail = INSTANCE.base + tail - 10;} \
-    return INSTANCE.head; \
-} \
-\
-TYPE head##NAME() \
-{ \
-    return *array##NAME(); \
-} \
-\
-void deque##NAME() \
-{ \
-    if (INSTANCE.head != INSTANCE.tail) { \
-        INSTANCE.head = INSTANCE.head + 1;} \
-} \
-\
 TYPE *alloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
@@ -255,22 +207,55 @@ TYPE *alloc##NAME(int size) \
     return INSTANCE.tail - size; \
 } \
 \
-void free##NAME(int size) \
+TYPE *array##NAME() \
 { \
-    if (INSTANCE.head + size <= INSTANCE.tail) { \
-        INSTANCE.head = INSTANCE.head + size;} \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
         int tail = INSTANCE.tail - INSTANCE.base; \
         for (int i = 10; i < tail; i++) { \
             INSTANCE.base[i-10] = INSTANCE.base[i];} \
         INSTANCE.head = INSTANCE.base; \
         INSTANCE.tail = INSTANCE.base + tail - 10;} \
+    return INSTANCE.head; \
+} \
+\
+int size##NAME() \
+{ \
+    return INSTANCE.tail - INSTANCE.head; \
 } \
 \
 void dealloc##NAME(int size) \
 { \
-    if (INSTANCE.tail - size >= INSTANCE.head) { \
-        INSTANCE.tail = INSTANCE.tail - size;} \
+    INSTANCE.head = INSTANCE.head + size; \
+} \
+\
+void enque##NAME(TYPE val) \
+{ \
+    *alloc##NAME(1) = val; \
+} \
+\
+TYPE head##NAME() \
+{ \
+    return *array##NAME(); \
+} \
+\
+int valid##NAME() \
+{ \
+    return (size##NAME() > 0); \
+} \
+\
+void deque##NAME() \
+{ \
+    dealloc##NAME(1); \
+} \
+\
+TYPE *push##NAME(int size) \
+{ \
+    return alloc##NAME(size); \
+} \
+\
+void pop##NAME(int size) \
+{ \
+    INSTANCE.tail = INSTANCE.tail - size; \
 }
 
 #define EVENT0(event) \
@@ -287,12 +272,13 @@ void dealloc##NAME(int size) \
 
 #define CHECK0(command,Command) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
-    if (linkCheck > 0) {linkCheck = 0; enqueCommand(&command); return;}
+    if (linkCheck > 0) {linkCheck = 0; enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
 
 #define CHECK1(command,Command,type,argument,Argument) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
     type argument = head##Argument(); deque##Argument(); \
-    if (linkCheck > 0) {linkCheck = 0; enque##Argument(argument); enqueCommand(&command); return;}
+    if (linkCheck > 0) {linkCheck = 0; enque##Argument(argument); \
+        enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
 
 #define ENQUE0(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
@@ -321,24 +307,26 @@ void dealloc##NAME(int size) \
 #define DEQUE0(command,Command) \
     command##State = Command##Idle; return;
 
-#define DEQUE1(command,Command,argument,Argument) \
+#define DEQUE1(command,Command) \
     DEQUE0(command,Command)
 
 #define CHECKS0(command,Command) \
-    Command##State command##State = head##Command(); deque##Command(); CHECK0(command,Command)
+    if (linkCheck > 0) exitErrstr(#command" command not linkable"); \
+    enum Command##State command##State = head##Command(); deque##Command();
 
 #define CHECKS1(command,Command,type,argument,Argument) \
-    Command##State command##State = head##Command(); deque##Command(); \
-    CHECK1(command,Command,type,argument,Argument)
+    if (linkCheck > 0) exitErrstr(#command" command not linkable"); \
+    enum Command##State command##State = head##Command(); deque##Command(); \
+    type argument = head##Argument(); deque##Argument();
 
 #define ENQUES0(command,Command) \
-    enque##Command(command##Enqued); enqueCommand(command);
+    enque##Command(Command##Enqued); enqueCommand(command);
 
 #define ENQUES1(command,Command,argument,Argument) \
     enque##Argument(argument); ENQUES0(command,Command)
 
 #define DEFERS0(command,Command) \
-    enque##Command(command##Enqued); enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(command);
+    enque##Command(command##State); enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(command);
 
 #define DEFERS1(command,Command,argument,Argument) \
     enque##Argument(argument); DEFERS0(command,Command)
@@ -349,11 +337,11 @@ void dealloc##NAME(int size) \
 #define REQUES1(command,Command,argument,Argument) \
     enque##Command(command##State); REQUE1(command,Command,argument,Argument)
 
-#define DEQUES0(command,Command) \
-    DEQUE0(command,Command)
+#define DEQUES0() \
+    return;
 
-#define DEQUES1(command,Command,argument,Argument) \
-    DEQUE1(command,Command,argument,Argument)
+#define DEQUES1() \
+    return;
 
 #define READ0(command,Command,buffer,Before,After) \
     if (command##State == Command##Before) { \
@@ -411,6 +399,8 @@ ACCESS_QUEUE(Metric,char,metrics)
 
 ACCESS_QUEUE(Generic,char,generics)
 
+ACCESS_QUEUE(Wrap,enum WrapState,wraps)
+
 ACCESS_QUEUE(Defer,int,defers)
 
 ACCESS_QUEUE(Command,Command,commands)
@@ -449,70 +439,70 @@ void intcpy(int *dst, int *src)
     *dst = *src;
 }
 
-char *readLine(FILE *file) // caller must call deallocChar
+char *readLine(FILE *file) // caller must call popChar
 {
     int depth = 0;
     int count = 0;
     int chr = 0;
     char nest[100];
-    char *buf = allocChar(0);
-    while ((buf == allocChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
+    char *buf = pushChar(0);
+    while ((buf == pushChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
         if (chr == '(') nest[depth++] = ')';
         else if (chr == '[') nest[depth++] = ']';
         else if (chr == '{') nest[depth++] = '}';
         else if (depth && chr == nest[depth-1]) depth--;
         if (!isspace(chr)) enqueChar(chr);}
     enqueChar(0);
-    if (depth) {deallocChar(strlen(buf)); return 0;}
+    if (depth) {popChar(strlen(buf)); return 0;}
     return buf;
 }
 
-char *copyStrings(char **bufs) // caller must call deallocChar
+char *copyStrings(char **bufs) // caller must call popChar
 {
-    char *buf = allocChar(0);
+    char *buf = pushChar(0);
     for (int i = 0; bufs[i]; i++) {
         for (int j = 0; bufs[i][j]; j++) {
-            enqueChar(bufs[i][j]);}}
-    enqueChar(0);
+            *pushChar(1) = bufs[i][j];}}
+    *pushChar(1) = 0;
     return buf;
 }
 
-char *partsToLine(char *part[2]) // caller must call deallocChar
+char *partsToLine(char *part[2]) // caller must call popChar
 {
     return 0;
 }
 
-char *lineToPart(char **line) // caller must call deallocChar
+char *lineToPart(char **line) // caller must call popChar
 {
     return 0;
 }
 
-int *partToIndices(char *part) // caller must call freeInt
+int *partToIndices(char *part) // caller must call popInt
 {
     return 0;
 }
 
-char *indicesToPart(int *indices) // caller must call deallocChar
+char *indicesToPart(int *indices) // caller must call popChar
 {
     return 0;
 }
 
-char *partToBytes(char *part) // caller must call deallocChar
+char *partToBytes(char *part) // caller must call popChar
 {
     return 0;
 }
 
-char *bytesToPart(char *bytes, char *format) // caller must call deallocChar
+char *bytesToPart(char *bytes, char *format) // caller must call popChar
 {
     return 0;
 }
 
-char *partToFormat(char *part) // caller must call deallocChar
+char *partToFormat(char *part) // caller must call popChar
 {
     return 0;
 }
 
-char *indicesToFormat(int *indices, char *format) // caller must call deallocChar
+char *indicesToFormat(int *indices, char *format) // caller must call popChar
 {
     return 0;
 }
@@ -551,14 +541,21 @@ void enqueErrstr(const char *str)
     EVENT0(Error);
 }
 
-void link()
+void link() // only works on single-instance commands with global state
 {
     for (int i = 0; i < commands.tail - commands.head; i++) {
         if (commands.head[i] == headLink()) {linkCheck = 1; break;}}
     if (linkCheck) {
+        enqueDefer(sequenceNumber + sizeCommand());
         enqueCommand(&link);
         enqueLink(headLink());}
     dequeLink();
+}
+
+void wrap()
+{
+    CHECKS1(wrap,Wrap,struct Buffer *,buffer,Buffer)
+    DEQUES1()
 }
 
 #ifdef BRINGUP
@@ -669,8 +666,8 @@ void bringup()
 
 void configure()
 {
-    char *filename = 0;
     CHECK0(configure,Configure)
+    char *filename = 0;
     if (configureState == ConfigureEnqued) {
         if (configFile && fclose(configFile) != 0) {
             enqueErrstr("invalid path for close");}
@@ -915,13 +912,15 @@ char *generic(int *indices, int size)
 char *message()
 {
     if (!validChar()) return 0;
-    return arrayChar();
+    char *buf = arrayChar(); deallocChar(strlen(buf));
+    return buf;
 }
 
 int event()
 {
     if (!validEvent()) return -1;
-    switch (headEvent()) {
+    enum Event event = headEvent(); dequeEvent();
+    switch (event) {
         case (Error): return 3;
         case (Done): return 4;}
     return -1;
@@ -1062,11 +1061,90 @@ const GLchar *intersectCode = "\
         augment[2] = ((F+((-k/g)*D))+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(E+((-i/g)*D))));\n\
         point = transpose(cofactor)*augment;\n\
         float det = dot(system[0],cofactor[0]);\n\
-        float recip = 1.0/invalid;\n\
+        float recip = 1.1/invalid;\n\
         if (det/point[0] <= recip || det/point[1] <= recip || det/point[2] <= recip)\n\
             point = vec3(invalid,invalid,invalid); else\n\
             point = point/det;\n\
     }\n";
+
+#define VertexCode(INPUT) "\
+    layout (location = 0) in vec3 plane;\n\
+    layout (location = 1) in uint versor;\n\
+    layout (location = 2) in vec3 point;\n\
+    out vec3 xformed;\n\
+    out uint uiformed;\n\
+    out vec3 rotated;\n\
+    out uint uitated;\n\
+    out vec3 xpanded;\n\
+    out uint uipanded;\n\
+    uniform mat4 model;\n\
+    uniform mat3 normal;\n\
+    void main()\n\
+    {\n\
+        xpanded = "INPUT";\n\
+        xformed = "INPUT";\n\
+        rotated = vec3(1.0f,1.0f,1.0f);\n\
+   }\n";
+
+#define GeometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
+    layout ("LAYOUT0") in;\n\
+    layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
+    in vec3 xformed["LAYOUT3"];\n\
+    in uint uiformed["LAYOUT3"];\n\
+    in vec3 rotated["LAYOUT3"];\n\
+    in uint uitated["LAYOUT3"];\n\
+    in vec3 xpanded["LAYOUT3"];\n\
+    in uint uipanded["LAYOUT3"];\n\
+    out vec3 cross;\n\
+    out vec3 vector;\n\
+    out float scalar;\n\
+    uniform mat3 project;\n\
+    uniform vec3 feather;\n\
+    uniform vec3 arrow;\n\
+    void main()\n\
+    {\n\
+        for (int i = 0; i < "LAYOUT2"; i++) {\n\
+        int index = i * "LAYOUT3" / "LAYOUT2";\n\
+        gl_Position = vec4(xformed[index], 1.0);\n\
+        cross = rotated[index];\n\
+        vector = xpanded[index];\n\
+        scalar = xpanded[index][0];\n\
+        EmitVertex();}\n\
+        EndPrimitive();\n\
+    }\n";
+
+#define FragmentCode "\
+    in vec3 cross;\n\
+    out vec4 result;\n\
+    uniform vec4 light;\n\
+    void main()\n\
+    {\n\
+        result = vec4(cross, 1.0f);\n\
+    }\n";
+
+const GLchar *diplaneVertex = VertexCode("plane");
+const GLchar *diplaneGeometry = GeometryCode("triangles_adjacency", "6", "triangle_strip", "3");
+const GLchar *diplaneFragment = FragmentCode;
+
+const GLchar *dipointVertex = VertexCode("point");
+const GLchar *dipointGeometry = GeometryCode("triangles", "3", "triangle_strip", "3");
+const GLchar *dipointFragment = FragmentCode;
+
+const GLchar *coplaneVertex = VertexCode("plane");
+const GLchar *coplaneGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *coplaneFragment = 0;
+
+const GLchar *copointVertex = VertexCode("point");
+const GLchar *copointGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *copointFragment = 0;
+
+const GLchar *adplaneVertex = VertexCode("plane");
+const GLchar *adplaneGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *adplaneFragment = 0;
+
+const GLchar *adpointVertex = VertexCode("point");
+const GLchar *adpointGeometry = GeometryCode("points", "1", "points", "1");
+const GLchar *adpointFragment = 0;
 
 GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *feedback, const char *name)
 {
@@ -1122,85 +1200,6 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     if (fragmentCode) glDeleteShader(fragment);
     return program;
 }
-
-#define vertexCode(INPUT) "\
-    layout (location = 0) in vec3 plane;\n\
-    layout (location = 1) in uint versor;\n\
-    layout (location = 2) in vec3 point;\n\
-    out vec3 xformed;\n\
-    out uint uiformed;\n\
-    out vec3 rotated;\n\
-    out uint uitated;\n\
-    out vec3 xpanded;\n\
-    out uint uipanded;\n\
-    uniform mat4 model;\n\
-    uniform mat3 normal;\n\
-    void main()\n\
-    {\n\
-        xpanded = "INPUT";\n\
-        xformed = "INPUT";\n\
-        rotated = vec3(1.0f,1.0f,1.0f);\n\
-   }\n";
-
-#define geometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
-    layout ("LAYOUT0") in;\n\
-    layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
-    in vec3 xformed["LAYOUT3"];\n\
-    in uint uiformed["LAYOUT3"];\n\
-    in vec3 rotated["LAYOUT3"];\n\
-    in uint uitated["LAYOUT3"];\n\
-    in vec3 xpanded["LAYOUT3"];\n\
-    in uint uipanded["LAYOUT3"];\n\
-    out vec3 cross;\n\
-    out vec3 vector;\n\
-    out float scalar;\n\
-    uniform mat3 project;\n\
-    uniform vec3 feather;\n\
-    uniform vec3 arrow;\n\
-    void main()\n\
-    {\n\
-        for (int i = 0; i < "LAYOUT2"; i++) {\n\
-        int index = i * "LAYOUT3" / "LAYOUT2";\n\
-        gl_Position = vec4(xformed[index], 1.0);\n\
-        cross = rotated[index];\n\
-        vector = xpanded[index];\n\
-        scalar = xpanded[index][0];\n\
-        EmitVertex();}\n\
-        EndPrimitive();\n\
-    }\n";
-
-#define fragmentCode "\
-    in vec3 cross;\n\
-    out vec4 result;\n\
-    uniform vec4 light;\n\
-    void main()\n\
-    {\n\
-        result = vec4(cross, 1.0f);\n\
-    }\n";
-
-const GLchar *diplaneVertex = vertexCode("plane");
-const GLchar *diplaneGeometry = geometryCode("triangles_adjacency", "6", "triangle_strip", "3");
-const GLchar *diplaneFragment = fragmentCode;
-
-const GLchar *dipointVertex = vertexCode("point");
-const GLchar *dipointGeometry = geometryCode("triangles", "3", "triangle_strip", "3");
-const GLchar *dipointFragment = fragmentCode;
-
-const GLchar *coplaneVertex = vertexCode("plane");
-const GLchar *coplaneGeometry = geometryCode("triangles", "3", "points", "1");
-const GLchar *coplaneFragment = 0;
-
-const GLchar *copointVertex = vertexCode("point");
-const GLchar *copointGeometry = geometryCode("triangles", "3", "points", "1");
-const GLchar *copointFragment = 0;
-
-const GLchar *adplaneVertex = vertexCode("plane");
-const GLchar *adplaneGeometry = geometryCode("triangles", "3", "points", "1");
-const GLchar *adplaneFragment = 0;
-
-const GLchar *adpointVertex = vertexCode("point");
-const GLchar *adpointGeometry = geometryCode("points", "1", "points", "1");
-const GLchar *adpointFragment = 0;
 
 void initialize(int argc, char **argv)
 {
@@ -1357,6 +1356,7 @@ void finalize()
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
+    if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
     if (events.base) {struct Events initial = {0}; free(events.base); events = initial;}
