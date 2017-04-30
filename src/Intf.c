@@ -1009,6 +1009,21 @@ const GLchar *intersectCode = "\
         float I = points[2][0][2];\n\
         float q = I - points[2][1][2];\n\
         float r = I - points[2][2][2];\n\
+        mat3 system;\n\
+        vec3 augment;\n\
+        system[0][0] = ((-q/m)+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(-o/m)));\n\
+        system[0][1] = ((-e/a)+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(-c/a)));\n\
+        system[0][2] = ((-k/g)+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(-i/g)));\n\
+        system[1][0] = (-(r+((-q/m)*n))/(p+((-o/m)*n)));\n\
+        system[1][1] = (-(f+((-e/a)*b))/(d+((-c/a)*b)));\n\
+        system[1][2] = (-(l+((-k/g)*h))/(j+((-i/g)*h)));\n\
+        system[2][0] = 1.0;\n\
+        system[2][1] = 1.0;\n\
+        system[2][2] = 1.0;\n\
+        augment[0] = ((I+((-q/m)*G))+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(H+((-o/m)*G))));\n\
+        augment[1] = ((C+((-e/a)*A))+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(B+((-c/a)*A))));\n\
+        augment[2] = ((F+((-k/g)*D))+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(E+((-i/g)*D))));\n\
+        point = inverse(system)*augment;\n\
     }\n";
 
 GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *feedback, const char *name)
