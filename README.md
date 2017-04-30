@@ -2,11 +2,11 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The default directory for human readable history and configuration is .sculpt/. The following command line arguments are processed in order.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The default file for human readable history and configuration is ./.sculpt . The following command line arguments are processed in order.
 
   * -i start interactive mode  
   * -e \<metric> start animation that tweaks planes according to a metric  
-  * -c <file> change file for configuration and history  
+  * -c \<file> change file for configuration and history  
   * -o \<file> save polytope in format indicated by file extension  
   * -f \<file> load polytope in format indicated by file extension  
   * -t \<ident> change current polytope to one from history  
@@ -17,18 +17,18 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
 
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button deselects pierce point, and deactivates action. Keyboard enter selects, and letter or arrow moves to menu entry in console.
 
-  * Mouse -- action of mouse motion in Transform and Manipulate modes  
-    * Rotate -- tilt polytope around pierce point  
-    * Translate -- slide polytope from pierce point  
+  * Mouse -- action of mouse motion in Transform/Manipulate modes  
+    * Rotate -- tilt polytope/plane around pierce point  
+    * Translate -- slide polytope/plane from pierce point  
     * Look -- tilt camera around focal point  
-  * Roller -- action of roller button in Transform and Manipulate modes  
-    * Lever -- push or pull other end of tilt line from pierce point
+  * Roller -- action of roller button in Transform/Manipulate modes  
+    * Lever -- push or pull other end of tilt segment from pierce point
     * Clock -- rotate picture plane around perpendicular to pierce point  
     * Cylinder -- rotate polytope around tilt line  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
   * Transform -- modify model or perspective matrix  
   * Manipulate -- modify pierced plane  
-  * Refine -- click adds random plane  
-  * Additive -- click hollows out region  
-  * Subtractive -- click fills in region  
+  * Refine -- click adds random plane through pierce point  
+  * Additive -- click fills in region over pierce point  
+  * Subtractive -- click hollows out region under pierce point  

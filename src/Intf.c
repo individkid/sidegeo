@@ -157,6 +157,11 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
+float xPos = 0;
+float yPos = 0;
+float zPos = 0;
+float xClick = 0;
+float yClick = 0;
 enum {Diplane,Dipoint} shaderMode = Diplane;
 struct Chars generics = {0}; // sized formatted packets of bytes
 enum WrapState {WrapEnqued,WrapWait};
@@ -259,7 +264,7 @@ void pop##NAME(int size) \
 }
 
 #define EVENT0(event) \
-    enqueCommand(0); enqueEvent(event);
+    enqueEvent(event); enqueCommand(0);
 
 #define EVENT1(event,argument,Argument) \
     enque##Argument(argument); EVENT0(event)
@@ -268,7 +273,7 @@ void pop##NAME(int size) \
     enqueCommand(&command);
 
 #define LINK1(command,argument,Argument) \
-    enqueCommand(&command); enque##Argument(argument);
+    enque##Argument(argument); enqueCommand(&command);
 
 #define CHECK0(command,Command) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
@@ -282,15 +287,19 @@ void pop##NAME(int size) \
 
 #define ENQUE0(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
-    enqueCommand(&command); command##State = Command##Enqued;
+    command##State = Command##Enqued; enqueCommand(&command);
+
+#define ENQUE1(command,Command,argument,Argument) \
+    if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
+    enque##Argument(argument); command##State = Command##Enqued; enqueCommand(&command);
 
 #define MAYBE0(command,Command) \
     if (command##State == Command##Idle) { \
-        enqueCommand(&command); command##State = Command##Enqued;}
+        command##State = Command##Enqued; enqueCommand(&command);}
 
 #define MAYBE1(command,Command,argument,Argument) \
     if (command##State == Command##Idle) { \
-        enque##Argument(argument); enqueCommand(&command); command##State = Command##Enqued;}
+        enque##Argument(argument); command##State = Command##Enqued; enqueCommand(&command);}
 
 #define REQUE0(command,Command) \
     enqueCommand(&command); return;
@@ -930,13 +939,6 @@ int event()
  * callbacks triggered by user actions and inputs
  */
 
-void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
-    if (key == GLFW_KEY_E && action == GLFW_PRESS) printf("key E\n");
-    if (key == GLFW_KEY_UP && action == GLFW_PRESS) printf("key up\n");
-}
-
 void displayClose(GLFWwindow* window)
 {
     EVENT0(Done);
@@ -945,13 +947,45 @@ void displayClose(GLFWwindow* window)
 void displaySize(GLFWwindow *window, int width, int height)
 {
     glViewport(0, 0, width, height);
+    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+    printf("displaySize done\n");
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    if (processState != ProcessIdle) return;
-    if (shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-    if (shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+    printf("displayRefresh done\n");
+}
+
+void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
+    if (key == GLFW_KEY_E && action == GLFW_PRESS) printf("key E\n");
+    if (key == GLFW_KEY_UP && action == GLFW_PRESS) printf("key up\n");
+}
+
+void displayClick(GLFWwindow *window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {xClick = xPos; yClick = yPos; mouseMode = Left;}
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {mouseMode = Right;}
+    printf("displayClick done\n");
+}
+
+void displayCursor(GLFWwindow *window, double xpos, double ypos)
+{
+    xPos = xpos; yPos = ypos;
+    // change matrices depending on *Mode, *Click, *Pos
+    printf("displayCursor %f %f done\n", xpos, ypos);
+}
+
+void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
+{
+    double zpos = zPos + yoffset;
+    zPos = zpos;
+    // change matrices depending on *Mode, *Click, *Pos
+    printf("displayScroll %f %f done\n", xoffset, yoffset);
 }
 
 /*
@@ -1222,10 +1256,13 @@ void initialize(int argc, char **argv)
         printf("could not create window\n");
         glfwTerminate();
         exit(-1);}
-    glfwSetKeyCallback(windowHandle, displayKey);
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowSizeCallback(windowHandle, displaySize);
     glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
+    glfwSetKeyCallback(windowHandle, displayKey);
+    glfwSetMouseButtonCallback(windowHandle, displayClick);
+    glfwSetCursorPosCallback(windowHandle, displayCursor);
+    glfwSetScrollCallback(windowHandle, displayScroll);
     glfwMakeContextCurrent(windowHandle);
 
     struct utsname buf;
