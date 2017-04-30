@@ -947,8 +947,8 @@ const GLchar *expandCode = "\
         for (int i = 0; i < 3; i++) result[i][index] = plane[i];\n\
     }\n";
 
-const GLchar *contractCode = "\
-    void contract(in mat3 points, out vec3 plane, out uint versor)\n\
+const GLchar *constructCode = "\
+    void construct(in mat3 points, out vec3 plane, out uint versor)\n\
     {\n\
         float delta[3];\n\
         for (int i = 0; i < 3; i++) {\n\
@@ -979,6 +979,38 @@ const GLchar *contractCode = "\
             plane[i] = dot(solution,difference) + points[0][versor];}\n\
     }\n";
 
+const GLchar *intersectCode = "\
+    void intersect(in mat3 points[3], out vec3 point)\n\
+    {\n\
+        float A = points[0][0][0];\n\
+        float a = A - points[0][1][0];\n\
+        float b = A - points[0][2][0];\n\
+        float B = points[0][0][1];\n\
+        float c = B - points[0][1][1];\n\
+        float d = B - points[0][2][1];\n\
+        float C = points[0][0][2];\n\
+        float e = C - points[0][1][2];\n\
+        float f = C - points[0][2][2];\n\
+        float D = points[1][0][0];\n\
+        float g = D - points[1][1][0];\n\
+        float h = D - points[1][2][0];\n\
+        float E = points[1][0][1];\n\
+        float i = E - points[1][1][1];\n\
+        float j = E - points[1][2][1];\n\
+        float F = points[1][0][2];\n\
+        float k = F - points[1][1][2];\n\
+        float l = F - points[1][2][2];\n\
+        float G = points[2][0][0];\n\
+        float m = G - points[2][1][0];\n\
+        float n = G - points[2][2][0];\n\
+        float H = points[2][0][1];\n\
+        float o = H - points[2][1][1];\n\
+        float p = H - points[2][2][1];\n\
+        float I = points[2][0][2];\n\
+        float q = I - points[2][1][2];\n\
+        float r = I - points[2][2][2];\n\
+    }\n";
+
 GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *feedback, const char *name)
 {
     GLint success = 0;
@@ -986,7 +1018,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     const GLchar *code[4] = {0};
     GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[0] = uniformCode; code[1] = expandCode; code[2] = contractCode; code[3] = vertexCode;
+    code[0] = uniformCode; code[1] = expandCode; code[2] = constructCode; code[3] = vertexCode;
     glShaderSource(vertex, 4, code, NULL);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
