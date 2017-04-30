@@ -91,6 +91,7 @@ extern void __stginit_Main(void);
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
+#define EVENT_DELAY 0.00001
 #else
 #endif
 
@@ -129,6 +130,7 @@ GLint invalidUniform = 0;
 GLint basisUniform = 0;
 GLint modelUniform = 0;
 GLint normalUniform = 0;
+GLint projectUniform = 0;
 GLint featherUniform = 0;
 GLint arrowUniform = 0;
 GLint lightUniform = 0;
@@ -164,13 +166,15 @@ enum CoplaneState {CoplaneIdle,CoplaneWait,CoplaneEnqued} coplaneState = Coplane
 enum CopointState {CopointIdle,CopointWait,CopointEnqued} copointState = CopointIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 int linkCheck = 0;
+int sequenceNumber = 0;
+struct Ints {DECLARE_QUEUE(int)} defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
 enum Event {Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-struct Ints {DECLARE_QUEUE(int)} ints = {0};
+struct Ints ints = {0};
  // for scratchpad and arguments
 struct Chars chars = {0};
  // for scratchpad and arguments
@@ -203,6 +207,11 @@ void enque##NAME(TYPE val) \
 int valid##NAME() \
 { \
     return (INSTANCE.head != INSTANCE.tail); \
+} \
+\
+int size##NAME() \
+{ \
+    return INSTANCE.tail - INSTANCE.head; \
 } \
 \
 TYPE *array##NAME() \
@@ -278,12 +287,12 @@ void dealloc##NAME(int size) \
 
 #define CHECK0(command,Command) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
-    if (linkCheck) {linkCheck = 0; enqueCommand(&command); return;}
+    if (linkCheck > 0) {linkCheck = 0; enqueCommand(&command); return;}
 
 #define CHECK1(command,Command,type,argument,Argument) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
     type argument = head##Argument(); deque##Argument(); \
-    if (linkCheck) {linkCheck = 0; enque##Argument(argument); enqueCommand(&command); return;}
+    if (linkCheck > 0) {linkCheck = 0; enque##Argument(argument); enqueCommand(&command); return;}
 
 #define ENQUE0(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
@@ -295,13 +304,19 @@ void dealloc##NAME(int size) \
 
 #define MAYBE1(command,Command,argument,Argument) \
     if (command##State == Command##Idle) { \
-        enque##Argument(argument);enqueCommand(&command); command##State = Command##Enqued;}
+        enque##Argument(argument); enqueCommand(&command); command##State = Command##Enqued;}
 
 #define REQUE0(command,Command) \
     enqueCommand(&command); return;
 
 #define REQUE1(command,Command,argument,Argument) \
     enque##Argument(argument); REQUE0(command,Command)
+
+#define DEFER0(command,Command) \
+    enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;
+
+#define DEFER1(command,Command,argument,Argument) \
+    enque##Argument(argument); DEFER0(command,Command)
 
 #define DEQUE0(command,Command) \
     command##State = Command##Idle; return;
@@ -321,6 +336,12 @@ void dealloc##NAME(int size) \
 
 #define ENQUES1(command,Command,argument,Argument) \
     enque##Argument(argument); ENQUES0(command,Command)
+
+#define DEFERS0(command,Command) \
+    enque##Command(command##Enqued); enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(command);
+
+#define DEFERS1(command,Command,argument,Argument) \
+    enque##Argument(argument); DEFERS0(command,Command)
 
 #define REQUES0(command,Command) \
     enque##Command(command##State); REQUE0(command,Command)
@@ -389,6 +410,8 @@ ACCESS_QUEUE(Format,char,formats)
 ACCESS_QUEUE(Metric,char,metrics)
 
 ACCESS_QUEUE(Generic,char,generics)
+
+ACCESS_QUEUE(Defer,int,defers)
 
 ACCESS_QUEUE(Command,Command,commands)
 
@@ -1131,6 +1154,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     out vec3 cross;\n\
     out vec3 vector;\n\
     out float scalar;\n\
+    uniform mat3 project;\n\
     uniform vec3 feather;\n\
     uniform vec3 arrow;\n\
     void main()\n\
@@ -1284,12 +1308,14 @@ void initialize(int argc, char **argv)
     basisUniform = glGetUniformLocation(diplaneProgram, "basis");
     modelUniform = glGetUniformLocation(diplaneProgram, "model");
     normalUniform = glGetUniformLocation(diplaneProgram, "normal");
+    projectUniform = glGetUniformLocation(diplaneProgram, "project");
     lightUniform = glGetUniformLocation(diplaneProgram, "light");
     glUseProgram(0);
 
     glUseProgram(dipointProgram);
     modelUniform = glGetUniformLocation(dipointProgram, "model");
     normalUniform = glGetUniformLocation(dipointProgram, "normal");
+    projectUniform = glGetUniformLocation(dipointProgram, "project");
     lightUniform = glGetUniformLocation(dipointProgram, "light");
     glUseProgram(0);
 
@@ -1331,6 +1357,7 @@ void finalize()
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
+    if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
     if (events.base) {struct Events initial = {0}; free(events.base); events = initial;}
     if (ints.base) {struct Ints initial = {0}; free(ints.base); ints = initial;}
@@ -1345,10 +1372,13 @@ void waitForEvent()
 {
     while (1) {
         if (!validCommand()) glfwWaitEvents();
-        else glfwWaitEventsTimeout(0.000001);
+        else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
+        else glfwPollEvents();
         if (!validCommand()) continue;
         Command command = headCommand();
         dequeCommand();
+        if (validDefer() && sequenceNumber == headDefer()) dequeDefer();
+        sequenceNumber++;
         if (command) (*command)();
         else break;}
 }
