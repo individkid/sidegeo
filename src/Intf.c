@@ -157,21 +157,29 @@ enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
+enum {In,Out} focusMode = In;
+/*In: mouse is inside window frame
+ *Out: mouse is outside window frame*/
+enum {Diplane,Dipoint} shaderMode = Diplane;
+/*Diplane: display planes
+ *Dipoint: display points*/
 float xPos = 0;
 float yPos = 0;
 float zPos = 0;
-float xClick = 0;
-float yClick = 0;
-enum {Diplane,Dipoint} shaderMode = Diplane;
+int xSiz = 0;
+int ySiz = 0;
+float modelMat[9] = {0};
+float normalMat[9] = {0};
+float projectMat[9] = {0};
 struct Chars generics = {0}; // sized formatted packets of bytes
-enum WrapState {WrapEnqued,WrapWait};
-struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps;
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureWait} configureState = ConfigureIdle;
 enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
 enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
 enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneWait} coplaneState = CoplaneIdle;
 enum CopointState {CopointIdle,CopointEnqued,CopointWait} copointState = CopointIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
+enum WrapState {WrapEnqued,WrapWait};
+struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
 int linkCheck = 0;
 int sequenceNumber = 0;
 struct Ints {DECLARE_QUEUE(int)} defers = {0};
@@ -738,9 +746,6 @@ void diplane()
 
     glfwSwapBuffers(windowHandle);
 
-#ifdef BRINGUP
-    printf("diplane done\n");
-#endif
     DEQUE0(diplane,Diplane)
 }
 
@@ -760,9 +765,6 @@ void dipoint()
 
     glfwSwapBuffers(windowHandle);
 
-#ifdef BRINGUP
-    printf("dipoint done\n");
-#endif
     DEQUE0(dipoint,Dipoint)
 }
 
@@ -806,9 +808,6 @@ void coplane()
 
     // reque to read next chunk
 
-#ifdef BRINGUP
-    printf("coplane done\n");
-#endif
     DEQUE0(coplane,Coplane)
 }
 
@@ -848,7 +847,6 @@ void copoint()
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printf("%f\n", feedback[i]);
-    printf("copoint done\n");
 #endif
     DEQUE0(copoint,Copoint) 
 }
@@ -944,21 +942,6 @@ void displayClose(GLFWwindow* window)
     EVENT0(Done);
 }
 
-void displaySize(GLFWwindow *window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
-    printf("displaySize done\n");
-}
-
-void displayRefresh(GLFWwindow *window)
-{
-    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
-    printf("displayRefresh done\n");
-}
-
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
@@ -966,26 +949,67 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
     if (key == GLFW_KEY_UP && action == GLFW_PRESS) printf("key up\n");
 }
 
+void displayFocus(GLFWwindow *window, int entered)
+{
+    focusMode = (entered ? In : Out);
+    printf("displayFocus %d done\n", entered);
+}
+
 void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {xClick = xPos; yClick = yPos; mouseMode = Left;}
-    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {mouseMode = Right;}
-    printf("displayClick done\n");
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+        xPos = yPos = zPos = 0;
+        if (shaderMode == Diplane) {
+            glGetUniformfv(diplaneProgram,modelUniform,modelMat);
+            glGetUniformfv(diplaneProgram,normalUniform,normalMat);
+            glGetUniformfv(diplaneProgram,projectUniform,projectMat);}
+        else {
+            glGetUniformfv(dipointProgram,modelUniform,modelMat);
+            glGetUniformfv(dipointProgram,normalUniform,normalMat);
+            glGetUniformfv(dipointProgram,projectUniform,projectMat);}
+        mouseMode = Left;}
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
+        mouseMode = Right;}
+    if (action == GLFW_PRESS) printf("displayClick %d done\n", button);
 }
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
-    xPos = xpos; yPos = ypos;
-    // change matrices depending on *Mode, *Click, *Pos
-    printf("displayCursor %f %f done\n", xpos, ypos);
+    focusMode = (xpos >=0 && xpos < xSiz && ypos >= 0 && ypos < ySiz ? In : Out);
+    if (focusMode == In && mouseMode == Left) {
+        xPos = xpos; yPos = ypos;
+        // change uniforms depending on *Mode, *Pos, *Siz, *Mat
+        if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+        printf("displayCursor pos %f %f siz %d %d done\n", xPos, yPos, xSiz,ySiz);}
 }
 
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     double zpos = zPos + yoffset;
-    zPos = zpos;
-    // change matrices depending on *Mode, *Click, *Pos
-    printf("displayScroll %f %f done\n", xoffset, yoffset);
+    if (focusMode == In && mouseMode == Left) {
+        zPos = zpos;
+        // change uniforms depending on *Mode, *Pos, *Siz, *Mat
+        if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+        printf("displayScroll %f done\n", zPos);}
+}
+
+void displaySize(GLFWwindow *window, int width, int height)
+{
+    glViewport(0, 0, width, height);
+    xSiz = width; ySiz = height;
+    // change uniforms depending on *Mode, *Pos, *Siz, *Mat
+    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+    printf("displaySize %d %d done\n", xSiz, ySiz);
+}
+
+void displayRefresh(GLFWwindow *window)
+{
+    // change uniforms depending on *Mode, *Pos, *Mat
+    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
 }
 
 /*
@@ -1288,6 +1312,7 @@ void initialize(int argc, char **argv)
     int width, height;
     glfwGetFramebufferSize(windowHandle, &width, &height);
     glViewport(0, 0, width, height);
+    xSiz = width; ySiz = height;
 
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
