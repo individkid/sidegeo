@@ -283,6 +283,14 @@ void pop##NAME(int size) \
 #define LINK1(command,argument,Argument) \
     enque##Argument(argument); enqueCommand(&command);
 
+#define SPOOF0(command,Command) \
+    if (command##State == Command##Idle) { \
+        command##State = Command##Enqued;  command();}
+
+#define SPOOF1(command,Command,argument,Argument) \
+    if (command##State == Command##Idle) { \
+        enque##Argument(argument); command##State = Command##Enqued;  command();}
+
 #define CHECK0(command,Command) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
     if (linkCheck > 0) {linkCheck = 0; enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
@@ -722,9 +730,6 @@ void configure()
         if (!(configFile = fopen(filename,"a"))) {
             enqueErrnum("invalid path for append", filename);}
         configureState = ConfigureWait; REQUE0(configure,Configure)}
-#ifdef BRINGUP
-    printf("configure done\n");
-#endif
     DEQUE0(configure,Configure)
 }
 
@@ -853,9 +858,6 @@ void copoint()
 
 void process()
 {
-#ifdef BRINGUP
-    printf("process %s\n", (validOption() ? headOption() : "null"));
-#endif
     CHECK0(process,Process)
     if (!validOption()) {
         EVENT0(Done) DEQUE0(process,Process)}
@@ -945,14 +947,6 @@ void displayClose(GLFWwindow* window)
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
-    if (key == GLFW_KEY_E && action == GLFW_PRESS) printf("key E\n");
-    if (key == GLFW_KEY_UP && action == GLFW_PRESS) printf("key up\n");
-}
-
-void displayFocus(GLFWwindow *window, int entered)
-{
-    focusMode = (entered ? In : Out);
-    printf("displayFocus %d done\n", entered);
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
@@ -970,7 +964,6 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         mouseMode = Left;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
         mouseMode = Right;}
-    if (action == GLFW_PRESS) printf("displayClick %d done\n", button);
 }
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
@@ -980,8 +973,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         xPos = xpos; yPos = ypos;
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
-        printf("displayCursor pos %f %f siz %d %d done\n", xPos, yPos, xSiz,ySiz);}
+        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
 }
 
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
@@ -991,8 +983,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
         zPos = zpos;
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
-        printf("displayScroll %f done\n", zPos);}
+        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
 }
 
 void displaySize(GLFWwindow *window, int width, int height)
@@ -1002,7 +993,6 @@ void displaySize(GLFWwindow *window, int width, int height)
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
     if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
     if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
-    printf("displaySize %d %d done\n", xSiz, ySiz);
 }
 
 void displayRefresh(GLFWwindow *window)
@@ -1217,8 +1207,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-        printf("could not compile vertex shader for program %s: %s\n", name, infoLog);
-        return 0;}
+        printf("could not compile vertex shader for program %s: %s\n", name, infoLog); exit(-1);}
     glAttachShader(program, vertex);
     GLuint geometry = 0;
     if (geometryCode) {
@@ -1229,8 +1218,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
         if(!success) {
             glGetShaderInfoLog(geometry, 512, NULL, infoLog);
-            printf("could not compile geometry shader for program %s: %s\n", name, infoLog);
-            return 0;}
+            printf("could not compile geometry shader for program %s: %s\n", name, infoLog); exit(-1);}
         glAttachShader(program, geometry);}
     GLuint fragment = 0;
     if (fragmentCode) {
@@ -1241,8 +1229,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
         if(!success) {
             glGetShaderInfoLog(fragment, 512, NULL, infoLog);
-            printf("could not compile fragment shader for program %s: %s\n", name, infoLog);
-            return 0;}
+            printf("could not compile fragment shader for program %s: %s\n", name, infoLog); exit(-1);}
         glAttachShader(program, fragment);}
     if (feedback) {
         const GLchar* feedbacks[1]; feedbacks[0] = feedback;
@@ -1251,8 +1238,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
         glGetProgramInfoLog(program, 512, NULL, infoLog);
-        printf("could not link shaders for program %s: %s\n", name, infoLog);
-        return 0;}
+        printf("could not link shaders for program %s: %s\n", name, infoLog); exit(-1);}
     glDeleteShader(vertex);
     if (geometryCode) glDeleteShader(geometry);
     if (fragmentCode) glDeleteShader(fragment);
@@ -1274,7 +1260,7 @@ void initialize(int argc, char **argv)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    windowHandle = glfwCreateWindow(800, 600, "Sculpt", NULL, NULL);
+    windowHandle = glfwCreateWindow(xSiz = 800, ySiz = 600, "Sculpt", NULL, NULL);
     if (!windowHandle) {
         glfwTerminate();
         printf("could not create window\n");
@@ -1291,15 +1277,12 @@ void initialize(int argc, char **argv)
 
     struct utsname buf;
     if (uname(&buf) < 0) {
-        printf("cannot get kernel info\n");
-        exit(-1);}
+        printf("cannot get kernel info\n"); exit(-1);}
 #ifdef __linux__
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
     if (GLEW_OK != err) {
-        printf("could not initialize glew: %s\n", glewGetErrorString(err));
-        glfwTerminate();
-        exit(-1);}
+        printf("could not initialize glew: %s\n", glewGetErrorString(err)); exit(-1);}
     if (GLEW_VERSION_3_3) {
         printf("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
     else {
@@ -1309,10 +1292,7 @@ void initialize(int argc, char **argv)
     printf("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
 #endif
 
-    int width, height;
-    glfwGetFramebufferSize(windowHandle, &width, &height);
-    glViewport(0, 0, width, height);
-    xSiz = width; ySiz = height;
+    glViewport(0, 0, xSiz, ySiz);
 
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
@@ -1402,9 +1382,6 @@ void initialize(int argc, char **argv)
     arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
 
-#ifdef BRINGUP
-    printf("initialize done\n");
-#endif
     ENQUE0(process,Process);
 }
 
@@ -1427,7 +1404,6 @@ void finalize()
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
     if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
     if (links.base) {struct Commands initial = {0}; free(links.base); links = initial;}
-    printf("finalize done\n");
 }
 
 void waitForEvent()
