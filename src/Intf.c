@@ -59,6 +59,7 @@ The vertex and geometry shaders are same as in class mode, exept geometry shader
 extern void __stginit_Main(void);
 #endif
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -138,6 +139,7 @@ struct Strings {DECLARE_QUEUE(char *)} options = {0}; // command line arguments
 struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
+struct Chars prints = {0}; // messages printed to console
 enum {Transform,Manipulate,Refine,Additive,Subractive} menuMode = Transform;
 /*Transform: modify model or perspective matrix
  *Manipulate: modify pierced plane
@@ -163,6 +165,7 @@ enum {In,Out} focusMode = In;
 enum {Diplane,Dipoint} shaderMode = Diplane;
 /*Diplane: display planes
  *Dipoint: display points*/
+int yCur = 0;
 float xPos = 0;
 float yPos = 0;
 float zPos = 0;
@@ -204,18 +207,18 @@ struct Commands links = {0};
 TYPE *alloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
-        INSTANCE.base = malloc(10 * sizeof*INSTANCE.base); \
+        INSTANCE.base = malloc(10*sizeof*INSTANCE.base); \
         INSTANCE.limit = INSTANCE.base + 10; \
         INSTANCE.head = INSTANCE.base; \
         INSTANCE.tail = INSTANCE.base;} \
     while (INSTANCE.tail + size >= INSTANCE.limit) { \
-        int limit = INSTANCE.limit - INSTANCE.base; \
         int head = INSTANCE.head - INSTANCE.base; \
         int tail = INSTANCE.tail - INSTANCE.base; \
-        INSTANCE.base = realloc(INSTANCE.base, (limit+10) * sizeof*INSTANCE.base); \
-        INSTANCE.limit = INSTANCE.base + limit + 10; \
+        int limit = INSTANCE.limit - INSTANCE.base; \
+        INSTANCE.base = realloc(INSTANCE.base, (limit+10)*sizeof*INSTANCE.base); \
         INSTANCE.head = INSTANCE.base + head; \
-        INSTANCE.tail = INSTANCE.base + tail;} \
+        INSTANCE.tail = INSTANCE.base + tail; \
+        INSTANCE.limit = INSTANCE.base + limit + 10;} \
     INSTANCE.tail = INSTANCE.tail + size; \
     return INSTANCE.tail - size; \
 } \
@@ -226,8 +229,8 @@ TYPE *array##NAME() \
         int tail = INSTANCE.tail - INSTANCE.base; \
         for (int i = 10; i < tail; i++) { \
             INSTANCE.base[i-10] = INSTANCE.base[i];} \
-        INSTANCE.head = INSTANCE.base; \
-        INSTANCE.tail = INSTANCE.base + tail - 10;} \
+        INSTANCE.head = INSTANCE.head - 10; \
+        INSTANCE.tail = INSTANCE.tail - 10;} \
     return INSTANCE.head; \
 } \
 \
@@ -292,21 +295,21 @@ void pop##NAME(int size) \
         enque##Argument(argument); command##State = Command##Enqued;  command();}
 
 #define CHECK0(command,Command) \
-    if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
+    if (command##State == Command##Idle) exitErrstr(#command" command not enqued\n"); \
     if (linkCheck > 0) {linkCheck = 0; enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
 
 #define CHECK1(command,Command,type,argument,Argument) \
-    if (command##State == Command##Idle) exitErrstr(#command" command not enqued"); \
+    if (command##State == Command##Idle) exitErrstr(#command" command not enqued\n"); \
     type argument = head##Argument(); deque##Argument(); \
     if (linkCheck > 0) {linkCheck = 0; enque##Argument(argument); \
         enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
 
 #define ENQUE0(command,Command) \
-    if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
+    if (command##State != Command##Idle) exitErrstr(#command" command not idle\n"); \
     command##State = Command##Enqued; enqueCommand(&command);
 
 #define ENQUE1(command,Command,argument,Argument) \
-    if (command##State != Command##Idle) exitErrstr(#command" command not idle"); \
+    if (command##State != Command##Idle) exitErrstr(#command" command not idle\n"); \
     enque##Argument(argument); command##State = Command##Enqued; enqueCommand(&command);
 
 #define MAYBE0(command,Command) \
@@ -336,11 +339,11 @@ void pop##NAME(int size) \
     DEQUE0(command,Command)
 
 #define CHECKS0(command,Command) \
-    if (linkCheck > 0) exitErrstr(#command" command not linkable"); \
+    if (linkCheck > 0) exitErrstr(#command" command not linkable\n"); \
     enum Command##State command##State = head##Command(); deque##Command();
 
 #define CHECKS1(command,Command,type,argument,Argument) \
-    if (linkCheck > 0) exitErrstr(#command" command not linkable"); \
+    if (linkCheck > 0) exitErrstr(#command" command not linkable\n"); \
     enum Command##State command##State = head##Command(); deque##Command(); \
     type argument = head##Argument(); deque##Argument();
 
@@ -397,20 +400,22 @@ void pop##NAME(int size) \
 #define READY0(command,Command,buffer,size,Before,After) \
     if (command##State == Command##Before) { \
         if (buffer.done != buffer.ready) {REQUE0(command,Command)} \
-        if ((buffer.ready += size) > buffer.todo) exitErrstr(#command" command too ready"); \
+        if ((buffer.ready += size) > buffer.todo) exitErrstr(#command" command too ready\n"); \
         command##State = Command##After;}
 
 #define DONE0(command,Command,buffer,size) \
-    if ((buffer.done += size) > buffer.ready) exitErrstr(#command" command too done");
+    if ((buffer.done += size) > buffer.ready) exitErrstr(#command" command too done\n");
 
 /*
  * pure functions including
  * helpers for accessing state
  */
 
-void exitErrstr(const char *str)
+void exitErrstr(const char *fmt, ...)
 {
-    printf("fatal: %s\n", str);
+    va_list args;                     
+    endwin();
+    printf(fmt, args);
     exit(-1);
 }
 
@@ -421,6 +426,8 @@ ACCESS_QUEUE(Filename,char *,filenames)
 ACCESS_QUEUE(Format,char,formats)
 
 ACCESS_QUEUE(Metric,char,metrics)
+
+ACCESS_QUEUE(Print,char,prints)
 
 ACCESS_QUEUE(Generic,char,generics)
 
@@ -441,6 +448,19 @@ ACCESS_QUEUE(Float,float,floats)
 ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
 
 ACCESS_QUEUE(Link,Command,links)
+
+void printMessage(char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(0, 0, fmt, args) + 1;
+    va_end(args);
+    char *buf = allocPrint(len);
+    va_start(args, fmt);
+    vsnprintf(buf, len, fmt, args);
+    va_end(args);
+    mvprintw(10+yCur++, 0, "%s", buf);
+}
 
 /*
  * pure functions including
@@ -556,7 +576,7 @@ void enqueErrnum(const char *str, const char *name)
     char *err = strerror(num);
     int siz = strlen(str) + strlen(name) + strlen(err) + 12;
     char *buf = allocChar(siz);
-    if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exit(-1);
+    if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exitErrstr("snprintf failed\n");
     EVENT0(Error);
 }
 
@@ -616,7 +636,7 @@ void bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-    printf("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
+    printMessage("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
     GLfloat tetrahedron[] = {
         -g,-b,-q,
          g,-b,-q,
@@ -808,7 +828,7 @@ void coplane()
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printf("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printMessage("%f\n", feedback[i]);
 #endif
 
     // reque to read next chunk
@@ -851,7 +871,7 @@ void copoint()
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printf("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printMessage("%f\n", feedback[i]);
 #endif
     DEQUE0(copoint,Copoint) 
 }
@@ -862,17 +882,17 @@ void process()
     if (!validOption()) {
         EVENT0(Done) DEQUE0(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
-        printf("-h print this message\n");
-        printf("-i start interactive mode\n");
-        printf("-e <metric> start animation that tweaks planes according to a metric\n");
-        printf("-c <file> change file for config and configuration\n");
-        printf("-o <file> save polytope in format indicated by file extension\n");
-        printf("-f <file> load polytope in format indicated by file extension\n");
-        printf("-t <ident> change current polytope to one from config\n");
-        printf("-n <shape> replace current polytope by builtin polytope\n");
-        printf("-r randomize direction and color of light sources\n");
-        printf("-s resample current space to planes with same sidedness\n");
-        printf("-S resample current polytope to space and planes\n");}
+        printMessage("-h print this message\n");
+        printMessage("-i start interactive mode\n");
+        printMessage("-e <metric> start animation that tweaks planes according to a metric\n");
+        printMessage("-c <file> change file for config and configuration\n");
+        printMessage("-o <file> save polytope in format indicated by file extension\n");
+        printMessage("-f <file> load polytope in format indicated by file extension\n");
+        printMessage("-t <ident> change current polytope to one from config\n");
+        printMessage("-n <shape> replace current polytope by builtin polytope\n");
+        printMessage("-r randomize direction and color of light sources\n");
+        printMessage("-s resample current space to planes with same sidedness\n");
+        printMessage("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == Diplane) {
             ENQUE0(configure,Configure)
@@ -1207,7 +1227,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-        printf("could not compile vertex shader for program %s: %s\n", name, infoLog); exit(-1);}
+        exitErrstr("could not compile vertex shader for program %s: %s\n", name, infoLog);}
     glAttachShader(program, vertex);
     GLuint geometry = 0;
     if (geometryCode) {
@@ -1218,7 +1238,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
         if(!success) {
             glGetShaderInfoLog(geometry, 512, NULL, infoLog);
-            printf("could not compile geometry shader for program %s: %s\n", name, infoLog); exit(-1);}
+            exitErrstr("could not compile geometry shader for program %s: %s\n", name, infoLog);}
         glAttachShader(program, geometry);}
     GLuint fragment = 0;
     if (fragmentCode) {
@@ -1229,7 +1249,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
         glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
         if(!success) {
             glGetShaderInfoLog(fragment, 512, NULL, infoLog);
-            printf("could not compile fragment shader for program %s: %s\n", name, infoLog); exit(-1);}
+            exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
         glAttachShader(program, fragment);}
     if (feedback) {
         const GLchar* feedbacks[1]; feedbacks[0] = feedback;
@@ -1238,7 +1258,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
         glGetProgramInfoLog(program, 512, NULL, infoLog);
-        printf("could not link shaders for program %s: %s\n", name, infoLog); exit(-1);}
+        exitErrstr("could not link shaders for program %s: %s\n", name, infoLog);}
     glDeleteShader(vertex);
     if (geometryCode) glDeleteShader(geometry);
     if (fragmentCode) glDeleteShader(fragment);
@@ -1253,19 +1273,16 @@ void initialize(int argc, char **argv)
 
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
+    initscr();
+
     if (!glfwInit()) {
-        printf("could not initialize glfw\n");
-        exit(-1);}
+        exitErrstr("could not initialize glfw\n");}
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     windowHandle = glfwCreateWindow(xSiz = 800, ySiz = 600, "Sculpt", NULL, NULL);
-    if (!windowHandle) {
-        glfwTerminate();
-        printf("could not create window\n");
-        glfwTerminate();
-        exit(-1);}
+    if (!windowHandle) {exitErrstr("could not create window\n");}
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowSizeCallback(windowHandle, displaySize);
     glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
@@ -1277,19 +1294,19 @@ void initialize(int argc, char **argv)
 
     struct utsname buf;
     if (uname(&buf) < 0) {
-        printf("cannot get kernel info\n"); exit(-1);}
+        exitErrstr("cannot get kernel info\n");}
 #ifdef __linux__
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
     if (GLEW_OK != err) {
-        printf("could not initialize glew: %s\n", glewGetErrorString(err)); exit(-1);}
+        exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
     if (GLEW_VERSION_3_3) {
-        printf("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        printMessage("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
     else {
-        printf("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        printMessage("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
 #endif
 #ifdef __APPLE__
-    printf("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
+    printMessage("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
 #endif
 
     glViewport(0, 0, xSiz, ySiz);
@@ -1382,18 +1399,30 @@ void initialize(int argc, char **argv)
     arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
 
+    printMessage("initialize done\n");
     ENQUE0(process,Process);
 }
 
+unsigned int sleep(unsigned int);
 void finalize()
 {
     // save transformation matrices
+    printMessage("finalize done\n");
+    refresh();
+    sleep(5);
+    endwin();
+    while (validPrint()) {
+        char *str = arrayPrint();
+        printf("%s", str);
+        deallocPrint(strlen(str)+1);
+    }
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
+    if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
