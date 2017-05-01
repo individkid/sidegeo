@@ -192,9 +192,9 @@ struct Commands {DECLARE_QUEUE(Command)} commands = {0};
 enum Event {Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-struct Ints ints = {0};
- // for scratchpad and arguments
 struct Chars chars = {0};
+ // for scratchpad and arguments
+struct Ints ints = {0};
  // for scratchpad and arguments
 struct Floats {DECLARE_QUEUE(float)} floats = {0};
  // for scratchpad and arguments
@@ -415,7 +415,7 @@ void exitErrstr(const char *fmt, ...)
 {
     va_list args;                     
     endwin();
-    printf(fmt, args);
+    va_start(args, fmt); printf("fatal: "); vprintf(fmt, args); va_end(args);
     exit(-1);
 }
 
@@ -439,9 +439,9 @@ ACCESS_QUEUE(Command,Command,commands)
 
 ACCESS_QUEUE(Event,enum Event,events)
 
-ACCESS_QUEUE(Int,int,ints)
-
 ACCESS_QUEUE(Char,char,chars)
+
+ACCESS_QUEUE(Int,int,ints)
 
 ACCESS_QUEUE(Float,float,floats)
 
@@ -449,18 +449,31 @@ ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
 
 ACCESS_QUEUE(Link,Command,links)
 
-void printMessage(char *fmt, ...)
+void printMsgstr(const char *fmt, ...)
 {
     va_list args;
-    va_start(args, fmt);
-    int len = vsnprintf(0, 0, fmt, args) + 1;
-    va_end(args);
-    char *buf = allocPrint(len);
-    va_start(args, fmt);
-    vsnprintf(buf, len, fmt, args);
-    va_end(args);
-    mvprintw(10+yCur++, 0, "%s", buf);
+    int len;
+    char *buf;
+    va_start(args, fmt); len = vsnprintf(0, 0, fmt, args) + 1; va_end(args);
+    buf = allocPrint(len);
+    va_start(args, fmt); vsnprintf(buf, len, fmt, args); va_end(args);
+    move(10+yCur++, 0);
+    va_start(args, fmt); vwprintw(stdscr, fmt, args); va_end(args);
     refresh();
+}
+
+void enqueErrnum(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt); printMsgstr("error: "); printMsgstr(fmt, args);  printMsgstr(": %s", strerror(errno));va_end(args);
+    EVENT0(Error);
+}
+
+void enqueErrstr(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt); printMsgstr("error: "); printMsgstr(fmt, args); va_end(args);
+    EVENT0(Error);
 }
 
 /*
@@ -571,22 +584,6 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
  * so, each void *() below has a corresponding *State variable above
  */
 
-void enqueErrnum(const char *str, const char *name)
-{
-    int num = errno;
-    char *err = strerror(num);
-    int siz = strlen(str) + strlen(name) + strlen(err) + 12;
-    char *buf = allocChar(siz);
-    if (snprintf(buf, siz, "error: %s: %s: %s", str, name, err) < 0) exitErrstr("snprintf failed\n");
-    EVENT0(Error);
-}
-
-void enqueErrstr(const char *str)
-{
-    strcpy(allocChar(strlen(str)+1), str);
-    EVENT0(Error);
-}
-
 void link() // only works on single-instance commands with global state
 {
     for (int i = 0; i < commands.tail - commands.head; i++) {
@@ -637,7 +634,7 @@ void bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-    printMessage("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
+    printMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
     GLfloat tetrahedron[] = {
         -g,-b,-q,
          g,-b,-q,
@@ -716,7 +713,7 @@ void configure()
     char *filename = 0;
     if (configureState == ConfigureEnqued) {
         if (configFile && fclose(configFile) != 0) {
-            enqueErrstr("invalid path for close");}
+            enqueErrstr("invalid path for close\n");}
         if (!validFilename()) {
             enqueFilename("./sculpt.cfg");}
         while (validFilename()) {
@@ -745,11 +742,11 @@ void configure()
                 bringup();
 #endif
             }
-            else enqueErrnum("invalid path for config", filename);
+            else enqueErrnum("invalid path for config\n", filename);
             if (fclose(configFile) != 0) {
-                enqueErrnum("invalid path for close", filename);}}
+                enqueErrnum("invalid path for close\n", filename);}}
         if (!(configFile = fopen(filename,"a"))) {
-            enqueErrnum("invalid path for append", filename);}
+            enqueErrnum("invalid path for append\n", filename);}
         configureState = ConfigureWait; REQUE0(configure,Configure)}
     DEQUE0(configure,Configure)
 }
@@ -829,7 +826,7 @@ void coplane()
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printMessage("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printMsgstr("%f\n", feedback[i]);
 #endif
 
     // reque to read next chunk
@@ -872,7 +869,7 @@ void copoint()
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printMessage("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printMsgstr("%f\n", feedback[i]);
 #endif
     DEQUE0(copoint,Copoint) 
 }
@@ -883,17 +880,17 @@ void process()
     if (!validOption()) {
         EVENT0(Done) DEQUE0(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
-        printMessage("-h print this message\n");
-        printMessage("-i start interactive mode\n");
-        printMessage("-e <metric> start animation that tweaks planes according to a metric\n");
-        printMessage("-c <file> change file for config and configuration\n");
-        printMessage("-o <file> save polytope in format indicated by file extension\n");
-        printMessage("-f <file> load polytope in format indicated by file extension\n");
-        printMessage("-t <ident> change current polytope to one from config\n");
-        printMessage("-n <shape> replace current polytope by builtin polytope\n");
-        printMessage("-r randomize direction and color of light sources\n");
-        printMessage("-s resample current space to planes with same sidedness\n");
-        printMessage("-S resample current polytope to space and planes\n");}
+        printMsgstr("-h print this message\n");
+        printMsgstr("-i start interactive mode\n");
+        printMsgstr("-e <metric> start animation that tweaks planes according to a metric\n");
+        printMsgstr("-c <file> change file for config and configuration\n");
+        printMsgstr("-o <file> save polytope in format indicated by file extension\n");
+        printMsgstr("-f <file> load polytope in format indicated by file extension\n");
+        printMsgstr("-t <ident> change current polytope to one from config\n");
+        printMsgstr("-n <shape> replace current polytope by builtin polytope\n");
+        printMsgstr("-r randomize direction and color of light sources\n");
+        printMsgstr("-s resample current space to planes with same sidedness\n");
+        printMsgstr("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == Diplane) {
             ENQUE0(configure,Configure)
@@ -914,7 +911,7 @@ void process()
     if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
         if (!validOption()) {
-            enqueErrstr("missing file argument"); return;}
+            enqueErrstr("missing file argument\n"); return;}
         enqueFilename(headOption());}
     dequeOption();
     REQUE0(process,Process)
@@ -1275,6 +1272,11 @@ void initialize(int argc, char **argv)
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
     initscr();
+    cbreak();
+    noecho();
+    nonl();
+    intrflush(stdscr, FALSE);
+    keypad(stdscr, TRUE);
 
     if (!glfwInit()) {
         exitErrstr("could not initialize glfw\n");}
@@ -1302,12 +1304,12 @@ void initialize(int argc, char **argv)
     if (GLEW_OK != err) {
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
     if (GLEW_VERSION_3_3) {
-        printMessage("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        printMsgstr("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
     else {
-        printMessage("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        printMsgstr("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
 #endif
 #ifdef __APPLE__
-    printMessage("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
+    printMsgstr("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
 #endif
 
     glViewport(0, 0, xSiz, ySiz);
@@ -1400,14 +1402,14 @@ void initialize(int argc, char **argv)
     arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
 
-    printMessage("initialize done\n");
+    printMsgstr("initialize done\n");
     ENQUE0(process,Process);
 }
 
 void finalize()
 {
     // save transformation matrices
-    printMessage("finalize done\n");
+    printMsgstr("finalize done\n");
     endwin();
     while (validPrint()) {
         char *str = arrayPrint();
@@ -1426,8 +1428,8 @@ void finalize()
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
     if (events.base) {struct Events initial = {0}; free(events.base); events = initial;}
-    if (ints.base) {struct Ints initial = {0}; free(ints.base); ints = initial;}
     if (chars.base) {struct Chars initial = {0}; free(chars.base); chars = initial;}
+    if (ints.base) {struct Ints initial = {0}; free(ints.base); ints = initial;}
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
     if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
     if (links.base) {struct Commands initial = {0}; free(links.base); links = initial;}

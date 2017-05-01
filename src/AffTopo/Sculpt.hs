@@ -20,7 +20,6 @@ module AffTopo.Sculpt where
 
 import Foreign.Ptr
 import Foreign.C.Types
-import Foreign.C.String
 import AffTopo.Naive
 
 -- foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
@@ -39,10 +38,7 @@ handleEvent :: IO Bool
 handleEvent = do
  event <- eventC
  case event of
-  3 -> do
-   ptr <- messageC
-   str <- peekCString ptr
-   error str
+  3 -> return True
   4 -> return True
   _ -> return False
 
