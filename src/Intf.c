@@ -460,6 +460,7 @@ void printMessage(char *fmt, ...)
     vsnprintf(buf, len, fmt, args);
     va_end(args);
     mvprintw(10+yCur++, 0, "%s", buf);
+    refresh();
 }
 
 /*
@@ -1403,13 +1404,10 @@ void initialize(int argc, char **argv)
     ENQUE0(process,Process);
 }
 
-unsigned int sleep(unsigned int);
 void finalize()
 {
     // save transformation matrices
     printMessage("finalize done\n");
-    refresh();
-    sleep(5);
     endwin();
     while (validPrint()) {
         char *str = arrayPrint();
