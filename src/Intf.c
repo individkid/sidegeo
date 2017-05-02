@@ -140,22 +140,32 @@ struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
 struct Chars prints = {0}; // messages printed to console
-enum {Transform,Manipulate,Refine,Additive,Subractive} menuMode = Transform;
+enum {Additive,Subractive,Refine,Transform,Manipulate} menuMode = Additive;
 /*Transform: modify model or perspective matrix
  *Manipulate: modify pierced plane
  *Refine: click adds random plane
  *Additive: click hollows out region
  *Subtractive: click fills in region*/
-enum {Sphere,Translate,Look} mouseMode = Sphere;
+enum {Sphere,Translate,Look,Screen,Window} mouseMode = Sphere;
 /*Sphere: tilt polytope around pierce point
  *Translate: slide polytope from pierce point
- *Look: tilt camera around focal point*/
-enum {Lever,Clock,Cylinder,Scale,Drive} rollerMode = Lever;
+ *Look: tilt camera around focal point
+ *Screen: move window with display fixed on screen
+ *Window: move window with display fixed in window*/
+enum {Lever,Clock,Cylinder,Scale,Drive,Size,Aspect} rollerMode = Lever;
 /*Lever: push or pull other end of tilt line from pierce point
  *Clock: rotate picture plane around perpendicular to pierce point
  *Cylinder: rotate polytope around tilt line
  *Scale: grow or shrink polytope with pierce point fixed
- *Drive: move picture plane forward or back*/
+ *Drive: move picture plane forward or back
+ *Size: change window size with display fixed on screen
+ *Aspect: change size ration with display fixed on screen*/
+enum {Physical,Virtual} windowMode = Physical;
+/*Physical: display fixed during operating system move
+ *Virtual: display follows window during operating system move*/
+enum {Opposite,Northwest,Northeast,Southwest,Southeast} cornerMode = Opposite;
+/*Opposite: opposite corner appears fixed during resize
+ **: * absolute corner apears fixed during resize*/
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
@@ -174,10 +184,10 @@ float zPos = 0; // cumulative roller ball activity
 float aspect = 0; // ratio between xSiz and ySiz
 int xSiz = 0; // size of window
 int ySiz = 0;
-int xLim = 0; // size of console
-int yLim = 0;
 int xLoc = 0; // location of window on screen
 int yLoc = 0;
+int xLim = 0; // size of console
+int yLim = 0;
 int yOut = 0; // amount of scroll in output part of console
 int xSel = 0; // next character to select on line
 int ySel = 0; // line to select upon enter
@@ -190,9 +200,10 @@ enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
 enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
 enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneWait} coplaneState = CoplaneIdle;
 enum CopointState {CopointIdle,CopointEnqued,CopointWait} copointState = CopointIdle;
+enum WrapState {WrapEnqued,WrapWait};
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 enum ConsoleState {ConsoleIdle,ConsoleEnqued} consoleState = ConsoleIdle;
-enum WrapState {WrapEnqued,WrapWait};
+enum WindowState {WindowIdle,WindowEnqued} windowState = WindowIdle;
 struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
 int linkCheck = 0;
 int sequenceNumber = 0;
@@ -479,21 +490,34 @@ void printConsole()
     getmaxyx(stdscr, ylim, xlim);
     erase();
     move(0,0);
+    printw(limitLine("Additive -- click fills in region over pierce point\n")); pos++;
+    printw(limitLine("Subtractive -- click hollows out region under pierce point\n")); pos++;
+    printw(limitLine("Refine -- click adds random plane through pierce point\n")); pos++;
+    printw(limitLine("Transform -- modify model or perspective matrix\n")); pos++;
+    printw(limitLine("Manipulate -- modify pierced plane\n")); pos++;
     printw(limitLine("Mouse -- action of mouse motion in Transform/Manipulate modes\n")); pos++;
     printw(limitLine("  Rotate -- tilt polytope/plane around pierce point\n")); pos++;
     printw(limitLine("  Translate -- slide polytope/plane from pierce point\n")); pos++;
     printw(limitLine("  Look -- tilt camera around focal point\n")); pos++;
+    printw(limitLine("  Screen -- window moves over display fixed to screen\n")); pos++;
+    printw(limitLine("  Window -- move window and display on screen\n")); pos++;
     printw(limitLine("Roller -- action of roller button in Transform/Manipulate modes\n")); pos++;
     printw(limitLine("  Lever -- push or pull other end of tilt segment from pierce poi\n")); pos++;
     printw(limitLine("  Clock -- rotate picture plane around perpendicular to pierce point\n")); pos++;
     printw(limitLine("  Cylinder -- rotate polytope around tilt line\n")); pos++;
     printw(limitLine("  Scale -- grow or shrink polytope with pierce point fixed\n")); pos++;
     printw(limitLine("  Drive -- move picture plane forward or back\n")); pos++;
-    printw(limitLine("Transform -- modify model or perspective matrix\n")); pos++;
-    printw(limitLine("Manipulate -- modify pierced plane\n")); pos++;
-    printw(limitLine("Refine -- click adds random plane through pierce point\n")); pos++;
-    printw(limitLine("Additive -- click fills in region over pierce point\n")); pos++;
-    printw(limitLine("Subtractive -- click hollows out region under pierce point\n")); pos++;
+    printw(limitLine("  Size -- resize window with display fixed to screen\n")); pos++;
+    printw(limitLine("  Aspect -- change ratio between window dimensions\n")); pos++;
+    printw(limitLine("Window -- how operating system window move affects display\n")); pos++;
+    printw(limitLine("  Physical -- display appears fixed on screen\n")); pos++;
+    printw(limitLine("  Virtual -- display appears fixed in window\n")); pos++;
+    printw(limitLine("Corner -- how operating system window resize affects display\n")); pos++;
+    printw(limitLine("  Opposite -- corner of display opposite dragged appears fixed\n")); pos++;
+    printw(limitLine("  Northwest -- upper left corner of display appears fixed\n")); pos++;
+    printw(limitLine("  Northeast -- upper right corner of display appears fixed\n")); pos++;
+    printw(limitLine("  Southwest -- lower left corner of display appears fixed\n")); pos++;
+    printw(limitLine("  Southeast -- lower right corner of display appears fixed\n")); pos++;
     int lines = 0;
     char *str = arrayPrint();
     for (int i = 0; i < sizePrint(); i++) if (str[i] == '\n') lines++;
@@ -986,12 +1010,28 @@ void console()
     if (chr != ERR || ylim != yLim || xlim != xLim) {
         if (chr != ERR) {
             // change selection
+            printMsgstr("%d\n", chr);
         }
         yLim = ylim; xLim = xlim;
         printConsole();
         REQUE0(console,Console)}
-    else {
+    else if (focusMode == Outside) {
         DEFER0(console,Console)}
+    else {
+        DEQUE0(console,Console)}
+}
+
+void window()
+{
+    CHECK0(window,Window)
+    // get window position and size
+    if (0/*window position or size changed from xLoc yLoc xSiz ySiz*/) {
+        // change uniforms according to windowMode and cornerMode
+        REQUE0(window,Window)}
+    else if (focusMode == Outside) {
+        DEFER0(window,Window)}
+    else {
+        DEQUE0(window,Window)}
 }
 
 /*
@@ -1057,15 +1097,18 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             glGetUniformfv(dipointProgram,modelUniform,modelMat);
             glGetUniformfv(dipointProgram,normalUniform,normalMat);
             glGetUniformfv(dipointProgram,projectUniform,projectMat);}
-        mouseMode = Left;}
+        clickMode = Left;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
-        mouseMode = Right;}
+        clickMode = Right;}
 }
 
-void displayCursor(GLFWwindow *window, double xpos, double ypos)
+void displayCursor(GLFWwindow *win, double xpos, double ypos)
 {
     focusMode = (xpos >=0 && xpos < xSiz && ypos >= 0 && ypos < ySiz ? Inside : Outside);
-    if (focusMode == Inside && mouseMode == Left) {
+    if (focusMode == Outside) {
+        MAYBE0(console,Console)
+        MAYBE0(window,Window)}
+    if (focusMode == Inside && clickMode == Left) {
         xPos = xpos; yPos = ypos;
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
@@ -1075,7 +1118,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     double zpos = zPos + yoffset;
-    if (focusMode == Inside && mouseMode == Left) {
+    if (focusMode == Inside && clickMode == Left) {
         zPos = zpos;
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
@@ -1482,9 +1525,10 @@ void initialize(int argc, char **argv)
     arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
 
-    printMsgstr("initialize done\n");
     ENQUE0(process,Process)
     ENQUE0(console,Console)
+    ENQUE0(window,Window)
+    printMsgstr("initialize done\n");
 }
 
 void finalize()
