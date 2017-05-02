@@ -92,8 +92,7 @@ extern void __stginit_Main(void);
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
-#define EVENT_DELAY 0.00001
-#define MENU_LENGTH 15
+#define EVENT_DELAY 0.1
 #else
 #endif
 
@@ -175,6 +174,8 @@ float zPos = 0; // cumulative roller ball activity
 float aspect = 0; // ratio between xSiz and ySiz
 int xSiz = 0; // size of window
 int ySiz = 0;
+int xLim = 0; // size of console
+int yLim = 0;
 int xLoc = 0; // location of window on screen
 int yLoc = 0;
 int yOut = 0; // amount of scroll in output part of console
@@ -190,6 +191,7 @@ enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
 enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneWait} coplaneState = CoplaneIdle;
 enum CopointState {CopointIdle,CopointEnqued,CopointWait} copointState = CopointIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
+enum ConsoleState {ConsoleIdle,ConsoleEnqued} consoleState = ConsoleIdle;
 enum WrapState {WrapEnqued,WrapWait};
 struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
 int linkCheck = 0;
@@ -458,44 +460,50 @@ ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
 
 ACCESS_QUEUE(Link,Command,links)
 
-char *limitLine(const char *given) // caller must call popChar
+char *limitLine(const char *given)
 {
-    // allocate string of length to fill console width
-    // filter out \0; pad with space after any \n; allow room for terminating \n\0.
-    return 0;
+    int ylim, xlim, len;
+    len = strlen(given) + 1;
+    getmaxyx(stdscr, ylim, xlim); xlim--;
+    if (len - 2 > xlim) len = xlim + 2;
+    char *buf = allocChar(len); popChar(len);
+    strncpy(buf, given, len - 2);
+    buf[len - 2] = '\n'; buf[len - 1] = 0;
+    return buf;
 }
 
 void printConsole()
 {
-    move(0,0);
     int pos = 0;
-    printw("Mouse -- action of mouse motion in Transform/Manipulate modes\n"); pos++;
-    printw("  Rotate -- tilt polytope/plane around pierce point\n"); pos++;
-    printw("  Translate -- slide polytope/plane from pierce point\n"); pos++;
-    printw("  Look -- tilt camera around focal point\n"); pos++;
-    printw("Roller -- action of roller button in Transform/Manipulate modes\n"); pos++;
-    printw("  Lever -- push or pull other end of tilt segment from pierce poi\n"); pos++;
-    printw("  Clock -- rotate picture plane around perpendicular to pierce point\n"); pos++;
-    printw("  Cylinder -- rotate polytope around tilt line\n"); pos++;
-    printw("  Scale -- grow or shrink polytope with pierce point fixed\n"); pos++;
-    printw("  Drive -- move picture plane forward or back\n"); pos++;
-    printw("Transform -- modify model or perspective matrix\n"); pos++;
-    printw("Manipulate -- modify pierced plane\n"); pos++;
-    printw("Refine -- click adds random plane through pierce point\n"); pos++;
-    printw("Additive -- click fills in region over pierce point\n"); pos++;
-    printw("Subtractive -- click hollows out region under pierce point\n"); pos++;
-    int bot, right;
-    getmaxyx(stdscr, bot, right);
+    int ylim, xlim;
+    getmaxyx(stdscr, ylim, xlim);
+    erase();
+    move(0,0);
+    printw(limitLine("Mouse -- action of mouse motion in Transform/Manipulate modes\n")); pos++;
+    printw(limitLine("  Rotate -- tilt polytope/plane around pierce point\n")); pos++;
+    printw(limitLine("  Translate -- slide polytope/plane from pierce point\n")); pos++;
+    printw(limitLine("  Look -- tilt camera around focal point\n")); pos++;
+    printw(limitLine("Roller -- action of roller button in Transform/Manipulate modes\n")); pos++;
+    printw(limitLine("  Lever -- push or pull other end of tilt segment from pierce poi\n")); pos++;
+    printw(limitLine("  Clock -- rotate picture plane around perpendicular to pierce point\n")); pos++;
+    printw(limitLine("  Cylinder -- rotate polytope around tilt line\n")); pos++;
+    printw(limitLine("  Scale -- grow or shrink polytope with pierce point fixed\n")); pos++;
+    printw(limitLine("  Drive -- move picture plane forward or back\n")); pos++;
+    printw(limitLine("Transform -- modify model or perspective matrix\n")); pos++;
+    printw(limitLine("Manipulate -- modify pierced plane\n")); pos++;
+    printw(limitLine("Refine -- click adds random plane through pierce point\n")); pos++;
+    printw(limitLine("Additive -- click fills in region over pierce point\n")); pos++;
+    printw(limitLine("Subtractive -- click hollows out region under pierce point\n")); pos++;
     int lines = 0;
     char *str = arrayPrint();
     for (int i = 0; i < sizePrint(); i++) if (str[i] == '\n') lines++;
-    while (pos + lines > bot) {
+    while (pos + lines > ylim) {
         while (*str != '\n') str++;
         if (*str == '\n') str++;
         if (*str == 0) str++;
         lines--;}
-    for (int i = 0; i < lines && pos < bot; i++) {
-        printw(str); pos++;
+    for (int i = 0; i < lines && pos < ylim; i++) {
+        printw(limitLine(str)); pos++;
         while (*str != '\n') str++;
         if (*str == '\n') str++;
         if (*str == 0) str++;}
@@ -685,7 +693,7 @@ void bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-    // printMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
+    printMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
     GLfloat tetrahedron[] = {
         -g,-b,-q,
          g,-b,-q,
@@ -966,6 +974,24 @@ void process()
         enqueFilename(headOption());}
     dequeOption();
     REQUE0(process,Process)
+}
+
+void console()
+{
+    CHECK0(console,Console)
+    int chr = getch();
+    int ylim, xlim;
+    move(0,0);
+    getmaxyx(stdscr, ylim, xlim);
+    if (chr != ERR || ylim != yLim || xlim != xLim) {
+        if (chr != ERR) {
+            // change selection
+        }
+        yLim = ylim; xLim = xlim;
+        printConsole();
+        REQUE0(console,Console)}
+    else {
+        DEFER0(console,Console)}
 }
 
 /*
@@ -1330,6 +1356,7 @@ void initialize(int argc, char **argv)
     keypad(stdscr, TRUE);
     nonl();
     curs_set(0);
+    nodelay(stdscr, TRUE);
 
     if (!glfwInit()) {
         exitErrstr("could not initialize glfw\n");}
@@ -1456,7 +1483,8 @@ void initialize(int argc, char **argv)
     glUseProgram(0);
 
     printMsgstr("initialize done\n");
-    ENQUE0(process,Process);
+    ENQUE0(process,Process)
+    ENQUE0(console,Console)
 }
 
 void finalize()
