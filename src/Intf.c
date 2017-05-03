@@ -68,7 +68,10 @@ extern void __stginit_Main(void);
 #include <sys/utsname.h>
 #include <math.h>
 
+#ifdef NCURSES
 #include <ncurses.h>
+#endif
+
 #ifdef __linux__
 #include <GL/glew.h>
 #endif
@@ -139,7 +142,9 @@ struct Strings {DECLARE_QUEUE(char *)} options = {0}; // command line arguments
 struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
+#ifdef NCURSES
 struct Chars prints = {0}; // messages printed to console
+#endif
 enum {Additive,Subractive,Refine,Transform,Manipulate} menuMode = Additive;
 /*Transform: modify model or perspective matrix
  *Manipulate: modify pierced plane
@@ -186,25 +191,27 @@ int xSiz = 0; // size of window
 int ySiz = 0;
 int xLoc = 0; // location of window on screen
 int yLoc = 0;
+#ifdef NCURSES
 int xLim = 0; // size of console
 int yLim = 0;
 int yOut = 0; // amount of scroll in output part of console
 int xSel = 0; // next character to select on line
 int ySel = 0; // line to select upon enter
+#endif
 float modelMat[9] = {0};
 float normalMat[9] = {0};
 float projectMat[9] = {0};
 struct Chars generics = {0}; // sized formatted packets of bytes
-enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureWait} configureState = ConfigureIdle;
+enum WrapState {WrapEnqued,WrapWait};
+struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
 enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
 enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
 enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneWait} coplaneState = CoplaneIdle;
 enum CopointState {CopointIdle,CopointEnqued,CopointWait} copointState = CopointIdle;
-enum WrapState {WrapEnqued,WrapWait};
+enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureWait} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 enum ConsoleState {ConsoleIdle,ConsoleEnqued} consoleState = ConsoleIdle;
-enum WindowState {WindowIdle,WindowEnqued} windowState = WindowIdle;
-struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
+enum MypollState {MypollIdle,MypollEnqued} mypollState = MypollIdle;
 int linkCheck = 0;
 int sequenceNumber = 0;
 struct Ints {DECLARE_QUEUE(int)} defers = {0};
@@ -223,7 +230,7 @@ struct Floats {DECLARE_QUEUE(float)} floats = {0};
 struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
  // for scratchpad and arguments
 struct Commands links = {0};
- // for prelink link postline commands
+ // for scratchpad and arguments
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
 TYPE *alloc##NAME(int size) \
@@ -436,7 +443,9 @@ void pop##NAME(int size) \
 void exitErrstr(const char *fmt, ...)
 {
     va_list args;                     
+#ifdef NCURSES
     endwin();
+#endif
     va_start(args, fmt); printf("fatal: "); vprintf(fmt, args); va_end(args);
     exit(-1);
 }
@@ -449,7 +458,9 @@ ACCESS_QUEUE(Format,char,formats)
 
 ACCESS_QUEUE(Metric,char,metrics)
 
+#ifdef NCURSES
 ACCESS_QUEUE(Print,char,prints)
+#endif
 
 ACCESS_QUEUE(Generic,char,generics)
 
@@ -471,11 +482,18 @@ ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
 
 ACCESS_QUEUE(Link,Command,links)
 
+#ifdef NCURSES
+void consoleSize(int *ylim, int *xlim)
+{
+    *ylim = yLim;
+    *xlim = xLim;
+}
+
 char *limitLine(const char *given)
 {
     int ylim, xlim, len;
     len = strlen(given) + 1;
-    getmaxyx(stdscr, ylim, xlim); xlim--;
+    consoleSize(&ylim, &xlim); xlim--;
     if (len - 2 > xlim) len = xlim + 2;
     char *buf = allocChar(len); popChar(len);
     strncpy(buf, given, len - 2);
@@ -483,57 +501,10 @@ char *limitLine(const char *given)
     return buf;
 }
 
-void printConsole()
-{
-    int pos = 0;
-    int ylim, xlim;
-    getmaxyx(stdscr, ylim, xlim);
-    erase();
-    move(0,0);
-    printw(limitLine("Additive -- click fills in region over pierce point\n")); pos++;
-    printw(limitLine("Subtractive -- click hollows out region under pierce point\n")); pos++;
-    printw(limitLine("Refine -- click adds random plane through pierce point\n")); pos++;
-    printw(limitLine("Transform -- modify model or perspective matrix\n")); pos++;
-    printw(limitLine("Manipulate -- modify pierced plane\n")); pos++;
-    printw(limitLine("Mouse -- action of mouse motion in Transform/Manipulate modes\n")); pos++;
-    printw(limitLine("  Rotate -- tilt polytope/plane around pierce point\n")); pos++;
-    printw(limitLine("  Translate -- slide polytope/plane from pierce point\n")); pos++;
-    printw(limitLine("  Look -- tilt camera around focal point\n")); pos++;
-    printw(limitLine("  Screen -- window moves over display fixed to screen\n")); pos++;
-    printw(limitLine("  Window -- move window and display on screen\n")); pos++;
-    printw(limitLine("Roller -- action of roller button in Transform/Manipulate modes\n")); pos++;
-    printw(limitLine("  Lever -- push or pull other end of tilt segment from pierce poi\n")); pos++;
-    printw(limitLine("  Clock -- rotate picture plane around perpendicular to pierce point\n")); pos++;
-    printw(limitLine("  Cylinder -- rotate polytope around tilt line\n")); pos++;
-    printw(limitLine("  Scale -- grow or shrink polytope with pierce point fixed\n")); pos++;
-    printw(limitLine("  Drive -- move picture plane forward or back\n")); pos++;
-    printw(limitLine("  Size -- resize window with display fixed to screen\n")); pos++;
-    printw(limitLine("  Aspect -- change ratio between window dimensions\n")); pos++;
-    printw(limitLine("Window -- how operating system window move affects display\n")); pos++;
-    printw(limitLine("  Physical -- display appears fixed on screen\n")); pos++;
-    printw(limitLine("  Virtual -- display appears fixed in window\n")); pos++;
-    printw(limitLine("Corner -- how operating system window resize affects display\n")); pos++;
-    printw(limitLine("  Opposite -- corner of display opposite dragged appears fixed\n")); pos++;
-    printw(limitLine("  Northwest -- upper left corner of display appears fixed\n")); pos++;
-    printw(limitLine("  Northeast -- upper right corner of display appears fixed\n")); pos++;
-    printw(limitLine("  Southwest -- lower left corner of display appears fixed\n")); pos++;
-    printw(limitLine("  Southeast -- lower right corner of display appears fixed\n")); pos++;
-    int lines = 0;
-    char *str = arrayPrint();
-    for (int i = 0; i < sizePrint(); i++) if (str[i] == '\n') lines++;
-    while (pos + lines > ylim) {
-        while (*str != '\n') str++;
-        if (*str == '\n') str++;
-        if (*str == 0) str++;
-        lines--;}
-    for (int i = 0; i < lines && pos < ylim; i++) {
-        printw(limitLine(str)); pos++;
-        while (*str != '\n') str++;
-        if (*str == '\n') str++;
-        if (*str == 0) str++;}
-    refresh();
-}
+void console();
+#endif
 
+#ifdef NCURSES
 void printMsgstr(const char *fmt, ...)
 {
     va_list args;
@@ -542,8 +513,11 @@ void printMsgstr(const char *fmt, ...)
     va_start(args, fmt); len = vsnprintf(0, 0, fmt, args) + 1; va_end(args);
     buf = allocPrint(len);
     va_start(args, fmt); vsnprintf(buf, len, fmt, args); va_end(args);
-    printConsole();
+    console(); // MAYBE0(console,Console);
 }
+#else
+#define printMsgstr printf
+#endif
 
 void enqueErrnum(const char *fmt, ...)
 {
@@ -659,31 +633,6 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
     return -1;
 }
 
-/*
- * functions put on command queue (except the non-void ones)
- * to merit being put on the command queue, a function must implement a state machine
- * however, even a two state machine (*Idle,*Enqued) is a state machine
- * and, each state machine has a global state variable
- * so, each void *() below has a corresponding *State variable above
- */
-
-void link() // only works on single-instance commands with global state
-{
-    for (int i = 0; i < commands.tail - commands.head; i++) {
-        if (commands.head[i] == headLink()) {linkCheck = 1; break;}}
-    if (linkCheck) {
-        enqueDefer(sequenceNumber + sizeCommand());
-        enqueCommand(&link);
-        enqueLink(headLink());}
-    dequeLink();
-}
-
-void wrap()
-{
-    CHECKS1(wrap,Wrap,struct Buffer *,buffer,Buffer)
-    DEQUES1()
-}
-
 #ifdef BRINGUP
 void bringup()
 {
@@ -790,88 +739,25 @@ void bringup()
 }
 #endif
 
-void configure()
+/*
+ * functions put on command queue
+ */
+
+void link() // only works on single-instance commands with global state
 {
-    CHECK0(configure,Configure)
-    char *filename = 0;
-    if (configureState == ConfigureEnqued) {
-        if (configFile && fclose(configFile) != 0) {
-            enqueErrstr("invalid path for close\n");}
-        if (!validFilename()) {
-            enqueFilename("./sculpt.cfg");}
-        while (validFilename()) {
-            filename = headFilename();
-            dequeFilename();
-            if ((configFile = fopen(filename, "r"))) {
-                // load lighting directions and colors
-                // ensure indices are empty on first config line
-                // read format and bytes from first config line
-                // for each subsequent config line,
-                    // read indices, find subformat, read bytes
-                    // find replaced range and replacement size
-                    // replace range by bytes read from config
-                // load transformation matrices
-                // ftruncate to before transformation matrices
-#ifdef BRINGUP
-                bringup();
-#endif
-            }
-            else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
-                // randomize();
-                // save lighting directions and colors
-                // randomizeH();
-                // save generic data
-#ifdef BRINGUP
-                bringup();
-#endif
-            }
-            else enqueErrnum("invalid path for config\n", filename);
-            if (fclose(configFile) != 0) {
-                enqueErrnum("invalid path for close\n", filename);}}
-        if (!(configFile = fopen(filename,"a"))) {
-            enqueErrnum("invalid path for append\n", filename);}
-        configureState = ConfigureWait; REQUE0(configure,Configure)}
-    DEQUE0(configure,Configure)
+    for (int i = 0; i < commands.tail - commands.head; i++) {
+        if (commands.head[i] == headLink()) {linkCheck = 1; break;}}
+    if (linkCheck) {
+        enqueDefer(sequenceNumber + sizeCommand());
+        enqueCommand(&link);
+        enqueLink(headLink());}
+    dequeLink();
 }
 
-void diplane()
+void wrap()
 {
-    CHECK0(diplane,Diplane)
-
-    glUseProgram(diplaneProgram);
-    glEnableVertexAttribArray(PLANE_LOCATION);
-    glEnableVertexAttribArray(VERSOR_LOCATION);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceSub.base);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawElements(GL_TRIANGLES_ADJACENCY, NUM_FACES*FACE_PLANES, GL_UNSIGNED_INT, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableVertexAttribArray(VERSOR_LOCATION);
-    glDisableVertexAttribArray(PLANE_LOCATION);
-    glUseProgram(0);
-
-    glfwSwapBuffers(windowHandle);
-
-    DEQUE0(diplane,Diplane)
-}
-
-void dipoint()
-{
-    CHECK0(dipoint,Dipoint)
-
-    glUseProgram(dipointProgram);
-    glEnableVertexAttribArray(POINT_LOCATION);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polygonSub.base);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawElements(GL_TRIANGLES, NUM_POLYGONS*POLYGON_POINTS, GL_UNSIGNED_INT, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableVertexAttribArray(POINT_LOCATION);
-    glUseProgram(0);
-
-    glfwSwapBuffers(windowHandle);
-
-    DEQUE0(dipoint,Dipoint)
+    CHECKS1(wrap,Wrap,struct Buffer *,buffer,Buffer)
+    DEQUES1()
 }
 
 void coplane()
@@ -957,6 +843,90 @@ void copoint()
     DEQUE0(copoint,Copoint) 
 }
 
+void diplane()
+{
+    CHECK0(diplane,Diplane)
+
+    glUseProgram(diplaneProgram);
+    glEnableVertexAttribArray(PLANE_LOCATION);
+    glEnableVertexAttribArray(VERSOR_LOCATION);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceSub.base);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawElements(GL_TRIANGLES_ADJACENCY, NUM_FACES*FACE_PLANES, GL_UNSIGNED_INT, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glDisableVertexAttribArray(VERSOR_LOCATION);
+    glDisableVertexAttribArray(PLANE_LOCATION);
+    glUseProgram(0);
+
+    glfwSwapBuffers(windowHandle);
+
+    DEQUE0(diplane,Diplane)
+}
+
+void dipoint()
+{
+    CHECK0(dipoint,Dipoint)
+
+    glUseProgram(dipointProgram);
+    glEnableVertexAttribArray(POINT_LOCATION);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polygonSub.base);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawElements(GL_TRIANGLES, NUM_POLYGONS*POLYGON_POINTS, GL_UNSIGNED_INT, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glDisableVertexAttribArray(POINT_LOCATION);
+    glUseProgram(0);
+
+    glfwSwapBuffers(windowHandle);
+
+    DEQUE0(dipoint,Dipoint)
+}
+
+void configure()
+{
+    CHECK0(configure,Configure)
+    char *filename = 0;
+    if (configureState == ConfigureEnqued) {
+        if (configFile && fclose(configFile) != 0) {
+            enqueErrstr("invalid path for close\n");}
+        if (!validFilename()) {
+            enqueFilename("./sculpt.cfg");}
+        while (validFilename()) {
+            filename = headFilename();
+            dequeFilename();
+            if ((configFile = fopen(filename, "r"))) {
+                // load lighting directions and colors
+                // ensure indices are empty on first config line
+                // read format and bytes from first config line
+                // for each subsequent config line,
+                    // read indices, find subformat, read bytes
+                    // find replaced range and replacement size
+                    // replace range by bytes read from config
+                // load transformation matrices
+                // ftruncate to before transformation matrices
+#ifdef BRINGUP
+                bringup();
+#endif
+            }
+            else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
+                // randomize();
+                // save lighting directions and colors
+                // randomizeH();
+                // save generic data
+#ifdef BRINGUP
+                bringup();
+#endif
+            }
+            else enqueErrnum("invalid path for config\n", filename);
+            if (fclose(configFile) != 0) {
+                enqueErrnum("invalid path for close\n", filename);}}
+        if (!(configFile = fopen(filename,"a"))) {
+            enqueErrnum("invalid path for append\n", filename);}
+        configureState = ConfigureWait; REQUE0(configure,Configure)}
+    DEQUE0(configure,Configure)
+}
+
 void process()
 {
     CHECK0(process,Process)
@@ -1000,50 +970,83 @@ void process()
     REQUE0(process,Process)
 }
 
+#ifdef NCURSES
 void console()
 {
-    CHECK0(console,Console)
-    int chr = getch();
+    // CHECK0(console,Console)
+    int pos = 0;
     int ylim, xlim;
+    consoleSize(&ylim, &xlim);
+    erase();
     move(0,0);
-    getmaxyx(stdscr, ylim, xlim);
-    if (chr != ERR || ylim != yLim || xlim != xLim) {
-        if (chr != ERR) {
-            // change selection
-            printMsgstr("%d\n", chr);
-        }
-        yLim = ylim; xLim = xlim;
-        printConsole();
-        REQUE0(console,Console)}
-    else if (focusMode == Outside) {
-        DEFER0(console,Console)}
-    else {
-        DEQUE0(console,Console)}
+    printw(limitLine("Additive -- click fills in region over pierce point\n")); pos++;
+    printw(limitLine("Subtractive -- click hollows out region under pierce point\n")); pos++;
+    printw(limitLine("Refine -- click adds random plane through pierce point\n")); pos++;
+    printw(limitLine("Transform -- modify model or perspective matrix\n")); pos++;
+    printw(limitLine("Manipulate -- modify pierced plane\n")); pos++;
+    printw(limitLine("Mouse -- action of mouse motion in Transform/Manipulate modes\n")); pos++;
+    printw(limitLine("  Rotate -- tilt polytope/plane around pierce point\n")); pos++;
+    printw(limitLine("  Translate -- slide polytope/plane from pierce point\n")); pos++;
+    printw(limitLine("  Look -- tilt camera around focal point\n")); pos++;
+    printw(limitLine("  Screen -- window moves over display fixed to screen\n")); pos++;
+    printw(limitLine("  Window -- move window and display on screen\n")); pos++;
+    printw(limitLine("Roller -- action of roller button in Transform/Manipulate modes\n")); pos++;
+    printw(limitLine("  Lever -- push or pull other end of tilt segment from pierce poi\n")); pos++;
+    printw(limitLine("  Clock -- rotate picture plane around perpendicular to pierce point\n")); pos++;
+    printw(limitLine("  Cylinder -- rotate polytope around tilt line\n")); pos++;
+    printw(limitLine("  Scale -- grow or shrink polytope with pierce point fixed\n")); pos++;
+    printw(limitLine("  Drive -- move picture plane forward or back\n")); pos++;
+    printw(limitLine("  Size -- resize window with display fixed to screen\n")); pos++;
+    printw(limitLine("  Aspect -- change ratio between window dimensions\n")); pos++;
+    printw(limitLine("Window -- how operating system window move affects display\n")); pos++;
+    printw(limitLine("  Physical -- display appears fixed on screen\n")); pos++;
+    printw(limitLine("  Virtual -- display appears fixed in window\n")); pos++;
+    printw(limitLine("Corner -- how operating system window resize affects display\n")); pos++;
+    printw(limitLine("  Opposite -- corner of display opposite dragged appears fixed\n")); pos++;
+    printw(limitLine("  Northwest -- upper left corner of display appears fixed\n")); pos++;
+    printw(limitLine("  Northeast -- upper right corner of display appears fixed\n")); pos++;
+    printw(limitLine("  Southwest -- lower left corner of display appears fixed\n")); pos++;
+    printw(limitLine("  Southeast -- lower right corner of display appears fixed\n")); pos++;
+    int lines = 0;
+    char *str = arrayPrint();
+    for (int i = 0; i < sizePrint(); i++) if (str[i] == '\n') lines++;
+    while (pos + lines > ylim) {
+        while (*str != '\n') str++;
+        if (*str == '\n') str++;
+        if (*str == 0) str++;
+        lines--;}
+    for (int i = 0; i < lines && pos < ylim; i++) {
+        printw(limitLine(str)); pos++;
+        while (*str != '\n') str++;
+        if (*str == '\n') str++;
+        if (*str == 0) str++;}
+    refresh();
+    // DEQUE0(console,Console)
 }
 
-void window()
+void mypoll()
 {
-    CHECK0(window,Window)
-    // get window position and size
-    if (0/*window position or size changed from xLoc yLoc xSiz ySiz*/) {
-        // change uniforms according to windowMode and cornerMode
-        REQUE0(window,Window)}
-    else if (focusMode == Outside) {
-        DEFER0(window,Window)}
+    CHECK0(mypoll,Mypoll)
+    if (focusMode == Outside) {
+        int chr = getch();
+        if (chr == KEY_RESIZE) {
+            getmaxyx(stdscr, yLim, xLim);
+            printMsgstr("resize %d %d\n", yLim, xLim);
+            MAYBE0(console,Console);
+            REQUE0(mypoll,Mypoll)}
+        else {
+            DEFER0(mypoll,Mypoll)}}
     else {
-        DEQUE0(window,Window)}
+        if (0/*window position or size changed*/) {
+            printMsgstr("move %d %d %d %d\n", yLoc, xLoc, xSiz, ySiz);
+            REQUE0(mypoll,Mypoll)}
+        else {
+            DEFER0(mypoll,Mypoll)}}
 }
+#endif
 
 /*
  * accessors for Haskell to read and modify state
- * often, changes to state trigger dipoint
- * as often, changes to state trigger second order state changes
- * often, second order state changes occur in chunks
- * as often, second order state changes prevent access from Haskell
- * so, requests to Haskell must only be enqued by proper commands
- * in other words, user input must not enque events to Haskell
- * unless, the event to Haskell is guaranteed not to modify state
- * for example, the Done event does not modify state
  */
 
 char *generic(int *indices, int size)
@@ -1102,14 +1105,23 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         clickMode = Right;}
 }
 
-void displayCursor(GLFWwindow *win, double xpos, double ypos)
+void displayFocus(GLFWwindow *window, int focused)
 {
-    focusMode = (xpos >=0 && xpos < xSiz && ypos >= 0 && ypos < ySiz ? Inside : Outside);
-    if (focusMode == Outside) {
-        MAYBE0(console,Console)
-        MAYBE0(window,Window)}
-    if (focusMode == Inside && clickMode == Left) {
+    if (focused) {
+        focusMode = Inside;
+        printMsgstr("entry\n");
+    }
+    else {
+        focusMode = Outside;
+        printMsgstr("leave\n");
+    }
+}
+
+void displayCursor(GLFWwindow *window, double xpos, double ypos)
+{
+    if (focusMode == Inside && clickMode == Left && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz) {
         xPos = xpos; yPos = ypos;
+        printMsgstr("displayCursor %f %f\n", xPos, yPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
         if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
@@ -1120,6 +1132,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     double zpos = zPos + yoffset;
     if (focusMode == Inside && clickMode == Left) {
         zPos = zpos;
+        printMsgstr("displayScroll %f\n", zPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
         if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
@@ -1129,6 +1142,16 @@ void displaySize(GLFWwindow *window, int width, int height)
 {
     glViewport(0, 0, width, height);
     xSiz = width; ySiz = height;
+    printMsgstr("displaySize %d %d\n", xSiz, ySiz);
+    // change uniforms depending on *Mode, *Pos, *Siz, *Mat
+    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+}
+
+void displayLocation(GLFWwindow *window, int xloc, int yloc)
+{
+    xLoc = xloc; yLoc = yloc;
+    printMsgstr("displayLocation %d %d\n", xLoc, yLoc);
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
     if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
     if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
@@ -1136,7 +1159,6 @@ void displaySize(GLFWwindow *window, int width, int height)
 
 void displayRefresh(GLFWwindow *window)
 {
-    // change uniforms depending on *Mode, *Pos, *Mat
     if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
     if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
 }
@@ -1392,6 +1414,7 @@ void initialize(int argc, char **argv)
 
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
+#ifdef NCURSES
     initscr();
     cbreak();
     noecho();
@@ -1400,6 +1423,9 @@ void initialize(int argc, char **argv)
     nonl();
     curs_set(0);
     nodelay(stdscr, TRUE);
+    // scrollok(stdscr, TRUE);
+    getmaxyx(stdscr, yLim, xLim);
+#endif
 
     if (!glfwInit()) {
         exitErrstr("could not initialize glfw\n");}
@@ -1411,9 +1437,11 @@ void initialize(int argc, char **argv)
     if (!windowHandle) {exitErrstr("could not create window\n");}
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowSizeCallback(windowHandle, displaySize);
+    glfwSetWindowPosCallback(windowHandle, displayLocation);
     glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
     glfwSetKeyCallback(windowHandle, displayKey);
     glfwSetMouseButtonCallback(windowHandle, displayClick);
+    glfwSetWindowFocusCallback(windowHandle, displayFocus);
     glfwSetCursorPosCallback(windowHandle, displayCursor);
     glfwSetScrollCallback(windowHandle, displayScroll);
     glfwMakeContextCurrent(windowHandle);
@@ -1526,28 +1554,32 @@ void initialize(int argc, char **argv)
     glUseProgram(0);
 
     ENQUE0(process,Process)
-    ENQUE0(console,Console)
-    ENQUE0(window,Window)
+#ifdef NCURSES
+    ENQUE0(mypoll,Mypoll)
+#endif
     printMsgstr("initialize done\n");
 }
 
 void finalize()
 {
     // save transformation matrices
-    printMsgstr("finalize done\n");
+#ifdef NCURSES
     endwin();
     while (validPrint()) {
         char *str = arrayPrint();
         printf("%s", str);
         deallocPrint(strlen(str)+1);
     }
+#endif
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
+#ifdef NCURSES
     if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
+#endif
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
@@ -1558,6 +1590,7 @@ void finalize()
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
     if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
     if (links.base) {struct Commands initial = {0}; free(links.base); links = initial;}
+    printf("finalize done\n");
 }
 
 void waitForEvent()

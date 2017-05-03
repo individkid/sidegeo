@@ -77,12 +77,10 @@ executable sculpt
                        Xcursor,
                        rt,
                        m,
-                       pthread,
-                       ncurses
+                       pthread
   if os(osx)
     extra-lib-dirs:    /usr/lib
-    extra-libraries:   glfw3,
-                       ncurses
+    extra-libraries:   glfw3
     frameworks:        Cocoa,
                        OpenGL,
                        IOKit,
