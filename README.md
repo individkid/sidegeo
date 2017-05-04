@@ -17,18 +17,31 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
 
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button deselects pierce point, and deactivates action. Keyboard enter selects, and letter or arrow moves to menu entry in console.
 
+  * Additive -- click fills in region over pierce point  
+  * Subtractive -- click hollows out region under pierce point  
+  * Refine -- click adds random plane through pierce point  
+  * Transform -- modify model or perspective matrix  
+  * Manipulate -- modify pierced plane  
   * Mouse -- action of mouse motion in Transform/Manipulate modes  
     * Rotate -- tilt polytope/plane around pierce point  
     * Translate -- slide polytope/plane from pierce point  
     * Look -- tilt camera around focal point  
+    * Screen -- window moves over display fixed to screen\n")); pos++;
+    * Window -- move window and display on screen\n")); pos++;
   * Roller -- action of roller button in Transform/Manipulate modes  
     * Lever -- push or pull other end of tilt segment from pierce point
     * Clock -- rotate picture plane around perpendicular to pierce point  
     * Cylinder -- rotate polytope around tilt line  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
-  * Transform -- modify model or perspective matrix  
-  * Manipulate -- modify pierced plane  
-  * Refine -- click adds random plane through pierce point  
-  * Additive -- click fills in region over pierce point  
-  * Subtractive -- click hollows out region under pierce point  
+    * Size -- resize window with display fixed to screen
+    * Aspect -- change ratio between window dimensions
+  * Window -- how operating system window move affects display
+    * Physical -- display appears fixed on screen
+    * Virtual -- display appears fixed in window
+  * Corner -- how operating system window resize affects display
+    * Opposite -- corner of display opposite dragged appears fixed
+    * Northwest -- upper left corner of display appears fixed
+    * Northeast -- upper right corner of display appears fixed
+    * Southwest -- lower left corner of display appears fixed
+    * Southeast -- lower right corner of display appears fixed

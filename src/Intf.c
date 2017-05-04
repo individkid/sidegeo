@@ -68,10 +68,6 @@ extern void __stginit_Main(void);
 #include <sys/utsname.h>
 #include <math.h>
 
-#ifdef NCURSES
-#include <ncurses.h>
-#endif
-
 #ifdef __linux__
 #include <GL/glew.h>
 #endif
@@ -142,9 +138,6 @@ struct Strings {DECLARE_QUEUE(char *)} options = {0}; // command line arguments
 struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
-#ifdef NCURSES
-struct Chars prints = {0}; // messages printed to console
-#endif
 enum {Additive,Subractive,Refine,Transform,Manipulate} menuMode = Additive;
 /*Transform: modify model or perspective matrix
  *Manipulate: modify pierced plane
@@ -174,30 +167,26 @@ enum {Opposite,Northwest,Northeast,Southwest,Southeast} cornerMode = Opposite;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
-enum {Inside,Outside} focusMode = Inside;
-/*Inside: mouse is inside window frame
- *Outside: mouse is outside window frame*/
 enum {Input,Output} cursesMode = Input;
 /*Input: arrow keys select menu item
  *Output: arrow keys scroll output*/
 enum {Diplane,Dipoint} shaderMode = Diplane;
 /*Diplane: display planes
  *Dipoint: display points*/
-float xPos = 0; // position of pierce point
+float xPoint = 0;  // position of pierce point
+float yPoint = 0;
+float zPoint = 0;
+float xWarp = 0; // saved mouse position
+float yWarp = 0;
+float zWarp = 0;
+float xPos = 0; // mouse position
 float yPos = 0;
-float zPos = 0; // cumulative roller ball activity
+float zPos = 0; // cumulative roller activity
 float aspect = 0; // ratio between xSiz and ySiz
 int xSiz = 0; // size of window
 int ySiz = 0;
-int xLoc = 0; // location of window on screen
+int xLoc = 0; // window location
 int yLoc = 0;
-#ifdef NCURSES
-int xLim = 0; // size of console
-int yLim = 0;
-int yOut = 0; // amount of scroll in output part of console
-int xSel = 0; // next character to select on line
-int ySel = 0; // line to select upon enter
-#endif
 float modelMat[9] = {0};
 float normalMat[9] = {0};
 float projectMat[9] = {0};
@@ -443,9 +432,6 @@ void pop##NAME(int size) \
 void exitErrstr(const char *fmt, ...)
 {
     va_list args;                     
-#ifdef NCURSES
-    endwin();
-#endif
     va_start(args, fmt); printf("fatal: "); vprintf(fmt, args); va_end(args);
     exit(-1);
 }
@@ -457,10 +443,6 @@ ACCESS_QUEUE(Filename,char *,filenames)
 ACCESS_QUEUE(Format,char,formats)
 
 ACCESS_QUEUE(Metric,char,metrics)
-
-#ifdef NCURSES
-ACCESS_QUEUE(Print,char,prints)
-#endif
 
 ACCESS_QUEUE(Generic,char,generics)
 
@@ -482,54 +464,17 @@ ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
 
 ACCESS_QUEUE(Link,Command,links)
 
-#ifdef NCURSES
-void consoleSize(int *ylim, int *xlim)
-{
-    *ylim = yLim;
-    *xlim = xLim;
-}
-
-char *limitLine(const char *given)
-{
-    int ylim, xlim, len;
-    len = strlen(given) + 1;
-    consoleSize(&ylim, &xlim); xlim--;
-    if (len - 2 > xlim) len = xlim + 2;
-    char *buf = allocChar(len); popChar(len);
-    strncpy(buf, given, len - 2);
-    buf[len - 2] = '\n'; buf[len - 1] = 0;
-    return buf;
-}
-
-void console();
-#endif
-
-#ifdef NCURSES
-void printMsgstr(const char *fmt, ...)
-{
-    va_list args;
-    int len;
-    char *buf;
-    va_start(args, fmt); len = vsnprintf(0, 0, fmt, args) + 1; va_end(args);
-    buf = allocPrint(len);
-    va_start(args, fmt); vsnprintf(buf, len, fmt, args); va_end(args);
-    console(); // MAYBE0(console,Console);
-}
-#else
-#define printMsgstr printf
-#endif
-
 void enqueErrnum(const char *fmt, ...)
 {
     va_list args;
-    va_start(args, fmt); printMsgstr("error: "); printMsgstr(fmt, args);  printMsgstr(": %s", strerror(errno));va_end(args);
+    va_start(args, fmt); printf("error: "); printf(fmt, args);  printf(": %s", strerror(errno));va_end(args);
     EVENT0(Error);
 }
 
 void enqueErrstr(const char *fmt, ...)
 {
     va_list args;
-    va_start(args, fmt); printMsgstr("error: "); printMsgstr(fmt, args); va_end(args);
+    va_start(args, fmt); printf("error: "); printf(fmt, args); va_end(args);
     EVENT0(Error);
 }
 
@@ -666,7 +611,7 @@ void bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-    printMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
+    printf("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
     GLfloat tetrahedron[] = {
         -g,-b,-q,
          g,-b,-q,
@@ -795,7 +740,7 @@ void coplane()
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printMsgstr("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printf("%f\n", feedback[i]);
 #endif
 
     // reque to read next chunk
@@ -838,7 +783,7 @@ void copoint()
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printMsgstr("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printf("%f\n", feedback[i]);
 #endif
     DEQUE0(copoint,Copoint) 
 }
@@ -933,17 +878,17 @@ void process()
     if (!validOption()) {
         EVENT0(Done) DEQUE0(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
-        printMsgstr("-h print this message\n");
-        printMsgstr("-i start interactive mode\n");
-        printMsgstr("-e <metric> start animation that tweaks planes according to a metric\n");
-        printMsgstr("-c <file> change file for config and configuration\n");
-        printMsgstr("-o <file> save polytope in format indicated by file extension\n");
-        printMsgstr("-f <file> load polytope in format indicated by file extension\n");
-        printMsgstr("-t <ident> change current polytope to one from config\n");
-        printMsgstr("-n <shape> replace current polytope by builtin polytope\n");
-        printMsgstr("-r randomize direction and color of light sources\n");
-        printMsgstr("-s resample current space to planes with same sidedness\n");
-        printMsgstr("-S resample current polytope to space and planes\n");}
+        printf("-h print this message\n");
+        printf("-i start interactive mode\n");
+        printf("-e <metric> start animation that tweaks planes according to a metric\n");
+        printf("-c <file> change file for config and configuration\n");
+        printf("-o <file> save polytope in format indicated by file extension\n");
+        printf("-f <file> load polytope in format indicated by file extension\n");
+        printf("-t <ident> change current polytope to one from config\n");
+        printf("-n <shape> replace current polytope by builtin polytope\n");
+        printf("-r randomize direction and color of light sources\n");
+        printf("-s resample current space to planes with same sidedness\n");
+        printf("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == Diplane) {
             ENQUE0(configure,Configure)
@@ -969,81 +914,6 @@ void process()
     dequeOption();
     REQUE0(process,Process)
 }
-
-#ifdef NCURSES
-void console()
-{
-    // CHECK0(console,Console)
-    int pos = 0;
-    int ylim, xlim;
-    consoleSize(&ylim, &xlim);
-    erase();
-    move(0,0);
-    printw(limitLine("Additive -- click fills in region over pierce point\n")); pos++;
-    printw(limitLine("Subtractive -- click hollows out region under pierce point\n")); pos++;
-    printw(limitLine("Refine -- click adds random plane through pierce point\n")); pos++;
-    printw(limitLine("Transform -- modify model or perspective matrix\n")); pos++;
-    printw(limitLine("Manipulate -- modify pierced plane\n")); pos++;
-    printw(limitLine("Mouse -- action of mouse motion in Transform/Manipulate modes\n")); pos++;
-    printw(limitLine("  Rotate -- tilt polytope/plane around pierce point\n")); pos++;
-    printw(limitLine("  Translate -- slide polytope/plane from pierce point\n")); pos++;
-    printw(limitLine("  Look -- tilt camera around focal point\n")); pos++;
-    printw(limitLine("  Screen -- window moves over display fixed to screen\n")); pos++;
-    printw(limitLine("  Window -- move window and display on screen\n")); pos++;
-    printw(limitLine("Roller -- action of roller button in Transform/Manipulate modes\n")); pos++;
-    printw(limitLine("  Lever -- push or pull other end of tilt segment from pierce poi\n")); pos++;
-    printw(limitLine("  Clock -- rotate picture plane around perpendicular to pierce point\n")); pos++;
-    printw(limitLine("  Cylinder -- rotate polytope around tilt line\n")); pos++;
-    printw(limitLine("  Scale -- grow or shrink polytope with pierce point fixed\n")); pos++;
-    printw(limitLine("  Drive -- move picture plane forward or back\n")); pos++;
-    printw(limitLine("  Size -- resize window with display fixed to screen\n")); pos++;
-    printw(limitLine("  Aspect -- change ratio between window dimensions\n")); pos++;
-    printw(limitLine("Window -- how operating system window move affects display\n")); pos++;
-    printw(limitLine("  Physical -- display appears fixed on screen\n")); pos++;
-    printw(limitLine("  Virtual -- display appears fixed in window\n")); pos++;
-    printw(limitLine("Corner -- how operating system window resize affects display\n")); pos++;
-    printw(limitLine("  Opposite -- corner of display opposite dragged appears fixed\n")); pos++;
-    printw(limitLine("  Northwest -- upper left corner of display appears fixed\n")); pos++;
-    printw(limitLine("  Northeast -- upper right corner of display appears fixed\n")); pos++;
-    printw(limitLine("  Southwest -- lower left corner of display appears fixed\n")); pos++;
-    printw(limitLine("  Southeast -- lower right corner of display appears fixed\n")); pos++;
-    int lines = 0;
-    char *str = arrayPrint();
-    for (int i = 0; i < sizePrint(); i++) if (str[i] == '\n') lines++;
-    while (pos + lines > ylim) {
-        while (*str != '\n') str++;
-        if (*str == '\n') str++;
-        if (*str == 0) str++;
-        lines--;}
-    for (int i = 0; i < lines && pos < ylim; i++) {
-        printw(limitLine(str)); pos++;
-        while (*str != '\n') str++;
-        if (*str == '\n') str++;
-        if (*str == 0) str++;}
-    refresh();
-    // DEQUE0(console,Console)
-}
-
-void mypoll()
-{
-    CHECK0(mypoll,Mypoll)
-    if (focusMode == Outside) {
-        int chr = getch();
-        if (chr == KEY_RESIZE) {
-            getmaxyx(stdscr, yLim, xLim);
-            printMsgstr("resize %d %d\n", yLim, xLim);
-            MAYBE0(console,Console);
-            REQUE0(mypoll,Mypoll)}
-        else {
-            DEFER0(mypoll,Mypoll)}}
-    else {
-        if (0/*window position or size changed*/) {
-            printMsgstr("move %d %d %d %d\n", yLoc, xLoc, xSiz, ySiz);
-            REQUE0(mypoll,Mypoll)}
-        else {
-            DEFER0(mypoll,Mypoll)}}
-}
-#endif
 
 /*
  * accessors for Haskell to read and modify state
@@ -1085,13 +955,15 @@ void displayClose(GLFWwindow* window)
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
-    if (key == GLFW_KEY_A && action == GLFW_PRESS) {printMsgstr("a key\n");}
+    if (key == GLFW_KEY_A && action == GLFW_PRESS) {printf("a key\n");}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {
+        button = GLFW_MOUSE_BUTTON_RIGHT;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
-        xPos = yPos = zPos = 0;
+        xPoint = xPos; yPoint = yPos; zPoint = zPos;
         if (shaderMode == Diplane) {
             glGetUniformfv(diplaneProgram,modelUniform,modelMat);
             glGetUniformfv(diplaneProgram,normalUniform,normalMat);
@@ -1102,26 +974,30 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             glGetUniformfv(dipointProgram,projectUniform,projectMat);}
         clickMode = Left;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
-        clickMode = Right;}
+        if (clickMode == Right) {
+            xPos = xWarp; yPos = yWarp; zPos = zWarp;
+            printf("set cursor %f %f\n", xPos, yPos);
+            clickMode = Left;}
+        else {
+            xWarp = xPos; yWarp = yPos; zWarp = zPos;
+            clickMode = Right;}}
 }
 
 void displayFocus(GLFWwindow *window, int focused)
 {
     if (focused) {
-        focusMode = Inside;
-        printMsgstr("entry\n");
+        printf("entry\n");
     }
     else {
-        focusMode = Outside;
-        printMsgstr("leave\n");
+        printf("leave\n");
     }
 }
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
-    if (focusMode == Inside && clickMode == Left && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz) {
+    if (clickMode == Left && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz) {
         xPos = xpos; yPos = ypos;
-        printMsgstr("displayCursor %f %f\n", xPos, yPos);
+        printf("displayCursor %f %f\n", xPos, yPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
         if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
@@ -1130,9 +1006,9 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     double zpos = zPos + yoffset;
-    if (focusMode == Inside && clickMode == Left) {
+    if (clickMode == Left) {
         zPos = zpos;
-        printMsgstr("displayScroll %f\n", zPos);
+        printf("displayScroll %f\n", zPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
         if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
@@ -1140,9 +1016,9 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 
 void displaySize(GLFWwindow *window, int width, int height)
 {
-    glViewport(0, 0, width, height);
     xSiz = width; ySiz = height;
-    printMsgstr("displaySize %d %d\n", xSiz, ySiz);
+    glViewport(0, 0, xSiz, ySiz);
+    printf("displaySize %d %d\n", xSiz, ySiz);
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
     if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
     if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
@@ -1151,7 +1027,8 @@ void displaySize(GLFWwindow *window, int width, int height)
 void displayLocation(GLFWwindow *window, int xloc, int yloc)
 {
     xLoc = xloc; yLoc = yloc;
-    printMsgstr("displayLocation %d %d\n", xLoc, yLoc);
+    glViewport(0, 0, xSiz, ySiz);
+    printf("displayLocation %d %d\n", xLoc, yLoc);
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
     if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
     if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
@@ -1414,19 +1291,6 @@ void initialize(int argc, char **argv)
 
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
-#ifdef NCURSES
-    initscr();
-    cbreak();
-    noecho();
-    intrflush(stdscr, FALSE);
-    keypad(stdscr, TRUE);
-    nonl();
-    curs_set(0);
-    nodelay(stdscr, TRUE);
-    // scrollok(stdscr, TRUE);
-    getmaxyx(stdscr, yLim, xLim);
-#endif
-
     if (!glfwInit()) {
         exitErrstr("could not initialize glfw\n");}
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -1455,12 +1319,12 @@ void initialize(int argc, char **argv)
     if (GLEW_OK != err) {
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
     if (GLEW_VERSION_3_3) {
-        printMsgstr("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        printf("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
     else {
-        printMsgstr("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        printf("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
 #endif
 #ifdef __APPLE__
-    printMsgstr("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
+    printf("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
 #endif
 
     glViewport(0, 0, xSiz, ySiz);
@@ -1554,32 +1418,18 @@ void initialize(int argc, char **argv)
     glUseProgram(0);
 
     ENQUE0(process,Process)
-#ifdef NCURSES
-    ENQUE0(mypoll,Mypoll)
-#endif
-    printMsgstr("initialize done\n");
+    printf("initialize done\n");
 }
 
 void finalize()
 {
     // save transformation matrices
-#ifdef NCURSES
-    endwin();
-    while (validPrint()) {
-        char *str = arrayPrint();
-        printf("%s", str);
-        deallocPrint(strlen(str)+1);
-    }
-#endif
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
-#ifdef NCURSES
-    if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
-#endif
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
