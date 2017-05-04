@@ -67,6 +67,8 @@ extern void __stginit_Main(void);
 #include <ctype.h>
 #include <sys/utsname.h>
 #include <math.h>
+#include <pthread.h>
+#include <unistd.h>
 
 #ifdef __linux__
 #include <GL/glew.h>
@@ -99,10 +101,13 @@ extern void __stginit_Main(void);
     TYPE *base; \
     TYPE *limit; \
     TYPE *head; \
-    TYPE *tail;
+    TYPE *tail; \
+    pthread_mutex_t mutex; \
+    int valid;
 
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
+pthread_t consoleThread; // for io in the console
 enum Flag {OutOfDateFlag,InUseFlag,LockedFlag,FlagsFlag};
 struct Buffer {
     GLuint base;
@@ -136,7 +141,11 @@ GLint arrowUniform = 0;
 GLint lightUniform = 0;
 struct Strings {DECLARE_QUEUE(char *)} options = {0}; // command line arguments
 struct Strings filenames = {0}; // for config files
-struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
+struct Chars {DECLARE_QUEUE(char)} inputs = {0}; // for reading from console
+struct Chars outputs = {0}; // for writing to console
+struct Chars echos = {0}; // for re-echoing input on console
+struct Chars prints = {0}; // for staging output to console
+struct Chars formats = {0}; // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
 enum {Additive,Subractive,Refine,Transform,Manipulate} menuMode = Additive;
 /*Transform: modify model or perspective matrix
@@ -200,7 +209,7 @@ enum CopointState {CopointIdle,CopointEnqued,CopointWait} copointState = Copoint
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureWait} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 enum ConsoleState {ConsoleIdle,ConsoleEnqued} consoleState = ConsoleIdle;
-enum MypollState {MypollIdle,MypollEnqued} mypollState = MypollIdle;
+enum MenuState {MenuIdle,MenuEnqued} menuState = MenuIdle;
 int linkCheck = 0;
 int sequenceNumber = 0;
 struct Ints {DECLARE_QUEUE(int)} defers = {0};
@@ -282,14 +291,34 @@ void deque##NAME() \
     dealloc##NAME(1); \
 } \
 \
-TYPE *push##NAME(int size) \
-{ \
-    return alloc##NAME(size); \
-} \
-\
 void pop##NAME(int size) \
 { \
     INSTANCE.tail = INSTANCE.tail - size; \
+} \
+\
+int entry##NAME(TYPE const *val, TYPE term, int len) \
+{ \
+    if (len <= 0) return -1; \
+    if (pthread_mutex_trylock(&INSTANCE.mutex) != 0) return -1; \
+    TYPE *buf = alloc##NAME(len); \
+    for (int i = 0; i < len; i++) { \
+        if (val[i] == term) INSTANCE.valid++; \
+        buf[i] = val[i];} \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) return -1; \
+    return 0; \
+} \
+\
+int detry##NAME(TYPE *val, TYPE term, int len) \
+{ \
+    if (len <= 0) return -1; \
+    if (INSTANCE.valid == 0) return -1; \
+    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) return -1; \
+    if (size##NAME() < len) len = size##NAME(); \
+    for (int i = 0; i < len; i++) { \
+        val[i] = head##NAME(); deque##NAME(); \
+        if (val[i] == term) {INSTANCE.valid--; return i+1;}} \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) return -1; \
+    return 0; \
 }
 
 #define EVENT0(event) \
@@ -440,6 +469,14 @@ ACCESS_QUEUE(Option,char *,options)
 
 ACCESS_QUEUE(Filename,char *,filenames)
 
+ACCESS_QUEUE(Input,char,inputs)
+
+ACCESS_QUEUE(Output,char,outputs)
+
+ACCESS_QUEUE(Echo,char,echos)
+
+ACCESS_QUEUE(Print,char,prints)
+
 ACCESS_QUEUE(Format,char,formats)
 
 ACCESS_QUEUE(Metric,char,metrics)
@@ -506,8 +543,8 @@ char *readLine(FILE *file) // caller must call popChar
     int count = 0;
     int chr = 0;
     char nest[100];
-    char *buf = pushChar(0);
-    while ((buf == pushChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
+    char *buf = allocChar(0);
+    while ((buf == allocChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
         if (chr == '(') nest[depth++] = ')';
         else if (chr == '[') nest[depth++] = ']';
         else if (chr == '{') nest[depth++] = '}';
@@ -520,11 +557,11 @@ char *readLine(FILE *file) // caller must call popChar
 
 char *copyStrings(char **bufs) // caller must call popChar
 {
-    char *buf = pushChar(0);
+    char *buf = allocChar(0);
     for (int i = 0; bufs[i]; i++) {
         for (int j = 0; bufs[i][j]; j++) {
-            *pushChar(1) = bufs[i][j];}}
-    *pushChar(1) = 0;
+            *allocChar(1) = bufs[i][j];}}
+    *allocChar(1) = 0;
     return buf;
 }
 
@@ -688,13 +725,13 @@ void bringup()
  * functions put on command queue
  */
 
-void link() // only works on single-instance commands with global state
+void linker() // only works on single-instance commands with global state
 {
     for (int i = 0; i < commands.tail - commands.head; i++) {
         if (commands.head[i] == headLink()) {linkCheck = 1; break;}}
     if (linkCheck) {
         enqueDefer(sequenceNumber + sizeCommand());
-        enqueCommand(&link);
+        enqueCommand(&linker);
         enqueLink(headLink());}
     dequeLink();
 }
@@ -892,17 +929,17 @@ void process()
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == Diplane) {
             ENQUE0(configure,Configure)
-            LINK1(link,&configure,Link)
+            LINK1(linker,&configure,Link)
 #ifdef BRINGUP
             ENQUE0(copoint,Copoint)
-            LINK1(link,&copoint,Link)
+            LINK1(linker,&copoint,Link)
 #endif
             ENQUE0(diplane,Diplane)}
         else {
             ENQUE0(configure,Configure)
-            LINK1(link,&configure,Link)
+            LINK1(linker,&configure,Link)
             ENQUE0(coplane,Coplane)
-            LINK1(link,&coplane,Link)
+            LINK1(linker,&coplane,Link)
             ENQUE0(dipoint,Dipoint)}
         dequeOption();
         DEQUE0(process,Process)}
@@ -913,6 +950,16 @@ void process()
         enqueFilename(headOption());}
     dequeOption();
     REQUE0(process,Process)
+}
+
+void menu()
+{
+    CHECK0(menu,Menu)
+    char *buf = arrayChar();
+    *strstr(buf,"\n") = 0;
+    printf("%s\n",buf);
+    deallocChar(strlen(buf)+1);
+    DEQUE0(menu,Menu)
 }
 
 /*
@@ -975,8 +1022,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         clickMode = Left;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
         if (clickMode == Right) {
-            xPos = xWarp; yPos = yWarp; zPos = zWarp;
-            printf("set cursor %f %f\n", xPos, yPos);
+            // xPos = xWarp; yPos = yWarp; zPos = zWarp;
             clickMode = Left;}
         else {
             xWarp = xPos; yWarp = yPos; zWarp = zPos;
@@ -1283,6 +1329,12 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     return program;
 }
 
+void *console(void *arg)
+{
+    const char *str = "hello ok again\n";
+    while (entryInput(str,'\n',strlen(str)) < 0) sleep(1);
+}
+
 void initialize(int argc, char **argv)
 {
 #ifdef __GLASGOW_HASKELL__
@@ -1418,6 +1470,11 @@ void initialize(int argc, char **argv)
     glUseProgram(0);
 
     ENQUE0(process,Process)
+
+    if (pthread_mutex_init(&inputs.mutex, 0) < 0) exitErrstr("cannot initialize inputs mutex\n");
+    if (pthread_mutex_init(&outputs.mutex, 0) < 0) exitErrstr("cannot initialize outputs mutex\n");
+    if (pthread_create(&consoleThread, 0, &console, 0) < 0) exitErrstr("cannot create thread\n");
+
     printf("initialize done\n");
 }
 
@@ -1428,6 +1485,10 @@ void finalize()
     if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
+    if (inputs.base) {struct Chars initial = {0}; free(inputs.base); inputs = initial;}
+    if (outputs.base) {struct Chars initial = {0}; free(outputs.base); outputs = initial;}
+    if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
+    if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
@@ -1446,6 +1507,12 @@ void finalize()
 void waitForEvent()
 {
     while (1) {
+        int len = entryOutput(arrayPrint(),'\n',sizePrint());
+        if (len > 0) deallocPrint(len);
+        int tot = 10;
+        while ((len = detryInput(allocChar(10),'\n',10)) == 0) tot += 10;
+        if (len < 0) popChar(tot);
+        else {popChar(10-len); ENQUE0(menu,Menu);} 
         if (!validCommand()) glfwWaitEvents();
         else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
         else glfwPollEvents();
