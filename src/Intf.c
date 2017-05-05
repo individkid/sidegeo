@@ -68,6 +68,7 @@ extern void __stginit_Main(void);
 #include <sys/utsname.h>
 #include <math.h>
 #include <pthread.h>
+#include <termios.h>
 #include <unistd.h>
 #define link mylink
 
@@ -108,6 +109,7 @@ extern void __stginit_Main(void);
 
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
+struct termios savedTermios; // for restoring from non canonical unechoed io
 pthread_t consoleThread; // for io in the console
 enum Flag {OutOfDateFlag,InUseFlag,LockedFlag,FlagsFlag};
 struct Buffer {
@@ -1357,6 +1359,31 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 
 void *console(void *arg)
 {
+    printf("type something\n");
+
+    if (!isatty (STDIN_FILENO)) exit(-1);
+    tcgetattr(STDIN_FILENO, &savedTermios);
+    struct termios terminal;
+    tcgetattr(STDIN_FILENO, &terminal);
+    terminal.c_lflag &= ~(ECHO|ICANON);
+    terminal.c_cc[VMIN] = 1;
+    terminal.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal);
+    // setvbuf(stdin, 0, _IONBF, 0);
+    setvbuf(stdout, 0, _IONBF, 0);
+    char test = 'A';
+    read(STDIN_FILENO, &test, 1);
+    write(STDOUT_FILENO, &test, 1);
+    read(STDIN_FILENO, &test, 1);
+    write(STDOUT_FILENO, &test, 1);
+    read(STDIN_FILENO, &test, 1);
+    write(STDOUT_FILENO, "\r", 1);
+    write(STDOUT_FILENO, &test, 1);
+    read(STDIN_FILENO, &test, 1);
+    write(STDOUT_FILENO, &test, 1);
+    write(STDOUT_FILENO, "\n", 1);
+    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
+
     const char *str = "hello ok again\n";
     int done = 0;
     while (1) {
@@ -1371,6 +1398,9 @@ void *console(void *arg)
             printf("console: %s\n",buf);
             deallocEcho(strlen(buf)+1);} 
         sleep(1);}
+
+    printf("console done\n");
+
     return 0;
 }
 
@@ -1522,6 +1552,8 @@ void finalize()
     // save transformation matrices
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
+    pthread_cancel(consoleThread);
+    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (inputs.base) {struct Chars initial = {0}; free(inputs.base); inputs = initial;}
