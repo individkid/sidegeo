@@ -231,7 +231,8 @@ struct Commands links = {0};
  // for scratchpad and arguments
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
-TYPE *alloc##NAME(int size) \
+/*return pointer valid only until next call to alloc##NAME array##NAME enque##NAME entry##NAME */  \
+inline TYPE *alloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
         INSTANCE.base = malloc(10*sizeof*INSTANCE.base); \
@@ -250,7 +251,8 @@ TYPE *alloc##NAME(int size) \
     return INSTANCE.tail - size; \
 } \
 \
-TYPE *array##NAME() \
+/*return pointer valid only until next call to alloc##NAME array##NAME enque##NAME entry##NAME */  \
+inline TYPE *array##NAME() \
 { \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
         int tail = INSTANCE.tail - INSTANCE.base; \
@@ -261,64 +263,77 @@ TYPE *array##NAME() \
     return INSTANCE.head; \
 } \
 \
-int size##NAME() \
+inline int size##NAME() \
 { \
     return INSTANCE.tail - INSTANCE.head; \
 } \
 \
-void dealloc##NAME(int size) \
+inline void dealloc##NAME(int size) \
 { \
     INSTANCE.head = INSTANCE.head + size; \
 } \
 \
-void enque##NAME(TYPE val) \
+inline void enque##NAME(TYPE val) \
 { \
     *alloc##NAME(1) = val; \
 } \
 \
-TYPE head##NAME() \
+inline TYPE head##NAME() \
 { \
     return *array##NAME(); \
 } \
 \
-int valid##NAME() \
+inline int valid##NAME() \
 { \
     return (size##NAME() > 0); \
 } \
 \
-void deque##NAME() \
+inline void deque##NAME() \
 { \
     dealloc##NAME(1); \
 } \
 \
-void pop##NAME(int size) \
+inline void pop##NAME(int size) \
 { \
     INSTANCE.tail = INSTANCE.tail - size; \
 } \
-\
+/*only one writer supported; for multiple writers, round robin and blocking lock required*/ \
 int entry##NAME(TYPE const *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
     if (pthread_mutex_trylock(&INSTANCE.mutex) != 0) return -1; \
     TYPE *buf = alloc##NAME(len); \
+    int retval = 0; \
     for (int i = 0; i < len; i++) { \
-        if (val[i] == term) INSTANCE.valid++; \
-        buf[i] = val[i];} \
+        buf[i] = val[i]; \
+        if (val[i] == term) { \
+            INSTANCE.valid++; \
+            retval = i+1; \
+            break;}} \
+    if (retval > 0 && retval < len) pop##NAME(len-retval); \
     if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) return -1; \
-    return 0; \
+    return retval; /*0: all taken but no terminator; >0: given number taken with terminator*/ \
 } \
 \
+/*only one reader supported; for multiple readers, round robin identities would be required*/ \
 int detry##NAME(TYPE *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
     if (INSTANCE.valid == 0) return -1; \
     if (pthread_mutex_lock(&INSTANCE.mutex) != 0) return -1; \
-    if (size##NAME() < len) len = size##NAME(); \
+    TYPE *buf = array##NAME(); \
+    int retval = 0; \
     for (int i = 0; i < len; i++) { \
-        val[i] = head##NAME(); deque##NAME(); \
-        if (val[i] == term) {INSTANCE.valid--; return i+1;}} \
+        if (i == size##NAME()) exitErrstr("valid but no terminator\n"); \
+        val[i] = buf[i]; \
+        if (val[i] == term) { \
+            INSTANCE.valid--; \
+            retval = i+1; \
+            break;}} \
+    if (retval == 0) dealloc##NAME(len); \
+    if (retval > 0) dealloc##NAME(retval); \
     if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) return -1; \
-    return 0; \
+    return retval; /*0: all filled but no terminator; >0: given number filled with terminator*/ \
 }
 
 #define EVENT0(event) \
@@ -957,7 +972,7 @@ void menu()
     CHECK0(menu,Menu)
     char *buf = arrayChar();
     *strstr(buf,"\n") = 0;
-    printf("%s\n",buf);
+    printf("menu: %s\n",buf);
     deallocChar(strlen(buf)+1);
     DEQUE0(menu,Menu)
 }
@@ -1332,7 +1347,20 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 void *console(void *arg)
 {
     const char *str = "hello ok again\n";
-    while (entryInput(str,'\n',strlen(str)) < 0) sleep(1);
+    int done = 0;
+    while (1) {
+        if (!done && entryInput(str,'\n',strlen(str)) > 0) done = 1;
+        int tot = 10; int len;
+        while ((len = detryOutput(allocEcho(10),'\n',10)) == 0) tot += 10;
+        if (len < 0) popEcho(tot);
+        else {
+            popEcho(10-len);
+            char *buf = arrayEcho();
+            *strstr(buf,"\n") = 0;
+            printf("console: %s\n",buf);
+            deallocEcho(strlen(buf)+1);} 
+        sleep(1);}
+    return 0;
 }
 
 void initialize(int argc, char **argv)
@@ -1506,6 +1534,9 @@ void finalize()
 
 void waitForEvent()
 {
+    const char *str = "again ok hello\n";
+    int len = strlen(str);
+    strncpy(allocPrint(len),str,len);
     while (1) {
         int len = entryOutput(arrayPrint(),'\n',sizePrint());
         if (len > 0) deallocPrint(len);
