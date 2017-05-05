@@ -69,6 +69,7 @@ extern void __stginit_Main(void);
 #include <math.h>
 #include <pthread.h>
 #include <unistd.h>
+#define link mylink
 
 #ifdef __linux__
 #include <GL/glew.h>
@@ -476,7 +477,8 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 void exitErrstr(const char *fmt, ...)
 {
     va_list args;                     
-    va_start(args, fmt); printf("fatal: "); vprintf(fmt, args); va_end(args);
+    fprintf(stderr, "fatal: ");
+    va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
     exit(-1);
 }
 
@@ -518,16 +520,25 @@ ACCESS_QUEUE(Link,Command,links)
 
 void enqueErrnum(const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt); printf("error: "); printf(fmt, args);  printf(": %s", strerror(errno));va_end(args);
+    fprintf(stderr, "error: ");
+    va_list args; va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
+    fprintf(stderr, ": %s", strerror(errno));
     EVENT0(Error);
 }
 
 void enqueErrstr(const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt); printf("error: "); printf(fmt, args); va_end(args);
+    fprintf(stderr, "error: ");
+    va_list args; va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
     EVENT0(Error);
+}
+
+void enqueMsgstr(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
+    va_start(args, fmt); vsnprintf(allocPrint(len+1), len+1, fmt, args); va_end(args);
+    popPrint(1); // remove '\0' that vsnprintf puts on
 }
 
 /*
@@ -663,7 +674,7 @@ void bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-    printf("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
+    enqueMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
     GLfloat tetrahedron[] = {
         -g,-b,-q,
          g,-b,-q,
@@ -740,13 +751,13 @@ void bringup()
  * functions put on command queue
  */
 
-void linker() // only works on single-instance commands with global state
+void link() // only works on single-instance commands with global state
 {
     for (int i = 0; i < commands.tail - commands.head; i++) {
         if (commands.head[i] == headLink()) {linkCheck = 1; break;}}
     if (linkCheck) {
         enqueDefer(sequenceNumber + sizeCommand());
-        enqueCommand(&linker);
+        enqueCommand(&link);
         enqueLink(headLink());}
     dequeLink();
 }
@@ -792,7 +803,7 @@ void coplane()
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) printf("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) enqueMsgstr("%f\n", feedback[i]);
 #endif
 
     // reque to read next chunk
@@ -835,7 +846,7 @@ void copoint()
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) printf("%f\n", feedback[i]);
+    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) enqueMsgstr("%f\n", feedback[i]);
 #endif
     DEQUE0(copoint,Copoint) 
 }
@@ -930,31 +941,31 @@ void process()
     if (!validOption()) {
         EVENT0(Done) DEQUE0(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
-        printf("-h print this message\n");
-        printf("-i start interactive mode\n");
-        printf("-e <metric> start animation that tweaks planes according to a metric\n");
-        printf("-c <file> change file for config and configuration\n");
-        printf("-o <file> save polytope in format indicated by file extension\n");
-        printf("-f <file> load polytope in format indicated by file extension\n");
-        printf("-t <ident> change current polytope to one from config\n");
-        printf("-n <shape> replace current polytope by builtin polytope\n");
-        printf("-r randomize direction and color of light sources\n");
-        printf("-s resample current space to planes with same sidedness\n");
-        printf("-S resample current polytope to space and planes\n");}
+        enqueMsgstr("-h print this message\n");
+        enqueMsgstr("-i start interactive mode\n");
+        enqueMsgstr("-e <metric> start animation that tweaks planes according to a metric\n");
+        enqueMsgstr("-c <file> change file for config and configuration\n");
+        enqueMsgstr("-o <file> save polytope in format indicated by file extension\n");
+        enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
+        enqueMsgstr("-t <ident> change current polytope to one from config\n");
+        enqueMsgstr("-n <shape> replace current polytope by builtin polytope\n");
+        enqueMsgstr("-r randomize direction and color of light sources\n");
+        enqueMsgstr("-s resample current space to planes with same sidedness\n");
+        enqueMsgstr("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == Diplane) {
             ENQUE0(configure,Configure)
-            LINK1(linker,&configure,Link)
+            LINK1(link,&configure,Link)
 #ifdef BRINGUP
             ENQUE0(copoint,Copoint)
-            LINK1(linker,&copoint,Link)
+            LINK1(link,&copoint,Link)
 #endif
             ENQUE0(diplane,Diplane)}
         else {
             ENQUE0(configure,Configure)
-            LINK1(linker,&configure,Link)
+            LINK1(link,&configure,Link)
             ENQUE0(coplane,Coplane)
-            LINK1(linker,&coplane,Link)
+            LINK1(link,&coplane,Link)
             ENQUE0(dipoint,Dipoint)}
         dequeOption();
         DEQUE0(process,Process)}
@@ -1399,12 +1410,12 @@ void initialize(int argc, char **argv)
     if (GLEW_OK != err) {
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
     if (GLEW_VERSION_3_3) {
-        printf("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        enqueMsgstr("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
     else {
-        printf("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
+        enqueMsgstr("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
 #endif
 #ifdef __APPLE__
-    printf("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
+    enqueMsgstr("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
 #endif
 
     glViewport(0, 0, xSiz, ySiz);
@@ -1503,7 +1514,7 @@ void initialize(int argc, char **argv)
     if (pthread_mutex_init(&outputs.mutex, 0) < 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) < 0) exitErrstr("cannot create thread\n");
 
-    printf("initialize done\n");
+    enqueMsgstr("initialize done\n");
 }
 
 void finalize()
