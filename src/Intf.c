@@ -135,21 +135,17 @@ GLuint coplaneProgram = 0; // find intersections of plane triples
 GLuint copointProgram = 0; // construct planes from point triples
 GLuint adplaneProgram = 0; // find plane triples wrt feather and arrow
 GLuint adpointProgram = 0; // find point singles wrt feather and arrow
-GLint invalidUniform = 0;
-GLint basisUniform = 0;
-GLint modelUniform = 0;
-GLint normalUniform = 0;
-GLint projectUniform = 0;
-GLint featherUniform = 0;
-GLint arrowUniform = 0;
-GLint lightUniform = 0;
+GLint invalidUniform = 0; // large number indicating divide by zero
+GLint basisUniform = 0; // 3 points on each of 3 non-parallel planes
+GLint modelUniform = 0; // aparent and actual transformation
+GLint normalUniform = 0; // actual only transformation
+GLint projectUniform = 0; // transformation for apearance of depth
+GLint featherUniform = 0; // point on a plane to analyze
+GLint arrowUniform = 0; // normal of the plane to analyze
+GLint lightUniform = 0; // transformation from normal to color
 struct Strings {DECLARE_QUEUE(char *)} options = {0}; // command line arguments
 struct Strings filenames = {0}; // for config files
-struct Chars {DECLARE_QUEUE(char)} inputs = {0}; // for reading from console
-struct Chars outputs = {0}; // for writing to console
-struct Chars echos = {0}; // for re-echoing input on console
-struct Chars prints = {0}; // for staging output to console
-struct Chars formats = {0}; // from first line of history portion of config file
+struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
 enum {Additive,Subractive,Refine,Transform,Manipulate} menuMode = Additive;
 /*Transform: modify model or perspective matrix
@@ -180,9 +176,6 @@ enum {Opposite,Northwest,Northeast,Southwest,Southeast} cornerMode = Opposite;
 enum {Right,Left} clickMode = Right;
 /*Right: mouse movement ignored
  *Left: mouse movement affects matrices*/
-enum {Input,Output} cursesMode = Input;
-/*Input: arrow keys select menu item
- *Output: arrow keys scroll output*/
 enum {Diplane,Dipoint} shaderMode = Diplane;
 /*Diplane: display planes
  *Dipoint: display points*/
@@ -233,6 +226,11 @@ struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
  // for scratchpad and arguments
 struct Commands links = {0};
  // for scratchpad and arguments
+struct Chars inputs = {0}; // for reading from console
+struct Chars outputs = {0}; // for writing to console
+struct Chars scans = {0}; // for staging input in console
+struct Chars prints = {0}; // for staging output to console
+struct Chars echos = {0}; // for staging output in console
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
 /*return pointer valid only until next call to alloc##NAME array##NAME enque##NAME entry##NAME */  \
@@ -489,14 +487,6 @@ ACCESS_QUEUE(Option,char *,options)
 
 ACCESS_QUEUE(Filename,char *,filenames)
 
-ACCESS_QUEUE(Input,char,inputs)
-
-ACCESS_QUEUE(Output,char,outputs)
-
-ACCESS_QUEUE(Echo,char,echos)
-
-ACCESS_QUEUE(Print,char,prints)
-
 ACCESS_QUEUE(Format,char,formats)
 
 ACCESS_QUEUE(Metric,char,metrics)
@@ -520,6 +510,16 @@ ACCESS_QUEUE(Float,float,floats)
 ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
 
 ACCESS_QUEUE(Link,Command,links)
+
+ACCESS_QUEUE(Input,char,inputs)
+
+ACCESS_QUEUE(Output,char,outputs)
+
+ACCESS_QUEUE(Scan,char,scans)
+
+ACCESS_QUEUE(Print,char,prints)
+
+ACCESS_QUEUE(Echo,char,echos)
 
 void enqueErrnum(const char *fmt, ...)
 {
@@ -1387,27 +1387,60 @@ void *console(void *arg)
     terminal.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed\n");
 
+    int scan = 0;
     while (1) {
-        int tot = 10; int len;
-        while ((len = detryOutput(allocEcho(10),'\n',10)) == 0) tot += 10;
-        if (len < 0) {
-            popEcho(tot);
-            if (pselect(1, &fds, 0, 0, 0, &saved) == 1) {
-                char test;
-                read(STDIN_FILENO, &test, 1);
-                printf("echo: %c\n", test);
-            }
-            else if (errno != EINTR) exitErrstr("pselect failed\n");}
+        int lenIn = entryInput(arrayScan(),'\n',sizeScan()-scan);
+        if (lenIn == 0) deallocScan(sizeScan()-scan);
+        else if (lenIn > 0) deallocScan(lenIn);
+        int totOut = 0; int lenOut;
+        while ((lenOut = detryOutput(allocEcho(10),'\n',10)) == 0) totOut += 10;
+        if (lenOut < 0 && totOut > 0) exitErrstr("detryOutput failed\n");
+        else if (lenOut < 0) deallocEcho(10);
         else {
-            popEcho(10-len);
-            char *buf = arrayEcho();
-            *strstr(buf,"\n") = 0;
-            printf("console: %s\n",buf);
-            deallocEcho(strlen(buf)+1);}}
+            popEcho(10-lenOut);
+            printf("\r");
+            for (int i = 0; i < scan; i++) printf(" ");
+            printf("\r");
+            enqueEcho(0);
+            printf("%s",arrayEcho());
+            deallocEcho(totOut+lenOut+1);
+            enqueScan(0);
+            printf("%s",arrayScan());
+            popScan(1);}
+        if (!validScan() && pselect(1, &fds, 0, 0, 0, &saved) == 1) {
+            char key;
+            read(STDIN_FILENO, &key, 1);
+            enqueScan(key); scan++;
+            printf("%c", key);
+            if (key == '\n') scan = 0;}
+        else if (!validScan() && errno != EINTR) exitErrstr("pselect failed\n");}
 
     printf("console done\n");
 
     return 0;
+}
+
+void waitForEvent()
+{
+    while (1) {
+        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
+        if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGIO);}
+        if (lenOut == 0) deallocPrint(sizePrint());
+        int totIn = 0; int lenIn;
+        while ((lenIn = detryInput(allocChar(10),'\n',10)) == 0) totIn += 10;
+        if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
+        else if (lenIn < 0) popChar(10);
+        else {popChar(10-lenIn); ENQUE0(menu,Menu);} 
+        if (!validPrint() && !validCommand()) glfwWaitEvents();
+        else if (!validPrint() && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
+        else glfwPollEvents();
+        if (!validCommand()) continue;
+        Command command = headCommand();
+        dequeCommand();
+        if (validDefer() && sequenceNumber == headDefer()) dequeDefer();
+        sequenceNumber++;
+        if (command) (*command)();
+        else break;}
 }
 
 void initialize(int argc, char **argv)
@@ -1560,16 +1593,12 @@ void initialize(int argc, char **argv)
 void finalize()
 {
     // save transformation matrices
+    pthread_cancel(consoleThread); // send signal and waitpid so console can flush
+    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); // do this in console
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
-    pthread_cancel(consoleThread);
-    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
-    if (inputs.base) {struct Chars initial = {0}; free(inputs.base); inputs = initial;}
-    if (outputs.base) {struct Chars initial = {0}; free(outputs.base); outputs = initial;}
-    if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
-    if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
@@ -1582,27 +1611,10 @@ void finalize()
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
     if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
     if (links.base) {struct Commands initial = {0}; free(links.base); links = initial;}
+    if (inputs.base) {struct Chars initial = {0}; free(inputs.base); inputs = initial;}
+    if (outputs.base) {struct Chars initial = {0}; free(outputs.base); outputs = initial;}
+    if (scans.base) {struct Chars initial = {0}; free(scans.base); scans = initial;}
+    if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
+    if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
     printf("finalize done\n");
-}
-
-void waitForEvent()
-{
-    while (1) {
-        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
-        if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGIO);}
-        if (lenOut == 0) deallocPrint(sizePrint());
-        int totIn = 10; int lenIn;
-        while ((lenIn = detryInput(allocChar(10),'\n',10)) == 0) totIn += 10;
-        if (lenIn < 0) popChar(totIn);
-        else {popChar(10-lenIn); ENQUE0(menu,Menu);} 
-        if (!validPrint() && !validCommand()) glfwWaitEvents();
-        else if (!validPrint() && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
-        else glfwPollEvents();
-        if (!validCommand()) continue;
-        Command command = headCommand();
-        dequeCommand();
-        if (validDefer() && sequenceNumber == headDefer()) dequeDefer();
-        sequenceNumber++;
-        if (command) (*command)();
-        else break;}
 }
