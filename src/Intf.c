@@ -69,6 +69,7 @@ extern void __stginit_Main(void);
 #include <math.h>
 #include <pthread.h>
 #include <termios.h>
+#include <signal.h>
 #include <unistd.h>
 #define link mylink
 
@@ -539,7 +540,8 @@ void enqueMsgstr(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    va_start(args, fmt); vsnprintf(allocPrint(len+1), len+1, fmt, args); va_end(args);
+    char *buf = allocPrint(len+1);
+    va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
     popPrint(1); // remove '\0' that vsnprintf puts on
 }
 
@@ -1357,47 +1359,51 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     return program;
 }
 
+void handler(int sig)
+{
+}
+
 void *console(void *arg)
 {
-    printf("type something\n");
+    struct sigaction sigact = {0};
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_handler = &handler;
+    if (sigaction(SIGIO, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    fd_set fds;
+    sigset_t sigs;
+    sigset_t saved;
+    FD_ZERO(&fds);
+    FD_SET(STDIN_FILENO, &fds);
+    sigemptyset(&sigs);
+    sigaddset(&sigs, SIGIO);
+    if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed\n");
 
-    if (!isatty (STDIN_FILENO)) exit(-1);
+    if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
     tcgetattr(STDIN_FILENO, &savedTermios);
     struct termios terminal;
-    tcgetattr(STDIN_FILENO, &terminal);
+    if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed\n");
     terminal.c_lflag &= ~(ECHO|ICANON);
     terminal.c_cc[VMIN] = 1;
     terminal.c_cc[VTIME] = 0;
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal);
-    // setvbuf(stdin, 0, _IONBF, 0);
-    setvbuf(stdout, 0, _IONBF, 0);
-    char test = 'A';
-    read(STDIN_FILENO, &test, 1);
-    write(STDOUT_FILENO, &test, 1);
-    read(STDIN_FILENO, &test, 1);
-    write(STDOUT_FILENO, &test, 1);
-    read(STDIN_FILENO, &test, 1);
-    write(STDOUT_FILENO, "\r", 1);
-    write(STDOUT_FILENO, &test, 1);
-    read(STDIN_FILENO, &test, 1);
-    write(STDOUT_FILENO, &test, 1);
-    write(STDOUT_FILENO, "\n", 1);
-    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed\n");
 
-    const char *str = "hello ok again\n";
-    int done = 0;
     while (1) {
-        if (!done && entryInput(str,'\n',strlen(str)) > 0) done = 1;
         int tot = 10; int len;
         while ((len = detryOutput(allocEcho(10),'\n',10)) == 0) tot += 10;
-        if (len < 0) popEcho(tot);
+        if (len < 0) {
+            popEcho(tot);
+            if (pselect(1, &fds, 0, 0, 0, &saved) == 1) {
+                char test;
+                read(STDIN_FILENO, &test, 1);
+                printf("echo: %c\n", test);
+            }
+            else if (errno != EINTR) exitErrstr("pselect failed\n");}
         else {
             popEcho(10-len);
             char *buf = arrayEcho();
             *strstr(buf,"\n") = 0;
             printf("console: %s\n",buf);
-            deallocEcho(strlen(buf)+1);} 
-        sleep(1);}
+            deallocEcho(strlen(buf)+1);}}
 
     printf("console done\n");
 
@@ -1540,6 +1546,10 @@ void initialize(int argc, char **argv)
 
     ENQUE0(process,Process)
 
+    // struct sigaction sigact = {0};
+    // sigact.sa_handler = &handler;
+    // sigaction(SIGIO, &sigact, 0);
+
     if (pthread_mutex_init(&inputs.mutex, 0) < 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) < 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) < 0) exitErrstr("cannot create thread\n");
@@ -1577,18 +1587,16 @@ void finalize()
 
 void waitForEvent()
 {
-    const char *str = "again ok hello\n";
-    int len = strlen(str);
-    strncpy(allocPrint(len),str,len);
     while (1) {
-        int len = entryOutput(arrayPrint(),'\n',sizePrint());
-        if (len > 0) deallocPrint(len);
-        int tot = 10;
-        while ((len = detryInput(allocChar(10),'\n',10)) == 0) tot += 10;
-        if (len < 0) popChar(tot);
-        else {popChar(10-len); ENQUE0(menu,Menu);} 
-        if (!validCommand()) glfwWaitEvents();
-        else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
+        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
+        if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGIO);}
+        if (lenOut == 0) deallocPrint(sizePrint());
+        int totIn = 10; int lenIn;
+        while ((lenIn = detryInput(allocChar(10),'\n',10)) == 0) totIn += 10;
+        if (lenIn < 0) popChar(totIn);
+        else {popChar(10-lenIn); ENQUE0(menu,Menu);} 
+        if (!validPrint() && !validCommand()) glfwWaitEvents();
+        else if (!validPrint() && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
         else glfwPollEvents();
         if (!validCommand()) continue;
         Command command = headCommand();
