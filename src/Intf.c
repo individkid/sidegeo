@@ -303,7 +303,7 @@ inline void pop##NAME(int size) \
 int entry##NAME(TYPE const *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
-    if (pthread_mutex_trylock(&INSTANCE.mutex) != 0) return -1; \
+    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("entry lock failed\n"); \
     TYPE *buf = alloc##NAME(len); \
     int retval = 0; \
     for (int i = 0; i < len; i++) { \
@@ -313,7 +313,7 @@ int entry##NAME(TYPE const *val, TYPE term, int len) \
             retval = i+1; \
             break;}} \
     if (retval > 0 && retval < len) pop##NAME(len-retval); \
-    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) return -1; \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("entry unlock failed\n"); \
     return retval; /*0: all taken but no terminator; >0: given number taken with terminator*/ \
 } \
 \
@@ -322,7 +322,7 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
     if (INSTANCE.valid == 0) return -1; \
-    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) return -1; \
+    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("detry lock failed\n"); \
     TYPE *buf = array##NAME(); \
     int retval = 0; \
     for (int i = 0; i < len; i++) { \
@@ -334,7 +334,7 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
             break;}} \
     if (retval == 0) dealloc##NAME(len); \
     if (retval > 0) dealloc##NAME(retval); \
-    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) return -1; \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed\n"); \
     return retval; /*0: all filled but no terminator; >0: given number filled with terminator*/ \
 }
 
@@ -1368,14 +1368,14 @@ void *console(void *arg)
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
-    if (sigaction(SIGIO, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
     fd_set fds;
     sigset_t sigs;
     sigset_t saved;
     FD_ZERO(&fds);
     FD_SET(STDIN_FILENO, &fds);
     sigemptyset(&sigs);
-    sigaddset(&sigs, SIGIO);
+    sigaddset(&sigs, SIGUSR1);
     if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed\n");
 
     if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
@@ -1390,8 +1390,10 @@ void *console(void *arg)
     int scan = 0;
     while (1) {
         int lenIn = entryInput(arrayScan(),'\n',sizeScan()-scan);
-        if (lenIn == 0) deallocScan(sizeScan()-scan);
-        else if (lenIn > 0) deallocScan(lenIn);
+        if (lenIn < 0) exitErrstr("entryInput failed\n");
+        else if (lenIn == 0) deallocScan(sizeScan()-scan);
+        else deallocScan(lenIn);
+
         int totOut = 0; int lenOut;
         while ((lenOut = detryOutput(allocEcho(10),'\n',10)) == 0) totOut += 10;
         if (lenOut < 0 && totOut > 0) exitErrstr("detryOutput failed\n");
@@ -1407,13 +1409,31 @@ void *console(void *arg)
             enqueScan(0);
             printf("%s",arrayScan());
             popScan(1);}
-        if (!validScan() && pselect(1, &fds, 0, 0, 0, &saved) == 1) {
-            char key;
-            read(STDIN_FILENO, &key, 1);
-            enqueScan(key); scan++;
-            printf("%c", key);
-            if (key == '\n') scan = 0;}
-        else if (!validScan() && errno != EINTR) exitErrstr("pselect failed\n");}
+
+        int lenSel;
+        if (lenOut > 0 || validScan()) lenSel = pselect(1, &fds, 0, 0, &timeout, 0);
+        else lenSel = pselect(1, &fds, 0, 0, 0, &saved);
+        if (lenSel == 0 || (lenSel < 0 && errno == EINTR)) continue;
+        if (lenSel != 1) exitErrstr("pselect failed\n");
+
+        char key; len = read(STDIN_FILENO, &key, 1);
+        if (len == 1 && key == '\n') {
+            scan = 0;
+            enqueScan('\n');
+            printf("\n");}
+        else if (len == 1) {
+            scan++;
+            enqueScan(key);
+            printf("%c", key);}
+        else if (len == 0) {
+            scan = 0;
+            for (char const *chr = " ** EOF\n"; *chr; chr++) {
+                enqueScan(*chr);
+                printf("%c", *chr);}}
+        else exitErrstr("read failed\n");}
+
+    // break out of while(1) on control character arrayEcho.
+    // restore to savedTermios and flush stdin here.
 
     printf("console done\n");
 
@@ -1424,16 +1444,20 @@ void waitForEvent()
 {
     while (1) {
         int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
-        if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGIO);}
+        if (lenOut < 0) exitErrstr("entryOutput failed\n");
+        else if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGUSR1);}
         if (lenOut == 0) deallocPrint(sizePrint());
+        
         int totIn = 0; int lenIn;
         while ((lenIn = detryInput(allocChar(10),'\n',10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
         else if (lenIn < 0) popChar(10);
-        else {popChar(10-lenIn); ENQUE0(menu,Menu);} 
+        else {popChar(10-lenIn); ENQUE0(menu,Menu);}
+
         if (!validPrint() && !validCommand()) glfwWaitEvents();
         else if (!validPrint() && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
         else glfwPollEvents();
+
         if (!validCommand()) continue;
         Command command = headCommand();
         dequeCommand();
@@ -1579,10 +1603,10 @@ void initialize(int argc, char **argv)
 
     ENQUE0(process,Process)
 
-    // struct sigaction sigact = {0};
-    // sigact.sa_handler = &handler;
-    // sigaction(SIGIO, &sigact, 0);
-
+    struct sigaction sigact = {0};
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_handler = &handler;
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
     if (pthread_mutex_init(&inputs.mutex, 0) < 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) < 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) < 0) exitErrstr("cannot create thread\n");
