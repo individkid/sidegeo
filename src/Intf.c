@@ -112,7 +112,7 @@ GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
 struct termios savedTermios; // for restoring from non canonical unechoed io
 pthread_t consoleThread; // for io in the console
-enum Flag {OutOfDateFlag,InUseFlag,LockedFlag,FlagsFlag};
+enum Escape {MenuEscape,ExitEscape};
 struct Buffer {
     GLuint base;
     GLintptr limit;
@@ -233,8 +233,8 @@ struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
-/*return pointer valid only until next call to alloc##NAME array##NAME enque##NAME entry##NAME */  \
-inline TYPE *alloc##NAME(int size) \
+/*return pointer valid only until next call to enloc##NAME array##NAME enque##NAME entry##NAME */  \
+inline TYPE *enloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
         INSTANCE.base = malloc(10*sizeof*INSTANCE.base); \
@@ -253,7 +253,7 @@ inline TYPE *alloc##NAME(int size) \
     return INSTANCE.tail - size; \
 } \
 \
-/*return pointer valid only until next call to alloc##NAME array##NAME enque##NAME entry##NAME */  \
+/*return pointer valid only until next call to enloc##NAME array##NAME enque##NAME entry##NAME */  \
 inline TYPE *array##NAME() \
 { \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
@@ -265,19 +265,9 @@ inline TYPE *array##NAME() \
     return INSTANCE.head; \
 } \
 \
-inline int size##NAME() \
-{ \
-    return INSTANCE.tail - INSTANCE.head; \
-} \
-\
-inline void dealloc##NAME(int size) \
-{ \
-    INSTANCE.head = INSTANCE.head + size; \
-} \
-\
 inline void enque##NAME(TYPE val) \
 { \
-    *alloc##NAME(1) = val; \
+    *enloc##NAME(1) = val; \
 } \
 \
 inline TYPE head##NAME() \
@@ -285,26 +275,41 @@ inline TYPE head##NAME() \
     return *array##NAME(); \
 } \
 \
-inline int valid##NAME() \
+inline void deloc##NAME(int size) \
 { \
-    return (size##NAME() > 0); \
+    INSTANCE.head = INSTANCE.head + size; \
 } \
 \
 inline void deque##NAME() \
 { \
-    dealloc##NAME(1); \
+    deloc##NAME(1); \
 } \
 \
-inline void pop##NAME(int size) \
+inline void unloc##NAME(int size) \
 { \
     INSTANCE.tail = INSTANCE.tail - size; \
+} \
+\
+inline void unque##NAME() \
+{ \
+    unloc##NAME(1); \
+} \
+\
+inline int size##NAME() \
+{ \
+    return INSTANCE.tail - INSTANCE.head; \
+} \
+\
+inline int valid##NAME() \
+{ \
+    return (size##NAME() > 0); \
 } \
 /*only one writer supported; for multiple writers, round robin and blocking lock required*/ \
 int entry##NAME(TYPE const *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
-    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("entry lock failed\n"); \
-    TYPE *buf = alloc##NAME(len); \
+    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    TYPE *buf = enloc##NAME(len); \
     int retval = 0; \
     for (int i = 0; i < len; i++) { \
         buf[i] = val[i]; \
@@ -312,8 +317,8 @@ int entry##NAME(TYPE const *val, TYPE term, int len) \
             INSTANCE.valid++; \
             retval = i+1; \
             break;}} \
-    if (retval > 0 && retval < len) pop##NAME(len-retval); \
-    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("entry unlock failed\n"); \
+    if (retval > 0 && retval < len) unloc##NAME(len-retval); \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     return retval; /*0: all taken but no terminator; >0: given number taken with terminator*/ \
 } \
 \
@@ -322,19 +327,19 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
     if (INSTANCE.valid == 0) return -1; \
-    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("detry lock failed\n"); \
+    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("detry lock failed: %s\n", strerror(errno)); \
     TYPE *buf = array##NAME(); \
     int retval = 0; \
     for (int i = 0; i < len; i++) { \
-        if (i == size##NAME()) exitErrstr("valid but no terminator\n"); \
+        if (i == size##NAME()) exitErrstr("valid but no terminator: %s\n", strerror(errno)); \
         val[i] = buf[i]; \
         if (val[i] == term) { \
             INSTANCE.valid--; \
             retval = i+1; \
             break;}} \
-    if (retval == 0) dealloc##NAME(len); \
-    if (retval > 0) dealloc##NAME(retval); \
-    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed\n"); \
+    if (retval == 0) deloc##NAME(len); \
+    if (retval > 0) deloc##NAME(retval); \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
     return retval; /*0: all filled but no terminator; >0: given number filled with terminator*/ \
 }
 
@@ -477,9 +482,8 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 
 void exitErrstr(const char *fmt, ...)
 {
-    va_list args;                     
     fprintf(stderr, "fatal: ");
-    va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
+    va_list args; va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
     exit(-1);
 }
 
@@ -521,14 +525,6 @@ ACCESS_QUEUE(Print,char,prints)
 
 ACCESS_QUEUE(Echo,char,echos)
 
-void enqueErrnum(const char *fmt, ...)
-{
-    fprintf(stderr, "error: ");
-    va_list args; va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
-    fprintf(stderr, ": %s", strerror(errno));
-    EVENT0(Error);
-}
-
 void enqueErrstr(const char *fmt, ...)
 {
     fprintf(stderr, "error: ");
@@ -538,11 +534,10 @@ void enqueErrstr(const char *fmt, ...)
 
 void enqueMsgstr(const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char *buf = allocPrint(len+1);
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
+    char *buf = enlocPrint(len+1);
     va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    popPrint(1); // remove '\0' that vsnprintf puts on
+    unlocPrint(1); // remove '\0' that vsnprintf puts on
 }
 
 /*
@@ -567,70 +562,70 @@ void intcpy(int *dst, int *src)
     *dst = *src;
 }
 
-char *readLine(FILE *file) // caller must call popChar
+char *readLine(FILE *file) // caller must call unlocChar
 {
     int depth = 0;
     int count = 0;
     int chr = 0;
     char nest[100];
-    char *buf = allocChar(0);
-    while ((buf == allocChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
+    char *buf = enlocChar(0);
+    while ((buf == enlocChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
         if (chr == '(') nest[depth++] = ')';
         else if (chr == '[') nest[depth++] = ']';
         else if (chr == '{') nest[depth++] = '}';
         else if (depth && chr == nest[depth-1]) depth--;
         if (!isspace(chr)) enqueChar(chr);}
     enqueChar(0);
-    if (depth) {popChar(strlen(buf)); return 0;}
+    if (depth) {unlocChar(strlen(buf)); return 0;}
     return buf;
 }
 
-char *copyStrings(char **bufs) // caller must call popChar
+char *copyStrings(char **bufs) // caller must call unlocChar
 {
-    char *buf = allocChar(0);
+    char *buf = enlocChar(0);
     for (int i = 0; bufs[i]; i++) {
         for (int j = 0; bufs[i][j]; j++) {
-            *allocChar(1) = bufs[i][j];}}
-    *allocChar(1) = 0;
+            *enlocChar(1) = bufs[i][j];}}
+    *enlocChar(1) = 0;
     return buf;
 }
 
-char *partsToLine(char *part[2]) // caller must call popChar
+char *partsToLine(char *part[2]) // caller must call unlocChar
 {
     return 0;
 }
 
-char *lineToPart(char **line) // caller must call popChar
+char *lineToPart(char **line) // caller must call unlocChar
 {
     return 0;
 }
 
-int *partToIndices(char *part) // caller must call popInt
+int *partToIndices(char *part) // caller must call unlocInt
 {
     return 0;
 }
 
-char *indicesToPart(int *indices) // caller must call popChar
+char *indicesToPart(int *indices) // caller must call unlocChar
 {
     return 0;
 }
 
-char *partToBytes(char *part) // caller must call popChar
+char *partToBytes(char *part) // caller must call unlocChar
 {
     return 0;
 }
 
-char *bytesToPart(char *bytes, char *format) // caller must call popChar
+char *bytesToPart(char *bytes, char *format) // caller must call unlocChar
 {
     return 0;
 }
 
-char *partToFormat(char *part) // caller must call popChar
+char *partToFormat(char *part) // caller must call unlocChar
 {
     return 0;
 }
 
-char *indicesToFormat(int *indices, char *format) // caller must call popChar
+char *indicesToFormat(int *indices, char *format) // caller must call unlocChar
 {
     return 0;
 }
@@ -901,7 +896,7 @@ void configure()
     char *filename = 0;
     if (configureState == ConfigureEnqued) {
         if (configFile && fclose(configFile) != 0) {
-            enqueErrstr("invalid path for close\n");}
+            enqueErrstr("invalid path for close: %s\n", strerror(errno));}
         if (!validFilename()) {
             enqueFilename("./sculpt.cfg");}
         while (validFilename()) {
@@ -930,11 +925,11 @@ void configure()
                 bringup();
 #endif
             }
-            else enqueErrnum("invalid path for config\n", filename);
+            else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));
             if (fclose(configFile) != 0) {
-                enqueErrnum("invalid path for close\n", filename);}}
+                enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));}}
         if (!(configFile = fopen(filename,"a"))) {
-            enqueErrnum("invalid path for append\n", filename);}
+            enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));}
         configureState = ConfigureWait; REQUE0(configure,Configure)}
     DEQUE0(configure,Configure)
 }
@@ -986,9 +981,9 @@ void menu()
 {
     CHECK0(menu,Menu)
     char *buf = arrayChar();
-    *strstr(buf,"\n") = 0;
-    printf("menu: %s\n",buf);
-    deallocChar(strlen(buf)+1);
+    int len = strstr(buf,"\n") - buf;
+    strncpy(enlocPrint(len+1),buf,len+1);
+    delocChar(len+1);
     DEQUE0(menu,Menu)
 }
 
@@ -1006,7 +1001,7 @@ char *generic(int *indices, int size)
 char *message()
 {
     if (!validChar()) return 0;
-    char *buf = arrayChar(); deallocChar(strlen(buf));
+    char *buf = arrayChar(); delocChar(strlen(buf));
     return buf;
 }
 
@@ -1032,7 +1027,7 @@ void displayClose(GLFWwindow* window)
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
-    if (key == GLFW_KEY_A && action == GLFW_PRESS) {printf("a key\n");}
+    if (key == GLFW_KEY_A && action == GLFW_PRESS) {enqueMsgstr("a key\n");}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
@@ -1062,10 +1057,10 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 void displayFocus(GLFWwindow *window, int focused)
 {
     if (focused) {
-        printf("entry\n");
+        enqueMsgstr("entry\n");
     }
     else {
-        printf("leave\n");
+        enqueMsgstr("leave\n");
     }
 }
 
@@ -1073,7 +1068,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
     if (clickMode == Left && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz) {
         xPos = xpos; yPos = ypos;
-        printf("displayCursor %f %f\n", xPos, yPos);
+        enqueMsgstr("displayCursor %f %f\n", xPos, yPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
         if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
@@ -1084,7 +1079,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     double zpos = zPos + yoffset;
     if (clickMode == Left) {
         zPos = zpos;
-        printf("displayScroll %f\n", zPos);
+        enqueMsgstr("displayScroll %f\n", zPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
         if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
         if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
@@ -1094,7 +1089,7 @@ void displaySize(GLFWwindow *window, int width, int height)
 {
     xSiz = width; ySiz = height;
     glViewport(0, 0, xSiz, ySiz);
-    printf("displaySize %d %d\n", xSiz, ySiz);
+    enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
     if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
     if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
@@ -1104,7 +1099,7 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
 {
     xLoc = xloc; yLoc = yloc;
     glViewport(0, 0, xSiz, ySiz);
-    printf("displayLocation %d %d\n", xLoc, yLoc);
+    enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
     if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
     if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
@@ -1363,48 +1358,74 @@ void handler(int sig)
 {
 }
 
+int readchr()
+{
+    char chr;
+    while (1) {
+        int val = read(STDIN_FILENO, &chr, 1);
+        if (val == 1) break;
+        if (val == 0) return -1;
+        if ((val < 0 && errno != EINTR) || val > 1) exitErrstr("read failed: %s\n", strerror(errno));}
+    return chr;
+}
+
+void writechr(int chr)
+{
+    while (1) {
+        int val = write(STDOUT_FILENO, &chr, 1);
+        if (val == 1) break;
+        if ((val < 0 && errno != EINTR) || val > 1) exitErrstr("write failed: %s\n", strerror(errno));}
+}
+
+void writestr(const char *str)
+{
+    for (int i = 0; str[i]; i++) writechr(str[i]);
+}
+
 void *console(void *arg)
 {
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
-    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed: %s\n", strerror(errno));
     sigset_t sigs;
     sigset_t saved;
     sigemptyset(&sigs);
     sigaddset(&sigs, SIGUSR1);
-    if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed\n");
+    if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed: %s\n", strerror(errno));
 
     if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
     tcgetattr(STDIN_FILENO, &savedTermios);
     struct termios terminal;
-    if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed\n");
+    if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed: %s\n", strerror(errno));
     terminal.c_lflag &= ~(ECHO|ICANON);
     terminal.c_cc[VMIN] = 1;
     terminal.c_cc[VTIME] = 0;
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed\n");
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
 
     int scan = 0;
     while (1) {
         int lenIn = entryInput(arrayScan(),'\n',sizeScan()-scan);
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
-        else if (lenIn > 0) deallocScan(lenIn);
+        else if (lenIn > 0) delocScan(lenIn);
 
         int totOut = 0; int lenOut;
-        while ((lenOut = detryOutput(allocEcho(10),'\n',10)) == 0) totOut += 10;
+        while ((lenOut = detryOutput(enlocEcho(10),'\n',10)) == 0) totOut += 10;
         if (lenOut < 0 && totOut > 0) exitErrstr("detryOutput failed\n");
-        else if (lenOut < 0) deallocEcho(10);
+        else if (lenOut < 0) delocEcho(10);
+        else if (headEcho() == ExitEscape) break;
         else {
-            popEcho(10-lenOut);
-            printf("\r");
-            for (int i = 0; i < scan; i++) printf(" ");
-            if (write("\r",1) != 1) exitErrstr();
+            unlocEcho(10-lenOut);
+            writechr('\r');
+            for (int i = 0; i < scan; i++) writechr(' ');
+            writechr('\r');
             enqueEcho(0);
-            printf("%s",arrayEcho());
-            deallocEcho(totOut+lenOut+1);
+            writestr(arrayEcho());
+            if (sizeEcho() != totOut+lenOut+1) exitErrstr("sizeEcho is wrong\n");
+            delocEcho(sizeEcho());
             enqueScan(0);
-            printf("%s",arrayScan());
-            popScan(1);}
+            writestr(enlocScan(0)-scan-1);
+            unlocScan(1);}
 
         fd_set fds;
         FD_ZERO(&fds);
@@ -1414,26 +1435,24 @@ void *console(void *arg)
         if (lenOut < 0 && lenIn < 0) lenSel = pselect(1, &fds, 0, 0, 0, &saved);
         else lenSel = pselect(1, &fds, 0, 0, &timeout, 0);
         if (lenSel == 0 || (lenSel < 0 && errno == EINTR)) continue;
-        if (lenSel != 1) exitErrstr("pselect failed\n");
+        if (lenSel != 1) exitErrstr("pselect failed: %s\n", strerror(errno));
 
-        char key; int len = read(STDIN_FILENO, &key, 1);
-        if (len == 1 && key == '\n') {
+        int key = readchr();
+        if (key == '\n') {
             scan = 0;
             enqueScan('\n');
-            printf("\n");}
-        else if (len == 1) {
+            writechr('\n');}
+        else if (key > 0) {
             scan++;
             enqueScan(key);
-            printf("%c", key);}
-        else if (len == 0) {
+            writechr(key);}
+        else {
             scan = 0;
             for (char const *chr = " ** EOF\n"; *chr; chr++) {
                 enqueScan(*chr);
-                printf("%c", *chr);}}
-        else exitErrstr("read failed\n");}
+                writechr(*chr);}}}
 
-    // break out of while(1) on control character arrayEcho.
-    // restore to savedTermios and flush stdin here.
+    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
 
     printf("console done\n");
 
@@ -1444,14 +1463,16 @@ void waitForEvent()
 {
     while (1) {
         int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
-        if (lenOut == 0) deallocPrint(sizePrint());
-        else if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGUSR1);}
+        if (lenOut == 0) delocPrint(sizePrint());
+        else if (lenOut > 0) {
+            delocPrint(lenOut);
+            if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
         
         int totIn = 0; int lenIn;
-        while ((lenIn = detryInput(allocChar(10),'\n',10)) == 0) totIn += 10;
+        while ((lenIn = detryInput(enlocChar(10),'\n',10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
-        else if (lenIn < 0) popChar(10);
-        else {popChar(10-lenIn); ENQUE0(menu,Menu);}
+        else if (lenIn < 0) unlocChar(10);
+        else {unlocChar(10-lenIn); ENQUE0(menu,Menu);}
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
         else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
@@ -1606,9 +1627,9 @@ void initialize(int argc, char **argv)
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
     if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
-    if (pthread_mutex_init(&inputs.mutex, 0) < 0) exitErrstr("cannot initialize inputs mutex\n");
-    if (pthread_mutex_init(&outputs.mutex, 0) < 0) exitErrstr("cannot initialize outputs mutex\n");
-    if (pthread_create(&consoleThread, 0, &console, 0) < 0) exitErrstr("cannot create thread\n");
+    if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
+    if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
+    if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
 
     enqueMsgstr("initialize done\n");
 }
@@ -1616,8 +1637,13 @@ void initialize(int argc, char **argv)
 void finalize()
 {
     // save transformation matrices
-    pthread_cancel(consoleThread); // send signal and waitpid so console can flush
-    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); // do this in console
+    enquePrint(ExitEscape); enquePrint('\n');
+    while (validPrint()) {
+        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
+        if (lenOut <= 0) exitErrstr("entryOutput failed\n");
+        delocPrint(lenOut);
+        if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
+    if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
