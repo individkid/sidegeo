@@ -26,8 +26,8 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Rotate -- tilt polytope/plane around pierce point  
     * Translate -- slide polytope/plane from pierce point  
     * Look -- tilt camera around focal point  
-    * Screen -- window moves over display fixed to screen\n")); pos++;
-    * Window -- move window and display on screen\n")); pos++;
+    * Screen -- window moves over display fixed to screen
+    * Window -- move window and display on screen
   * Roller -- action of roller button in Transform/Manipulate modes  
     * Lever -- push or pull other end of tilt segment from pierce point
     * Clock -- rotate picture plane around perpendicular to pierce point  

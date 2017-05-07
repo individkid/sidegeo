@@ -96,7 +96,7 @@ extern void __stginit_Main(void);
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
-#define EVENT_DELAY 0.1
+#define POLL_DELAY 0.1
 #else
 #endif
 
@@ -110,9 +110,8 @@ extern void __stginit_Main(void);
 
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
-struct termios savedTermios; // for restoring from non canonical unechoed io
-pthread_t consoleThread; // for io in the console
-enum Escape {MenuEscape,ExitEscape};
+struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
+pthread_t consoleThread = 0; // for io in the console
 struct Buffer {
     GLuint base;
     GLintptr limit;
@@ -143,42 +142,69 @@ GLint projectUniform = 0; // transformation for apearance of depth
 GLint featherUniform = 0; // point on a plane to analyze
 GLint arrowUniform = 0; // normal of the plane to analyze
 GLint lightUniform = 0; // transformation from normal to color
-struct Strings {DECLARE_QUEUE(char *)} options = {0}; // command line arguments
+struct Strings {DECLARE_QUEUE(char *)} options = {0};
+ // command line arguments
 struct Strings filenames = {0}; // for config files
-struct Chars {DECLARE_QUEUE(char)} formats = {0}; // from first line of history portion of config file
+struct Chars {DECLARE_QUEUE(char)} formats = {0};
+ // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
-enum {Additive,Subractive,Refine,Transform,Manipulate} menuMode = Additive;
-/*Transform: modify model or perspective matrix
- *Manipulate: modify pierced plane
- *Refine: click adds random plane
- *Additive: click hollows out region
- *Subtractive: click fills in region*/
-enum {Sphere,Translate,Look,Screen,Window} mouseMode = Sphere;
-/*Sphere: tilt polytope around pierce point
- *Translate: slide polytope from pierce point
- *Look: tilt camera around focal point
- *Screen: move window with display fixed on screen
- *Window: move window with display fixed in window*/
-enum {Lever,Clock,Cylinder,Scale,Drive,Size,Aspect} rollerMode = Lever;
-/*Lever: push or pull other end of tilt line from pierce point
- *Clock: rotate picture plane around perpendicular to pierce point
- *Cylinder: rotate polytope around tilt line
- *Scale: grow or shrink polytope with pierce point fixed
- *Drive: move picture plane forward or back
- *Size: change window size with display fixed on screen
- *Aspect: change size ration with display fixed on screen*/
-enum {Physical,Virtual} windowMode = Physical;
-/*Physical: display fixed during operating system move
- *Virtual: display follows window during operating system move*/
-enum {Opposite,Northwest,Northeast,Southwest,Southeast} cornerMode = Opposite;
-/*Opposite: opposite corner appears fixed during resize
- **: * absolute corner apears fixed during resize*/
-enum {Right,Left} clickMode = Right;
-/*Right: mouse movement ignored
- *Left: mouse movement affects matrices*/
-enum {Diplane,Dipoint} shaderMode = Diplane;
-/*Diplane: display planes
- *Dipoint: display points*/
+enum {ModeRight,ModeLeft} clickMode = ModeRight;
+/*ModeRight: mouse movement ignored
+ *ModeLeft: mouse movement affects matrices*/
+enum {ModeDiplane,ModeDipoint} shaderMode = ModeDiplane;
+/*ModeDiplane: display planes
+ *ModeDipoint: display points*/
+enum Escape {EscapeExit}; // excape characters to console
+enum Menu { // lines in the menu
+MenuSculpt,MenuAdditive,MenuSubtractive,MenuRefine,MenuTransform,MenuManipulate,
+MenuMouse,MenuRotate,MenuTranslate,MenuLook,MenuScreen,MenuWindow,
+MenuRoller,MenuLever,MenuClock,MenuCylinder,MenuScale,MenuDrive,MenuSize,MenuAspect,
+MenuWindows,MenuPhysical,MenuVirtual,
+MenuCorner,MenuOpposite,MenuNorthwest,MenuNortheast,MenuSouthwest,MenuSoutheast,
+MenuMenus};
+enum Mode {ModeSculpt,ModeMouse,ModeRoller,ModeWindow,ModeCorner,ModeModes};
+#define INIT {MenuTransform,MenuRotate,MenuLever,MenuPhysical,MenuOpposite}
+enum Menu mode[ModeModes] = INIT; // owned by main thread
+enum Menu mark[ModeModes] = INIT; // owned by console thread
+struct Item { // per-menu-line info
+    enum Menu collect; // arrayItem()[arrayItem()[x].collect].mode == ModeModes
+    enum Mode mode; // arrayItem()[arrayMode()[x]].mode == x
+    int level; // arrayItem()[arrayItem()[x].collect].level == arrayItem()[x].level-1
+    char *name; // word to match console input against
+    char *comment; /*text to print after matching word*/} item[MenuMenus] = {
+    {MenuMenus,ModeModes,0,"Sculpt","display and manipulate polytope"},
+    {MenuSculpt,ModeSculpt,1,"Additive","click fills in region over pierce point"},
+    {MenuSculpt,ModeSculpt,1,"Subtractive","click hollows out region under pierce point"},
+    {MenuSculpt,ModeSculpt,1,"Refine","click adds random plane through pierce point"},
+    {MenuSculpt,ModeSculpt,1,"Transform","modify model or perspective matrix"},
+    {MenuSculpt,ModeSculpt,1,"Manipulate","modify pierced plane"},
+    {MenuSculpt,ModeModes,1,"Mouse","action of mouse motion in Transform/Manipulate modes"},
+    {MenuMouse,ModeMouse,2,"Rotate","tilt polytope/plane around pierce point"},
+    {MenuMouse,ModeMouse,2,"Translate","slide polytope/plane from pierce point"},
+    {MenuMouse,ModeMouse,2,"Look","tilt camera around focal point"},
+    {MenuMouse,ModeMouse,2,"Screen","window moves over display fixed to screen"},
+    {MenuMouse,ModeMouse,2,"Window","move window and display on screen"},
+    {MenuSculpt,ModeModes,1,"Roller","action of roller button in Transform/Manipulate modes"},
+    {MenuRoller,ModeRoller,2,"Lever","push or pull other end of tilt segment from pierce point"},
+    {MenuRoller,ModeRoller,2,"Clock","rotate picture plane around perpendicular to pierce point"},
+    {MenuRoller,ModeRoller,2,"Cylinder","rotate polytope around tilt line"},
+    {MenuRoller,ModeRoller,2,"Scale","grow or shrink polytope with pierce point fixed"},
+    {MenuRoller,ModeRoller,2,"Drive","move picture plane forward or back"},
+    {MenuRoller,ModeRoller,2,"Size","resize window with display fixed to screen"},
+    {MenuRoller,ModeRoller,2,"Aspect","change ratio between window dimensions"},
+    {MenuSculpt,ModeModes,1,"Window","how operating system window move affects display"},
+    {MenuWindows,ModeWindow,2,"Physical","display appears fixed on screen"},
+    {MenuWindows,ModeWindow,2,"Virtual","display appears fixed in window"},
+    {MenuSculpt,ModeModes,1,"Corner","how operating system window resize affects display"},
+    {MenuCorner,ModeCorner,2,"Opposite","corner of display opposite dragged appears fixed"},
+    {MenuCorner,ModeCorner,2,"Northwest","upper left corner of display appears fixed"},
+    {MenuCorner,ModeCorner,2,"Northeast","upper right corner of display appears fixed"},
+    {MenuCorner,ModeCorner,2,"Southwest","lower left corner of display appears fixed"},
+    {MenuCorner,ModeCorner,2,"Southeast","lower right corner of display appears fixed"}};
+struct Ints {DECLARE_QUEUE(int)} lines = {0};
+ // index into arrayItem() for console undo
+struct Ints matchs = {0};
+ // index into arrayItem()[line].name for console undo
 float xPoint = 0;  // position of pierce point
 float yPoint = 0;
 float zPoint = 0;
@@ -196,8 +222,9 @@ int yLoc = 0;
 float modelMat[9] = {0};
 float normalMat[9] = {0};
 float projectMat[9] = {0};
-struct Chars generics = {0}; // sized formatted packets of bytes
-enum WrapState {WrapEnqued,WrapWait};
+struct Chars generics = {0};
+ // sized formatted packets of bytes
+enum WrapState {WrapEnqued,MenuWrapWait};
 struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
 enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
 enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
@@ -209,7 +236,8 @@ enum ConsoleState {ConsoleIdle,ConsoleEnqued} consoleState = ConsoleIdle;
 enum MenuState {MenuIdle,MenuEnqued} menuState = MenuIdle;
 int linkCheck = 0;
 int sequenceNumber = 0;
-struct Ints {DECLARE_QUEUE(int)} defers = {0};
+struct Ints defers = {0};
+ // sequence numbers of commands that are polling
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
@@ -305,7 +333,7 @@ inline int valid##NAME() \
     return (size##NAME() > 0); \
 } \
 /*only one writer supported; for multiple writers, round robin and blocking lock required*/ \
-int entry##NAME(TYPE const *val, TYPE term, int len) \
+int entry##NAME(TYPE *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
     if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
@@ -476,8 +504,7 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
     if ((buffer.done += size) > buffer.ready) exitErrstr(#command" command too done\n");
 
 /*
- * pure functions including
- * helpers for accessing state
+ * fifo stack mutex message
  */
 
 void exitErrstr(const char *fmt, ...)
@@ -494,6 +521,10 @@ ACCESS_QUEUE(Filename,char *,filenames)
 ACCESS_QUEUE(Format,char,formats)
 
 ACCESS_QUEUE(Metric,char,metrics)
+
+ACCESS_QUEUE(Line,int,lines)
+
+ACCESS_QUEUE(Match,int,matchs)
 
 ACCESS_QUEUE(Generic,char,generics)
 
@@ -541,8 +572,7 @@ void enqueMsgstr(const char *fmt, ...)
 }
 
 /*
- * pure functions including
- * helpers for parsing history portion of config file
+ * helpers for parsing config file
  */
 
 int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
@@ -640,6 +670,10 @@ int indicesToRange(int *indices, char *format, char *bytes, char **base, char **
     return -1;
 }
 
+/*
+ * helpers for configuration
+ */
+
 #ifdef BRINGUP
 void bringup()
 {
@@ -686,7 +720,7 @@ void bringup()
         6.0,7.0,8.0,
         9.0,0.1,1.1,
     };
-    if (shaderMode == Diplane) {
+    if (shaderMode == ModeDiplane) {
         glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
         glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), bringup);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -952,7 +986,7 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
-        if (shaderMode == Diplane) {
+        if (shaderMode == ModeDiplane) {
             ENQUE0(configure,Configure)
             LINK1(link,&configure,Link)
 #ifdef BRINGUP
@@ -1036,7 +1070,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         button = GLFW_MOUSE_BUTTON_RIGHT;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
         xPoint = xPos; yPoint = yPos; zPoint = zPos;
-        if (shaderMode == Diplane) {
+        if (shaderMode == ModeDiplane) {
             glGetUniformfv(diplaneProgram,modelUniform,modelMat);
             glGetUniformfv(diplaneProgram,normalUniform,normalMat);
             glGetUniformfv(diplaneProgram,projectUniform,projectMat);}
@@ -1044,14 +1078,14 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             glGetUniformfv(dipointProgram,modelUniform,modelMat);
             glGetUniformfv(dipointProgram,normalUniform,normalMat);
             glGetUniformfv(dipointProgram,projectUniform,projectMat);}
-        clickMode = Left;}
+        clickMode = ModeLeft;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
-        if (clickMode == Right) {
+        if (clickMode == ModeRight) {
             // xPos = xWarp; yPos = yWarp; zPos = zWarp;
-            clickMode = Left;}
+            clickMode = ModeLeft;}
         else {
             xWarp = xPos; yWarp = yPos; zWarp = zPos;
-            clickMode = Right;}}
+            clickMode = ModeRight;}}
 }
 
 void displayFocus(GLFWwindow *window, int focused)
@@ -1066,23 +1100,23 @@ void displayFocus(GLFWwindow *window, int focused)
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
-    if (clickMode == Left && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz) {
+    if (clickMode == ModeLeft && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz) {
         xPos = xpos; yPos = ypos;
         enqueMsgstr("displayCursor %f %f\n", xPos, yPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-        if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
+        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}}
 }
 
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     double zpos = zPos + yoffset;
-    if (clickMode == Left) {
+    if (clickMode == ModeLeft) {
         zPos = zpos;
         enqueMsgstr("displayScroll %f\n", zPos);
         // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-        if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}}
+        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}}
 }
 
 void displaySize(GLFWwindow *window, int width, int height)
@@ -1091,8 +1125,8 @@ void displaySize(GLFWwindow *window, int width, int height)
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}
 }
 
 void displayLocation(GLFWwindow *window, int xloc, int yloc)
@@ -1101,18 +1135,18 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
     // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    if (processState == ProcessIdle && shaderMode == Dipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == Diplane) {MAYBE0(diplane,Diplane)}
+    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}
 }
 
 /*
- * functions called by top level Haskell
+ * shader programs
  */
 
 const GLchar *uniformCode = "\
@@ -1303,6 +1337,10 @@ const GLchar *adpointVertex = VertexCode("point");
 const GLchar *adpointGeometry = GeometryCode("points", "1", "points", "1");
 const GLchar *adpointFragment = 0;
 
+/*
+ * helpers for initialization
+ */
+
 GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const GLchar *feedback, const char *name)
 {
     GLint success = 0;
@@ -1353,6 +1391,10 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     if (fragmentCode) glDeleteShader(fragment);
     return program;
 }
+
+/*
+ * helpers and thread for parsing input and preparing output
+ */
 
 void handler(int sig)
 {
@@ -1413,7 +1455,7 @@ void *console(void *arg)
         while ((lenOut = detryOutput(enlocEcho(10),'\n',10)) == 0) totOut += 10;
         if (lenOut < 0 && totOut > 0) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
-        else if (headEcho() == ExitEscape) break;
+        else if (headEcho() == EscapeExit) break;
         else {
             unlocEcho(10-lenOut);
             writechr('\r');
@@ -1459,6 +1501,10 @@ void *console(void *arg)
     return 0;
 }
 
+/*
+ * functions called by top level Haskell
+ */
+
 void waitForEvent()
 {
     while (1) {
@@ -1475,7 +1521,7 @@ void waitForEvent()
         else {unlocChar(10-lenIn); ENQUE0(menu,Menu);}
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
-        else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
+        else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
         else glfwPollEvents();
 
         if (!validCommand()) continue;
@@ -1637,7 +1683,7 @@ void initialize(int argc, char **argv)
 void finalize()
 {
     // save transformation matrices
-    enquePrint(ExitEscape); enquePrint('\n');
+    enquePrint(EscapeExit); enquePrint('\n');
     while (validPrint()) {
         int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
         if (lenOut <= 0) exitErrstr("entryOutput failed\n");
@@ -1650,6 +1696,8 @@ void finalize()
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
+    if (lines.base) {struct Ints initial = {0}; free(lines.base); lines = initial;}
+    if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
