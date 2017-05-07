@@ -1369,11 +1369,8 @@ void *console(void *arg)
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
     if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
-    fd_set fds;
     sigset_t sigs;
     sigset_t saved;
-    FD_ZERO(&fds);
-    FD_SET(STDIN_FILENO, &fds);
     sigemptyset(&sigs);
     sigaddset(&sigs, SIGUSR1);
     if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed\n");
@@ -1390,9 +1387,8 @@ void *console(void *arg)
     int scan = 0;
     while (1) {
         int lenIn = entryInput(arrayScan(),'\n',sizeScan()-scan);
-        if (lenIn < 0) exitErrstr("entryInput failed\n");
-        else if (lenIn == 0) deallocScan(sizeScan()-scan);
-        else deallocScan(lenIn);
+        if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
+        else if (lenIn > 0) deallocScan(lenIn);
 
         int totOut = 0; int lenOut;
         while ((lenOut = detryOutput(allocEcho(10),'\n',10)) == 0) totOut += 10;
@@ -1402,7 +1398,7 @@ void *console(void *arg)
             popEcho(10-lenOut);
             printf("\r");
             for (int i = 0; i < scan; i++) printf(" ");
-            printf("\r");
+            if (write("\r",1) != 1) exitErrstr();
             enqueEcho(0);
             printf("%s",arrayEcho());
             deallocEcho(totOut+lenOut+1);
@@ -1410,13 +1406,17 @@ void *console(void *arg)
             printf("%s",arrayScan());
             popScan(1);}
 
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(STDIN_FILENO, &fds);
+        struct timespec timeout = {0};
         int lenSel;
-        if (lenOut > 0 || validScan()) lenSel = pselect(1, &fds, 0, 0, &timeout, 0);
-        else lenSel = pselect(1, &fds, 0, 0, 0, &saved);
+        if (lenOut < 0 && lenIn < 0) lenSel = pselect(1, &fds, 0, 0, 0, &saved);
+        else lenSel = pselect(1, &fds, 0, 0, &timeout, 0);
         if (lenSel == 0 || (lenSel < 0 && errno == EINTR)) continue;
         if (lenSel != 1) exitErrstr("pselect failed\n");
 
-        char key; len = read(STDIN_FILENO, &key, 1);
+        char key; int len = read(STDIN_FILENO, &key, 1);
         if (len == 1 && key == '\n') {
             scan = 0;
             enqueScan('\n');
@@ -1444,9 +1444,8 @@ void waitForEvent()
 {
     while (1) {
         int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
-        if (lenOut < 0) exitErrstr("entryOutput failed\n");
-        else if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGUSR1);}
         if (lenOut == 0) deallocPrint(sizePrint());
+        else if (lenOut > 0) {deallocPrint(lenOut); pthread_kill(consoleThread, SIGUSR1);}
         
         int totIn = 0; int lenIn;
         while ((lenIn = detryInput(allocChar(10),'\n',10)) == 0) totIn += 10;
@@ -1454,8 +1453,8 @@ void waitForEvent()
         else if (lenIn < 0) popChar(10);
         else {popChar(10-lenIn); ENQUE0(menu,Menu);}
 
-        if (!validPrint() && !validCommand()) glfwWaitEvents();
-        else if (!validPrint() && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
+        if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
+        else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(EVENT_DELAY);
         else glfwPollEvents();
 
         if (!validCommand()) continue;
