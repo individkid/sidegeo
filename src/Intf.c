@@ -1019,12 +1019,13 @@ void process()
 void menu()
 {
     CHECK0(menu,Menu)
-    char *buf = arrayChar();
-    int len = strstr(buf,"\n") - buf;
     const char *str = "menu: ";
-    strcpy(enlocPrint(strlen(str)+1),str);
-    strncpy(enlocPrint(len+1),buf,len+1);
-    delocChar(len+1);
+    int len = strlen(str);
+    strncpy(enlocPrint(len),str,len);
+    char *buf = arrayChar();
+    len = (strstr(buf,"\n")-buf)+1;
+    strncpy(enlocPrint(len),buf,len);
+    delocChar(len);
     DEQUE0(menu,Menu)
 }
 
@@ -1442,52 +1443,72 @@ void writenum(int key)
     unlocScan(len+1);
 }
 
-void unwriteitem()
+void writeitem(enum Menu line)
 {
+    struct Item *iptr = &item[line];
+    enum Menu menu = MenuMenus;
+    if (iptr->mode != ModeModes) menu = mark[iptr->mode];
+    for (int i = 0; i < iptr->level; i++) writechr(' ');
+    writestr(iptr->name);
+    if (menu == line) writestr(" ** "); else writestr(" -- ");
+    writestr(iptr->comment);
 }
 
-void writeitem()
+void writeprompt(enum Menu line, int match)
 {
-    struct Item *item = &item[tailLine()];
-    // writechr('\r');
-    // for (int i = 0; i < item->level; i++) writechr(' ');
-    // writestr(item->name);
-    // depending on mode, writestr(" -- "); or writestr(" ** ");
-    // writestr(item->comment);
-    // writechr('\r');
-    // for (int i = 0; i < item->level; i++) writechr(' ');
-    // for (int i = 0; i < tailMatch(); i++) writechr(item->name[i]);
+    struct Item *iptr = &item[line];
+    writeitem(line);
+    writechr('\r');
+    for (int i = 0; i < iptr->level; i++) writechr(' ');
+}
+
+void unwriteprompt(enum Menu line)
+{
+    struct Item *iptr = &item[line];
+    int count = iptr->level+strlen(iptr->name)+6+strlen(iptr->comment);
+    writechr('\r');
+    for (int i = 0; i < count; i++) writechr(' ');
+    for (int i = 0; i < count; i++) writechr(127);
+    writechr('\r');
 }
 
 void writemenu()
 {
+    for (enum Menu i = 0; i < MenuMenus; i++) {
+        writeitem(i); writechr('\n');}
 }
 
-void writematch(char chr)
+void writematch(char chr, enum Menu *lptr, int *mptr)
 {
-    enum Menu line = tailLine();
-    int match = tailMatch();
-    enum Mode mode = item->mode;
-    if (item[line].name[match] == chr) {
-        unqueMatch(); enqueMatch(match+1);
-        writeitem(); return;}
-    for (int i = line+1; i < MenuMenus && item[i].mode == item[line].mode; i++) {
-        if (strncmp(item[line].name,item[i].name,match) == 0 && item[i].name[match] == chr) {
-            unqueMatch(); enqueMatch(match+1);
-            unqueLine(); enqueLine(i);
-            writeitem(); return;}}
-    for (int i = item[line].collect+1; i < line; i++) {
-        if (strncmp(item[line].name,item[i].name,match) == 0 && item[i].name[match] == chr) {
-            unqueMatch(); enqueMatch(match+1);
-            unqueLine(); enqueLine(i);
-            writeitem(); return;}}
+    enum Menu line = *lptr;
+    int match = *mptr;
+    struct Item *iptr = &item[line];
+    enum Mode mode = iptr->mode;
+    unwriteprompt(line);
+    if (iptr->name[match] == chr) {
+        *mptr = match+1; writeprompt(line,match+1); return;}
+    for (int i = line+1; i < MenuMenus && item[i].mode == iptr->mode; i++) {
+        struct Item *jptr = &item[i];
+        if (strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
+            *mptr = match+1; *lptr = i; writeprompt(i,match+1); return;}}
+    for (int i = iptr->collect+1; i < line; i++) {
+        struct Item *jptr = &item[i];
+        if (strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
+            *mptr = match+1; *lptr = i; writeprompt(i,match+1); return;}}
     writemenu();
-    writeitem();
+    writeprompt(line,match);
 }
 
 void *console(void *arg)
 {
-    enqueLine(0); enqueMatch(0);
+    int match = 0;
+    enum Menu *line = 0;
+    int lim = 0;
+    for (enum Menu i = 0; i < MenuMenus; i++) {
+        int len = strlen(item[i].name);
+        if (len > lim) lim = len;}
+    line = (enum Menu *)malloc(++lim*sizeof(enum Menu));
+    line[0] = MenuSculpt;
 
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
@@ -1522,12 +1543,12 @@ void *console(void *arg)
         else if (headEcho() == 0) break;
         else {
             unlocEcho(10-lenOut);
-            unwriteitem();
+            unwriteprompt(line[match]);
             enqueEcho(0);
             writestr(arrayEcho());
             if (sizeEcho() != totOut+lenOut+1) exitErrstr("sizeEcho is wrong\n");
             delocEcho(sizeEcho());
-            writeitem();}
+            writeprompt(line[match],match);}
 
         fd_set fds;
         FD_ZERO(&fds);
@@ -1541,15 +1562,17 @@ void *console(void *arg)
 
         int key = readchr();
         if (esc == 0 && key == '\n') {
+            unwriteprompt(line[match]);
             // change mode
-            writeitem(); writechr('\n');
+            writeprompt(line[match],match);
+            writechr('\n');
             enqueScan('\n');}
         else if (esc == 0 && key >= 'a' && key <= 'z') {
-            if (tailMatch() == 0) writematch(key-'a'+'A');
-            else writematch(key);}
+            if (match == 0) writematch(key-'a'+'A',&line[match],&match);
+            else writematch(key,&line[match],&match);}
         else if (esc == 0 && key >= 'A' && key <= 'Z') {
-            if (tailMatch() == 0) writematch(key);
-            else writematch(key-'A'+'a');}
+            if (match == 0) writematch(key,&line[match],&match);
+            else writematch(key-'A'+'a',&line[match],&match);}
         else if (esc == 0 && key == 127) {
             esc = 0; writestr("<bksp>");}
         else if (esc == 0 && key == 27) last[esc++] = key;
@@ -1578,6 +1601,7 @@ void *console(void *arg)
         else {
             for (int i = 0; i < esc; i++) writenum(last[i]);
             esc = 0; writenum(key);}}
+    unwriteprompt(line[match]);
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
 
     printf("console done\n");
@@ -1770,8 +1794,6 @@ void finalize()
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
-    if (lines.base) {struct Menus initial = {0}; free(lines.base); lines = initial;}
-    if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
