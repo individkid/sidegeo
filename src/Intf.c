@@ -53,6 +53,8 @@ The coplane mode calculates vertices.
 The vertex and geometry shaders are same as in class mode, exept geometry shader outputs intersection instead of difference dot.
 */
 
+#define BRINGUP
+
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
 #include "Main_stub.h"
@@ -65,8 +67,9 @@ extern void __stginit_Main(void);
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
-#include <sys/utsname.h>
+#ifdef BRINGUP
 #include <math.h>
+#endif
 #include <pthread.h>
 #include <termios.h>
 #include <signal.h>
@@ -81,7 +84,6 @@ extern void __stginit_Main(void);
 #endif
 #include <GLFW/glfw3.h>
 
-#define BRINGUP
 #ifdef BRINGUP
 #define NUM_PLANES 4
 #define NUM_POINTS 4
@@ -97,7 +99,6 @@ extern void __stginit_Main(void);
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
 #define POLL_DELAY 0.1
-#else
 #endif
 
 #define DECLARE_QUEUE(TYPE) \
@@ -154,7 +155,6 @@ enum {ModeRight,ModeLeft} clickMode = ModeRight;
 enum {ModeDiplane,ModeDipoint} shaderMode = ModeDiplane;
 /*ModeDiplane: display planes
  *ModeDipoint: display points*/
-enum Escape {EscapeExit}; // excape characters to console
 enum Menu { // lines in the menu
 MenuSculpt,MenuAdditive,MenuSubtractive,MenuRefine,MenuTransform,MenuManipulate,
 MenuMouse,MenuRotate,MenuTranslate,MenuLook,MenuScreen,MenuWindow,
@@ -1091,10 +1091,10 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 void displayFocus(GLFWwindow *window, int focused)
 {
     if (focused) {
-        enqueMsgstr("entry\n");
+        enqueMsgstr("displayFocus entry\n");
     }
     else {
-        enqueMsgstr("leave\n");
+        enqueMsgstr("displayFocus leave\n");
     }
 }
 
@@ -1424,6 +1424,26 @@ void writestr(const char *str)
     for (int i = 0; str[i]; i++) writechr(str[i]);
 }
 
+int scannum(int key)
+{
+    int len = snprintf(0,0,"<%d>",key);
+    if (len < 0) exitErrstr("snprintf failed\n");
+    char *buf = enlocScan(len+1);
+    if (snprintf(buf,len+1,"<%d>",key) != len) exitErrstr("snprintf failed\n");
+    buf[len] = 0;
+    writestr(buf);
+    unlocScan(1);
+    return len;
+}
+
+int  scanstr(const char *str)
+{
+    int len = strlen(str);
+    strncpy(enlocScan(len),str,len);
+    writestr(str);
+    return len;
+}
+
 void *console(void *arg)
 {
     struct sigaction sigact = {0};
@@ -1446,6 +1466,8 @@ void *console(void *arg)
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
 
     int scan = 0;
+    int last[4];
+    int esc = 0;
     while (1) {
         int lenIn = entryInput(arrayScan(),'\n',sizeScan()-scan);
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
@@ -1455,7 +1477,7 @@ void *console(void *arg)
         while ((lenOut = detryOutput(enlocEcho(10),'\n',10)) == 0) totOut += 10;
         if (lenOut < 0 && totOut > 0) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
-        else if (headEcho() == EscapeExit) break;
+        else if (headEcho() == 0) break;
         else {
             unlocEcho(10-lenOut);
             writechr('\r');
@@ -1480,20 +1502,40 @@ void *console(void *arg)
         if (lenSel != 1) exitErrstr("pselect failed: %s\n", strerror(errno));
 
         int key = readchr();
-        if (key == '\n') {
-            scan = 0;
-            enqueScan('\n');
-            writechr('\n');}
-        else if (key > 0) {
-            scan++;
-            enqueScan(key);
-            writechr(key);}
+        if (esc == 0 && key == '\n') {
+            scan = 0; enqueScan('\n'); writechr('\n');}
+        else if (esc == 0 && key >= 'a' && key <= 'z') {
+            scan++; enqueScan(key); writechr(key);}
+        else if (esc == 0 && key >= 'A' && key <= 'Z') {
+            scan++; enqueScan(key-'A'+'a'); writechr(key-'A'+'a');}
+        else if (esc == 0 && key == 127) {
+            esc = 0; scan += scanstr("<bksp>");}
+        else if (esc == 0 && key == 27) last[esc++] = key;
+        else if (esc == 1 && key == 91) last[esc++] = key;
+        else if (esc == 2 && key == 51) last[esc++] = key;
+        else if (esc == 2 && key == 53) last[esc++] = key;
+        else if (esc == 2 && key == 54) last[esc++] = key;
+        else if (esc == 2 && key == 65) {
+            esc = 0; scan += scanstr("<up>");}
+        else if (esc == 2 && key == 66) {
+            esc = 0; scan += scanstr("<down>");}
+        else if (esc == 2 && key == 67) {
+            esc = 0; scan += scanstr("<right>");}
+        else if (esc == 2 && key == 68) {
+            esc = 0; scan += scanstr("<left>");}
+        else if (esc == 2 && key == 70) {
+            esc = 0; scan += scanstr("<end>");}
+        else if (esc == 2 && key == 72) {
+            esc = 0; scan += scanstr("<home>");}
+        else if (esc == 3 && key == 126 && last[2] == 51) {
+            esc = 0; scan += scanstr("<del>");}
+        else if (esc == 3 && key == 126 && last[2] == 53) {
+            esc = 0; scan += scanstr("<pgup>");}
+        else if (esc == 3 && key == 126 && last[2] == 54) {
+            esc = 0; scan += scanstr("<pgdn>");}
         else {
-            scan = 0;
-            for (char const *chr = " ** EOF\n"; *chr; chr++) {
-                enqueScan(*chr);
-                writechr(*chr);}}}
-
+            for (int i = 0; i < esc; i++) scan += scannum(last[i]);
+            esc = 0; scan += scannum(key);}}
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
 
     printf("console done\n");
@@ -1560,21 +1602,11 @@ void initialize(int argc, char **argv)
     glfwSetScrollCallback(windowHandle, displayScroll);
     glfwMakeContextCurrent(windowHandle);
 
-    struct utsname buf;
-    if (uname(&buf) < 0) {
-        exitErrstr("cannot get kernel info\n");}
 #ifdef __linux__
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
     if (GLEW_OK != err) {
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
-    if (GLEW_VERSION_3_3) {
-        enqueMsgstr("%s: %s; glew: %s; OpenGL: 3.3; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
-    else {
-        enqueMsgstr("%s: %s; glew: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, glewGetString(GLEW_VERSION), GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);}
-#endif
-#ifdef __APPLE__
-    enqueMsgstr("%s: %s; glfw: %d.%d.%d\n", buf.sysname, buf.release, GLFW_VERSION_MAJOR, GLFW_VERSION_MINOR, GLFW_VERSION_REVISION);
 #endif
 
     glViewport(0, 0, xSiz, ySiz);
@@ -1683,7 +1715,7 @@ void initialize(int argc, char **argv)
 void finalize()
 {
     // save transformation matrices
-    enquePrint(EscapeExit); enquePrint('\n');
+    enquePrint(0); enquePrint('\n');
     while (validPrint()) {
         int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
         if (lenOut <= 0) exitErrstr("entryOutput failed\n");
