@@ -201,9 +201,9 @@ struct Item { // per-menu-line info
     {MenuCorner,ModeCorner,2,"Northeast","upper right corner of display appears fixed"},
     {MenuCorner,ModeCorner,2,"Southwest","lower left corner of display appears fixed"},
     {MenuCorner,ModeCorner,2,"Southeast","lower right corner of display appears fixed"}};
-struct Ints {DECLARE_QUEUE(int)} lines = {0};
+struct Menus {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into arrayItem() for console undo
-struct Ints matchs = {0};
+struct Ints {DECLARE_QUEUE(int)} matchs = {0};
  // index into arrayItem()[line].name for console undo
 float xPoint = 0;  // position of pierce point
 float yPoint = 0;
@@ -298,9 +298,24 @@ inline void enque##NAME(TYPE val) \
     *enloc##NAME(1) = val; \
 } \
 \
+inline int size##NAME() \
+{ \
+    return INSTANCE.tail - INSTANCE.head; \
+} \
+\
+inline int valid##NAME() \
+{ \
+    return (size##NAME() > 0); \
+} \
+\
 inline TYPE head##NAME() \
 { \
     return *array##NAME(); \
+} \
+\
+inline TYPE tail##NAME() \
+{ \
+    return *(array##NAME()+size##NAME()-1); \
 } \
 \
 inline void deloc##NAME(int size) \
@@ -321,16 +336,6 @@ inline void unloc##NAME(int size) \
 inline void unque##NAME() \
 { \
     unloc##NAME(1); \
-} \
-\
-inline int size##NAME() \
-{ \
-    return INSTANCE.tail - INSTANCE.head; \
-} \
-\
-inline int valid##NAME() \
-{ \
-    return (size##NAME() > 0); \
 } \
 /*only one writer supported; for multiple writers, round robin and blocking lock required*/ \
 int entry##NAME(TYPE *val, TYPE term, int len) \
@@ -522,7 +527,7 @@ ACCESS_QUEUE(Format,char,formats)
 
 ACCESS_QUEUE(Metric,char,metrics)
 
-ACCESS_QUEUE(Line,int,lines)
+ACCESS_QUEUE(Line,enum Menu,lines)
 
 ACCESS_QUEUE(Match,int,matchs)
 
@@ -1016,6 +1021,8 @@ void menu()
     CHECK0(menu,Menu)
     char *buf = arrayChar();
     int len = strstr(buf,"\n") - buf;
+    const char *str = "menu: ";
+    strcpy(enlocPrint(strlen(str)+1),str);
     strncpy(enlocPrint(len+1),buf,len+1);
     delocChar(len+1);
     DEQUE0(menu,Menu)
@@ -1424,7 +1431,7 @@ void writestr(const char *str)
     for (int i = 0; str[i]; i++) writechr(str[i]);
 }
 
-int scannum(int key)
+void writenum(int key)
 {
     int len = snprintf(0,0,"<%d>",key);
     if (len < 0) exitErrstr("snprintf failed\n");
@@ -1432,20 +1439,56 @@ int scannum(int key)
     if (snprintf(buf,len+1,"<%d>",key) != len) exitErrstr("snprintf failed\n");
     buf[len] = 0;
     writestr(buf);
-    unlocScan(1);
-    return len;
+    unlocScan(len+1);
 }
 
-int  scanstr(const char *str)
+void unwriteitem()
 {
-    int len = strlen(str);
-    strncpy(enlocScan(len),str,len);
-    writestr(str);
-    return len;
+}
+
+void writeitem()
+{
+    struct Item *item = &item[tailLine()];
+    // writechr('\r');
+    // for (int i = 0; i < item->level; i++) writechr(' ');
+    // writestr(item->name);
+    // depending on mode, writestr(" -- "); or writestr(" ** ");
+    // writestr(item->comment);
+    // writechr('\r');
+    // for (int i = 0; i < item->level; i++) writechr(' ');
+    // for (int i = 0; i < tailMatch(); i++) writechr(item->name[i]);
+}
+
+void writemenu()
+{
+}
+
+void writematch(char chr)
+{
+    enum Menu line = tailLine();
+    int match = tailMatch();
+    enum Mode mode = item->mode;
+    if (item[line].name[match] == chr) {
+        unqueMatch(); enqueMatch(match+1);
+        writeitem(); return;}
+    for (int i = line+1; i < MenuMenus && item[i].mode == item[line].mode; i++) {
+        if (strncmp(item[line].name,item[i].name,match) == 0 && item[i].name[match] == chr) {
+            unqueMatch(); enqueMatch(match+1);
+            unqueLine(); enqueLine(i);
+            writeitem(); return;}}
+    for (int i = item[line].collect+1; i < line; i++) {
+        if (strncmp(item[line].name,item[i].name,match) == 0 && item[i].name[match] == chr) {
+            unqueMatch(); enqueMatch(match+1);
+            unqueLine(); enqueLine(i);
+            writeitem(); return;}}
+    writemenu();
+    writeitem();
 }
 
 void *console(void *arg)
 {
+    enqueLine(0); enqueMatch(0);
+
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
@@ -1465,11 +1508,10 @@ void *console(void *arg)
     terminal.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
 
-    int scan = 0;
     int last[4];
     int esc = 0;
     while (1) {
-        int lenIn = entryInput(arrayScan(),'\n',sizeScan()-scan);
+        int lenIn = entryInput(arrayScan(),'\n',sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
         else if (lenIn > 0) delocScan(lenIn);
 
@@ -1480,16 +1522,12 @@ void *console(void *arg)
         else if (headEcho() == 0) break;
         else {
             unlocEcho(10-lenOut);
-            writechr('\r');
-            for (int i = 0; i < scan; i++) writechr(' ');
-            writechr('\r');
+            unwriteitem();
             enqueEcho(0);
             writestr(arrayEcho());
             if (sizeEcho() != totOut+lenOut+1) exitErrstr("sizeEcho is wrong\n");
             delocEcho(sizeEcho());
-            enqueScan(0);
-            writestr(enlocScan(0)-scan-1);
-            unlocScan(1);}
+            writeitem();}
 
         fd_set fds;
         FD_ZERO(&fds);
@@ -1503,39 +1541,43 @@ void *console(void *arg)
 
         int key = readchr();
         if (esc == 0 && key == '\n') {
-            scan = 0; enqueScan('\n'); writechr('\n');}
+            // change mode
+            writeitem(); writechr('\n');
+            enqueScan('\n');}
         else if (esc == 0 && key >= 'a' && key <= 'z') {
-            scan++; enqueScan(key); writechr(key);}
+            if (tailMatch() == 0) writematch(key-'a'+'A');
+            else writematch(key);}
         else if (esc == 0 && key >= 'A' && key <= 'Z') {
-            scan++; enqueScan(key-'A'+'a'); writechr(key-'A'+'a');}
+            if (tailMatch() == 0) writematch(key);
+            else writematch(key-'A'+'a');}
         else if (esc == 0 && key == 127) {
-            esc = 0; scan += scanstr("<bksp>");}
+            esc = 0; writestr("<bksp>");}
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 1 && key == 91) last[esc++] = key;
         else if (esc == 2 && key == 51) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
         else if (esc == 2 && key == 65) {
-            esc = 0; scan += scanstr("<up>");}
+            esc = 0; writestr("<up>");}
         else if (esc == 2 && key == 66) {
-            esc = 0; scan += scanstr("<down>");}
+            esc = 0; writestr("<down>");}
         else if (esc == 2 && key == 67) {
-            esc = 0; scan += scanstr("<right>");}
+            esc = 0; writestr("<right>");}
         else if (esc == 2 && key == 68) {
-            esc = 0; scan += scanstr("<left>");}
+            esc = 0; writestr("<left>");}
         else if (esc == 2 && key == 70) {
-            esc = 0; scan += scanstr("<end>");}
+            esc = 0; writestr("<end>");}
         else if (esc == 2 && key == 72) {
-            esc = 0; scan += scanstr("<home>");}
+            esc = 0; writestr("<home>");}
         else if (esc == 3 && key == 126 && last[2] == 51) {
-            esc = 0; scan += scanstr("<del>");}
+            esc = 0; writestr("<del>");}
         else if (esc == 3 && key == 126 && last[2] == 53) {
-            esc = 0; scan += scanstr("<pgup>");}
+            esc = 0; writestr("<pgup>");}
         else if (esc == 3 && key == 126 && last[2] == 54) {
-            esc = 0; scan += scanstr("<pgdn>");}
+            esc = 0; writestr("<pgdn>");}
         else {
-            for (int i = 0; i < esc; i++) scan += scannum(last[i]);
-            esc = 0; scan += scannum(key);}}
+            for (int i = 0; i < esc; i++) writenum(last[i]);
+            esc = 0; writenum(key);}}
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
 
     printf("console done\n");
@@ -1728,7 +1770,7 @@ void finalize()
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
-    if (lines.base) {struct Ints initial = {0}; free(lines.base); lines = initial;}
+    if (lines.base) {struct Menus initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
