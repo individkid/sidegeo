@@ -178,13 +178,13 @@ struct Item { // per-menu-line info
     {MenuSculpt,ModeSculpt,1,"Refine","click adds random plane through pierce point"},
     {MenuSculpt,ModeSculpt,1,"Transform","modify model or perspective matrix"},
     {MenuSculpt,ModeSculpt,1,"Manipulate","modify pierced plane"},
-    {MenuSculpt,ModeModes,1,"Mouse","action of mouse motion in Transform/Manipulate modes"},
+    {MenuSculpt,ModeMouse,1,"Mouse","action of mouse motion in Transform/Manipulate modes"},
     {MenuMouse,ModeMouse,2,"Rotate","tilt polytope/plane around pierce point"},
     {MenuMouse,ModeMouse,2,"Translate","slide polytope/plane from pierce point"},
     {MenuMouse,ModeMouse,2,"Look","tilt camera around focal point"},
     {MenuMouse,ModeMouse,2,"Screen","window moves over display fixed to screen"},
     {MenuMouse,ModeMouse,2,"Window","move window and display on screen"},
-    {MenuSculpt,ModeModes,1,"Roller","action of roller button in Transform/Manipulate modes"},
+    {MenuSculpt,ModeRoller,1,"Roller","action of roller button in Transform/Manipulate modes"},
     {MenuRoller,ModeRoller,2,"Lever","push or pull other end of tilt segment from pierce point"},
     {MenuRoller,ModeRoller,2,"Clock","rotate picture plane around perpendicular to pierce point"},
     {MenuRoller,ModeRoller,2,"Cylinder","rotate polytope around tilt line"},
@@ -192,10 +192,10 @@ struct Item { // per-menu-line info
     {MenuRoller,ModeRoller,2,"Drive","move picture plane forward or back"},
     {MenuRoller,ModeRoller,2,"Size","resize window with display fixed to screen"},
     {MenuRoller,ModeRoller,2,"Aspect","change ratio between window dimensions"},
-    {MenuSculpt,ModeModes,1,"Window","how operating system window move affects display"},
+    {MenuSculpt,ModeWindow,1,"Window","how operating system window move affects display"},
     {MenuWindows,ModeWindow,2,"Physical","display appears fixed on screen"},
     {MenuWindows,ModeWindow,2,"Virtual","display appears fixed in window"},
-    {MenuSculpt,ModeModes,1,"Corner","how operating system window resize affects display"},
+    {MenuSculpt,ModeCorner,1,"Corner","how operating system window resize affects display"},
     {MenuCorner,ModeCorner,2,"Opposite","corner of display opposite dragged appears fixed"},
     {MenuCorner,ModeCorner,2,"Northwest","upper left corner of display appears fixed"},
     {MenuCorner,ModeCorner,2,"Northeast","upper right corner of display appears fixed"},
@@ -1019,13 +1019,12 @@ void process()
 void menu()
 {
     CHECK0(menu,Menu)
-    const char *str = "menu: ";
-    int len = strlen(str);
-    strncpy(enlocPrint(len),str,len);
     char *buf = arrayChar();
-    len = (strstr(buf,"\n")-buf)+1;
-    strncpy(enlocPrint(len),buf,len);
-    delocChar(len);
+    int len = strstr(buf,"\n")-buf;
+    if (len == 1 && buf[0] < MenuMenus) {mode[item[buf[0]].mode] = buf[0];}
+    else if (len == 1 && buf[0] == 127) {MAYBE0(process,Process)}
+    else {buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
+    delocChar(len+1);
     DEQUE0(menu,Menu)
 }
 
@@ -1443,72 +1442,63 @@ void writenum(int key)
     unlocScan(len+1);
 }
 
-void writeitem(enum Menu line)
+void writeitem(enum Menu line, int match)
 {
     struct Item *iptr = &item[line];
-    enum Menu menu = MenuMenus;
-    if (iptr->mode != ModeModes) menu = mark[iptr->mode];
     for (int i = 0; i < iptr->level; i++) writechr(' ');
     writestr(iptr->name);
-    if (menu == line) writestr(" ** "); else writestr(" -- ");
-    writestr(iptr->comment);
-}
-
-void writeprompt(enum Menu line, int match)
-{
-    struct Item *iptr = &item[line];
-    writeitem(line);
     writechr('\r');
     for (int i = 0; i < iptr->level; i++) writechr(' ');
+    for (int i = 0; i < match; i++) writechr(iptr->name[i]);
 }
 
-void unwriteprompt(enum Menu line)
+void unwriteitem(enum Menu line)
 {
     struct Item *iptr = &item[line];
-    int count = iptr->level+strlen(iptr->name)+6+strlen(iptr->comment);
+    int count = iptr->level+strlen(iptr->name);
     writechr('\r');
     for (int i = 0; i < count; i++) writechr(' ');
-    for (int i = 0; i < count; i++) writechr(127);
     writechr('\r');
 }
 
 void writemenu()
 {
-    for (enum Menu i = 0; i < MenuMenus; i++) {
-        writeitem(i); writechr('\n');}
+    for (enum Menu line = 0; line < MenuMenus; line++) {
+        struct Item *iptr = &item[line];
+        enum Menu menu = MenuMenus;
+        if (iptr->mode != ModeModes) menu = mark[iptr->mode];
+        for (int i = 0; i < iptr->level; i++) writechr(' ');
+        writestr(iptr->name);
+        if (menu == line) writestr(" ** "); else writestr(" -- ");
+        writestr(iptr->comment);
+        writechr('\n');
+    }
 }
 
-void writematch(char chr, enum Menu *lptr, int *mptr)
+void writematch(char chr)
 {
-    enum Menu line = *lptr;
-    int match = *mptr;
+    enum Menu line = tailLine();
+    int match = tailMatch();
     struct Item *iptr = &item[line];
     enum Mode mode = iptr->mode;
-    unwriteprompt(line);
+    unwriteitem(line);
     if (iptr->name[match] == chr) {
-        *mptr = match+1; writeprompt(line,match+1); return;}
-    for (int i = line+1; i < MenuMenus && item[i].mode == iptr->mode; i++) {
+        enqueLine(line); enqueMatch(match+1); writeitem(line,match+1); return;}
+    for (int i = line+1; i < MenuMenus; i++) {
         struct Item *jptr = &item[i];
-        if (strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
-            *mptr = match+1; *lptr = i; writeprompt(i,match+1); return;}}
-    for (int i = iptr->collect+1; i < line; i++) {
+        if (jptr->collect == iptr->collect && strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
+            enqueLine(i); enqueMatch(match+1); writeitem(i,match+1); return;}}
+    for (int i = 0; i < line; i++) {
         struct Item *jptr = &item[i];
-        if (strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
-            *mptr = match+1; *lptr = i; writeprompt(i,match+1); return;}}
+        if (jptr->collect == iptr->collect && strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
+            enqueLine(i); enqueMatch(match+1); writeitem(i,match+1); return;}}
     writemenu();
-    writeprompt(line,match);
+    writeitem(line,match);
 }
 
 void *console(void *arg)
 {
-    int match = 0;
-    enum Menu *line = 0;
-    int lim = 0;
-    for (enum Menu i = 0; i < MenuMenus; i++) {
-        int len = strlen(item[i].name);
-        if (len > lim) lim = len;}
-    line = (enum Menu *)malloc(++lim*sizeof(enum Menu));
-    line[0] = MenuSculpt;
+    enqueLine(0); enqueMatch(0);
 
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
@@ -1543,12 +1533,12 @@ void *console(void *arg)
         else if (headEcho() == 0) break;
         else {
             unlocEcho(10-lenOut);
-            unwriteprompt(line[match]);
+            unwriteitem(tailLine());
             enqueEcho(0);
             writestr(arrayEcho());
             if (sizeEcho() != totOut+lenOut+1) exitErrstr("sizeEcho is wrong\n");
             delocEcho(sizeEcho());
-            writeprompt(line[match],match);}
+            writeitem(tailLine(),tailMatch());}
 
         fd_set fds;
         FD_ZERO(&fds);
@@ -1562,19 +1552,27 @@ void *console(void *arg)
 
         int key = readchr();
         if (esc == 0 && key == '\n') {
-            unwriteprompt(line[match]);
-            // change mode
-            writeprompt(line[match],match);
             writechr('\n');
-            enqueScan('\n');}
+            enum Menu line = tailLine();
+            enum Menu collect = item[line].collect;
+            enum Mode mode = item[line].mode;
+            if (collect != MenuMenus && item[collect].mode == mode) {
+                delocLine(sizeLine()-1); delocMatch(sizeMatch()-1);
+                mark[mode] = line; enqueScan(tailLine()); enqueScan('\n');}
+            else {
+                enqueLine(mark[mode]); enqueMatch(0);}
+            writeitem(tailLine(),tailMatch());}
         else if (esc == 0 && key >= 'a' && key <= 'z') {
-            if (match == 0) writematch(key-'a'+'A',&line[match],&match);
-            else writematch(key,&line[match],&match);}
+            if (tailMatch() == 0) writematch(key-'a'+'A');
+            else writematch(key);}
         else if (esc == 0 && key >= 'A' && key <= 'Z') {
-            if (match == 0) writematch(key,&line[match],&match);
-            else writematch(key-'A'+'a',&line[match],&match);}
+            if (tailMatch() == 0) writematch(key);
+            else writematch(key-'A'+'a');}
         else if (esc == 0 && key == 127) {
-            esc = 0; writestr("<bksp>");}
+            unwriteitem(tailLine());
+            if (sizeLine() == 1) {enqueScan(127); enqueScan('\n');}
+            else {unqueLine(); unqueMatch();}
+            writeitem(tailLine(),tailMatch());}
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 1 && key == 91) last[esc++] = key;
         else if (esc == 2 && key == 51) last[esc++] = key;
@@ -1601,7 +1599,7 @@ void *console(void *arg)
         else {
             for (int i = 0; i < esc; i++) writenum(last[i]);
             esc = 0; writenum(key);}}
-    unwriteprompt(line[match]);
+    unwriteitem(tailLine());
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
 
     printf("console done\n");
@@ -1794,6 +1792,8 @@ void finalize()
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
+    if (lines.base) {struct Menus initial = {0}; free(lines.base); lines = initial;}
+    if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
