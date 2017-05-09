@@ -83,6 +83,10 @@ extern void __stginit_Main(void);
 #define GLFW_INCLUDE_GLCOREARB
 #endif
 #include <GLFW/glfw3.h>
+#ifdef __linux__
+#define GLFW_EXPOSE_NATIVE_X11
+#include <GLFW/glfw3native.h>
+#endif
 
 #ifdef BRINGUP
 #define NUM_PLANES 4
@@ -109,6 +113,9 @@ extern void __stginit_Main(void);
     pthread_mutex_t mutex; \
     int valid;
 
+#ifdef __linux__
+Display *displayHandle = 0; // for XWarpPointer
+#endif
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
@@ -167,9 +174,9 @@ enum Mode {ModeSculpt,ModeMouse,ModeRoller,ModeWindow,ModeCorner,ModeModes};
 enum Menu mode[ModeModes] = INIT; // owned by main thread
 enum Menu mark[ModeModes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
-    enum Menu collect; // arrayItem()[arrayItem()[x].collect].mode == ModeModes
-    enum Mode mode; // arrayItem()[arrayMode()[x]].mode == x
-    int level; // arrayItem()[arrayItem()[x].collect].level == arrayItem()[x].level-1
+    enum Menu collect; // item[item[x].collect].mode == ModeModes
+    enum Mode mode; // item[mode[x]].mode == x
+    int level; // item[item[x].collect].level == arrayItem()[x].level-1
     char *name; // word to match console input against
     char *comment; /*text to print after matching word*/} item[MenuMenus] = {
     {MenuMenus,ModeModes,0,"Sculpt","display and manipulate polytope"},
@@ -202,9 +209,9 @@ struct Item { // per-menu-line info
     {MenuCorner,ModeCorner,2,"Southwest","lower left corner of display appears fixed"},
     {MenuCorner,ModeCorner,2,"Southeast","lower right corner of display appears fixed"}};
 struct Menus {DECLARE_QUEUE(enum Menu)} lines = {0};
- // index into arrayItem() for console undo
+ // index into item for console undo
 struct Ints {DECLARE_QUEUE(int)} matchs = {0};
- // index into arrayItem()[line].name for console undo
+ // index into item[line].name for console undo
 float xPoint = 0;  // position of pierce point
 float yPoint = 0;
 float zPoint = 0;
@@ -1088,7 +1095,12 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         clickMode = ModeLeft;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
         if (clickMode == ModeRight) {
-            // xPos = xWarp; yPos = yWarp; zPos = zWarp;
+            xPos = xWarp; yPos = yWarp; zPos = zWarp;
+#ifdef __linux__
+            double xpos, ypos;
+            glfwGetCursorPos(windowHandle,&xpos,&ypos);
+            XWarpPointer(displayHandle,None,None,0,0,0,0,xWarp-xpos,yWarp-ypos);
+#endif
             clickMode = ModeLeft;}
         else {
             xWarp = xPos; yWarp = yPos; zWarp = zPos;
@@ -1671,6 +1683,7 @@ void initialize(int argc, char **argv)
     GLenum err = glewInit();
     if (GLEW_OK != err) {
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
+    displayHandle = glfwGetX11Display();
 #endif
 
     glViewport(0, 0, xSiz, ySiz);
