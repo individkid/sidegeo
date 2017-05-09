@@ -159,9 +159,10 @@ struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0};
  // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
-enum {ModeRight,ModeLeft} clickMode = ModeRight;
-/*ModeRight: mouse movement ignored
- *ModeLeft: mouse movement affects matrices*/
+enum {ModeInit,ModeLeft,ModeRight} clickMode = ModeInit;
+/*ModeInit: mouse movement ignored; no pierce point
+ *ModeLeft: mouse movement affects matrices; pierce point saved
+ *ModeRight: mouse movement ignored; pierce point saved*/
 enum {ModeDiplane,ModeDipoint} shaderMode = ModeDiplane;
 /*ModeDiplane: display planes
  *ModeDipoint: display points*/
@@ -229,9 +230,6 @@ int xSiz = 0; // size of window
 int ySiz = 0;
 int xLoc = 0; // window location
 int yLoc = 0;
-float modelMat[9] = {0};
-float normalMat[9] = {0};
-float projectMat[9] = {0};
 struct Chars generics = {0};
  // sized formatted packets of bytes
 enum WrapState {WrapEnqued,MenuWrapWait};
@@ -1223,8 +1221,9 @@ void menu()
     CHECK0(menu,Menu)
     char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
-    if (len == 1 && buf[0] < MenuMenus) {mode[item[buf[0]].mode] = buf[0];}
-    else if (len == 1 && buf[0] == 127) {MAYBE0(process,Process)}
+    if (len == 1 && buf[0] < MenuMenus) {
+        clickMode = ModeInit;
+        mode[item[buf[0]].mode] = buf[0];}
     else {buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocChar(len+1);
     DEQUE0(menu,Menu)
@@ -1279,17 +1278,12 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         button = GLFW_MOUSE_BUTTON_RIGHT;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
         xPoint = xPos; yPoint = yPos; zPoint = zPos;
-        if (shaderMode == ModeDiplane) {
-            glGetUniformfv(diplaneProgram,modelUniform,modelMat);
-            glGetUniformfv(diplaneProgram,normalUniform,normalMat);
-            glGetUniformfv(diplaneProgram,projectUniform,projectMat);}
-        else {
-            glGetUniformfv(dipointProgram,modelUniform,modelMat);
-            glGetUniformfv(dipointProgram,normalUniform,normalMat);
-            glGetUniformfv(dipointProgram,projectUniform,projectMat);}
         clickMode = ModeLeft;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
-        if (clickMode == ModeRight) {
+        if (clickMode == ModeLeft) {
+            xWarp = xPos; yWarp = yPos; zWarp = zPos;
+            clickMode = ModeRight;}
+        else if (clickMode == ModeRight) {
             xPos = xWarp; yPos = yWarp; zPos = zWarp;
 #ifdef __linux__
             double xpos, ypos;
@@ -1302,10 +1296,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             struct CGPoint point; point.x = xpos+xWarp; point.y = ypos+yWarp;
             CGWarpMouseCursorPosition(point);
 #endif
-            clickMode = ModeLeft;}
-        else {
-            xWarp = xPos; yWarp = yPos; zWarp = zPos;
-            clickMode = ModeRight;}}
+            clickMode = ModeLeft;}}
 }
 
 void displayFocus(GLFWwindow *window, int focused)
@@ -1502,20 +1493,17 @@ void writematch(char chr)
     int match = tailMatch();
     struct Item *iptr = &item[line];
     enum Mode mode = iptr->mode;
-    unwriteitem(line);
-    printf("writematch %c match %d name %s\n",chr,match,iptr->name);
     if (iptr->name[match] == chr) {
-        enqueLine(line); enqueMatch(match+1); writeitem(line,match+1); return;}
+        enqueLine(line); enqueMatch(match+1); return;}
     for (int i = line+1; i < MenuMenus; i++) {
         struct Item *jptr = &item[i];
         if (jptr->collect == iptr->collect && strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
-            enqueLine(i); enqueMatch(match+1); writeitem(i,match+1); return;}}
+            enqueLine(i); enqueMatch(match+1); return;}}
     for (int i = 0; i < line; i++) {
         struct Item *jptr = &item[i];
         if (jptr->collect == iptr->collect && strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
-            enqueLine(i); enqueMatch(match+1); writeitem(i,match+1); return;}}
+            enqueLine(i); enqueMatch(match+1); return;}}
     writemenu();
-    writeitem(line,match);
 }
 
 void *console(void *arg)
@@ -1572,56 +1560,44 @@ void *console(void *arg)
         if (lenSel == 0 || (lenSel < 0 && errno == EINTR)) continue;
         if (lenSel != 1) exitErrstr("pselect failed: %s\n", strerror(errno));
 
+        unwriteitem(tailLine());
         int key = readchr();
         if (esc == 0 && key == '\n') {
+            writeitem(tailLine(),tailMatch());
             writechr('\n');
             enum Menu line = tailLine();
             enum Menu collect = item[line].collect;
             enum Mode mode = item[line].mode;
+            while (item[tailLine()].collect == collect && sizeLine() > 1) {
+                unqueLine(); unqueMatch();}
+            if (item[tailLine()].collect != collect) {
+                enqueLine(line); enqueMatch(0);}
             if (collect != MenuMenus && item[collect].mode == mode) {
-                delocLine(sizeLine()-1); delocMatch(sizeMatch()-1);
-                mark[mode] = line; enqueScan(tailLine()); enqueScan('\n');}
+                mark[mode] = line; enqueScan(line); enqueScan('\n');}
             else {
-                enqueLine(mark[mode]); enqueMatch(0);}
-            writeitem(tailLine(),tailMatch());}
-        else if (esc == 0 && key >= 'a' && key <= 'z') {
-            if (tailMatch() == 0) writematch(key-'a'+'A');
-            else writematch(key);}
-        else if (esc == 0 && key >= 'A' && key <= 'Z') {
-            if (tailMatch() == 0) writematch(key);
-            else writematch(key-'A'+'a');}
-        else if (esc == 0 && key == 127) {
-            unwriteitem(tailLine());
-            printf("<bksp>\n");
-            if (sizeLine() == 1) {enqueScan(127); enqueScan('\n');}
-            else {unqueLine(); unqueMatch();}
-            writeitem(tailLine(),tailMatch());}
+                enqueLine(mark[mode]); enqueMatch(0);}}
+        else if (esc == 0 && key == 127 && sizeLine() > 1) {unqueLine(); unqueMatch();}
+        else if (esc == 0 && key == 127 && sizeLine() == 1) writemenu();
+        else if (esc == 0 && key >= 'a' && key <= 'z' && tailMatch() == 0) writematch(key-'a'+'A');
+        else if (esc == 0 && key >= 'a' && key <= 'z' && tailMatch() > 0) writematch(key);
+        else if (esc == 0 && key >= 'A' && key <= 'Z' && tailMatch() == 0) writematch(key);
+        else if (esc == 0 && key >= 'A' && key <= 'Z' && tailMatch() > 0) writematch(key-'A'+'a');
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 1 && key == 91) last[esc++] = key;
         else if (esc == 2 && key == 51) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
-        else if (esc == 2 && key == 65) {
-            esc = 0; unwriteitem(tailLine()); writestr("<up>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 2 && key == 66) {
-            esc = 0; unwriteitem(tailLine()); writestr("<down>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 2 && key == 67) {
-            esc = 0; unwriteitem(tailLine()); writestr("<right>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 2 && key == 68) {
-            esc = 0; unwriteitem(tailLine()); writestr("<left>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 2 && key == 70) {
-            esc = 0; unwriteitem(tailLine()); writestr("<end>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 2 && key == 72) {
-            esc = 0; unwriteitem(tailLine()); writestr("<home>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 3 && key == 126 && last[2] == 51) {
-            esc = 0; unwriteitem(tailLine()); writestr("<del>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 3 && key == 126 && last[2] == 53) {
-            esc = 0; unwriteitem(tailLine()); writestr("<pgup>\n"); writeitem(tailLine(),tailMatch());}
-        else if (esc == 3 && key == 126 && last[2] == 54) {
-            esc = 0; unwriteitem(tailLine()); writestr("<pgdn>\n"); writeitem(tailLine(),tailMatch());}
-        else {
-            for (int i = 0; i < esc; i++) writenum(last[i]);
-            esc = 0; writenum(key);}}
+        else if (esc == 2 && key == 65) {esc = 0; writestr("<up>\n");}
+        else if (esc == 2 && key == 66) {esc = 0; writestr("<down>\n");}
+        else if (esc == 2 && key == 67) {esc = 0; writestr("<right>\n");}
+        else if (esc == 2 && key == 68) {esc = 0; writestr("<left>\n");}
+        else if (esc == 2 && key == 70) {esc = 0; writestr("<end>\n");}
+        else if (esc == 2 && key == 72) {esc = 0; writestr("<home>\n");}
+        else if (esc == 3 && key == 126 && last[2] == 51) {esc = 0; writestr("<del>\n");}
+        else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; writestr("<pgup>\n");}
+        else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; writestr("<pgdn>\n");}
+        else {esc = 0; for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key);}
+        writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
 
