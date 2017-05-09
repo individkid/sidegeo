@@ -182,7 +182,7 @@ struct Item { // per-menu-line info
     int level; // item[item[x].collect].level == arrayItem()[x].level-1
     char *name; // word to match console input against
     char *comment; /*text to print after matching word*/} item[MenuMenus] = {
-    {MenuMenus,ModeModes,0,"Sculpt","display and manipulate polytope"},
+    {MenuMenus,ModeSculpt,0,"Sculpt","display and manipulate polytope"},
     {MenuSculpt,ModeSculpt,1,"Additive","click fills in region over pierce point"},
     {MenuSculpt,ModeSculpt,1,"Subtractive","click hollows out region under pierce point"},
     {MenuSculpt,ModeSculpt,1,"Refine","click adds random plane through pierce point"},
@@ -517,6 +517,198 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 
 #define DONE0(command,Command,buffer,size) \
     if ((buffer.done += size) > buffer.ready) exitErrstr(#command" command too done\n");
+
+/*
+ * shader programs
+ */
+
+const GLchar *uniformCode = "\
+    #version 330 core\n\
+    uniform mat3 basis[3];\n\
+    uniform float invalid;\n";
+
+const GLchar *expandCode = "\
+    void expand(in vec3 plane, in uint versor, out mat3 points)\n\
+    {\n\
+        uint index = uint(abs(versor));\n\
+        points = basis[index];\n\
+        for (int i = 0; i < 3; i++) points[i][index] = plane[i];\n\
+    }\n";
+
+const GLchar *constructCode = "\
+    void construct(in mat3 points, out vec3 plane, out uint versor)\n\
+    {\n\
+        float delta[3];\n\
+        for (int i = 0; i < 3; i++) {\n\
+            float mini = points[0][i];\n\
+            float maxi = points[0][i];\n\
+            for (int j = 1; j < 3; j++) {\n\
+                mini = min(mini,points[j][i]);\n\
+                maxi = max(maxi,points[j][i]);}\n\
+            delta[i] = maxi - mini;}\n\
+        float mini = delta[0];\n\
+        versor = uint(0);\n\
+        for (int i = 1; i < 3; i++) if (delta[i] < mini) {\n\
+            mini = delta[i];\n\
+            versor = uint(i);}\n\
+        for (int i = 0; i < 3; i++) {\n\
+            mat2 system;\n\
+            vec2 augment;\n\
+            for (int j = 0; j < 2; j++) {\n\
+                int index = j;\n\
+                if (j >= int(versor)) index++;\n\
+                system[0][j] = points[1][index] - points[0][index];\n\
+                system[1][j] = points[2][index] - points[0][index];\n\
+                augment[j] = basis[versor][i][index];}\n\
+            vec2 solution = inverse(system)*augment;\n\
+            vec2 difference;\n\
+            difference[0] = points[1][versor] - points[0][versor];\n\
+            difference[1] = points[2][versor] - points[0][versor];\n\
+            plane[i] = dot(solution,difference) + points[0][versor];}\n\
+    }\n";
+
+const GLchar *intersectCode = "\
+    void intersect(in mat3 points[3], out vec3 point)\n\
+    {\n\
+        float A = points[0][0][0];\n\
+        float a = A - points[0][1][0];\n\
+        float b = A - points[0][2][0];\n\
+        float B = points[0][0][1];\n\
+        float c = B - points[0][1][1];\n\
+        float d = B - points[0][2][1];\n\
+        float C = points[0][0][2];\n\
+        float e = C - points[0][1][2];\n\
+        float f = C - points[0][2][2];\n\
+        float D = points[1][0][0];\n\
+        float g = D - points[1][1][0];\n\
+        float h = D - points[1][2][0];\n\
+        float E = points[1][0][1];\n\
+        float i = E - points[1][1][1];\n\
+        float j = E - points[1][2][1];\n\
+        float F = points[1][0][2];\n\
+        float k = F - points[1][1][2];\n\
+        float l = F - points[1][2][2];\n\
+        float G = points[2][0][0];\n\
+        float m = G - points[2][1][0];\n\
+        float n = G - points[2][2][0];\n\
+        float H = points[2][0][1];\n\
+        float o = H - points[2][1][1];\n\
+        float p = H - points[2][2][1];\n\
+        float I = points[2][0][2];\n\
+        float q = I - points[2][1][2];\n\
+        float r = I - points[2][2][2];\n\
+        mat3 system;\n\
+        system[0][0] = ((-q/m)+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(-o/m)));\n\
+        system[0][1] = ((-e/a)+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(-c/a)));\n\
+        system[0][2] = ((-k/g)+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(-i/g)));\n\
+        system[1][0] = (-(r+((-q/m)*n))/(p+((-o/m)*n)));\n\
+        system[1][1] = (-(f+((-e/a)*b))/(d+((-c/a)*b)));\n\
+        system[1][2] = (-(l+((-k/g)*h))/(j+((-i/g)*h)));\n\
+        system[2][0] = 1.0;\n\
+        system[2][1] = 1.0;\n\
+        system[2][2] = 1.0;\n\
+        mat3 cofactor;\n\
+        float sig = 1.0;\n\
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {\n\
+            mat2 minor;\n\
+            int k, l, m, n;\n\
+            for (k = m = 0; k < 2; k++, m++) {\n\
+                if (m == i) m++;\n\
+                for (l = n = 0; l < 2; l++, n++) {\n\
+                    if (n == j) n++;\n\
+                    minor[k][l] = system[m][n];}}\n\
+            cofactor[i][j] = sig*determinant(minor);\n\
+            sig = sign(-sig);}\n\
+        vec3 augment;\n\
+        augment[0] = ((I+((-q/m)*G))+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(H+((-o/m)*G))));\n\
+        augment[1] = ((C+((-e/a)*A))+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(B+((-c/a)*A))));\n\
+        augment[2] = ((F+((-k/g)*D))+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(E+((-i/g)*D))));\n\
+        point = transpose(cofactor)*augment;\n\
+        float det = dot(system[0],cofactor[0]);\n\
+        float recip = 1.1/invalid;\n\
+        if (det/point[0] <= recip || det/point[1] <= recip || det/point[2] <= recip)\n\
+            point = vec3(invalid,invalid,invalid); else\n\
+            point = point/det;\n\
+    }\n";
+
+#define VertexCode(INPUT) "\
+    layout (location = 0) in vec3 plane;\n\
+    layout (location = 1) in uint versor;\n\
+    layout (location = 2) in vec3 point;\n\
+    out vec3 xformed;\n\
+    out uint uiformed;\n\
+    out vec3 rotated;\n\
+    out uint uitated;\n\
+    out vec3 xpanded;\n\
+    out uint uipanded;\n\
+    uniform mat4 model;\n\
+    uniform mat3 normal;\n\
+    void main()\n\
+    {\n\
+        xpanded = "INPUT";\n\
+        xformed = "INPUT";\n\
+        rotated = vec3(1.0f,1.0f,1.0f);\n\
+   }\n";
+
+#define GeometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
+    layout ("LAYOUT0") in;\n\
+    layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
+    in vec3 xformed["LAYOUT3"];\n\
+    in uint uiformed["LAYOUT3"];\n\
+    in vec3 rotated["LAYOUT3"];\n\
+    in uint uitated["LAYOUT3"];\n\
+    in vec3 xpanded["LAYOUT3"];\n\
+    in uint uipanded["LAYOUT3"];\n\
+    out vec3 cross;\n\
+    out vec3 vector;\n\
+    out float scalar;\n\
+    uniform mat3 project;\n\
+    uniform vec3 feather;\n\
+    uniform vec3 arrow;\n\
+    void main()\n\
+    {\n\
+        for (int i = 0; i < "LAYOUT2"; i++) {\n\
+        int index = i * "LAYOUT3" / "LAYOUT2";\n\
+        gl_Position = vec4(xformed[index], 1.0);\n\
+        cross = rotated[index];\n\
+        vector = xpanded[index];\n\
+        scalar = xpanded[index][0];\n\
+        EmitVertex();}\n\
+        EndPrimitive();\n\
+    }\n";
+
+#define FragmentCode "\
+    in vec3 cross;\n\
+    out vec4 result;\n\
+    uniform vec4 light;\n\
+    void main()\n\
+    {\n\
+        result = vec4(cross, 1.0f);\n\
+    }\n";
+
+const GLchar *diplaneVertex = VertexCode("plane");
+const GLchar *diplaneGeometry = GeometryCode("triangles_adjacency", "6", "triangle_strip", "3");
+const GLchar *diplaneFragment = FragmentCode;
+
+const GLchar *dipointVertex = VertexCode("point");
+const GLchar *dipointGeometry = GeometryCode("triangles", "3", "triangle_strip", "3");
+const GLchar *dipointFragment = FragmentCode;
+
+const GLchar *coplaneVertex = VertexCode("plane");
+const GLchar *coplaneGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *coplaneFragment = 0;
+
+const GLchar *copointVertex = VertexCode("point");
+const GLchar *copointGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *copointFragment = 0;
+
+const GLchar *adplaneVertex = VertexCode("plane");
+const GLchar *adplaneGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *adplaneFragment = 0;
+
+const GLchar *adpointVertex = VertexCode("point");
+const GLchar *adpointGeometry = GeometryCode("points", "1", "points", "1");
+const GLchar *adpointFragment = 0;
 
 /*
  * fifo stack mutex message
@@ -1174,198 +1366,6 @@ void displayRefresh(GLFWwindow *window)
 }
 
 /*
- * shader programs
- */
-
-const GLchar *uniformCode = "\
-    #version 330 core\n\
-    uniform mat3 basis[3];\n\
-    uniform float invalid;\n";
-
-const GLchar *expandCode = "\
-    void expand(in vec3 plane, in uint versor, out mat3 points)\n\
-    {\n\
-        uint index = uint(abs(versor));\n\
-        points = basis[index];\n\
-        for (int i = 0; i < 3; i++) points[i][index] = plane[i];\n\
-    }\n";
-
-const GLchar *constructCode = "\
-    void construct(in mat3 points, out vec3 plane, out uint versor)\n\
-    {\n\
-        float delta[3];\n\
-        for (int i = 0; i < 3; i++) {\n\
-            float mini = points[0][i];\n\
-            float maxi = points[0][i];\n\
-            for (int j = 1; j < 3; j++) {\n\
-                mini = min(mini,points[j][i]);\n\
-                maxi = max(maxi,points[j][i]);}\n\
-            delta[i] = maxi - mini;}\n\
-        float mini = delta[0];\n\
-        versor = uint(0);\n\
-        for (int i = 1; i < 3; i++) if (delta[i] < mini) {\n\
-            mini = delta[i];\n\
-            versor = uint(i);}\n\
-        for (int i = 0; i < 3; i++) {\n\
-            mat2 system;\n\
-            vec2 augment;\n\
-            for (int j = 0; j < 2; j++) {\n\
-                int index = j;\n\
-                if (j >= int(versor)) index++;\n\
-                system[0][j] = points[1][index] - points[0][index];\n\
-                system[1][j] = points[2][index] - points[0][index];\n\
-                augment[j] = basis[versor][i][index];}\n\
-            vec2 solution = inverse(system)*augment;\n\
-            vec2 difference;\n\
-            difference[0] = points[1][versor] - points[0][versor];\n\
-            difference[1] = points[2][versor] - points[0][versor];\n\
-            plane[i] = dot(solution,difference) + points[0][versor];}\n\
-    }\n";
-
-const GLchar *intersectCode = "\
-    void intersect(in mat3 points[3], out vec3 point)\n\
-    {\n\
-        float A = points[0][0][0];\n\
-        float a = A - points[0][1][0];\n\
-        float b = A - points[0][2][0];\n\
-        float B = points[0][0][1];\n\
-        float c = B - points[0][1][1];\n\
-        float d = B - points[0][2][1];\n\
-        float C = points[0][0][2];\n\
-        float e = C - points[0][1][2];\n\
-        float f = C - points[0][2][2];\n\
-        float D = points[1][0][0];\n\
-        float g = D - points[1][1][0];\n\
-        float h = D - points[1][2][0];\n\
-        float E = points[1][0][1];\n\
-        float i = E - points[1][1][1];\n\
-        float j = E - points[1][2][1];\n\
-        float F = points[1][0][2];\n\
-        float k = F - points[1][1][2];\n\
-        float l = F - points[1][2][2];\n\
-        float G = points[2][0][0];\n\
-        float m = G - points[2][1][0];\n\
-        float n = G - points[2][2][0];\n\
-        float H = points[2][0][1];\n\
-        float o = H - points[2][1][1];\n\
-        float p = H - points[2][2][1];\n\
-        float I = points[2][0][2];\n\
-        float q = I - points[2][1][2];\n\
-        float r = I - points[2][2][2];\n\
-        mat3 system;\n\
-        system[0][0] = ((-q/m)+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(-o/m)));\n\
-        system[0][1] = ((-e/a)+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(-c/a)));\n\
-        system[0][2] = ((-k/g)+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(-i/g)));\n\
-        system[1][0] = (-(r+((-q/m)*n))/(p+((-o/m)*n)));\n\
-        system[1][1] = (-(f+((-e/a)*b))/(d+((-c/a)*b)));\n\
-        system[1][2] = (-(l+((-k/g)*h))/(j+((-i/g)*h)));\n\
-        system[2][0] = 1.0;\n\
-        system[2][1] = 1.0;\n\
-        system[2][2] = 1.0;\n\
-        mat3 cofactor;\n\
-        float sig = 1.0;\n\
-        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {\n\
-            mat2 minor;\n\
-            int k, l, m, n;\n\
-            for (k = m = 0; k < 2; k++, m++) {\n\
-                if (m == i) m++;\n\
-                for (l = n = 0; l < 2; l++, n++) {\n\
-                    if (n == j) n++;\n\
-                    minor[k][l] = system[m][n];}}\n\
-            cofactor[i][j] = sig*determinant(minor);\n\
-            sig = sign(-sig);}\n\
-        vec3 augment;\n\
-        augment[0] = ((I+((-q/m)*G))+((-(r+((-q/m)*n))/(p+((-o/m)*n)))*(H+((-o/m)*G))));\n\
-        augment[1] = ((C+((-e/a)*A))+((-(f+((-e/a)*b))/(d+((-c/a)*b)))*(B+((-c/a)*A))));\n\
-        augment[2] = ((F+((-k/g)*D))+((-(l+((-k/g)*h))/(j+((-i/g)*h)))*(E+((-i/g)*D))));\n\
-        point = transpose(cofactor)*augment;\n\
-        float det = dot(system[0],cofactor[0]);\n\
-        float recip = 1.1/invalid;\n\
-        if (det/point[0] <= recip || det/point[1] <= recip || det/point[2] <= recip)\n\
-            point = vec3(invalid,invalid,invalid); else\n\
-            point = point/det;\n\
-    }\n";
-
-#define VertexCode(INPUT) "\
-    layout (location = 0) in vec3 plane;\n\
-    layout (location = 1) in uint versor;\n\
-    layout (location = 2) in vec3 point;\n\
-    out vec3 xformed;\n\
-    out uint uiformed;\n\
-    out vec3 rotated;\n\
-    out uint uitated;\n\
-    out vec3 xpanded;\n\
-    out uint uipanded;\n\
-    uniform mat4 model;\n\
-    uniform mat3 normal;\n\
-    void main()\n\
-    {\n\
-        xpanded = "INPUT";\n\
-        xformed = "INPUT";\n\
-        rotated = vec3(1.0f,1.0f,1.0f);\n\
-   }\n";
-
-#define GeometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
-    layout ("LAYOUT0") in;\n\
-    layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
-    in vec3 xformed["LAYOUT3"];\n\
-    in uint uiformed["LAYOUT3"];\n\
-    in vec3 rotated["LAYOUT3"];\n\
-    in uint uitated["LAYOUT3"];\n\
-    in vec3 xpanded["LAYOUT3"];\n\
-    in uint uipanded["LAYOUT3"];\n\
-    out vec3 cross;\n\
-    out vec3 vector;\n\
-    out float scalar;\n\
-    uniform mat3 project;\n\
-    uniform vec3 feather;\n\
-    uniform vec3 arrow;\n\
-    void main()\n\
-    {\n\
-        for (int i = 0; i < "LAYOUT2"; i++) {\n\
-        int index = i * "LAYOUT3" / "LAYOUT2";\n\
-        gl_Position = vec4(xformed[index], 1.0);\n\
-        cross = rotated[index];\n\
-        vector = xpanded[index];\n\
-        scalar = xpanded[index][0];\n\
-        EmitVertex();}\n\
-        EndPrimitive();\n\
-    }\n";
-
-#define FragmentCode "\
-    in vec3 cross;\n\
-    out vec4 result;\n\
-    uniform vec4 light;\n\
-    void main()\n\
-    {\n\
-        result = vec4(cross, 1.0f);\n\
-    }\n";
-
-const GLchar *diplaneVertex = VertexCode("plane");
-const GLchar *diplaneGeometry = GeometryCode("triangles_adjacency", "6", "triangle_strip", "3");
-const GLchar *diplaneFragment = FragmentCode;
-
-const GLchar *dipointVertex = VertexCode("point");
-const GLchar *dipointGeometry = GeometryCode("triangles", "3", "triangle_strip", "3");
-const GLchar *dipointFragment = FragmentCode;
-
-const GLchar *coplaneVertex = VertexCode("plane");
-const GLchar *coplaneGeometry = GeometryCode("triangles", "3", "points", "1");
-const GLchar *coplaneFragment = 0;
-
-const GLchar *copointVertex = VertexCode("point");
-const GLchar *copointGeometry = GeometryCode("triangles", "3", "points", "1");
-const GLchar *copointFragment = 0;
-
-const GLchar *adplaneVertex = VertexCode("plane");
-const GLchar *adplaneGeometry = GeometryCode("triangles", "3", "points", "1");
-const GLchar *adplaneFragment = 0;
-
-const GLchar *adpointVertex = VertexCode("point");
-const GLchar *adpointGeometry = GeometryCode("points", "1", "points", "1");
-const GLchar *adpointFragment = 0;
-
-/*
  * helpers for initialization
  */
 
@@ -1503,6 +1503,7 @@ void writematch(char chr)
     struct Item *iptr = &item[line];
     enum Mode mode = iptr->mode;
     unwriteitem(line);
+    printf("writematch %c match %d name %s\n",chr,match,iptr->name);
     if (iptr->name[match] == chr) {
         enqueLine(line); enqueMatch(match+1); writeitem(line,match+1); return;}
     for (int i = line+1; i < MenuMenus; i++) {
@@ -1591,6 +1592,7 @@ void *console(void *arg)
             else writematch(key-'A'+'a');}
         else if (esc == 0 && key == 127) {
             unwriteitem(tailLine());
+            printf("<bksp>\n");
             if (sizeLine() == 1) {enqueScan(127); enqueScan('\n');}
             else {unqueLine(); unqueMatch();}
             writeitem(tailLine(),tailMatch());}
@@ -1600,23 +1602,23 @@ void *console(void *arg)
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
         else if (esc == 2 && key == 65) {
-            esc = 0; writestr("<up>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<up>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 2 && key == 66) {
-            esc = 0; writestr("<down>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<down>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 2 && key == 67) {
-            esc = 0; writestr("<right>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<right>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 2 && key == 68) {
-            esc = 0; writestr("<left>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<left>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 2 && key == 70) {
-            esc = 0; writestr("<end>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<end>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 2 && key == 72) {
-            esc = 0; writestr("<home>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<home>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 3 && key == 126 && last[2] == 51) {
-            esc = 0; writestr("<del>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<del>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 3 && key == 126 && last[2] == 53) {
-            esc = 0; writestr("<pgup>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<pgup>\n"); writeitem(tailLine(),tailMatch());}
         else if (esc == 3 && key == 126 && last[2] == 54) {
-            esc = 0; writestr("<pgdn>");}
+            esc = 0; unwriteitem(tailLine()); writestr("<pgdn>\n"); writeitem(tailLine(),tailMatch());}
         else {
             for (int i = 0; i < esc; i++) writenum(last[i]);
             esc = 0; writenum(key);}}
