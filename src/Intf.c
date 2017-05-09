@@ -83,6 +83,9 @@ extern void __stginit_Main(void);
 #define GLFW_INCLUDE_GLCOREARB
 #endif
 #include <GLFW/glfw3.h>
+#ifdef __APPLE__
+#include <CoreGraphics/CoreGraphics.h>
+#endif
 
 #ifdef BRINGUP
 #define NUM_PLANES 4
@@ -1088,7 +1091,14 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         clickMode = ModeLeft;}
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
         if (clickMode == ModeRight) {
-            // xPos = xWarp; yPos = yWarp; zPos = zWarp;
+            xPos = xWarp; yPos = yWarp; zPos = zWarp;
+#ifdef __APPLE__
+            printf("displayClick\n");
+            int xpos, ypos;
+            glfwGetWindowPos(windowHandle,&xpos,&ypos);
+            struct CGPoint point; point.x = xpos+xWarp; point.y = ypos+yWarp;
+            CGWarpMouseCursorPosition(point);
+#endif
             clickMode = ModeLeft;}
         else {
             xWarp = xPos; yWarp = yPos; zWarp = zPos;
