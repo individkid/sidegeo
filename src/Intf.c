@@ -267,6 +267,7 @@ struct Chars outputs = {0}; // for writing to console
 struct Chars scans = {0}; // for staging input in console
 struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
+struct Chars injects = {0}; // for staging opengl keys in console
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
 /*return pointer valid only until next call to enloc##NAME array##NAME enque##NAME entry##NAME */  \
@@ -384,136 +385,77 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
     return retval; /*0: all filled but no terminator; >0: given number filled with terminator*/ \
 }
 
-#define EVENT0(event) \
-    enqueEvent(event); enqueCommand(0);
-
-#define EVENT1(event,argument,Argument) \
-    enque##Argument(argument); EVENT0(event)
-
-#define LINK0(command) \
-    enqueCommand(&command);
-
-#define LINK1(command,argument,Argument) \
-    enque##Argument(argument); enqueCommand(&command);
-
-#define SPOOF0(command,Command) \
-    if (command##State == Command##Idle) { \
-        command##State = Command##Enqued;  command();}
-
-#define SPOOF1(command,Command,argument,Argument) \
-    if (command##State == Command##Idle) { \
-        enque##Argument(argument); command##State = Command##Enqued;  command();}
-
-#define CHECK0(command,Command) \
+#define CHECK(command,Command) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued\n"); \
     if (linkCheck > 0) {linkCheck = 0; enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
 
-#define CHECK1(command,Command,type,argument,Argument) \
-    if (command##State == Command##Idle) exitErrstr(#command" command not enqued\n"); \
-    type argument = head##Argument(); deque##Argument(); \
-    if (linkCheck > 0) {linkCheck = 0; enque##Argument(argument); \
-        enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
-
-#define ENQUE0(command,Command) \
+#define ENQUE(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle\n"); \
     command##State = Command##Enqued; enqueCommand(&command);
 
-#define ENQUE1(command,Command,argument,Argument) \
-    if (command##State != Command##Idle) exitErrstr(#command" command not idle\n"); \
-    enque##Argument(argument); command##State = Command##Enqued; enqueCommand(&command);
-
-#define MAYBE0(command,Command) \
+#define MAYBE(command,Command) \
     if (command##State == Command##Idle) { \
         command##State = Command##Enqued; enqueCommand(&command);}
 
-#define MAYBE1(command,Command,argument,Argument) \
-    if (command##State == Command##Idle) { \
-        enque##Argument(argument); command##State = Command##Enqued; enqueCommand(&command);}
-
-#define REQUE0(command,Command) \
+#define REQUE(command) \
     enqueCommand(&command); return;
 
-#define REQUE1(command,Command,argument,Argument) \
-    enque##Argument(argument); REQUE0(command,Command)
-
-#define DEFER0(command,Command) \
+#define DEFER(command) \
     enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;
 
-#define DEFER1(command,Command,argument,Argument) \
-    enque##Argument(argument); DEFER0(command,Command)
-
-#define DEQUE0(command,Command) \
+#define DEQUE(command,Command) \
     command##State = Command##Idle; return;
 
-#define DEQUE1(command,Command) \
-    DEQUE0(command,Command)
-
-#define CHECKS0(command,Command) \
+#define CHECKS(command,Command) \
     if (linkCheck > 0) exitErrstr(#command" command not linkable\n"); \
     enum Command##State command##State = head##Command(); deque##Command();
 
-#define CHECKS1(command,Command,type,argument,Argument) \
-    if (linkCheck > 0) exitErrstr(#command" command not linkable\n"); \
-    enum Command##State command##State = head##Command(); deque##Command(); \
-    type argument = head##Argument(); deque##Argument();
-
-#define ENQUES0(command,Command) \
+#define ENQUES(command,Command) \
     enque##Command(Command##Enqued); enqueCommand(command);
 
-#define ENQUES1(command,Command,argument,Argument) \
-    enque##Argument(argument); ENQUES0(command,Command)
+#define REQUES(command,Command) \
+    enque##Command(command##State); REQUE(command)
 
-#define DEFERS0(command,Command) \
-    enque##Command(command##State); enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(command);
+#define DEFERS(command,Command) \
+    enque##Command(command##State); DEFER(command)
 
-#define DEFERS1(command,Command,argument,Argument) \
-    enque##Argument(argument); DEFERS0(command,Command)
-
-#define REQUES0(command,Command) \
-    enque##Command(command##State); REQUE0(command,Command)
-
-#define REQUES1(command,Command,argument,Argument) \
-    enque##Command(command##State); REQUE1(command,Command,argument,Argument)
-
-#define DEQUES0() \
+#define DEQUES() \
     return;
 
-#define DEQUES1() \
-    return;
-
-#define READ0(command,Command,buffer,Before,After) \
+#define READ(command,Command,buffer,Before,After) \
     if (command##State == Command##Before) { \
-        if (buffer.lock < 0) {REQUE0(command,Command)} \
+        if (buffer.lock < 0) {REQUE(command,Command)} \
         buffer.lock++; command##State = Command##After;}
 
-#define WRITE0(command,Command,buffer,Before,After) \
+#define WRITE(command,Command,buffer,Before,After) \
     if (command##State == Command##Before) { \
-        if (buffer.lock != 0) {REQUE0(command,Command)} \
+        if (buffer.lock != 0) {REQUE(command,Command)} \
         buffer.lock--; command##State = Command##After;}
 
-#define ROAD0(buffer) \
+#define ROAD(buffer) \
     buffer.lock--;
 
-#define WROTE0(buffer) \
+#define WROTE(buffer) \
     buffer.lock++;
 
 // deadlocks if buffer is write locked by current command, because wrap needs read lock
-#define TODO0(command,Command,buffer,size,Before,Wrap,After) \
+#define TODO(command,Command,buffer,size,Before,Wrap,After) \
     if (command##State == Command##Before) { \
-        if (buffer.done != buffer.todo) {REQUE0(command,Command)} \
-        if ((buffer.todo += size) > buffer.limit) {ENQUES1(wrap,Wrap,&buffer,Buffer)} \
+        if (buffer.done != buffer.todo) {REQUE(command,Command)} \
+        if ((buffer.todo += size) > buffer.limit) { \
+            enqueBuffer(&buffer); ENQUES(wrap,Wrap)} \
         command##State = Command##Wrap;} \
     if (command##State == Command##Wrap) { \
-        if (buffer.todo > buffer.limit) {REQUE0(command,Command)} \
+        if (buffer.todo > buffer.limit) {REQUE(command,Command)} \
         command##State = Command##After;}
 
-#define READY0(command,Command,buffer,size,Before,After) \
+#define READY(command,Command,buffer,size,Before,After) \
     if (command##State == Command##Before) { \
-        if (buffer.done != buffer.ready) {REQUE0(command,Command)} \
+        if (buffer.done != buffer.ready) {REQUE(command,Command)} \
         if ((buffer.ready += size) > buffer.todo) exitErrstr(#command" command too ready\n"); \
         command##State = Command##After;}
 
-#define DONE0(command,Command,buffer,size) \
+#define DONE(command,Command,buffer,size) \
     if ((buffer.done += size) > buffer.ready) exitErrstr(#command" command too done\n");
 
 /*
@@ -761,11 +703,13 @@ ACCESS_QUEUE(Print,char,prints)
 
 ACCESS_QUEUE(Echo,char,echos)
 
+ACCESS_QUEUE(Inject,char,injects)
+
 void enqueErrstr(const char *fmt, ...)
 {
     fprintf(stderr, "error: ");
     va_list args; va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
-    EVENT0(Error);
+    enqueEvent(Error); enqueCommand(0);
 }
 
 void enqueMsgstr(const char *fmt, ...)
@@ -774,6 +718,16 @@ void enqueMsgstr(const char *fmt, ...)
     char *buf = enlocPrint(len+1);
     va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
     unlocPrint(1); // remove '\0' that vsnprintf puts on
+}
+
+void enqueEscape(int val)
+{
+    enquePrint(27); enquePrint(val); enquePrint('\n');
+    while (validPrint()) {
+        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
+        if (lenOut <= 0) exitErrstr("entryOutput failed\n");
+        delocPrint(lenOut);
+        if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
 }
 
 /*
@@ -1002,13 +956,14 @@ void link() // only works on single-instance commands with global state
 
 void wrap()
 {
-    CHECKS1(wrap,Wrap,struct Buffer *,buffer,Buffer)
-    DEQUES1()
+    CHECKS(wrap,Wrap)
+    struct Buffer *buffer = headBuffer(); dequeBuffer();
+    DEQUES()
 }
 
 void coplane()
 {
-    CHECK0(coplane,Coplane)
+    CHECK(coplane,Coplane)
 
     // depending on state
     glUseProgram(coplaneProgram);
@@ -1032,7 +987,7 @@ void coplane()
         glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_AVAILABLE, &count);
         if (count == GL_FALSE) count = 0;
         else glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT, &count);
-        if (count < NUM_PLANES) {REQUE0(coplane,Coplane)}
+        if (count < NUM_PLANES) {REQUE(coplane)}
         coplaneState = CoplaneIdle;}
 
     // pointBuf.base is ready to use
@@ -1046,12 +1001,12 @@ void coplane()
 
     // reque to read next chunk
 
-    DEQUE0(coplane,Coplane)
+    DEQUE(coplane,Coplane)
 }
 
 void copoint()
 {
-    CHECK0(copoint,Copoint)
+    CHECK(copoint,Copoint)
 
     if (copointState == CopointEnqued) {
         glUseProgram(copointProgram);
@@ -1076,7 +1031,7 @@ void copoint()
         glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_AVAILABLE, &count);
         if (count == GL_FALSE) count = 0;
         else glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT, &count);
-        if (count < NUM_PLANES) {REQUE0(copoint,Copoint)}
+        if (count < NUM_PLANES) {REQUE(copoint)}
         copointState = CopointIdle;}
 
 #ifdef BRINGUP
@@ -1086,12 +1041,12 @@ void copoint()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) enqueMsgstr("%f\n", feedback[i]);
 #endif
-    DEQUE0(copoint,Copoint) 
+    DEQUE(copoint,Copoint) 
 }
 
 void diplane()
 {
-    CHECK0(diplane,Diplane)
+    CHECK(diplane,Diplane)
 
     glUseProgram(diplaneProgram);
     glEnableVertexAttribArray(PLANE_LOCATION);
@@ -1107,12 +1062,12 @@ void diplane()
 
     glfwSwapBuffers(windowHandle);
 
-    DEQUE0(diplane,Diplane)
+    DEQUE(diplane,Diplane)
 }
 
 void dipoint()
 {
-    CHECK0(dipoint,Dipoint)
+    CHECK(dipoint,Dipoint)
 
     glUseProgram(dipointProgram);
     glEnableVertexAttribArray(POINT_LOCATION);
@@ -1126,12 +1081,12 @@ void dipoint()
 
     glfwSwapBuffers(windowHandle);
 
-    DEQUE0(dipoint,Dipoint)
+    DEQUE(dipoint,Dipoint)
 }
 
 void configure()
 {
-    CHECK0(configure,Configure)
+    CHECK(configure,Configure)
     char *filename = 0;
     if (configureState == ConfigureEnqued) {
         if (configFile && fclose(configFile) != 0) {
@@ -1169,15 +1124,15 @@ void configure()
                 enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));}}
         if (!(configFile = fopen(filename,"a"))) {
             enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));}
-        configureState = ConfigureWait; REQUE0(configure,Configure)}
-    DEQUE0(configure,Configure)
+        configureState = ConfigureWait; REQUE(configure)}
+    DEQUE(configure,Configure)
 }
 
 void process()
 {
-    CHECK0(process,Process)
+    CHECK(process,Process)
     if (!validOption()) {
-        EVENT0(Done) DEQUE0(process,Process)}
+        enqueEvent(Done); enqueCommand(0); DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print this message\n");
         enqueMsgstr("-i start interactive mode\n");
@@ -1192,33 +1147,33 @@ void process()
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     if (strcmp(headOption(), "-i") == 0) {
         if (shaderMode == ModeDiplane) {
-            ENQUE0(configure,Configure)
-            LINK1(link,&configure,Link)
+            ENQUE(configure,Configure)
+            enqueLink(&configure); enqueCommand(&link);
 #ifdef BRINGUP
-            ENQUE0(copoint,Copoint)
-            LINK1(link,&copoint,Link)
+            ENQUE(copoint,Copoint)
+            enqueLink(&copoint); enqueCommand(&link);
 #endif
-            ENQUE0(diplane,Diplane)}
+            ENQUE(diplane,Diplane)}
         else {
-            ENQUE0(configure,Configure)
-            LINK1(link,&configure,Link)
-            ENQUE0(coplane,Coplane)
-            LINK1(link,&coplane,Link)
-            ENQUE0(dipoint,Dipoint)}
+            ENQUE(configure,Configure)
+            enqueLink(&configure); enqueCommand(&link);
+            ENQUE(coplane,Coplane)
+            enqueLink(&coplane); enqueCommand(&link);
+            ENQUE(dipoint,Dipoint)}
         dequeOption();
-        DEQUE0(process,Process)}
+        DEQUE(process,Process)}
     if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
         if (!validOption()) {
             enqueErrstr("missing file argument\n"); return;}
         enqueFilename(headOption());}
     dequeOption();
-    REQUE0(process,Process)
+    REQUE(process)
 }
 
 void menu()
 {
-    CHECK0(menu,Menu)
+    CHECK(menu,Menu)
     char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
     if (len == 1 && buf[0] < MenuMenus) {
@@ -1226,7 +1181,7 @@ void menu()
         mode[item[buf[0]].mode] = buf[0];}
     else {buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocChar(len+1);
-    DEQUE0(menu,Menu)
+    DEQUE(menu,Menu)
 }
 
 /*
@@ -1263,40 +1218,44 @@ int event()
 
 void displayClose(GLFWwindow* window)
 {
-    EVENT0(Done);
+    enqueEvent(Done); enqueCommand(0);
 }
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {MAYBE0(process,Process)}
-    if (key == GLFW_KEY_A && action == GLFW_PRESS) {enqueMsgstr("a key\n");}
+    if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE) {MAYBE(process,Process)}
+    else if (action == GLFW_PRESS && key >= GLFW_KEY_A && key <= GLFW_KEY_Z) enqueEscape(key-GLFW_KEY_A+'a');
+    else if (action == GLFW_PRESS && key == GLFW_KEY_ENTER) enqueEscape(1);
+    else if (action == GLFW_PRESS && key == GLFW_KEY_BACKSPACE) enqueEscape(2);
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {
         button = GLFW_MOUSE_BUTTON_RIGHT;}
-    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuTransform) {
         xPoint = xPos; yPoint = yPos; zPoint = zPos;
         clickMode = ModeLeft;}
-    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT) {
-        if (clickMode == ModeLeft) {
-            xWarp = xPos; yWarp = yPos; zWarp = zPos;
-            clickMode = ModeRight;}
-        else if (clickMode == ModeRight) {
-            xPos = xWarp; yPos = yWarp; zPos = zWarp;
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuManipulate) {
+        xPoint = xPos; yPoint = yPos; zPoint = zPos;
+        clickMode = ModeLeft;}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT && clickMode == ModeLeft) {
+        xWarp = xPos; yWarp = yPos; zWarp = zPos;
+        clickMode = ModeRight;}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT && clickMode == ModeRight) {
+        xPos = xWarp; yPos = yWarp; zPos = zWarp;
 #ifdef __linux__
-            double xpos, ypos;
-            glfwGetCursorPos(windowHandle,&xpos,&ypos);
-            XWarpPointer(displayHandle,None,None,0,0,0,0,xWarp-xpos,yWarp-ypos);
+        double xpos, ypos;
+        glfwGetCursorPos(windowHandle,&xpos,&ypos);
+        XWarpPointer(displayHandle,None,None,0,0,0,0,xWarp-xpos,yWarp-ypos);
 #endif
 #ifdef __APPLE__
-            int xpos, ypos;
-            glfwGetWindowPos(windowHandle,&xpos,&ypos);
-            struct CGPoint point; point.x = xpos+xWarp; point.y = ypos+yWarp;
-            CGWarpMouseCursorPosition(point);
+        int xpos, ypos;
+        glfwGetWindowPos(windowHandle,&xpos,&ypos);
+        struct CGPoint point; point.x = xpos+xWarp; point.y = ypos+yWarp;
+        CGWarpMouseCursorPosition(point);
 #endif
-            clickMode = ModeLeft;}}
+        clickMode = ModeLeft;}
 }
 
 void displayFocus(GLFWwindow *window, int focused)
@@ -1311,33 +1270,63 @@ void displayFocus(GLFWwindow *window, int focused)
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
-    if (clickMode == ModeLeft && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz) {
+    if (clickMode == ModeLeft && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz && mode[ModeSculpt] == MenuTransform) {
         xPos = xpos; yPos = ypos;
-        enqueMsgstr("displayCursor %f %f\n", xPos, yPos);
-        // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}}
+        enqueMsgstr("displayCursor transform %f %f\n", xPos, yPos);
+        switch (mode[ModeMouse]) {
+            case (MenuRotate): break;
+            case (MenuTranslate): break;
+            case (MenuLook): break;
+            case (MenuScreen): break;
+            case (MenuWindow): break;
+            default: exitErrstr("invalid mouse mode\n");}
+        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+    if (clickMode == ModeLeft && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz && mode[ModeSculpt] == MenuManipulate) {
+        xPos = xpos; yPos = ypos;
+        enqueMsgstr("displayCursor manipulate %f %f\n", xPos, yPos);
+        switch (mode[ModeMouse]) {
+            case (MenuRotate): break;
+            case (MenuTranslate): break;
+            case (MenuLook): break;
+            case (MenuScreen): break;
+            case (MenuWindow): break;
+            default: exitErrstr("invalid mouse mode\n");}
+        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
 }
 
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     double zpos = zPos + yoffset;
-    if (clickMode == ModeLeft) {
+    if (clickMode == ModeLeft && mode[ModeSculpt] == MenuTransform) {
         zPos = zpos;
-        enqueMsgstr("displayScroll %f\n", zPos);
-        // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}}
-}
-
-void displaySize(GLFWwindow *window, int width, int height)
-{
-    xSiz = width; ySiz = height;
-    glViewport(0, 0, xSiz, ySiz);
-    enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
-    // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}
+        enqueMsgstr("displayScroll transform %f\n", zPos);
+        switch (mode[ModeRoller]) {
+            case (MenuLever): break;
+            case (MenuClock): break;
+            case (MenuCylinder): break;
+            case (MenuScale): break;
+            case (MenuDrive): break;
+            case (MenuSize): break;
+            case (MenuAspect): break;
+            default: exitErrstr("invalid roller mode\n");}
+        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+    if (clickMode == ModeLeft && mode[ModeSculpt] == MenuManipulate) {
+        zPos = zpos;
+        enqueMsgstr("displayScroll manipulate %f\n", zPos);
+        switch (mode[ModeRoller]) {
+            case (MenuLever): break;
+            case (MenuClock): break;
+            case (MenuCylinder): break;
+            case (MenuScale): break;
+            case (MenuDrive): break;
+            case (MenuSize): break;
+            case (MenuAspect): break;
+            default: exitErrstr("invalid roller mode\n");}
+        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
 }
 
 void displayLocation(GLFWwindow *window, int xloc, int yloc)
@@ -1345,15 +1334,34 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
     xLoc = xloc; yLoc = yloc;
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
-    // change uniforms depending on *Mode, *Pos, *Siz, *Mat
-    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}
+    switch (mode[ModeWindow]) {
+        case (MenuPhysical): break;
+        case (MenuVirtual): break;
+        default: exitErrstr("invalid window mode\n");}
+    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+}
+
+void displaySize(GLFWwindow *window, int width, int height)
+{
+    xSiz = width; ySiz = height;
+    glViewport(0, 0, xSiz, ySiz);
+    enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
+    switch (mode[ModeCorner]) {
+        case (MenuOpposite): break;
+        case (MenuNorthwest): break;
+        case (MenuNortheast): break;
+        case (MenuSouthwest): break;
+        case (MenuSoutheast): break;
+        default: exitErrstr("invalid corner mode\n");}
+    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE0(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE0(diplane,Diplane)}
+    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
 }
 
 /*
@@ -1538,30 +1546,40 @@ void *console(void *arg)
 
         int totOut = 0; int lenOut;
         while ((lenOut = detryOutput(enlocEcho(10),'\n',10)) == 0) totOut += 10;
-        if (lenOut < 0 && totOut > 0) exitErrstr("detryOutput failed\n");
+        if ((lenOut < 0 && totOut > 0) || sizeEcho() != totOut+10) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
-        else if (headEcho() == 0) break;
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 0) {
+            delocEcho(10); break;}
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 1) {
+            enqueInject('\n'); delocEcho(10);}
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 2) {
+            enqueInject(127); delocEcho(10);}
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] > 2) {
+            enqueInject(arrayEcho()[1]); delocEcho(10);}
         else {
             unlocEcho(10-lenOut);
             unwriteitem(tailLine());
             enqueEcho(0);
             writestr(arrayEcho());
-            if (sizeEcho() != totOut+lenOut+1) exitErrstr("sizeEcho is wrong\n");
             delocEcho(sizeEcho());
             writeitem(tailLine(),tailMatch());}
 
-        fd_set fds;
-        FD_ZERO(&fds);
-        FD_SET(STDIN_FILENO, &fds);
-        struct timespec timeout = {0};
-        int lenSel;
-        if (lenOut < 0 && lenIn < 0) lenSel = pselect(1, &fds, 0, 0, 0, &saved);
-        else lenSel = pselect(1, &fds, 0, 0, &timeout, 0);
-        if (lenSel == 0 || (lenSel < 0 && errno == EINTR)) continue;
-        if (lenSel != 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+        int key;
+        if (validInject()) {
+            key = headInject(); dequeInject();}
+        else {
+            fd_set fds;
+            FD_ZERO(&fds);
+            FD_SET(STDIN_FILENO, &fds);
+            struct timespec timeout = {0};
+            int lenSel = 0;
+            if (lenOut < 0 && lenIn < 0) lenSel = pselect(1, &fds, 0, 0, 0, &saved);
+            else lenSel = pselect(1, &fds, 0, 0, &timeout, 0);
+            if (lenSel == 0 || (lenSel < 0 && errno == EINTR)) continue;
+            if (lenSel != 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+            key = readchr();}
 
         unwriteitem(tailLine());
-        int key = readchr();
         if (esc == 0 && key == '\n') {
             writeitem(tailLine(),tailMatch());
             writechr('\n');
@@ -1623,7 +1641,7 @@ void waitForEvent()
         while ((lenIn = detryInput(enlocChar(10),'\n',10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
         else if (lenIn < 0) unlocChar(10);
-        else {unlocChar(10-lenIn); ENQUE0(menu,Menu);}
+        else {unlocChar(10-lenIn); ENQUE(menu,Menu);}
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
         else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -1763,7 +1781,7 @@ void initialize(int argc, char **argv)
     arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
 
-    ENQUE0(process,Process)
+    ENQUE(process,Process)
 
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
@@ -1779,12 +1797,7 @@ void initialize(int argc, char **argv)
 void finalize()
 {
     // save transformation matrices
-    enquePrint(0); enquePrint('\n');
-    while (validPrint()) {
-        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
-        if (lenOut <= 0) exitErrstr("entryOutput failed\n");
-        delocPrint(lenOut);
-        if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
+    enqueEscape(0);
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
@@ -1809,5 +1822,6 @@ void finalize()
     if (scans.base) {struct Chars initial = {0}; free(scans.base); scans = initial;}
     if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
     if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
+    if (injects.base) {struct Chars initial = {0}; free(injects.base); injects = initial;}
     printf("finalize done\n");
 }
