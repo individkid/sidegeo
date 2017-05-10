@@ -145,14 +145,26 @@ GLuint coplaneProgram = 0; // find intersections of plane triples
 GLuint copointProgram = 0; // construct planes from point triples
 GLuint adplaneProgram = 0; // find plane triples wrt feather and arrow
 GLuint adpointProgram = 0; // find point singles wrt feather and arrow
-GLint invalidUniform = 0; // large number indicating divide by zero
-GLint basisUniform = 0; // 3 points on each of 3 non-parallel planes
-GLint modelUniform = 0; // aparent and actual transformation
-GLint normalUniform = 0; // actual only transformation
-GLint projectUniform = 0; // transformation for apearance of depth
-GLint featherUniform = 0; // point on a plane to analyze
-GLint arrowUniform = 0; // normal of the plane to analyze
-GLint lightUniform = 0; // transformation from normal to color
+GLint diplaneInvalid = 0; // invalid uniform in diplane program
+GLint diplaneBasis = 0; // basis uniform in diplane program
+GLint diplaneModel = 0; // model uniform in diplane program
+GLint diplaneNormal = 0; // normal uniform in diplane program
+GLint diplaneProject = 0; // project uniform in diplane program
+GLint diplaneLight = 0; // light uniform in diplane program
+GLint dipointModel = 0; // model uniform in dipoint program
+GLint dipointNormal = 0; // normal uniform in dipoint program
+GLint dipointProject = 0; // project uniform in dipoint program
+GLint dipointLight = 0; // light uniform in dipoint program
+GLint coplaneInvalid = 0; // invalid uniform in coplane program
+GLint coplaneBasis = 0; // basis uniform in coplane program
+GLint copointInvalid = 0; // invalid uniform in copoint program
+GLint copointBasis = 0; // basis uniform in copoint program
+GLint adplaneInvalid = 0; // invalid uniform in adplane program
+GLint adplaneBasis = 0; // basis uniform in adplane program
+GLint adplaneFeather = 0; // feather uniform in adplane program
+GLint adplaneArrow = 0; // arrow uniform in adplane program
+GLint adpointFeather = 0; // feather uniform in adpoint program
+GLint adpointArrow = 0; // arrow uniform in adpoint program
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 struct Strings filenames = {0}; // for config files
@@ -216,6 +228,9 @@ struct Menus {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints {DECLARE_QUEUE(int)} matchs = {0};
  // index into item[line].name for console undo
+float modelMat[16]; // transformation state at click time
+float normalMat[9];
+float projectMat[9];
 float xPoint = 0;  // position of pierce point
 float yPoint = 0;
 float zPoint = 0;
@@ -1221,6 +1236,16 @@ void displayClose(GLFWwindow* window)
     enqueEvent(Done); enqueCommand(0);
 }
 
+void displayFocus(GLFWwindow *window, int focused)
+{
+    if (focused) {
+        enqueMsgstr("displayFocus entry\n");
+    }
+    else {
+        enqueMsgstr("displayFocus leave\n");
+    }
+}
+
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE) {MAYBE(process,Process)}
@@ -1233,11 +1258,32 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {
         button = GLFW_MOUSE_BUTTON_RIGHT;}
-    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuTransform) {
-        xPoint = xPos; yPoint = yPos; zPoint = zPos;
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuAdditive) {
+        if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuSubtractive) {
+        if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuRefine) {
+        if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuTransform) {
+#ifdef BRINGUP
+        xPoint = 0; yPoint = 0; zPoint = 0;
+#endif
+        if (shaderMode == ModeDiplane) {
+            glGetUniformfv(diplaneProgram,diplaneModel,modelMat);
+            glGetUniformfv(diplaneProgram,diplaneNormal,normalMat);
+            glGetUniformfv(diplaneProgram,diplaneProject,projectMat);}
+        if (shaderMode == ModeDipoint) {
+            glGetUniformfv(dipointProgram,dipointModel,modelMat);
+            glGetUniformfv(dipointProgram,dipointNormal,normalMat);
+            glGetUniformfv(dipointProgram,dipointProject,projectMat);}
         clickMode = ModeLeft;}
     else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuManipulate) {
-        xPoint = xPos; yPoint = yPos; zPoint = zPos;
+#ifdef BRINGUP
+        xPoint = 0; yPoint = 0; zPoint = 0;
+#endif
         clickMode = ModeLeft;}
     else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT && clickMode == ModeLeft) {
         xWarp = xPos; yWarp = yPos; zWarp = zPos;
@@ -1258,16 +1304,6 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         clickMode = ModeLeft;}
 }
 
-void displayFocus(GLFWwindow *window, int focused)
-{
-    if (focused) {
-        enqueMsgstr("displayFocus entry\n");
-    }
-    else {
-        enqueMsgstr("displayFocus leave\n");
-    }
-}
-
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
     if (clickMode == ModeLeft && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz && mode[ModeSculpt] == MenuTransform) {
@@ -1280,8 +1316,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
             case (MenuScreen): break;
             case (MenuWindow): break;
             default: exitErrstr("invalid mouse mode\n");}
-        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+        if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
     if (clickMode == ModeLeft && xpos >= 0 && xpos < xSiz && ypos >= 0 && ypos < ySiz && mode[ModeSculpt] == MenuManipulate) {
         xPos = xpos; yPos = ypos;
         enqueMsgstr("displayCursor manipulate %f %f\n", xPos, yPos);
@@ -1292,8 +1328,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
             case (MenuScreen): break;
             case (MenuWindow): break;
             default: exitErrstr("invalid mouse mode\n");}
-        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+        if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
 }
 
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
@@ -1311,8 +1347,8 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             case (MenuSize): break;
             case (MenuAspect): break;
             default: exitErrstr("invalid roller mode\n");}
-        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+        if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
     if (clickMode == ModeLeft && mode[ModeSculpt] == MenuManipulate) {
         zPos = zpos;
         enqueMsgstr("displayScroll manipulate %f\n", zPos);
@@ -1325,8 +1361,8 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             case (MenuSize): break;
             case (MenuAspect): break;
             default: exitErrstr("invalid roller mode\n");}
-        if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-        if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
+        if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
 }
 
 void displayLocation(GLFWwindow *window, int xloc, int yloc)
@@ -1338,8 +1374,8 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
         case (MenuPhysical): break;
         case (MenuVirtual): break;
         default: exitErrstr("invalid window mode\n");}
-    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+    if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+    if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
 }
 
 void displaySize(GLFWwindow *window, int width, int height)
@@ -1354,14 +1390,14 @@ void displaySize(GLFWwindow *window, int width, int height)
         case (MenuSouthwest): break;
         case (MenuSoutheast): break;
         default: exitErrstr("invalid corner mode\n");}
-    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+    if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+    if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    if (processState == ProcessIdle && shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-    if (processState == ProcessIdle && shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+    if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
+    if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
 }
 
 /*
@@ -1614,7 +1650,7 @@ void *console(void *arg)
         else if (esc == 3 && key == 126 && last[2] == 51) {esc = 0; writestr("<del>\n");}
         else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; writestr("<pgup>\n");}
         else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; writestr("<pgdn>\n");}
-        else {esc = 0; for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key);}
+        else {esc = 0; for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writechr('\n');}
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
@@ -1744,41 +1780,41 @@ void initialize(int argc, char **argv)
     adpointProgram = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", "adpoint");
 
     glUseProgram(diplaneProgram);
-    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
-    basisUniform = glGetUniformLocation(diplaneProgram, "basis");
-    modelUniform = glGetUniformLocation(diplaneProgram, "model");
-    normalUniform = glGetUniformLocation(diplaneProgram, "normal");
-    projectUniform = glGetUniformLocation(diplaneProgram, "project");
-    lightUniform = glGetUniformLocation(diplaneProgram, "light");
+    diplaneInvalid = glGetUniformLocation(diplaneProgram, "invalid");
+    diplaneBasis = glGetUniformLocation(diplaneProgram, "basis");
+    diplaneModel = glGetUniformLocation(diplaneProgram, "model");
+    diplaneNormal = glGetUniformLocation(diplaneProgram, "normal");
+    diplaneProject = glGetUniformLocation(diplaneProgram, "project");
+    diplaneLight = glGetUniformLocation(diplaneProgram, "light");
     glUseProgram(0);
 
     glUseProgram(dipointProgram);
-    modelUniform = glGetUniformLocation(dipointProgram, "model");
-    normalUniform = glGetUniformLocation(dipointProgram, "normal");
-    projectUniform = glGetUniformLocation(dipointProgram, "project");
-    lightUniform = glGetUniformLocation(dipointProgram, "light");
+    dipointModel = glGetUniformLocation(dipointProgram, "model");
+    dipointNormal = glGetUniformLocation(dipointProgram, "normal");
+    dipointProject = glGetUniformLocation(dipointProgram, "project");
+    dipointLight = glGetUniformLocation(dipointProgram, "light");
     glUseProgram(0);
 
     glUseProgram(coplaneProgram);
-    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
-    basisUniform = glGetUniformLocation(coplaneProgram, "basis");
+    coplaneInvalid = glGetUniformLocation(diplaneProgram, "invalid");
+    coplaneBasis = glGetUniformLocation(coplaneProgram, "basis");
     glUseProgram(0);
 
     glUseProgram(copointProgram);
-    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
-    basisUniform = glGetUniformLocation(copointProgram, "basis");
+    copointInvalid = glGetUniformLocation(diplaneProgram, "invalid");
+    copointBasis = glGetUniformLocation(copointProgram, "basis");
     glUseProgram(0);
 
     glUseProgram(adplaneProgram);
-    invalidUniform = glGetUniformLocation(diplaneProgram, "invalid");
-    basisUniform = glGetUniformLocation(adplaneProgram, "basis");
-    featherUniform = glGetUniformLocation(adplaneProgram, "feather");
-    arrowUniform = glGetUniformLocation(adplaneProgram, "arrow");
+    adplaneInvalid = glGetUniformLocation(diplaneProgram, "invalid");
+    adplaneBasis = glGetUniformLocation(adplaneProgram, "basis");
+    adplaneFeather = glGetUniformLocation(adplaneProgram, "feather");
+    adplaneArrow = glGetUniformLocation(adplaneProgram, "arrow");
     glUseProgram(0);
  
     glUseProgram(adpointProgram);
-    featherUniform = glGetUniformLocation(adpointProgram, "feather");
-    arrowUniform = glGetUniformLocation(adpointProgram, "arrow");
+    adpointFeather = glGetUniformLocation(adpointProgram, "feather");
+    adpointArrow = glGetUniformLocation(adpointProgram, "arrow");
     glUseProgram(0);
 
     ENQUE(process,Process)
