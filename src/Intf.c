@@ -35,22 +35,6 @@ If the buffer to be modified is not big enough or a wrap is already issued, reis
 Wrap command breaks itself into chunks to allow other commands before entire wrap complete.
 Wrap uses new buffer that it binds to active when done.
 Use glfwPollEvents if commands on queue. Use glfwWaitEvents if command queue empty.
-
-In glsl, check if matrix is invertable by dividing determinant by each element of its adjoint,
-and checking if those are each larger than the smallest invertible float.
-If so, then find the inverse by transposing the inverses.
-
-The display mode draws base of tetrahedron.
-The vertex shader takes the plane vector and base selector, makes three point plane matrix and transforms once for normal and again for view.
-The geometry shader takes quadruples of plane matrices, makes intersection points, calculates the normal of the first plane to use with each point.
-The fragment shader dots the normal vector with the light uniforms to calculate color.
-
-The classify mode calclulates vertex sidedness.
-The vertex shader passes on three point plane matrix without transformation.
-The geometry shader takes matrix triple, outputs intersection point minus uniform, dotted with uniform.
-
-The coplane mode calculates vertices.
-The vertex and geometry shaders are same as in class mode, exept geometry shader outputs intersection instead of difference dot.
 */
 
 #define BRINGUP
@@ -148,7 +132,13 @@ GLuint adpointProgram = 0; // find point singles wrt feather and arrow
 GLint diplaneInvalid = 0; // invalid uniform in diplane program
 GLint diplaneBasis = 0; // basis uniform in diplane program
 GLint diplaneModel = 0; // model uniform in diplane program
+ // model is rotation and translation of polytope and lights
+ // in other words, model is transformation of polytope and camera
+ // in effect, model transforms points for display position
 GLint diplaneNormal = 0; // normal uniform in diplane program
+ // normal is corrective rotation of lights
+ // in other words, normal rotation of polytope
+ // in effect, normal rotates points for display color
 GLint diplaneProject = 0; // project uniform in diplane program
 GLint diplaneLight = 0; // light uniform in diplane program
 GLint dipointModel = 0; // model uniform in dipoint program
@@ -231,13 +221,16 @@ struct Ints {DECLARE_QUEUE(int)} matchs = {0};
 float modelMat[16]; // transformation state at click time
 float normalMat[9];
 float projectMat[9];
-float xPoint = 0;  // position of pierce point
+float modelCur[16]; // current transformation state
+float normalCur[9];
+float projectCur[9];
+float xPoint = 0;  // position of pierce point at click time
 float yPoint = 0;
 float zPoint = 0;
-float xWarp = 0; // saved mouse position
+float xWarp = 0; // saved mouse position wnen toggled inactive
 float yWarp = 0;
 float zWarp = 0;
-float xPos = 0; // mouse position
+float xPos = 0; // current mouse position
 float yPos = 0;
 float zPos = 0; // cumulative roller activity
 float aspect = 0; // ratio between xSiz and ySiz
@@ -601,7 +594,7 @@ const GLchar *intersectCode = "\
     void main()\n\
     {\n\
         xpanded = "INPUT";\n\
-        xformed = "INPUT";\n\
+        xformed = (model*vec4(xpanded,1.0)).xyz;\n\
         rotated = vec3(1.0f,1.0f,1.0f);\n\
    }\n";
 
@@ -842,6 +835,99 @@ int bytesToSize(char *bytes, char *format)
 int indicesToRange(int *indices, char *format, char *bytes, char **base, char **limit)
 {
     return -1;
+}
+
+/*
+ * helpers for arithmetic
+ */
+
+float dotvec(float *u, float *v, int n)
+{
+    float w = 0;
+    for (int i = 0; i < n; i++) w += u[i]*v[i];
+    return w;
+}
+
+float *plusvec(float *u, float *v, int n)
+{
+    for (int i = 0; i < n; i++) u[i] += v[i];
+    return u;
+}
+
+float *scalevec(float *u, float s, int n)
+{
+    for (int i = 0; i < n; i++) u[i] *= s;
+    return u;
+}
+
+float *leftmat(float *u, float *v, int n)
+{
+    int m = n*n; float w[m];
+    for (int i = 0; i < m; i++) w[i] = u[i];
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            u[i*n+j] = 0;
+            for (int k = 0; k < n; k++) {
+                u[i*n+j] += w[k*n+j]*v[i*n+k];}}}
+    return u;
+}
+
+float *rightmat(float *u, float *v, int n)
+{
+    int m = n*n; float w[m];
+    for (int i = 0; i < m; i++) w[i] = u[i];
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            u[i*n+j] = 0;
+            for (int k = 0; k < n; k++) {
+                u[i*n+j] += v[k*n+j]*w[i*n+k];}}}
+    return u;
+}
+
+float *identmat(float *u, int n)
+{
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            u[i*n+j] = (i == j ? 1.0 : 0.0);}}
+    return u;
+}
+
+float *hemivec(float *u, int n, int m)
+{
+    // find point on unit m-sphere that projects to u that is missing dimension n
+    return u;
+}
+
+float *copymat(float *u, float *v, int duty, int stride, int size)
+{
+    float *w = u;
+    int i = 0;
+    int j = 0;
+    int k = 0;
+    if (duty == 0 || stride <= 0 || size < 0) return 0;
+    while (i < size) {
+        if (k == 0) {j = duty; k = stride;}
+        if (j > 0 && duty > 0) *w = v[i++];
+        if (j == 0 && duty < 0) *w = v[i++];
+        w++; k--;
+        if (j > 0) j--;
+        if (j < 0) j++;}
+    return u;
+}
+
+float *crossmat(float *u)
+{
+    float x = u[0]; float y = u[1]; float z = u[2];
+    u[0] =  0; u[1] =  z; u[2] = -y;
+    u[3] = -z; u[4] =  0; u[5] =  x;
+    u[6] =  y; u[7] = -x; u[8] =  0;
+    return u;
+}
+
+float *crossvec(float *u, float *v)
+{
+    float w[9]; copymat(w,v,3,3,3);
+    return rightmat(u,crossmat(w),3);
 }
 
 /*
@@ -1191,40 +1277,10 @@ void menu()
     CHECK(menu,Menu)
     char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
-    if (len == 1 && buf[0] < MenuMenus) {
-        clickMode = ModeInit;
-        mode[item[buf[0]].mode] = buf[0];}
+    if (len == 1 && buf[0] < MenuMenus) mode[item[buf[0]].mode] = buf[0];
     else {buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocChar(len+1);
     DEQUE(menu,Menu)
-}
-
-/*
- * accessors for Haskell to read and modify state
- */
-
-char *generic(int *indices, int size)
-{
-    // if size is not zero, resize indicated portion of generic data
-    // return pointer to indicated portion of generic data
-    return 0;
-}
-
-char *message()
-{
-    if (!validChar()) return 0;
-    char *buf = arrayChar(); delocChar(strlen(buf));
-    return buf;
-}
-
-int event()
-{
-    if (!validEvent()) return -1;
-    enum Event event = headEvent(); dequeEvent();
-    switch (event) {
-        case (Error): return 3;
-        case (Done): return 4;}
-    return -1;
 }
 
 /*
@@ -1258,33 +1314,33 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {
         button = GLFW_MOUSE_BUTTON_RIGHT;}
-    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuAdditive) {
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && clickMode != ModeLeft && mode[ModeSculpt] == MenuAdditive) {
         if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
-    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuSubtractive) {
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+        clickMode = ModeInit;}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && clickMode != ModeLeft && mode[ModeSculpt] == MenuSubtractive) {
         if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
-    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuRefine) {
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+        clickMode = ModeInit;}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && clickMode != ModeLeft && mode[ModeSculpt] == MenuRefine) {
         if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
-        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}}
-    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuTransform) {
+        if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+        clickMode = ModeInit;}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && clickMode != ModeLeft && mode[ModeSculpt] == MenuTransform) {
 #ifdef BRINGUP
-        xPoint = 0; yPoint = 0; zPoint = 0;
+        xPoint = xPos; yPoint = yPos; zPoint = 0;
 #endif
-        if (shaderMode == ModeDiplane) {
-            glGetUniformfv(diplaneProgram,diplaneModel,modelMat);
-            glGetUniformfv(diplaneProgram,diplaneNormal,normalMat);
-            glGetUniformfv(diplaneProgram,diplaneProject,projectMat);}
-        if (shaderMode == ModeDipoint) {
-            glGetUniformfv(dipointProgram,dipointModel,modelMat);
-            glGetUniformfv(dipointProgram,dipointNormal,normalMat);
-            glGetUniformfv(dipointProgram,dipointProject,projectMat);}
+        for (int i = 0; i < 16; i++) modelMat[i] = modelCur[i];
+        for (int i = 0; i < 9; i++) normalMat[i] = normalCur[i];
+        for (int i = 0; i < 9; i++) projectMat[i] = projectCur[i];
         clickMode = ModeLeft;}
-    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && mode[ModeSculpt] == MenuManipulate) {
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && clickMode != ModeLeft && mode[ModeSculpt] == MenuManipulate) {
 #ifdef BRINGUP
-        xPoint = 0; yPoint = 0; zPoint = 0;
+        xPoint = xPos; yPoint = yPos; zPoint = 0;
 #endif
         clickMode = ModeLeft;}
+    else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT && clickMode == ModeLeft) {
+        clickMode = ModeInit;}
     else if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_RIGHT && clickMode == ModeLeft) {
         xWarp = xPos; yWarp = yPos; zWarp = zPos;
         clickMode = ModeRight;}
@@ -1310,7 +1366,25 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         xPos = xpos; yPos = ypos;
         enqueMsgstr("displayCursor transform %f %f\n", xPos, yPos);
         switch (mode[ModeMouse]) {
-            case (MenuRotate): break;
+            case (MenuRotate): {
+                float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
+                float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
+                float w[3]; w[0] = xPoint; w[1] = yPoint; w[2] = zPoint;
+                float s = dotvec(u,hemivec(v,2,3),3);
+                copymat(v,crossmat(crossvec(u,v)),9,9,9);
+                scalevec(leftmat(u,v,3),1.0/(1.0-s),9);
+                plusvec(v,plusvec(u,identmat(v,3),9),9);
+                rightmat(normalCur,u,3);
+                copymat(copymat(identmat(v,4)+12,w,3,3,3),u,3,4,9);
+                leftmat(v,copymat(identmat(u,4)+12,w,3,3,3),3);
+                rightmat(modelCur,v,4);
+                if (shaderMode == ModeDiplane) {
+                    glUniformMatrix4fv(diplaneModel,1,GL_FALSE,modelCur);
+                    glUniformMatrix3fv(diplaneNormal,1,GL_FALSE,normalCur);}
+                if (shaderMode == ModeDipoint) {
+                    glUniformMatrix4fv(dipointModel,1,GL_FALSE,modelCur);
+                    glUniformMatrix3fv(dipointNormal,1,GL_FALSE,normalCur);}
+                break;}
             case (MenuTranslate): break;
             case (MenuLook): break;
             case (MenuScreen): break;
@@ -1398,6 +1472,34 @@ void displayRefresh(GLFWwindow *window)
 {
     if (shaderMode == ModeDipoint) {MAYBE(dipoint,Dipoint)}
     if (shaderMode == ModeDiplane) {MAYBE(diplane,Diplane)}
+}
+
+/*
+ * accessors for Haskell to read and modify state
+ */
+
+char *generic(int *indices, int size)
+{
+    // if size is not zero, resize indicated portion of generic data
+    // return pointer to indicated portion of generic data
+    return 0;
+}
+
+char *message()
+{
+    if (!validChar()) return 0;
+    char *buf = arrayChar(); delocChar(strlen(buf));
+    return buf;
+}
+
+int event()
+{
+    if (!validEvent()) return -1;
+    enum Event event = headEvent(); dequeEvent();
+    switch (event) {
+        case (Error): return 3;
+        case (Done): return 4;}
+    return -1;
 }
 
 /*
@@ -1779,6 +1881,10 @@ void initialize(int argc, char **argv)
     adplaneProgram = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, "scalar", "adplane");
     adpointProgram = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", "adpoint");
 
+    for (int i = 0; i < 16; i++) modelCur[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) normalCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) projectCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+
     glUseProgram(diplaneProgram);
     diplaneInvalid = glGetUniformLocation(diplaneProgram, "invalid");
     diplaneBasis = glGetUniformLocation(diplaneProgram, "basis");
@@ -1786,6 +1892,9 @@ void initialize(int argc, char **argv)
     diplaneNormal = glGetUniformLocation(diplaneProgram, "normal");
     diplaneProject = glGetUniformLocation(diplaneProgram, "project");
     diplaneLight = glGetUniformLocation(diplaneProgram, "light");
+    glUniformMatrix4fv(diplaneModel,1,GL_FALSE,modelCur);
+    glUniformMatrix3fv(diplaneNormal,1,GL_FALSE,normalCur);
+    glUniformMatrix3fv(diplaneProject,1,GL_FALSE,projectCur);
     glUseProgram(0);
 
     glUseProgram(dipointProgram);
@@ -1793,6 +1902,9 @@ void initialize(int argc, char **argv)
     dipointNormal = glGetUniformLocation(dipointProgram, "normal");
     dipointProject = glGetUniformLocation(dipointProgram, "project");
     dipointLight = glGetUniformLocation(dipointProgram, "light");
+    glUniformMatrix4fv(dipointModel,1,GL_FALSE,modelCur);
+    glUniformMatrix3fv(dipointNormal,1,GL_FALSE,normalCur);
+    glUniformMatrix3fv(dipointProject,1,GL_FALSE,projectCur);
     glUseProgram(0);
 
     glUseProgram(coplaneProgram);
