@@ -824,13 +824,24 @@ float *scalevec(float *u, float s, int n)
     return u;
 }
 
+float *jumpvec(float *u, float *v, int n)
+{
+    float w[n];
+    for (int i = 0; i < n; i++) w[i] = u[i];
+    for (int i = 0; i < n; i++) {
+        u[i] = 0.0;
+        for (int j = 0; j < n; j++) {
+            u[i] += v[j*n+i]*w[j];}}
+    return u;
+}
+
 float *timesmat(float *u, float *v, int n)
 {
     int m = n*n; float w[m];
     for (int i = 0; i < m; i++) w[i] = u[i];
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
-            u[i*n+j] = 0;
+            u[i*n+j] = 0.0;
             for (int k = 0; k < n; k++) {
                 u[i*n+j] += w[k*n+j]*v[i*n+k];}}}
     return u;
@@ -842,7 +853,7 @@ float *jumpmat(float *u, float *v, int n)
     for (int i = 0; i < m; i++) w[i] = u[i];
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
-            u[i*n+j] = 0;
+            u[i*n+j] = 0.0;
             for (int k = 0; k < n; k++) {
                 u[i*n+j] += v[k*n+j]*w[i*n+k];}}}
     return u;
@@ -853,12 +864,6 @@ float *identmat(float *u, int n)
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             u[i*n+j] = (i == j ? 1.0 : 0.0);}}
-    return u;
-}
-
-float *hemivec(float *u, int n, int m)
-{
-    // find point on unit m-sphere that projects to u that is missing dimension n
     return u;
 }
 
@@ -882,9 +887,9 @@ float *copymat(float *u, float *v, int duty, int stride, int size)
 float *crossmat(float *u)
 {
     float x = u[0]; float y = u[1]; float z = u[2];
-    u[0] =  0; u[1] =  z; u[2] = -y;
-    u[3] = -z; u[4] =  0; u[5] =  x;
-    u[6] =  y; u[7] = -x; u[8] =  0;
+    u[0] =  0; u[3] = -z; u[6] =  y;
+    u[1] =  z; u[4] =  0; u[7] = -x;
+    u[2] = -y; u[5] =  x; u[8] =  0;
     return u;
 }
 
@@ -1357,10 +1362,11 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
             xPos = xpos; yPos = ypos;
             SWITCH(mode[ModeMouse],MenuRotate) {
                 float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
-                float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint; v[2] = 0.0;
-                float s = dotvec(u,hemivec(v,2,3),3);
+                float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
+                v[2] = -sqrt(1.0-v[0]*v[0]-v[1]*v[1]);
+                float s = dotvec(u,v,3);
                 copymat(v,crossmat(crossvec(u,v)),9,9,9);
-                scalevec(timesmat(u,v,3),1.0/(1.0-s),9);
+                scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
                 float w[9]; plusvec(u,plusvec(v,identmat(w,3),9),9);
                 jumpmat(normalCur,u,3);
                 w[0] = xPoint; w[1] = yPoint; w[2] = zPoint;
@@ -1370,7 +1376,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
                 jumpmat(modelCur,v,4);
                 enqueMsgstr("displayCursor transform %f %f\n", xPos, yPos);
                 glUseProgram(program[shaderMode]);
-                scalevec(identmat(modelCur,4),1.5,16);
+                scalevec(identmat(modelCur,4),1.5,12);
                 glUniformMatrix4fv(uniform[shaderMode][UniformModel],1,GL_FALSE,modelCur);
                 /*glUniformMatrix3fv(uniform[shaderMode][UniformNormal],1,GL_FALSE,normalCur);*/
                 glUseProgram(0);}
