@@ -106,73 +106,73 @@ struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0};
  // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
-enum {ModeInit,ModeLeft,ModeRight} clickMode = ModeInit;
-/*ModeInit: mouse movement ignored; no pierce point
- *ModeLeft: mouse movement affects matrices; pierce point saved
- *ModeRight: mouse movement ignored; pierce point saved*/
-enum {ModeDiplane,ModeDipoint,ModeCoplane,ModeCopoint,ModeAdplane,ModeAdpoint,ModeShaders} shaderMode = ModeDiplane;
-/*ModeDiplane: display planes
- *ModeDipoint: display points
- *ModeCoplane: calculate intersections
- *ModeCopoint: construct planes
- *ModeAdplane: intersect and classify
- *ModeAdpoint: classify only*/
-enum {UniformInvalid,UniformBasis,UniformModel,UniformNormal,UniformProject,UniformLight,UniformFeather,UniformArrow,UniformUniforms};
+enum {Init,Left,Right,Clicks} click = Init;
+/*Init: mouse movement ignored; no pierce point
+ *Left: mouse movement affects matrices; pierce point saved
+ *Right: mouse movement ignored; pierce point saved*/
+enum {Diplane,Dipoint,Coplane,Copoint,Adplane,Adpoint,Shaders} shader = Diplane;
+/*Diplane: display planes
+ *Dipoint: display points
+ *Coplane: calculate intersections
+ *Copoint: construct planes
+ *Adplane: intersect and classify
+ *Adpoint: classify only*/
+enum {Invalid,Basis,Model,Normal,Project,Light,Feather,Arrow,Uniforms};
 /*model is rotation and translation of polytope and lights
  *in other words, model is transformation of polytope and camera
  *in effect, model transforms points for display position
  *normal is corrective rotation of lights
  *in other words, normal rotation of polytope
  *in effect, normal rotates points for display color*/
-GLuint program[ModeShaders] = {0};
-GLint uniform[ModeShaders][UniformUniforms] = {0};
+GLuint program[Shaders] = {0};
+GLint uniform[Shaders][Uniforms] = {0};
 enum Menu { // lines in the menu
-MenuSculpt,MenuAdditive,MenuSubtractive,MenuRefine,MenuTransform,MenuManipulate,
-MenuMouse,MenuRotate,MenuTranslate,MenuLook,MenuScreen,MenuWindow,
-MenuRoller,MenuLever,MenuClock,MenuCylinder,MenuScale,MenuDrive,MenuSize,MenuAspect,
-MenuWindows,MenuPhysical,MenuVirtual,
-MenuCorner,MenuOpposite,MenuNorthwest,MenuNortheast,MenuSouthwest,MenuSoutheast,
-MenuMenus};
-enum Mode {ModeSculpt,ModeMouse,ModeRoller,ModeWindow,ModeCorner,ModeModes};
-#define INIT {MenuTransform,MenuRotate,MenuLever,MenuPhysical,MenuOpposite}
-enum Menu mode[ModeModes] = INIT; // owned by main thread
-enum Menu mark[ModeModes] = INIT; // owned by console thread
+Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
+Mouses,Rotate,Translate,Look,Screen,Windowz,
+Rollers,Lever,Clock,Cylinder,Scale,Drive,Sizez,Aspect,
+Windows,Physical,Virtual,
+Corners,Opposite,Northwest,Northeast,Southwest,Southeast,
+Menus};
+enum Mode {Sculpt,Mouse,Roller,Window,Corner,Modes};
+#define INIT {Transform,Rotate,Lever,Physical,Opposite}
+enum Menu mode[Modes] = INIT; // owned by main thread
+enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
-    enum Menu collect; // item[item[x].collect].mode == ModeModes
+    enum Menu collect; // item[item[x].collect].mode == Modes
     enum Mode mode; // item[mode[x]].mode == x
     int level; // item[item[x].collect].level == arrayItem()[x].level-1
     char *name; // word to match console input against
-    char *comment; /*text to print after matching word*/} item[MenuMenus] = {
-    {MenuMenus,ModeSculpt,0,"Sculpt","display and manipulate polytope"},
-    {MenuSculpt,ModeSculpt,1,"Additive","click fills in region over pierce point"},
-    {MenuSculpt,ModeSculpt,1,"Subtractive","click hollows out region under pierce point"},
-    {MenuSculpt,ModeSculpt,1,"Refine","click adds random plane through pierce point"},
-    {MenuSculpt,ModeSculpt,1,"Transform","modify model or perspective matrix"},
-    {MenuSculpt,ModeSculpt,1,"Manipulate","modify pierced plane"},
-    {MenuSculpt,ModeMouse,1,"Mouse","action of mouse motion in Transform/Manipulate modes"},
-    {MenuMouse,ModeMouse,2,"Rotate","tilt polytope/plane around pierce point"},
-    {MenuMouse,ModeMouse,2,"Translate","slide polytope/plane from pierce point"},
-    {MenuMouse,ModeMouse,2,"Look","tilt camera around focal point"},
-    {MenuMouse,ModeMouse,2,"Screen","window moves over display fixed to screen"},
-    {MenuMouse,ModeMouse,2,"Window","move window and display on screen"},
-    {MenuSculpt,ModeRoller,1,"Roller","action of roller button in Transform/Manipulate modes"},
-    {MenuRoller,ModeRoller,2,"Lever","push or pull other end of tilt segment from pierce point"},
-    {MenuRoller,ModeRoller,2,"Clock","rotate picture plane around perpendicular to pierce point"},
-    {MenuRoller,ModeRoller,2,"Cylinder","rotate polytope around tilt line"},
-    {MenuRoller,ModeRoller,2,"Scale","grow or shrink polytope with pierce point fixed"},
-    {MenuRoller,ModeRoller,2,"Drive","move picture plane forward or back"},
-    {MenuRoller,ModeRoller,2,"Size","resize window with display fixed to screen"},
-    {MenuRoller,ModeRoller,2,"Aspect","change ratio between window dimensions"},
-    {MenuSculpt,ModeWindow,1,"Window","how operating system window move affects display"},
-    {MenuWindows,ModeWindow,2,"Physical","display appears fixed on screen"},
-    {MenuWindows,ModeWindow,2,"Virtual","display appears fixed in window"},
-    {MenuSculpt,ModeCorner,1,"Corner","how operating system window resize affects display"},
-    {MenuCorner,ModeCorner,2,"Opposite","corner of display opposite dragged appears fixed"},
-    {MenuCorner,ModeCorner,2,"Northwest","upper left corner of display appears fixed"},
-    {MenuCorner,ModeCorner,2,"Northeast","upper right corner of display appears fixed"},
-    {MenuCorner,ModeCorner,2,"Southwest","lower left corner of display appears fixed"},
-    {MenuCorner,ModeCorner,2,"Southeast","lower right corner of display appears fixed"}};
-struct Menus {DECLARE_QUEUE(enum Menu)} lines = {0};
+    char *comment; /*text to print after matching word*/} item[Menus] = {
+    {Menus,Sculpt,0,"Sculpt","display and manipulate polytope"},
+    {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
+    {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
+    {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
+    {Sculpts,Sculpt,1,"Transform","modify model or perspective matrix"},
+    {Sculpts,Sculpt,1,"Manipulate","modify pierced plane"},
+    {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform/Manipulate modes"},
+    {Mouses,Mouse,2,"Rotate","tilt polytope/plane around pierce point"},
+    {Mouses,Mouse,2,"Translate","slide polytope/plane from pierce point"},
+    {Mouses,Mouse,2,"Look","tilt camera around focal point"},
+    {Mouses,Mouse,2,"Screen","window moves over display fixed to screen"},
+    {Mouses,Mouse,2,"Window","move window and display on screen"},
+    {Sculpts,Roller,1,"Roller","action of roller button in Transform/Manipulate modes"},
+    {Rollers,Roller,2,"Lever","push or pull other end of tilt segment from pierce point"},
+    {Rollers,Roller,2,"Clock","rotate picture plane around perpendicular to pierce point"},
+    {Rollers,Roller,2,"Cylinder","rotate polytope around tilt line"},
+    {Rollers,Roller,2,"Scale","grow or shrink polytope with pierce point fixed"},
+    {Rollers,Roller,2,"Drive","move picture plane forward or back"},
+    {Rollers,Roller,2,"Sizez","resize window with display fixed to screen"},
+    {Rollers,Roller,2,"Aspect","change ratio between window dimensions"},
+    {Sculpts,Window,1,"Window","how operating system window move affects display"},
+    {Windows,Window,2,"Physical","display appears fixed on screen"},
+    {Windows,Window,2,"Virtual","display appears fixed in window"},
+    {Sculpts,Corner,1,"Corner","how operating system window resize affects display"},
+    {Corners,Corner,2,"Opposite","corner of display opposite dragged appears fixed"},
+    {Corners,Corner,2,"Northwest","upper left corner of display appears fixed"},
+    {Corners,Corner,2,"Northeast","upper right corner of display appears fixed"},
+    {Corners,Corner,2,"Southwest","lower left corner of display appears fixed"},
+    {Corners,Corner,2,"Southeast","lower right corner of display appears fixed"}};
+struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints {DECLARE_QUEUE(int)} matchs = {0};
  // index into item[line].name for console undo
@@ -198,7 +198,7 @@ int xLoc = 0; // window location
 int yLoc = 0;
 struct Chars generics = {0};
  // sized formatted packets of bytes
-enum WrapState {WrapEnqued,MenuWrapWait};
+enum WrapState {WrapEnqued,WrapWait};
 struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
 enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
 enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
@@ -312,7 +312,7 @@ inline void unque##NAME() \
 { \
     unloc##NAME(1); \
 } \
-/*only one writer supported; for multiple writers, round robin and blocking lock required*/ \
+/*only one writer supported; for multiple writers, round robin required*/ \
 int entry##NAME(TYPE *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
@@ -330,7 +330,7 @@ int entry##NAME(TYPE *val, TYPE term, int len) \
     return retval; /*0: all taken but no terminator; >0: given number taken with terminator*/ \
 } \
 \
-/*only one reader supported; for multiple readers, round robin identities would be required*/ \
+/*only one reader supported; for multiple readers, round robin required*/ \
 int detry##NAME(TYPE *val, TYPE term, int len) \
 { \
     if (len <= 0) return -1; \
@@ -628,8 +628,9 @@ const GLchar *adpointFragment = 0;
 
 void exitErrstr(const char *fmt, ...)
 {
-    fprintf(stderr, "fatal: ");
-    va_list args; va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
+    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
+    printf("fatal: ");
+    va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
 }
 
@@ -677,13 +678,6 @@ ACCESS_QUEUE(Echo,char,echos)
 
 ACCESS_QUEUE(Inject,char,injects)
 
-void enqueErrstr(const char *fmt, ...)
-{
-    fprintf(stderr, "error: ");
-    va_list args; va_start(args, fmt); vfprintf(stderr, fmt, args); va_end(args);
-    enqueEvent(Error); enqueCommand(0);
-}
-
 void enqueMsgstr(const char *fmt, ...)
 {
     va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
@@ -692,14 +686,16 @@ void enqueMsgstr(const char *fmt, ...)
     unlocPrint(1); // remove '\0' that vsnprintf puts on
 }
 
+void enqueErrstr(const char *fmt, ...)
+{
+    enqueMsgstr("error: ");
+    va_list args; va_start(args, fmt); enqueMsgstr(fmt, args); va_end(args);
+    enqueEvent(Error); enqueCommand(0);
+}
+
 void enqueEscape(int val)
 {
     enquePrint(27); enquePrint(val); enquePrint('\n');
-    while (validPrint()) {
-        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
-        if (lenOut <= 0) exitErrstr("entryOutput failed\n");
-        delocPrint(lenOut);
-        if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
 }
 
 /*
@@ -949,14 +945,14 @@ void bringup()
         6.0,7.0,8.0,
         9.0,0.1,1.1,
     };
-    SWITCH(shaderMode,ModeDiplane) {
+    SWITCH(shader,Diplane) {
         glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
         glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), bringup);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
         glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    CASE(ModeDipoint) {
+    CASE(Dipoint) {
         glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
         glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), tetrahedron);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -1037,7 +1033,7 @@ void coplane()
     CHECK(coplane,Coplane)
 
     // depending on state
-    glUseProgram(program[ModeCoplane]);
+    glUseProgram(program[Coplane]);
     glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, pointBuf.base, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat));
     glEnable(GL_RASTERIZER_DISCARD);
     glBeginTransformFeedback(GL_POINTS);
@@ -1080,7 +1076,7 @@ void copoint()
     CHECK(copoint,Copoint)
 
     if (copointState == CopointEnqued) {
-        glUseProgram(program[ModeCopoint]);
+        glUseProgram(program[Copoint]);
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, planeBuf.query);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat));
         glEnable(GL_RASTERIZER_DISCARD);
@@ -1119,7 +1115,7 @@ void diplane()
 {
     CHECK(diplane,Diplane)
 
-    glUseProgram(program[ModeDiplane]);
+    glUseProgram(program[Diplane]);
     glEnableVertexAttribArray(PLANE_LOCATION);
     glEnableVertexAttribArray(VERSOR_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceSub.base);
@@ -1140,7 +1136,7 @@ void dipoint()
 {
     CHECK(dipoint,Dipoint)
 
-    glUseProgram(program[ModeDipoint]);
+    glUseProgram(program[Dipoint]);
     glEnableVertexAttribArray(POINT_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polygonSub.base);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -1217,7 +1213,7 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-        SWITCH(shaderMode,ModeDiplane) {
+        SWITCH(shader,Diplane) {
             ENQUE(configure,Configure)
             enqueLink(&configure); enqueCommand(&link);
 #ifdef BRINGUP
@@ -1225,7 +1221,7 @@ void process()
             enqueLink(&copoint); enqueCommand(&link);
 #endif
             ENQUE(diplane,Diplane)}
-        CASE(ModeDipoint) {
+        CASE(Dipoint) {
             ENQUE(configure,Configure)
             enqueLink(&configure); enqueCommand(&link);
             ENQUE(coplane,Coplane)
@@ -1248,11 +1244,64 @@ void menu()
     CHECK(menu,Menu)
     char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
-    if (len == 1 && buf[0] < MenuMenus) {
-        clickMode = ModeInit; mode[item[buf[0]].mode] = buf[0];}
+    if (len == 1 && buf[0] < Menus) {
+        click = Init; mode[item[buf[0]].mode] = buf[0];}
     else {buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocChar(len+1);
     DEQUE(menu,Menu)
+}
+
+/*
+ * helpers for display callbacks
+ */
+
+void leftTransformRight()
+{
+    double xpos, ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    xPoint = xpos; yPoint = ypos;
+    enqueMsgstr("displayClick %f %f\n",xPoint,yPoint);
+#ifdef BRINGUP
+    zPoint = 0.0;
+#endif
+    for (int i = 0; i < 16; i++) modelMat[i] = modelCur[i];
+    for (int i = 0; i < 9; i++) normalMat[i] = normalCur[i];
+    for (int i = 0; i < 9; i++) projectMat[i] = projectCur[i];
+    click = Left;
+}
+
+void leftManipulateRight()
+{
+    double xpos, ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    xPoint = xpos; yPoint = ypos;
+#ifdef BRINGUP
+    zPoint = 0.0;
+#endif
+    click = Left;
+}
+
+void rightTransformRight()
+{
+    xPos = xWarp; yPos = yWarp; zPos = zWarp;
+#ifdef __linux__
+    double xpos, ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    XWarpPointer(displayHandle,None,None,0,0,0,0,xWarp-xpos,yWarp-ypos);
+#endif
+#ifdef __APPLE__
+    int xpos, ypos;
+    glfwGetWindowPos(windowHandle,&xpos,&ypos);
+    struct CGPoint point; point.x = xpos+xWarp; point.y = ypos+yWarp;
+    CGWarpMouseCursorPosition(point);
+#endif
+    click = Left;
+}
+
+void rightTransformLeft()
+{
+    xWarp = xPos; yWarp = yPos; zWarp = zPos;
+    click = Right;
 }
 
 /*
@@ -1289,64 +1338,38 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {button = GLFW_MOUSE_BUTTON_RIGHT;}
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
-        SWITCH(mode[ModeSculpt],MenuAdditive) {
-            SWITCH(clickMode,ModeInit) {/*ignore*/}
+        SWITCH(mode[Sculpt],Additive) {
+            SWITCH(click,Init) {/*ignore*/}
             DEFAULT(exitErrstr("invalid click mode\n");)
-            SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-            CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+            SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+            CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
-        CASE(MenuSubtractive) {
-            SWITCH(clickMode,ModeInit) {/*ignore*/}
+        CASE(Subtractive) {
+            SWITCH(click,Init) {/*ignore*/}
             DEFAULT(exitErrstr("invalid click mode\n");)
-            SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-            CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+            SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+            CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
-        CASE(MenuRefine) {
-            SWITCH(clickMode,ModeInit) {/*ignore*/}
+        CASE(Refine) {
+            SWITCH(click,Init) {/*ignore*/}
             DEFAULT(exitErrstr("invalid click mode\n");)
-            SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-            CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+            SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+            CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
-        CASE(MenuTransform) {
-            SWITCH(clickMode,ModeInit) FALL(ModeRight) {
-#ifdef BRINGUP
-                xPoint = xPos; yPoint = yPos; zPoint = 0;
-#endif
-                for (int i = 0; i < 16; i++) modelMat[i] = modelCur[i];
-                for (int i = 0; i < 9; i++) normalMat[i] = normalCur[i];
-                for (int i = 0; i < 9; i++) projectMat[i] = projectCur[i];
-                clickMode = ModeLeft;}
-            CASE(ModeLeft) clickMode = ModeInit;
+        CASE(Transform) {
+            SWITCH(click,Init) FALL(Right) leftTransformRight();
+            CASE(Left) click = Init;
             DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(MenuManipulate) {
-            SWITCH(clickMode,ModeInit) FALL(ModeRight) {
-#ifdef BRINGUP
-                xPoint = xPos; yPoint = yPos; zPoint = 0;
-#endif
-                clickMode = ModeLeft;}
-            CASE(ModeLeft) clickMode = ModeInit;
+        CASE(Manipulate) {
+            SWITCH(click,Init) FALL(Right) leftManipulateRight();
+            CASE(Left) click = Init;
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
-        SWITCH(mode[ModeSculpt],MenuTransform) FALL(MenuManipulate) {
-            SWITCH(clickMode,ModeInit) {/*ignore*/}
-            CASE(ModeRight) {
-                xPos = xWarp; yPos = yWarp; zPos = zWarp;
-#ifdef __linux__
-                double xpos, ypos;
-                glfwGetCursorPos(windowHandle,&xpos,&ypos);
-                XWarpPointer(displayHandle,None,None,0,0,0,0,xWarp-xpos,yWarp-ypos);
-#endif
-#ifdef __APPLE__
-                int xpos, ypos;
-                glfwGetWindowPos(windowHandle,&xpos,&ypos);
-                struct CGPoint point; point.x = xpos+xWarp; point.y = ypos+yWarp;
-                CGWarpMouseCursorPosition(point);
-#endif
-                clickMode = ModeLeft;}
-            CASE(ModeLeft) {
-                xWarp = xPos; yWarp = yPos; zWarp = zPos;
-                clickMode = ModeRight;}
+        SWITCH(mode[Sculpt],Transform) FALL(Manipulate) {
+            SWITCH(click,Init) {/*ignore*/}
+            CASE(Right) rightTransformRight();
+            CASE(Left) rightTransformLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(/*ignore*/)}
     DEFAULT(/*ignore*/)
@@ -1355,17 +1378,19 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
-    SWITCH(mode[ModeSculpt],MenuAdditive) FALL(MenuSubtractive) FALL(MenuRefine) {/*ignore*/}
-    CASE(MenuTransform) {
-        SWITCH(clickMode,ModeInit) FALL(ModeRight) {/*ignore*/}
-        CASE(ModeLeft) {
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+    CASE(Transform) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
             xPos = xpos; yPos = ypos;
-            SWITCH(mode[ModeMouse],MenuRotate) {
+            SWITCH(mode[Mouse],Rotate) {
                 float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
-                float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
+                float v[16]; v[0] = (xPos-xPoint)/100.0; v[1] = (yPos-yPoint)/100.0;
                 v[2] = -sqrt(1.0-v[0]*v[0]-v[1]*v[1]);
                 float s = dotvec(u,v,3);
-                copymat(v,crossmat(crossvec(u,v)),9,9,9);
+                crossvec(u,v);
+                enqueMsgstr("displayCursor transform %f %f %f\n", u[0], u[1], u[2]);
+                copymat(v,crossmat(u),9,9,9);
                 scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
                 float w[9]; plusvec(u,plusvec(v,identmat(w,3),9),9);
                 jumpmat(normalCur,u,3);
@@ -1374,34 +1399,39 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
                 copymat(identmat(v,4)+12,w,3,3,3); copymat(v,u,3,4,9);
                 copymat(identmat(u,4)+12,w+3,3,3,3); timesmat(v,u,3);
                 jumpmat(modelCur,v,4);
-                enqueMsgstr("displayCursor transform %f %f\n", xPos, yPos);
-                glUseProgram(program[shaderMode]);
-                scalevec(identmat(modelCur,4),1.5,12);
-                glUniformMatrix4fv(uniform[shaderMode][UniformModel],1,GL_FALSE,modelCur);
-                /*glUniformMatrix3fv(uniform[shaderMode][UniformNormal],1,GL_FALSE,normalCur);*/
+                glUseProgram(program[shader]);
+                /*scalevec(identmat(modelCur,4),1.5,12);*/
+                double xpos = (xPos - xPoint) / 100.0;
+                modelCur[0] = 1.0; modelCur[4] = 0.0; modelCur[8] = 0.0;
+                modelCur[1] = 0.0; modelCur[5] = sqrt(1-xpos*xpos); modelCur[9] = xpos;
+                modelCur[2] = 0.0; modelCur[6] = xpos; modelCur[10] = sqrt(1-xpos*xpos);
+                modelCur[3] = 0.0; modelCur[7] = 0.0; modelCur[11] = 0.0;
+                modelCur[12] = 0.0; modelCur[13] = 0.0; modelCur[14] = 0.0; modelCur[15] = 1.0;
+                glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
+                glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalCur);
                 glUseProgram(0);}
-            CASE(MenuTranslate) {}
-            CASE(MenuLook) {}
-            CASE(MenuScreen) {}
-            CASE(MenuWindow) {}
+            CASE(Translate) {}
+            CASE(Look) {}
+            CASE(Screen) {}
+            CASE(Windowz) {}
             DEFAULT(exitErrstr("invalid mouse mode\n");)
-            SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-            CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+            SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+            CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}
-    CASE(MenuManipulate) {
-        SWITCH(clickMode,ModeInit) FALL(ModeRight) {/*ignore*/}
-        CASE(ModeLeft) {
+    CASE(Manipulate) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
             xPos = xpos; yPos = ypos;
-            SWITCH(mode[ModeMouse],MenuRotate) {
+            SWITCH(mode[Mouse],Rotate) {
                 enqueMsgstr("displayCursor manipulate %f %f\n", xPos, yPos);}
-            CASE(MenuTranslate) {}
-            CASE(MenuLook) {}
-            CASE(MenuScreen) {}
-            CASE(MenuWindow) {}
+            CASE(Translate) {}
+            CASE(Look) {}
+            CASE(Screen) {}
+            CASE(Windowz) {}
             DEFAULT(exitErrstr("invalid mouse mode\n");)
-            SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-            CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+            SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+            CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}
     DEFAULT(exitErrstr("invalid sculpt mode\n");)
@@ -1410,39 +1440,39 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     double zpos = zPos + yoffset;
-    SWITCH(mode[ModeSculpt],MenuAdditive) FALL(MenuSubtractive) FALL(MenuRefine) {/*ignore*/}
-    CASE(MenuTransform) {
-        SWITCH(clickMode,ModeInit) FALL(ModeRight) {/*ignore*/}
-        CASE(ModeLeft) {
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+    CASE(Transform) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
             zPos = zpos;
             enqueMsgstr("displayScroll transform %f\n", zPos);
-            SWITCH(mode[ModeRoller],MenuLever) {}
-            CASE(MenuClock) {}
-            CASE(MenuCylinder) {}
-            CASE(MenuScale) {}
-            CASE(MenuDrive) {}
-            CASE(MenuSize) {}
-            CASE(MenuAspect) {}
+            SWITCH(mode[Roller],Lever) {}
+            CASE(Clock) {}
+            CASE(Cylinder) {}
+            CASE(Scale) {}
+            CASE(Drive) {}
+            CASE(Sizez) {}
+            CASE(Aspect) {}
             DEFAULT(exitErrstr("invalid roller mode\n");)
-            SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-            CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+            SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+            CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}            
-    CASE(MenuManipulate) {
-        SWITCH(clickMode,ModeInit) FALL(ModeRight) {/*ignore*/}
-        CASE(ModeLeft) {
+    CASE(Manipulate) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
             zPos = zpos;
             enqueMsgstr("displayScroll transform %f\n", zPos);
-            SWITCH(mode[ModeRoller],MenuLever) {}
-            CASE(MenuClock) {}
-            CASE(MenuCylinder) {}
-            CASE(MenuScale) {}
-            CASE(MenuDrive) {}
-            CASE(MenuSize) {}
-            CASE(MenuAspect) {}
+            SWITCH(mode[Roller],Lever) {}
+            CASE(Clock) {}
+            CASE(Cylinder) {}
+            CASE(Scale) {}
+            CASE(Drive) {}
+            CASE(Sizez) {}
+            CASE(Aspect) {}
             DEFAULT(exitErrstr("invalid roller mode\n");)
-            SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-            CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+            SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+            CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}
     DEFAULT(exitErrstr("invalid sculpt mode");)
@@ -1453,11 +1483,11 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
     xLoc = xloc; yLoc = yloc;
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
-    SWITCH(mode[ModeWindow],MenuPhysical) {}
-    CASE(MenuVirtual) {}
+    SWITCH(mode[Window],Physical) {}
+    CASE(Virtual) {}
     DEFAULT(exitErrstr("invalid window mode\n");)
-    SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-    CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+    SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+    CASE(Diplane) {MAYBE(diplane,Diplane)}
     DEFAULT(exitErrstr("invalid shader mode\n");)
 }
 
@@ -1466,50 +1496,22 @@ void displaySize(GLFWwindow *window, int width, int height)
     xSiz = width; ySiz = height;
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
-    SWITCH(mode[ModeCorner],MenuOpposite) {}
-    CASE(MenuNorthwest) {}
-    CASE(MenuNortheast) {}
-    CASE(MenuSouthwest) {}
-    CASE(MenuSoutheast) {}
+    SWITCH(mode[Corner],Opposite) {}
+    CASE(Northwest) {}
+    CASE(Northeast) {}
+    CASE(Southwest) {}
+    CASE(Southeast) {}
     DEFAULT(exitErrstr("invalid corner mode\n");)
-    SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-    CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+    SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+    CASE(Diplane) {MAYBE(diplane,Diplane)}
     DEFAULT(exitErrstr("invalid shader mode\n");)
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    SWITCH(shaderMode,ModeDipoint) {MAYBE(dipoint,Dipoint)}
-    CASE(ModeDiplane) {MAYBE(diplane,Diplane)}
+    SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
+    CASE(Diplane) {MAYBE(diplane,Diplane)}
     DEFAULT(exitErrstr("invalid shader mode\n");)
-}
-
-/*
- * accessors for Haskell to read and modify state
- */
-
-char *generic(int *indices, int size)
-{
-    // if size is not zero, resize indicated portion of generic data
-    // return pointer to indicated portion of generic data
-    return 0;
-}
-
-char *message()
-{
-    if (!validChar()) return 0;
-    char *buf = arrayChar(); delocChar(strlen(buf));
-    return buf;
-}
-
-int event()
-{
-    if (!validEvent()) return -1;
-    enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Error) return 3;
-    CASE(Done) return 4;
-    DEFAULT({exitErrstr("invalid event\n");})
-    return -1;
 }
 
 /*
@@ -1631,10 +1633,10 @@ void unwriteitem(enum Menu line)
 
 void writemenu()
 {
-    for (enum Menu line = 0; line < MenuMenus; line++) {
+    for (enum Menu line = 0; line < Menus; line++) {
         struct Item *iptr = &item[line];
-        enum Menu menu = MenuMenus;
-        if (iptr->mode != ModeModes) menu = mark[iptr->mode];
+        enum Menu menu = Menus;
+        if (iptr->mode != Modes) menu = mark[iptr->mode];
         for (int i = 0; i < iptr->level; i++) writechr(' ');
         writestr(iptr->name);
         if (menu == line) writestr(" ** "); else writestr(" -- ");
@@ -1651,7 +1653,7 @@ void writematch(char chr)
     enum Mode mode = iptr->mode;
     if (iptr->name[match] == chr) {
         enqueLine(line); enqueMatch(match+1); return;}
-    for (int i = line+1; i < MenuMenus; i++) {
+    for (int i = line+1; i < Menus; i++) {
         struct Item *jptr = &item[i];
         if (jptr->collect == iptr->collect && strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
             enqueLine(i); enqueMatch(match+1); return;}}
@@ -1738,7 +1740,7 @@ void *console(void *arg)
                 unqueLine(); unqueMatch();}
             if (item[tailLine()].collect != collect) {
                 enqueLine(line); enqueMatch(0);}
-            if (collect != MenuMenus && item[collect].mode == mode) {
+            if (collect != Menus && item[collect].mode == mode) {
                 mark[mode] = line; enqueScan(line); enqueScan('\n');}
             else {
                 enqueLine(mark[mode]); enqueMatch(0);}}
@@ -1763,11 +1765,11 @@ void *console(void *arg)
         else if (esc == 3 && key == 126 && last[2] == 51) {esc = 0; writestr("<del>\n");}
         else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; writestr("<pgup>\n");}
         else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; writestr("<pgdn>\n");}
-        else {esc = 0; for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writechr('\n');}
+        else {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writechr('\n'); esc = 0;}
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
-    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
 
+    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
     printf("console done\n");
 
     return 0;
@@ -1885,59 +1887,59 @@ void initialize(int argc, char **argv)
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    program[ModeDiplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, "diplane");
-    program[ModeDipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, "dipoint");
-    program[ModeCoplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "vector", "coplane");
-    program[ModeCopoint] = compileProgram(copointVertex, copointGeometry, copointFragment, "vector", "copoint");
-    program[ModeAdplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, "scalar", "adplane");
-    program[ModeAdpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", "adpoint");
+    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, "diplane");
+    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, "dipoint");
+    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "vector", "coplane");
+    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment, "vector", "copoint");
+    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, "scalar", "adplane");
+    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", "adpoint");
 
     for (int i = 0; i < 16; i++) modelCur[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) normalCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
 
-    glUseProgram(program[ModeDiplane]);
-    uniform[ModeDiplane][UniformInvalid] = glGetUniformLocation(program[ModeDiplane], "invalid");
-    uniform[ModeDiplane][UniformBasis] = glGetUniformLocation(program[ModeDiplane], "basis");
-    uniform[ModeDiplane][UniformModel] = glGetUniformLocation(program[ModeDiplane], "model");
-    uniform[ModeDiplane][UniformNormal] = glGetUniformLocation(program[ModeDiplane], "normal");
-    uniform[ModeDiplane][UniformProject] = glGetUniformLocation(program[ModeDiplane], "project");
-    uniform[ModeDiplane][UniformLight] = glGetUniformLocation(program[ModeDiplane], "light");
-    glUniformMatrix4fv(uniform[ModeDiplane][UniformModel],1,GL_FALSE,modelCur);
-    glUniformMatrix3fv(uniform[ModeDiplane][UniformNormal],1,GL_FALSE,normalCur);
-    glUniformMatrix3fv(uniform[ModeDiplane][UniformProject],1,GL_FALSE,projectCur);
+    glUseProgram(program[Diplane]);
+    uniform[Diplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
+    uniform[Diplane][Basis] = glGetUniformLocation(program[Diplane], "basis");
+    uniform[Diplane][Model] = glGetUniformLocation(program[Diplane], "model");
+    uniform[Diplane][Normal] = glGetUniformLocation(program[Diplane], "normal");
+    uniform[Diplane][Project] = glGetUniformLocation(program[Diplane], "project");
+    uniform[Diplane][Light] = glGetUniformLocation(program[Diplane], "light");
+    glUniformMatrix4fv(uniform[Diplane][Model],1,GL_FALSE,modelCur);
+    glUniformMatrix3fv(uniform[Diplane][Normal],1,GL_FALSE,normalCur);
+    glUniformMatrix3fv(uniform[Diplane][Project],1,GL_FALSE,projectCur);
     glUseProgram(0);
 
-    glUseProgram(program[ModeDipoint]);
-    uniform[ModeDipoint][UniformModel] = glGetUniformLocation(program[ModeDipoint], "model");
-    uniform[ModeDipoint][UniformNormal] = glGetUniformLocation(program[ModeDipoint], "normal");
-    uniform[ModeDipoint][UniformProject] = glGetUniformLocation(program[ModeDipoint], "project");
-    uniform[ModeDipoint][UniformLight] = glGetUniformLocation(program[ModeDipoint], "light");
-    glUniformMatrix4fv(uniform[ModeDipoint][UniformModel],1,GL_FALSE,modelCur);
-    glUniformMatrix3fv(uniform[ModeDipoint][UniformNormal],1,GL_FALSE,normalCur);
-    glUniformMatrix3fv(uniform[ModeDipoint][UniformProject],1,GL_FALSE,projectCur);
+    glUseProgram(program[Dipoint]);
+    uniform[Dipoint][Model] = glGetUniformLocation(program[Dipoint], "model");
+    uniform[Dipoint][Normal] = glGetUniformLocation(program[Dipoint], "normal");
+    uniform[Dipoint][Project] = glGetUniformLocation(program[Dipoint], "project");
+    uniform[Dipoint][Light] = glGetUniformLocation(program[Dipoint], "light");
+    glUniformMatrix4fv(uniform[Dipoint][Model],1,GL_FALSE,modelCur);
+    glUniformMatrix3fv(uniform[Dipoint][Normal],1,GL_FALSE,normalCur);
+    glUniformMatrix3fv(uniform[Dipoint][Project],1,GL_FALSE,projectCur);
     glUseProgram(0);
 
-    glUseProgram(program[ModeCoplane]);
-    uniform[ModeCoplane][UniformInvalid] = glGetUniformLocation(program[ModeDiplane], "invalid");
-    uniform[ModeCoplane][UniformBasis] = glGetUniformLocation(program[ModeCoplane], "basis");
+    glUseProgram(program[Coplane]);
+    uniform[Coplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
+    uniform[Coplane][Basis] = glGetUniformLocation(program[Coplane], "basis");
     glUseProgram(0);
 
-    glUseProgram(program[ModeCopoint]);
-    uniform[ModeCopoint][UniformInvalid] = glGetUniformLocation(program[ModeDiplane], "invalid");
-    uniform[ModeCopoint][UniformBasis] = glGetUniformLocation(program[ModeCopoint], "basis");
+    glUseProgram(program[Copoint]);
+    uniform[Copoint][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
+    uniform[Copoint][Basis] = glGetUniformLocation(program[Copoint], "basis");
     glUseProgram(0);
 
-    glUseProgram(program[ModeAdplane]);
-    uniform[ModeAdplane][UniformInvalid] = glGetUniformLocation(program[ModeDiplane], "invalid");
-    uniform[ModeAdplane][UniformBasis] = glGetUniformLocation(program[ModeAdplane], "basis");
-    uniform[ModeAdplane][UniformFeather] = glGetUniformLocation(program[ModeAdplane], "feather");
-    uniform[ModeAdplane][UniformArrow] = glGetUniformLocation(program[ModeAdplane], "arrow");
+    glUseProgram(program[Adplane]);
+    uniform[Adplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
+    uniform[Adplane][Basis] = glGetUniformLocation(program[Adplane], "basis");
+    uniform[Adplane][Feather] = glGetUniformLocation(program[Adplane], "feather");
+    uniform[Adplane][Arrow] = glGetUniformLocation(program[Adplane], "arrow");
     glUseProgram(0);
  
-    glUseProgram(program[ModeAdpoint]);
-    uniform[ModeAdpoint][UniformFeather] = glGetUniformLocation(program[ModeAdpoint], "feather");
-    uniform[ModeAdpoint][UniformArrow] = glGetUniformLocation(program[ModeAdpoint], "arrow");
+    glUseProgram(program[Adpoint]);
+    uniform[Adpoint][Feather] = glGetUniformLocation(program[Adpoint], "feather");
+    uniform[Adpoint][Arrow] = glGetUniformLocation(program[Adpoint], "arrow");
     glUseProgram(0);
 
     ENQUE(process,Process)
@@ -1957,6 +1959,11 @@ void finalize()
 {
     // save transformation matrices
     enqueEscape(0);
+    while (validPrint()) {
+        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
+        if (lenOut <= 0) exitErrstr("entryOutput failed\n");
+        delocPrint(lenOut);
+        if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (configFile) {fclose(configFile); configFile = 0;}
@@ -1964,7 +1971,7 @@ void finalize()
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
     if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
-    if (lines.base) {struct Menus initial = {0}; free(lines.base); lines = initial;}
+    if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
     if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
@@ -1983,4 +1990,32 @@ void finalize()
     if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
     if (injects.base) {struct Chars initial = {0}; free(injects.base); injects = initial;}
     printf("finalize done\n");
+}
+
+/*
+ * accessors for Haskell to read and modify state
+ */
+
+char *generic(int *indices, int size)
+{
+    // if size is not zero, resize indicated portion of generic data
+    // return pointer to indicated portion of generic data
+    return 0;
+}
+
+char *message()
+{
+    if (!validChar()) return 0;
+    char *buf = arrayChar(); delocChar(strlen(buf));
+    return buf;
+}
+
+int event()
+{
+    if (!validEvent()) return -1;
+    enum Event event = headEvent(); dequeEvent();
+    SWITCH(event,Error) return 3;
+    CASE(Done) return 4;
+    DEFAULT({exitErrstr("invalid event\n");})
+    return -1;
 }
