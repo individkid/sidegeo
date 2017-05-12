@@ -1370,9 +1370,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
                 jumpmat(modelCur,v,4);
                 enqueMsgstr("displayCursor transform %f %f\n", xPos, yPos);
                 glUseProgram(program[shaderMode]);
-                modelCur[0] = 2.0; modelCur[1] = 0.0; modelCur[2] = 0.0;
-                modelCur[3] = 0.0; modelCur[4] = 2.0; modelCur[5] = 0.0;
-                modelCur[6] = 0.0; modelCur[7] = 0.0; modelCur[8] = 2.0;
+                scalevec(identmat(modelCur,4),1.5,16);
                 glUniformMatrix4fv(uniform[shaderMode][UniformModel],1,GL_FALSE,modelCur);
                 /*glUniformMatrix3fv(uniform[shaderMode][UniformNormal],1,GL_FALSE,normalCur);*/
                 glUseProgram(0);}
