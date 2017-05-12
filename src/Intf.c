@@ -1355,7 +1355,6 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         SWITCH(clickMode,ModeInit) FALL(ModeRight) {/*ignore*/}
         CASE(ModeLeft) {
             xPos = xpos; yPos = ypos;
-            enqueMsgstr("displayCursor transform %f %f\n", xPos, yPos);
             SWITCH(mode[ModeMouse],MenuRotate) {
                 float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
                 float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint; v[2] = 0.0;
@@ -1369,10 +1368,14 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
                 copymat(identmat(v,4)+12,w,3,3,3); copymat(v,u,3,4,9);
                 copymat(identmat(u,4)+12,w+3,3,3,3); timesmat(v,u,3);
                 jumpmat(modelCur,v,4);
-                /*glUseProgram(program[shaderMode]);
+                enqueMsgstr("displayCursor transform %f %f\n", xPos, yPos);
+                glUseProgram(program[shaderMode]);
+                modelCur[0] = 2.0; modelCur[1] = 0.0; modelCur[2] = 0.0;
+                modelCur[3] = 0.0; modelCur[4] = 2.0; modelCur[5] = 0.0;
+                modelCur[6] = 0.0; modelCur[7] = 0.0; modelCur[8] = 2.0;
                 glUniformMatrix4fv(uniform[shaderMode][UniformModel],1,GL_FALSE,modelCur);
-                glUniformMatrix3fv(uniform[shaderMode][UniformNormal],1,GL_FALSE,normalCur);
-                glUseProgram(0);*/}
+                /*glUniformMatrix3fv(uniform[shaderMode][UniformNormal],1,GL_FALSE,normalCur);*/
+                glUseProgram(0);}
             CASE(MenuTranslate) {}
             CASE(MenuLook) {}
             CASE(MenuScreen) {}
@@ -1386,8 +1389,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         SWITCH(clickMode,ModeInit) FALL(ModeRight) {/*ignore*/}
         CASE(ModeLeft) {
             xPos = xpos; yPos = ypos;
-            enqueMsgstr("displayCursor manipulate %f %f\n", xPos, yPos);
-            SWITCH(mode[ModeMouse],MenuRotate) {}
+            SWITCH(mode[ModeMouse],MenuRotate) {
+                enqueMsgstr("displayCursor manipulate %f %f\n", xPos, yPos);}
             CASE(MenuTranslate) {}
             CASE(MenuLook) {}
             CASE(MenuScreen) {}
