@@ -133,14 +133,14 @@ GLuint program[Shaders] = {0};
 GLint uniform[Shaders][Uniforms] = {0};
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
-    Mouses,Rotate,Translate,Look,Screen,Windowz,
+    Mouses,Rotate,Translate,Look,Screenz,Windowz,
     Rollers,Lever,Clock,Cylinder,Scale,Drive,Sizez,Aspect,
     Windows,Physical,Virtual,
-    Corners,Opposite,Northwest,Northeast,Southwest,Southeast,
+    Corners,Oppositez,Northwest,Northeast,Southwest,Southeast,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
-    Sculpt,Mouse,Roller,Window,Corner,Modes};
-#define INIT {Transform,Rotate,Lever,Physical,Opposite}
+    Sculpt,Mouse,Roller,Windowm,Corner,Modes};
+#define INIT {Transform,Rotate,Lever,Physical,Oppositez}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -170,9 +170,9 @@ struct Item { // per-menu-line info
     {Rollers,Roller,2,"Drive","move picture plane forward or back"},
     {Rollers,Roller,2,"Sizez","resize window with display fixed to screen"},
     {Rollers,Roller,2,"Aspect","change ratio between window dimensions"},
-    {Sculpts,Window,1,"Window","how operating system window move affects display"},
-    {Windows,Window,2,"Physical","display appears fixed on screen"},
-    {Windows,Window,2,"Virtual","display appears fixed in window"},
+    {Sculpts,Windowm,1,"Window","how operating system window move affects display"},
+    {Windows,Windowm,2,"Physical","display appears fixed on screen"},
+    {Windows,Windowm,2,"Virtual","display appears fixed in window"},
     {Sculpts,Corner,1,"Corner","how operating system window resize affects display"},
     {Corners,Corner,2,"Opposite","corner of display opposite dragged appears fixed"},
     {Corners,Corner,2,"Northwest","upper left corner of display appears fixed"},
@@ -1419,7 +1419,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
                 glUseProgram(0);}
             CASE(Translate) {}
             CASE(Look) {}
-            CASE(Screen) {}
+            CASE(Screenz) {}
             CASE(Windowz) {}
             DEFAULT(exitErrstr("invalid mouse mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
@@ -1434,7 +1434,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
                 enqueMsgstr("displayCursor manipulate %f %f\n", xPos, yPos);}
             CASE(Translate) {}
             CASE(Look) {}
-            CASE(Screen) {}
+            CASE(Screenz) {}
             CASE(Windowz) {}
             DEFAULT(exitErrstr("invalid mouse mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
@@ -1490,7 +1490,7 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
     xLoc = xloc; yLoc = yloc;
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
-    SWITCH(mode[Window],Physical) {}
+    SWITCH(mode[Windowm],Physical) {}
     CASE(Virtual) {}
     DEFAULT(exitErrstr("invalid window mode\n");)
     SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
@@ -1503,7 +1503,7 @@ void displaySize(GLFWwindow *window, int width, int height)
     xSiz = width; ySiz = height;
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
-    SWITCH(mode[Corner],Opposite) {}
+    SWITCH(mode[Corner],Oppositez) {}
     CASE(Northwest) {}
     CASE(Northeast) {}
     CASE(Southwest) {}
