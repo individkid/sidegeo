@@ -1501,6 +1501,9 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
 void displaySize(GLFWwindow *window, int width, int height)
 {
     xSiz = width; ySiz = height;
+#ifdef __APPLE__
+    xSiz *= 2; ySiz *= 2;
+#endif
     glViewport(0, 0, xSiz, ySiz);
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
     SWITCH(mode[Corner],Oppositez) {}
@@ -1828,6 +1831,9 @@ void initialize(int argc, char **argv)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     windowHandle = glfwCreateWindow(xSiz = 800, ySiz = 600, "Sculpt", NULL, NULL);
+#ifdef __APPLE__
+    xSiz *= 2; ySiz *= 2;
+#endif
     if (!windowHandle) {exitErrstr("could not create window\n");}
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowSizeCallback(windowHandle, displaySize);
