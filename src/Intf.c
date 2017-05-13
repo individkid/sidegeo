@@ -134,14 +134,12 @@ GLuint program[Shaders] = {0};
 GLint uniform[Shaders][Uniforms] = {0};
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
-    Mouses,Rotate,Translate,Look,Screenz,Windowz,
-    Rollers,Lever,Clock,Cylinder,Scale,Drive,Sizez,Aspect,
-    Windows,Physical,Virtual,
-    Corners,Oppositez,Northwest,Northeast,Southwest,Southeast,
+    Mouses,Rotate,Translate,Look,
+    Rollers,Lever,Clock,Cylinder,Scale,Drive,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
-    Sculpt,Mouse,Roller,Windowm,Corner,Modes};
-#define INIT {Transform,Rotate,Lever,Physical,Oppositez}
+    Sculpt,Mouse,Roller,Modes};
+#define INIT {Transform,Rotate,Lever}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -161,25 +159,12 @@ struct Item { // per-menu-line info
     {Mouses,Mouse,2,"Rotate","tilt polytope/plane around pierce point"},
     {Mouses,Mouse,2,"Translate","slide polytope/plane from pierce point"},
     {Mouses,Mouse,2,"Look","tilt camera around focal point"},
-    {Mouses,Mouse,2,"Screen","window moves over display fixed to screen"},
-    {Mouses,Mouse,2,"Window","move window and display on screen"},
     {Sculpts,Roller,1,"Roller","action of roller button in Transform/Manipulate modes"},
     {Rollers,Roller,2,"Lever","push or pull other end of tilt segment from pierce point"},
     {Rollers,Roller,2,"Clock","rotate picture plane around perpendicular to pierce point"},
     {Rollers,Roller,2,"Cylinder","rotate polytope around tilt line"},
     {Rollers,Roller,2,"Scale","grow or shrink polytope with pierce point fixed"},
-    {Rollers,Roller,2,"Drive","move picture plane forward or back"},
-    {Rollers,Roller,2,"Sizez","resize window with display fixed to screen"},
-    {Rollers,Roller,2,"Aspect","change ratio between window dimensions"},
-    {Sculpts,Windowm,1,"Window","how operating system window move affects display"},
-    {Windows,Windowm,2,"Physical","display appears fixed on screen"},
-    {Windows,Windowm,2,"Virtual","display appears fixed in window"},
-    {Sculpts,Corner,1,"Corner","how operating system window resize affects display"},
-    {Corners,Corner,2,"Opposite","corner of display opposite dragged appears fixed"},
-    {Corners,Corner,2,"Northwest","upper left corner of display appears fixed"},
-    {Corners,Corner,2,"Northeast","upper right corner of display appears fixed"},
-    {Corners,Corner,2,"Southwest","lower left corner of display appears fixed"},
-    {Corners,Corner,2,"Southeast","lower right corner of display appears fixed"}};
+    {Rollers,Roller,2,"Drive","move picture plane forward or back"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints {DECLARE_QUEUE(int)} matchs = {0};
@@ -1256,9 +1241,10 @@ void menu()
     CHECK(menu,Menu)
     char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
-    if (len == 1 && buf[0] < Menus) {
-        click = Init; mode[item[buf[0]].mode] = buf[0];}
-    else {buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
+    if (len == 1 && buf[0] < 0) {
+        click = Init; mode[item[buf[0]+128].mode] = buf[0]+128;}
+    else {
+        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocChar(len+1);
     DEQUE(menu,Menu)
 }
@@ -1267,7 +1253,7 @@ void menu()
  * helpers for display callbacks
  */
 
-void leftTransformRight()
+void leftTransform()
 {
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
@@ -1282,7 +1268,7 @@ void leftTransformRight()
     click = Left;
 }
 
-void leftManipulateRight()
+void leftManipulate()
 {
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
@@ -1293,30 +1279,34 @@ void leftManipulateRight()
     click = Left;
 }
 
-void rightTransformRight()
+void rightRight()
 {
     xPos = xWarp; yPos = yWarp; zPos = zWarp;
+    enqueMsgstr("rightRight %f %f\n",xPos,yPos);
+    int xwarp = (xWarp+1.0)*xSiz/2.0;
+    int ywarp = -(yWarp-1.0)*ySiz/2.0;
 #ifdef __linux__
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    XWarpPointer(displayHandle,None,None,0,0,0,0,xWarp-xpos,yWarp-ypos);
+    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
 #endif
 #ifdef __APPLE__
     int xpos, ypos;
     glfwGetWindowPos(windowHandle,&xpos,&ypos);
-    struct CGPoint point; point.x = xpos+xWarp; point.y = ypos+yWarp;
+    struct CGPoint point; point.x = xpos+xwarp; point.y = ypos+ywarp;
     CGWarpMouseCursorPosition(point);
 #endif
     click = Left;
 }
 
-void rightTransformLeft()
+void rightLeft()
 {
+    enqueMsgstr("rightLeft %f %f\n",xPos,yPos);
     xWarp = xPos; yWarp = yPos; zWarp = zPos;
     click = Right;
 }
 
-void transformLeftRotate()
+void transformRotate()
 {
     float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
     float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
@@ -1336,6 +1326,17 @@ void transformLeftRotate()
     glUseProgram(program[shader]);
     glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
     glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalCur);
+    glUseProgram(0);
+}
+
+void transformTranslate()
+{
+    float v[16]; identmat(v,4);
+    v[12] = xPos-xPoint; v[13] = yPos-yPoint;
+    copymat(modelCur,modelMat,16,16,16);
+    jumpmat(modelCur,v,4);
+    glUseProgram(program[shader]);
+    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
     glUseProgram(0);
 }
 
@@ -1392,19 +1393,19 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
         CASE(Transform) {
-            SWITCH(click,Init) FALL(Right) leftTransformRight();
+            SWITCH(click,Init) FALL(Right) leftTransform();
             CASE(Left) click = Init;
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Manipulate) {
-            SWITCH(click,Init) FALL(Right) leftManipulateRight();
+            SWITCH(click,Init) FALL(Right) leftManipulate();
             CASE(Left) click = Init;
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
         SWITCH(mode[Sculpt],Transform) FALL(Manipulate) {
             SWITCH(click,Init) {/*ignore*/}
-            CASE(Right) rightTransformRight();
-            CASE(Left) rightTransformLeft();
+            CASE(Right) rightRight();
+            CASE(Left) rightLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(/*ignore*/)}
     DEFAULT(/*ignore*/)
@@ -1419,11 +1420,9 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
             enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
-            SWITCH(mode[Mouse],Rotate) transformLeftRotate();
-            CASE(Translate) {}
+            SWITCH(mode[Mouse],Rotate) transformRotate();
+            CASE(Translate) transformTranslate();
             CASE(Look) {}
-            CASE(Screenz) {}
-            CASE(Windowz) {}
             DEFAULT(exitErrstr("invalid mouse mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1432,12 +1431,10 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
-            enqueMsgstr("displayCursor %f %f\n", xPos, yPos);
+            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
             SWITCH(mode[Mouse],Rotate) {}
             CASE(Translate) {}
             CASE(Look) {}
-            CASE(Screenz) {}
-            CASE(Windowz) {}
             DEFAULT(exitErrstr("invalid mouse mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1459,8 +1456,6 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             CASE(Cylinder) {}
             CASE(Scale) {}
             CASE(Drive) {}
-            CASE(Sizez) {}
-            CASE(Aspect) {}
             DEFAULT(exitErrstr("invalid roller mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1475,8 +1470,6 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             CASE(Cylinder) {}
             CASE(Scale) {}
             CASE(Drive) {}
-            CASE(Sizez) {}
-            CASE(Aspect) {}
             DEFAULT(exitErrstr("invalid roller mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1494,9 +1487,6 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
     glViewport(0, 0, xSiz, ySiz);
 #endif
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
-    SWITCH(mode[Windowm],Physical) {}
-    CASE(Virtual) {}
-    DEFAULT(exitErrstr("invalid window mode\n");)
     SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
     CASE(Diplane) {MAYBE(diplane,Diplane)}
     DEFAULT(exitErrstr("invalid shader mode\n");)
@@ -1511,12 +1501,6 @@ void displaySize(GLFWwindow *window, int width, int height)
     glViewport(0, 0, xSiz, ySiz);
 #endif
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
-    SWITCH(mode[Corner],Oppositez) {}
-    CASE(Northwest) {}
-    CASE(Northeast) {}
-    CASE(Southwest) {}
-    CASE(Southeast) {}
-    DEFAULT(exitErrstr("invalid corner mode\n");)
     SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
     CASE(Diplane) {MAYBE(diplane,Diplane)}
     DEFAULT(exitErrstr("invalid shader mode\n");)
@@ -1756,7 +1740,7 @@ void *console(void *arg)
             if (item[tailLine()].collect != collect) {
                 enqueLine(line); enqueMatch(0);}
             if (collect != Menus && item[collect].mode == mode) {
-                mark[mode] = line; enqueScan(line); enqueScan('\n');}
+                mark[mode] = line; enqueScan(line+128); enqueScan('\n');}
             else {
                 enqueLine(mark[mode]); enqueMatch(0);}}
         else if (esc == 0 && key == 127 && sizeLine() > 1) {unqueLine(); unqueMatch();}
