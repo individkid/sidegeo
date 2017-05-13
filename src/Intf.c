@@ -57,7 +57,7 @@ extern void __stginit_Main(void);
 #define NUM_POINTS 4
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
-#define NUM_FACES 2
+#define NUM_FACES 3
 #define FACE_PLANES 6
 #define NUM_POLYGONS 2
 #define POLYGON_POINTS 3
@@ -83,6 +83,7 @@ Display *displayHandle = 0; // for XWarpPointer
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 FILE *configFile = 0; // for appending generic deltas
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
+int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Buffer {
     GLuint base;
@@ -634,7 +635,9 @@ const GLchar *adpointFragment = 0;
 
 void exitErrstr(const char *fmt, ...)
 {
-    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
+    if (validTermios) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
+        validTermios = 0;}
     printf("fatal: ");
     va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
@@ -977,6 +980,7 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint face[] = {
+        0,1,2,3,3,0,
         2,0,3,2,2,3,
         1,2,3,0,0,3,
     };
@@ -1267,10 +1271,10 @@ void leftTransformRight()
 {
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    xPoint = xpos; yPoint = ypos;
-    enqueMsgstr("displayClick %f %f\n",xPoint,yPoint);
+    xPoint = 2.0*xpos/xSiz-1.0; yPoint = -2.0*ypos/ySiz+1.0;
+    enqueMsgstr("displayClick %f %f %d %d\n",xPoint,yPoint,xSiz,ySiz);
 #ifdef BRINGUP
-    zPoint = 0.0;
+    zPoint = base;
 #endif
     for (int i = 0; i < 16; i++) modelMat[i] = modelCur[i];
     for (int i = 0; i < 9; i++) normalMat[i] = normalCur[i];
@@ -1282,9 +1286,9 @@ void leftManipulateRight()
 {
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    xPoint = xpos; yPoint = ypos;
+    xPoint = 2.0*xpos/xSiz-1.0; yPoint = -2.0*ypos/ySiz+1.0;
 #ifdef BRINGUP
-    zPoint = 0.0;
+    zPoint = base;
 #endif
     click = Left;
 }
@@ -1315,27 +1319,20 @@ void rightTransformLeft()
 void transformLeftRotate()
 {
     float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
-    float v[16]; v[0] = 2.0*(xPos-xPoint)/xSiz; v[1] = -2.0*(yPos-yPoint)/ySiz;
+    float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
     float s = v[0]*v[0]+v[1]*v[1];
     if (s > 1.0) {s = sqrt(s); v[0] /= s; v[1] /= s; v[2] = 0.0;}
     else v[2] = -sqrt(1.0-s);
-    enqueMsgstr("displayCursor transform %f %f %f\n", v[0], v[1], v[2]);
     s = dotvec(u,v,3); crossvec(u,v);
     copymat(v,crossmat(u),9,9,9);
     scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
     float w[16]; plusvec(u,plusvec(v,identmat(w,3),9),9);
     jumpmat(copymat(normalCur,normalMat,9,9,9),u,3);
-    w[0] = 0.0; w[1] = 0.0; w[2] = -1.0;
-    jumpvec(w,normalCur,3);
-    enqueMsgstr("displayCursor %f %f %f\n", w[0], w[1], w[2]);
     copymat(identmat(w,4),u,3,4,9);
-    identmat(v,4); // v[12] = 2.0*xPoint/xSiz; v[13] = 2.0*yPoint/ySiz; v[14] = zPoint;
-    identmat(u,4); // u[12] = -2.0*xPoint/xSiz; u[13] = -2.0*yPoint/ySiz; u[14] = -zPoint;
+    identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
+    identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
     copymat(modelCur,modelMat,16,16,16);
     jumpmat(modelCur,u,4); jumpmat(modelCur,w,4); jumpmat(modelCur,v,4);
-    w[0] = 0.0; w[1] = 0.0; w[2] = -1.0; w[3] = 1.0;
-    jumpvec(w,modelCur,4);
-    enqueMsgstr("displayCursor %f %f %f\n", w[0], w[1], w[2]);
     glUseProgram(program[shader]);
     glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
     glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalCur);
@@ -1416,11 +1413,12 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
+    xPos = 2.0*xpos/xSiz-1.0; yPos = -2.0*ypos/ySiz+1.0;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
-            xPos = xpos; yPos = ypos;
+            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
             SWITCH(mode[Mouse],Rotate) transformLeftRotate();
             CASE(Translate) {}
             CASE(Look) {}
@@ -1434,9 +1432,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
-            xPos = xpos; yPos = ypos;
-            SWITCH(mode[Mouse],Rotate) {
-                enqueMsgstr("displayCursor manipulate %f %f\n", xPos, yPos);}
+            enqueMsgstr("displayCursor %f %f\n", xPos, yPos);
+            SWITCH(mode[Mouse],Rotate) {}
             CASE(Translate) {}
             CASE(Look) {}
             CASE(Screenz) {}
@@ -1451,13 +1448,12 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
-    double zpos = zPos + yoffset;
+    zPos = zPos + yoffset;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
-            zPos = zpos;
-            enqueMsgstr("displayScroll transform %f\n", zPos);
+            enqueMsgstr("displayScroll %f\n", zPos);
             SWITCH(mode[Roller],Lever) {}
             CASE(Clock) {}
             CASE(Cylinder) {}
@@ -1473,8 +1469,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
-            zPos = zpos;
-            enqueMsgstr("displayScroll transform %f\n", zPos);
+            enqueMsgstr("displayScroll %f\n", zPos);
             SWITCH(mode[Roller],Lever) {}
             CASE(Clock) {}
             CASE(Cylinder) {}
@@ -1691,7 +1686,7 @@ void *console(void *arg)
     if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed: %s\n", strerror(errno));
 
     if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
-    tcgetattr(STDIN_FILENO, &savedTermios);
+    tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
     struct termios terminal;
     if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed: %s\n", strerror(errno));
     terminal.c_lflag &= ~(ECHO|ICANON);
@@ -1781,7 +1776,7 @@ void *console(void *arg)
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
 
-    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
+    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
     printf("console done\n");
 
     return 0;
@@ -1827,8 +1822,7 @@ void initialize(int argc, char **argv)
 
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
-    if (!glfwInit()) {
-        exitErrstr("could not initialize glfw\n");}
+    if (!glfwInit()) exitErrstr("could not initialize glfw\n");
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
