@@ -106,43 +106,50 @@ struct Strings filenames = {0}; // for config files
 struct Chars {DECLARE_QUEUE(char)} formats = {0};
  // from first line of history portion of config file
 struct Chars metrics = {0}; // animation if valid
-enum {Init,Left,Right,Clicks} click = Init;
-/*Init: mouse movement ignored; no pierce point
- *Left: mouse movement affects matrices; pierce point saved
- *Right: mouse movement ignored; pierce point saved*/
-enum {Diplane,Dipoint,Coplane,Copoint,Adplane,Adpoint,Shaders} shader = Diplane;
-/*Diplane: display planes
- *Dipoint: display points
- *Coplane: calculate intersections
- *Copoint: construct planes
- *Adplane: intersect and classify
- *Adpoint: classify only*/
-enum {Invalid,Basis,Model,Normal,Project,Light,Feather,Arrow,Uniforms};
-/*model is rotation and translation of polytope and lights
- *in other words, model is transformation of polytope and camera
- *in effect, model transforms points for display position
- *normal is corrective rotation of lights
- *in other words, normal rotation of polytope
- *in effect, normal rotates points for display color*/
+enum { // mode changed by mouse buttons
+    Init, // no pierce point; no saved position
+    Left, // pierce point calculated; no saved position
+    Right, // pierce point calculated; position saved
+    Clicks} click = Init;
+enum { // one value per shader; state for bringup only
+    Diplane, // display planes
+    Dipoint, // display points
+    Coplane, // calculate intersections
+    Copoint, // construct planes
+    Adplane, // intersect and classify
+    Adpoint, //  classify only
+    Shaders} shader = Diplane;
+enum { // one value per uniform; no associated state
+    Invalid, // scalar indicating divide by near-zero
+    Basis, // 3 points on each base plane through origin
+    Model, // rotation and translation of polytope
+    Normal, // rotation only to find normals
+    Project, // specification of a frustrum
+    Light, // transformation of normal into color
+    Feather, // point on plane to classify
+    Arrow, // normal to plane to classify
+    Uniforms};
 GLuint program[Shaders] = {0};
 GLint uniform[Shaders][Uniforms] = {0};
-enum Menu { // lines in the menu
-Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
-Mouses,Rotate,Translate,Look,Screen,Windowz,
-Rollers,Lever,Clock,Cylinder,Scale,Drive,Sizez,Aspect,
-Windows,Physical,Virtual,
-Corners,Opposite,Northwest,Northeast,Southwest,Southeast,
-Menus};
-enum Mode {Sculpt,Mouse,Roller,Window,Corner,Modes};
+enum Menu { // lines in the menu; select with enter key
+    Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
+    Mouses,Rotate,Translate,Look,Screen,Windowz,
+    Rollers,Lever,Clock,Cylinder,Scale,Drive,Sizez,Aspect,
+    Windows,Physical,Virtual,
+    Corners,Opposite,Northwest,Northeast,Southwest,Southeast,
+    Menus};
+enum Mode { // menu and submenus; navigate and enter by keys
+    Sculpt,Mouse,Roller,Window,Corner,Modes};
 #define INIT {Transform,Rotate,Lever,Physical,Opposite}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
-    enum Menu collect; // item[item[x].collect].mode == Modes
+    enum Menu collect; // item[item[x].collect].mode == item[x].mode
     enum Mode mode; // item[mode[x]].mode == x
-    int level; // item[item[x].collect].level == arrayItem()[x].level-1
+    int level; // item[item[x].collect].level == item[x].level-1
     char *name; // word to match console input against
-    char *comment; /*text to print after matching word*/} item[Menus] = {
+    char *comment; // text to print after matching word
+} item[Menus] = {
     {Menus,Sculpt,0,"Sculpt","display and manipulate polytope"},
     {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
     {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
@@ -891,8 +898,8 @@ float *crossmat(float *u)
 
 float *crossvec(float *u, float *v)
 {
-    float w[9]; copymat(w,v,3,3,3);
-    return jumpmat(u,crossmat(w),3);
+    float w[9]; copymat(w,u,3,3,3);
+    return jumpvec(copymat(u,v,3,3,3),crossmat(w),3);
 }
 
 /*
