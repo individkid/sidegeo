@@ -1003,6 +1003,35 @@ void bringup()
 }
 #endif
 
+void loadFile()
+{
+    // TODO
+    // load lighting directions and colors
+    // ensure indices are empty on first config line
+    // read format and bytes from first config line
+    // for each subsequent config line,
+        // read indices, find subformat, read bytes
+        // find replaced range and replacement size
+        // replace range by bytes read from config
+    // load transformation matrices
+    // ftruncate to before transformation matrices
+#ifdef BRINGUP
+    bringup();
+#endif
+}
+
+void initFile()
+{
+    // TODO
+    // randomize();
+    // save lighting directions and colors
+    // randomizeH();
+    // save generic data
+#ifdef BRINGUP
+    bringup();
+#endif
+}
+
 /*
  * functions put on command queue
  */
@@ -1160,34 +1189,11 @@ void configure()
         while (validFilename()) {
             filename = headFilename();
             dequeFilename();
-            if ((configFile = fopen(filename, "r"))) {
-                // load lighting directions and colors
-                // ensure indices are empty on first config line
-                // read format and bytes from first config line
-                // for each subsequent config line,
-                    // read indices, find subformat, read bytes
-                    // find replaced range and replacement size
-                    // replace range by bytes read from config
-                // load transformation matrices
-                // ftruncate to before transformation matrices
-#ifdef BRINGUP
-                bringup();
-#endif
-            }
-            else if (errno == ENOENT && (configFile = fopen(filename, "w"))) {
-                // randomize();
-                // save lighting directions and colors
-                // randomizeH();
-                // save generic data
-#ifdef BRINGUP
-                bringup();
-#endif
-            }
+            if ((configFile = fopen(filename, "r"))) loadFile();
+            else if (errno == ENOENT && (configFile = fopen(filename, "w"))) initFile();
             else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));
-            if (fclose(configFile) != 0) {
-                enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));}}
-        if (!(configFile = fopen(filename,"a"))) {
-            enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));}
+            if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));}
+        if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
         configureState = ConfigureWait; REQUE(configure)}
     DEQUE(configure,Configure)
 }
@@ -1242,7 +1248,8 @@ void menu()
     char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
     if (len == 1 && buf[0] < 0) {
-        click = Init; mode[item[buf[0]+128].mode] = buf[0]+128;}
+        enum Menu line = buf[0]+128;
+        click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocChar(len+1);
@@ -1253,12 +1260,25 @@ void menu()
  * helpers for display callbacks
  */
 
+void leftAdditive()
+{
+    enqueMsgstr("leftAdditive %f %f\n",xPos,yPos);
+}
+
+void leftSubtractive()
+{
+    enqueMsgstr("leftSubtractive %f %f\n",xPos,yPos);
+}
+
+void leftRefine()
+{
+    enqueMsgstr("leftRefine %f %f\n",xPos,yPos);
+}
+
 void leftTransform()
 {
-    double xpos, ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    xPoint = 2.0*xpos/xSiz-1.0; yPoint = -2.0*ypos/ySiz+1.0;
-    enqueMsgstr("displayClick %f %f %d %d\n",xPoint,yPoint,xSiz,ySiz);
+    xPoint = xPos; yPoint = yPos;
+    enqueMsgstr("leftTransform %f %f\n",xPoint,yPoint);
 #ifdef BRINGUP
     zPoint = base;
 #endif
@@ -1270,9 +1290,8 @@ void leftTransform()
 
 void leftManipulate()
 {
-    double xpos, ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    xPoint = 2.0*xpos/xSiz-1.0; yPoint = -2.0*ypos/ySiz+1.0;
+    xPoint = xPos; yPoint = yPos;
+    enqueMsgstr("leftManipulate %f %f\n",xPoint,yPoint);
 #ifdef BRINGUP
     zPoint = base;
 #endif
@@ -1301,8 +1320,8 @@ void rightRight()
 
 void rightLeft()
 {
-    enqueMsgstr("rightLeft %f %f\n",xPos,yPos);
     xWarp = xPos; yWarp = yPos; zWarp = zPos;
+    enqueMsgstr("rightLeft %f %f\n",xPos,yPos);
     click = Right;
 }
 
@@ -1340,6 +1359,76 @@ void transformTranslate()
     glUseProgram(0);
 }
 
+void transformLook()
+{
+    // TODO
+}
+
+void transformLever()
+{
+    // TODO
+}
+
+void transformClock()
+{
+    // TODO
+}
+
+void transformCylinder()
+{
+    // TODO
+}
+
+void transformScale()
+{
+    // TODO
+}
+
+void transformDrive()
+{
+    // TODO
+}
+
+void manipulateRotate()
+{
+    // TODO
+}
+
+void manipulateTranslate()
+{
+    // TODO
+}
+
+void manipulateLook()
+{
+    // TODO
+}
+
+void manipulateLever()
+{
+    // TODO
+}
+
+void manipulateClock()
+{
+    // TODO
+}
+
+void manipulateCylinder()
+{
+    // TODO
+}
+
+void manipulateScale()
+{
+    // TODO
+}
+
+void manipulateDrive()
+{
+    // TODO
+}
+
 /*
  * callbacks triggered by user actions and inputs
  */
@@ -1351,12 +1440,8 @@ void displayClose(GLFWwindow* window)
 
 void displayFocus(GLFWwindow *window, int focused)
 {
-    if (focused) {
-        enqueMsgstr("displayFocus entry\n");
-    }
-    else {
-        enqueMsgstr("displayFocus leave\n");
-    }
+    if (focused) enqueMsgstr("displayFocus entry\n");
+    else enqueMsgstr("displayFocus leave\n");
 }
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -1373,21 +1458,24 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {button = GLFW_MOUSE_BUTTON_RIGHT;}
+    double xpos, ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    xPos = 2.0*xpos/xSiz-1.0; yPos = -2.0*ypos/ySiz+1.0;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
         SWITCH(mode[Sculpt],Additive) {
-            SWITCH(click,Init) {/*ignore*/}
+            SWITCH(click,Init) leftAdditive();
             DEFAULT(exitErrstr("invalid click mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
         CASE(Subtractive) {
-            SWITCH(click,Init) {/*ignore*/}
+            SWITCH(click,Init) leftSubtractive();
             DEFAULT(exitErrstr("invalid click mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
             DEFAULT(exitErrstr("invalid shader mode\n");)}
         CASE(Refine) {
-            SWITCH(click,Init) {/*ignore*/}
+            SWITCH(click,Init) leftRefine();
             DEFAULT(exitErrstr("invalid click mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1402,13 +1490,14 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
-        SWITCH(mode[Sculpt],Transform) FALL(Manipulate) {
+        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+        CASE(Transform) FALL(Manipulate) {
             SWITCH(click,Init) {/*ignore*/}
             CASE(Right) rightRight();
             CASE(Left) rightLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
-        DEFAULT(/*ignore*/)}
-    DEFAULT(/*ignore*/)
+        DEFAULT(exitErrstr("invalid sculpt mode\n");)}
+    DEFAULT(enqueMsgstr("displayClick %d\n",button);)
 }
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
@@ -1422,7 +1511,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
             enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
             SWITCH(mode[Mouse],Rotate) transformRotate();
             CASE(Translate) transformTranslate();
-            CASE(Look) {}
+            CASE(Look) transformLook();
             DEFAULT(exitErrstr("invalid mouse mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1432,9 +1521,9 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
             enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
-            SWITCH(mode[Mouse],Rotate) {}
-            CASE(Translate) {}
-            CASE(Look) {}
+            SWITCH(mode[Mouse],Rotate) manipulateRotate();
+            CASE(Translate) manipulateTranslate();
+            CASE(Look) manipulateLook();
             DEFAULT(exitErrstr("invalid mouse mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1451,11 +1540,11 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
             enqueMsgstr("displayScroll %f\n", zPos);
-            SWITCH(mode[Roller],Lever) {}
-            CASE(Clock) {}
-            CASE(Cylinder) {}
-            CASE(Scale) {}
-            CASE(Drive) {}
+            SWITCH(mode[Roller],Lever) transformLever();
+            CASE(Clock) transformClock();
+            CASE(Cylinder) transformCylinder();
+            CASE(Scale) transformScale();
+            CASE(Drive) transformDrive();
             DEFAULT(exitErrstr("invalid roller mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1465,11 +1554,11 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
             enqueMsgstr("displayScroll %f\n", zPos);
-            SWITCH(mode[Roller],Lever) {}
-            CASE(Clock) {}
-            CASE(Cylinder) {}
-            CASE(Scale) {}
-            CASE(Drive) {}
+            SWITCH(mode[Roller],Lever) manipulateLever();
+            CASE(Clock) manipulateClock();
+            CASE(Cylinder) manipulateCylinder();
+            CASE(Scale) manipulateScale();
+            CASE(Drive) manipulateDrive();
             DEFAULT(exitErrstr("invalid roller mode\n");)
             SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
             CASE(Diplane) {MAYBE(diplane,Diplane)}
@@ -1483,7 +1572,8 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
     xLoc = xloc; yLoc = yloc;
 #ifdef __APPLE__
     glViewport(0, 0, xSiz*2, ySiz*2);
-#else
+#endif
+#ifdef __linux__
     glViewport(0, 0, xSiz, ySiz);
 #endif
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
@@ -1497,7 +1587,8 @@ void displaySize(GLFWwindow *window, int width, int height)
     xSiz = width; ySiz = height;
 #ifdef __APPLE__
     glViewport(0, 0, xSiz*2, ySiz*2);
-#else
+#endif
+#ifdef __linux__
     glViewport(0, 0, xSiz, ySiz);
 #endif
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
@@ -1574,6 +1665,7 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 
 void handler(int sig)
 {
+    // TODO
 }
 
 int readchr()
@@ -1843,7 +1935,8 @@ void initialize(int argc, char **argv)
     glEnable(GL_DEPTH_TEST);
 #ifdef __APPLE__
     glViewport(0, 0, xSiz*2, ySiz*2);
-#else
+#endif
+#ifdef __linux__
     glViewport(0, 0, xSiz, ySiz);
 #endif
 
