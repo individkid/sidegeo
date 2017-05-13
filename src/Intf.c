@@ -566,7 +566,7 @@ const GLchar *intersectCode = "\
     {\n\
         xpanded = "INPUT";\n\
         xformed = (model*vec4(xpanded,1.0)).xyz;\n\
-        rotated = vec3(1.0f,1.0f,1.0f);\n\
+        rotated = "INPUT";\n\
    }\n";
 
 #define GeometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
@@ -587,11 +587,10 @@ const GLchar *intersectCode = "\
     void main()\n\
     {\n\
         for (int i = 0; i < "LAYOUT2"; i++) {\n\
-        int index = i * "LAYOUT3" / "LAYOUT2";\n\
-        gl_Position = vec4(xformed[index], 1.0);\n\
-        cross = rotated[index];\n\
-        vector = xpanded[index];\n\
-        scalar = xpanded[index][0];\n\
+        gl_Position = vec4(xformed[i], 1.0);\n\
+        cross = rotated[i];\n\
+        vector = xpanded[i];\n\
+        scalar = xpanded[i][0];\n\
         EmitVertex();}\n\
         EndPrimitive();\n\
     }\n";
@@ -907,6 +906,7 @@ float *crossvec(float *u, float *v)
  */
 
 #ifdef BRINGUP
+GLfloat base = 0;
 void bringup()
 {
     // f = 1
@@ -941,10 +941,10 @@ void bringup()
     GLfloat q = i - p; // distance from base to center of tetrahedron
     enqueMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
     GLfloat tetrahedron[] = {
-        -g,-b,-q,
-         g,-b,-q,
-         z, a,-q,
-         z, z, p,
+        -g,-b, q,
+         g,-b, q,
+         z, a, q,
+         z, z,-p,
     };
     GLfloat bringup[] = {
         0.0,1.0,2.0,
@@ -952,6 +952,7 @@ void bringup()
         6.0,7.0,8.0,
         9.0,0.1,1.1,
     };
+    base = q;
     SWITCH(shader,Diplane) {
         glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
         glBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), bringup);
@@ -976,7 +977,7 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint face[] = {
-        0,1,2,3,3,2,
+        2,0,3,2,2,3,
         1,2,3,0,0,3,
     };
     glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
@@ -1127,7 +1128,7 @@ void diplane()
     glEnableVertexAttribArray(VERSOR_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceSub.base);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDrawElements(GL_TRIANGLES_ADJACENCY, NUM_FACES*FACE_PLANES, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glDisableVertexAttribArray(VERSOR_LOCATION);
@@ -1147,7 +1148,7 @@ void dipoint()
     glEnableVertexAttribArray(POINT_LOCATION);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polygonSub.base);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDrawElements(GL_TRIANGLES, NUM_POLYGONS*POLYGON_POINTS, GL_UNSIGNED_INT, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glDisableVertexAttribArray(POINT_LOCATION);
@@ -1311,6 +1312,36 @@ void rightTransformLeft()
     click = Right;
 }
 
+void transformLeftRotate()
+{
+    float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
+    float v[16]; v[0] = 2.0*(xPos-xPoint)/xSiz; v[1] = -2.0*(yPos-yPoint)/ySiz;
+    float s = v[0]*v[0]+v[1]*v[1];
+    if (s > 1.0) {s = sqrt(s); v[0] /= s; v[1] /= s; v[2] = 0.0;}
+    else v[2] = -sqrt(1.0-s);
+    enqueMsgstr("displayCursor transform %f %f %f\n", v[0], v[1], v[2]);
+    s = dotvec(u,v,3); crossvec(u,v);
+    copymat(v,crossmat(u),9,9,9);
+    scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
+    float w[16]; plusvec(u,plusvec(v,identmat(w,3),9),9);
+    jumpmat(copymat(normalCur,normalMat,9,9,9),u,3);
+    w[0] = 0.0; w[1] = 0.0; w[2] = -1.0;
+    jumpvec(w,normalCur,3);
+    enqueMsgstr("displayCursor %f %f %f\n", w[0], w[1], w[2]);
+    copymat(identmat(w,4),u,3,4,9);
+    identmat(v,4); // v[12] = 2.0*xPoint/xSiz; v[13] = 2.0*yPoint/ySiz; v[14] = zPoint;
+    identmat(u,4); // u[12] = -2.0*xPoint/xSiz; u[13] = -2.0*yPoint/ySiz; u[14] = -zPoint;
+    copymat(modelCur,modelMat,16,16,16);
+    jumpmat(modelCur,u,4); jumpmat(modelCur,w,4); jumpmat(modelCur,v,4);
+    w[0] = 0.0; w[1] = 0.0; w[2] = -1.0; w[3] = 1.0;
+    jumpvec(w,modelCur,4);
+    enqueMsgstr("displayCursor %f %f %f\n", w[0], w[1], w[2]);
+    glUseProgram(program[shader]);
+    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
+    glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalCur);
+    glUseProgram(0);
+}
+
 /*
  * callbacks triggered by user actions and inputs
  */
@@ -1390,33 +1421,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
             xPos = xpos; yPos = ypos;
-            SWITCH(mode[Mouse],Rotate) {
-                float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
-                float v[16]; v[0] = (xPos-xPoint)/100.0; v[1] = (yPos-yPoint)/100.0;
-                v[2] = -sqrt(1.0-v[0]*v[0]-v[1]*v[1]);
-                float s = dotvec(u,v,3);
-                crossvec(u,v);
-                enqueMsgstr("displayCursor transform %f %f %f\n", u[0], u[1], u[2]);
-                copymat(v,crossmat(u),9,9,9);
-                scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
-                float w[9]; plusvec(u,plusvec(v,identmat(w,3),9),9);
-                jumpmat(normalCur,u,3);
-                w[0] = xPoint; w[1] = yPoint; w[2] = zPoint;
-                w[3] = -xPoint; w[4] = -yPoint; w[5] = -zPoint;
-                copymat(identmat(v,4)+12,w,3,3,3); copymat(v,u,3,4,9);
-                copymat(identmat(u,4)+12,w+3,3,3,3); timesmat(v,u,3);
-                jumpmat(modelCur,v,4);
-                glUseProgram(program[shader]);
-                /*scalevec(identmat(modelCur,4),1.5,12);*/
-                double xpos = (xPos - xPoint) / 100.0;
-                modelCur[0] = 1.0; modelCur[4] = 0.0; modelCur[8] = 0.0;
-                modelCur[1] = 0.0; modelCur[5] = sqrt(1-xpos*xpos); modelCur[9] = xpos;
-                modelCur[2] = 0.0; modelCur[6] = xpos; modelCur[10] = sqrt(1-xpos*xpos);
-                modelCur[3] = 0.0; modelCur[7] = 0.0; modelCur[11] = 0.0;
-                modelCur[12] = 0.0; modelCur[13] = 0.0; modelCur[14] = 0.0; modelCur[15] = 1.0;
-                glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
-                glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalCur);
-                glUseProgram(0);}
+            SWITCH(mode[Mouse],Rotate) transformLeftRotate();
             CASE(Translate) {}
             CASE(Look) {}
             CASE(Screenz) {}
@@ -1849,6 +1854,7 @@ void initialize(int argc, char **argv)
     displayHandle = glfwGetX11Display();
 #endif
 
+    glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, xSiz, ySiz);
 
     GLuint VAO;
