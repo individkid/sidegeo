@@ -1488,7 +1488,11 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 void displayLocation(GLFWwindow *window, int xloc, int yloc)
 {
     xLoc = xloc; yLoc = yloc;
+#ifdef __APPLE__
+    glViewport(0, 0, xSiz*2, ySiz*2);
+#else
     glViewport(0, 0, xSiz, ySiz);
+#endif
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
     SWITCH(mode[Windowm],Physical) {}
     CASE(Virtual) {}
@@ -1502,9 +1506,10 @@ void displaySize(GLFWwindow *window, int width, int height)
 {
     xSiz = width; ySiz = height;
 #ifdef __APPLE__
-    xSiz *= 2; ySiz *= 2;
-#endif
+    glViewport(0, 0, xSiz*2, ySiz*2);
+#else
     glViewport(0, 0, xSiz, ySiz);
+#endif
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
     SWITCH(mode[Corner],Oppositez) {}
     CASE(Northwest) {}
@@ -1831,9 +1836,6 @@ void initialize(int argc, char **argv)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     windowHandle = glfwCreateWindow(xSiz = 800, ySiz = 600, "Sculpt", NULL, NULL);
-#ifdef __APPLE__
-    xSiz *= 2; ySiz *= 2;
-#endif
     if (!windowHandle) {exitErrstr("could not create window\n");}
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowSizeCallback(windowHandle, displaySize);
@@ -1855,7 +1857,11 @@ void initialize(int argc, char **argv)
 #endif
 
     glEnable(GL_DEPTH_TEST);
+#ifdef __APPLE__
+    glViewport(0, 0, xSiz*2, ySiz*2);
+#else
     glViewport(0, 0, xSiz, ySiz);
+#endif
 
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
