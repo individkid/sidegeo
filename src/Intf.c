@@ -88,11 +88,11 @@ pthread_t consoleThread = 0; // for io in the console
 struct Buffer {
     GLuint base;
     GLuint loc;
+    int wrap;
     int limit;
     int todo;
     int ready;
     int done;
-    int lock; // -1 not readable; >0 not writable
     GLuint query;
 }; // for use by *Bind* and *Map*
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
@@ -1067,16 +1067,18 @@ void copoint()
     // enloc and deloc arguments incaseof REQUE or DEQUE
     CHECK(copoint,Copoint)
 
-#ifdef BRINGUP
-    int base = 0; int limit = NUM_PLANES;
-#else
-    // assume one-to-one between constructSub and planeBuf
-    int base = planeBuf.done; int limit = constructSub.done;
-    if (base > limit || base >= planeBuf.todo || limit > constructSub.todo) exitErrstr("copoint too done\n");
-    if (base == limit) {DEFER(copoint,Copoint)}
-    planeBuf.ready = limit;
-#endif
     if (copointState == CopointEnqued) {
+#ifdef BRINGUP
+        int base = 0; int limit = NUM_PLANES;
+#else
+        if (planeBuf.todo > planeBuf.limit && planeBuf.wrap == planeBuf.limit) {
+            planeBuf.wrap = planeBuf.todo; enqueBuffer(&planeBuf); ENQUE(wrap,Wrap)}
+        // assume one-to-one between constructSub and planeBuf
+        int base = planeBuf.done; int limit = constructSub.done;
+        if (base > limit || base >= planeBuf.todo || limit > constructSub.todo) exitErrstr("copoint too done\n");
+        if (base == limit || planeBuf.todo > planeBuf.limit) {DEFER(copoint,Copoint)}
+        planeBuf.ready = limit;
+#endif
         glUseProgram(program[Copoint]);
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, planeBuf.query);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base,
