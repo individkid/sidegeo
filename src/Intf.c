@@ -87,10 +87,11 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Buffer {
     GLuint base;
-    GLintptr limit;
-    GLintptr todo;
-    GLintptr ready;
-    GLintptr done;
+    GLuint loc;
+    int limit;
+    int todo;
+    int ready;
+    int done;
     int lock; // -1 not readable; >0 not writable
     GLuint query;
 }; // for use by *Bind* and *Map*
@@ -380,42 +381,6 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 
 #define DEQUES() \
     return;
-
-#define READ(command,Command,buffer,Before,After) \
-    if (command##State == Command##Before) { \
-        if (buffer.lock < 0) {REQUE(command,Command)} \
-        buffer.lock++; command##State = Command##After;}
-
-#define WRITE(command,Command,buffer,Before,After) \
-    if (command##State == Command##Before) { \
-        if (buffer.lock != 0) {REQUE(command,Command)} \
-        buffer.lock--; command##State = Command##After;}
-
-#define ROAD(buffer) \
-    buffer.lock--;
-
-#define WROTE(buffer) \
-    buffer.lock++;
-
-// deadlocks if buffer is write locked by current command, because wrap needs read lock
-#define TODO(command,Command,buffer,size,Before,Wrap,After) \
-    if (command##State == Command##Before) { \
-        if (buffer.done != buffer.todo) {REQUE(command,Command)} \
-        if ((buffer.todo += size) > buffer.limit) { \
-            enqueBuffer(&buffer); ENQUES(wrap,Wrap)} \
-        command##State = Command##Wrap;} \
-    if (command##State == Command##Wrap) { \
-        if (buffer.todo > buffer.limit) {REQUE(command,Command)} \
-        command##State = Command##After;}
-
-#define READY(command,Command,buffer,size,Before,After) \
-    if (command##State == Command##Before) { \
-        if (buffer.done != buffer.ready) {REQUE(command,Command)} \
-        if ((buffer.ready += size) > buffer.todo) exitErrstr(#command" command too ready\n"); \
-        command##State = Command##After;}
-
-#define DONE(command,Command,buffer,size) \
-    if ((buffer.done += size) > buffer.ready) exitErrstr(#command" command too done\n");
 
 #define SWITCH(EXP,VAL) switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
@@ -1099,19 +1064,32 @@ void coplane()
 
 void copoint()
 {
+    // enloc and deloc arguments incaseof REQUE or DEQUE
     CHECK(copoint,Copoint)
 
+#ifdef BRINGUP
+    int base = 0; int limit = NUM_PLANES;
+#else
+    // assume one-to-one between constructSub and planeBuf
+    int base = planeBuf.done; int limit = constructSub.done;
+    if (base > limit || base >= planeBuf.todo || limit > constructSub.todo) exitErrstr("copoint too done\n");
+    if (base == limit) {DEFER(copoint,Copoint)}
+    planeBuf.ready = limit;
+#endif
     if (copointState == CopointEnqued) {
         glUseProgram(program[Copoint]);
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, planeBuf.query);
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat));
+        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, planeBuf.base,
+            base*PLANE_DIMENSIONS*sizeof(GLfloat),
+            (limit-base)*PLANE_DIMENSIONS*sizeof(GLfloat));
         glEnable(GL_RASTERIZER_DISCARD);
         glBeginTransformFeedback(GL_POINTS);
-        glEnableVertexAttribArray(POINT_LOCATION);
+        glEnableVertexAttribArray(pointBuf.loc);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, constructSub.base);
-        glDrawElements(GL_TRIANGLES, NUM_POINTS*POINT_INCIDENCES, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, (limit-base)*POINT_INCIDENCES, GL_UNSIGNED_INT,
+            (void *)(base*POINT_INCIDENCES*sizeof(GL_UNSIGNED_INT)));
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glDisableVertexAttribArray(POINT_LOCATION);
+        glDisableVertexAttribArray(pointBuf.loc);
         glEndTransformFeedback();
         glDisable(GL_RASTERIZER_DISCARD);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
@@ -1124,16 +1102,22 @@ void copoint()
         glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT_AVAILABLE, &count);
         if (count == GL_FALSE) count = 0;
         else glGetQueryObjectuiv(planeBuf.query, GL_QUERY_RESULT, &count);
-        if (count < NUM_PLANES) {REQUE(copoint)}
-        copointState = CopointIdle;}
+        if (planeBuf.done+count < planeBuf.ready) {DEFER(copoint)}
+        if (planeBuf.done+count > planeBuf.ready) exitErrstr("copoint too ready\n");
 
 #ifdef BRINGUP
-    GLfloat feedback[NUM_PLANES*PLANE_DIMENSIONS];
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) enqueMsgstr("%f\n", feedback[i]);
+        GLfloat feedback[NUM_PLANES*PLANE_DIMENSIONS];
+        glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+        glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), feedback);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) enqueMsgstr("%f\n", feedback[i]);
+#else
+        planeBuf.done = planeBuf.ready;
+        if (planeBuf.done < planeBuf.todo) {
+            copointState = CopointEnqued; REQUE(copoint,Copoint)}
 #endif
+        copointState = CopointIdle;}
+    // unloc the arguments
     DEQUE(copoint,Copoint) 
 }
 
@@ -1944,9 +1928,9 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    glGenBuffers(1, &planeBuf.base); glGenQueries(1, &planeBuf.query);
-    glGenBuffers(1, &versorBuf.base); glGenQueries(1, &versorBuf.query);
-    glGenBuffers(1, &pointBuf.base); glGenQueries(1, &pointBuf.query);
+    glGenBuffers(1, &planeBuf.base); glGenQueries(1, &planeBuf.query); planeBuf.loc = PLANE_LOCATION;
+    glGenBuffers(1, &versorBuf.base); glGenQueries(1, &versorBuf.query); versorBuf.loc = VERSOR_LOCATION;
+    glGenBuffers(1, &pointBuf.base); glGenQueries(1, &pointBuf.query); pointBuf.loc = POINT_LOCATION;
     glGenBuffers(1, &faceSub.base); glGenQueries(1, &faceSub.query);
     glGenBuffers(1, &polygonSub.base); glGenQueries(1, &polygonSub.query);
     glGenBuffers(1, &vertexSub.base); glGenQueries(1, &vertexSub.query);
@@ -1954,17 +1938,17 @@ void initialize(int argc, char **argv)
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(PLANE_LOCATION, PLANE_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(planeBuf.loc, PLANE_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(VERSOR_LOCATION, 1, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(versorBuf.loc, 1, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), NULL, GL_STATIC_DRAW);
-    glVertexAttribPointer(POINT_LOCATION, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(pointBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
