@@ -1868,18 +1868,19 @@ void *console(void *arg)
 
         unwriteitem(tailLine());
         if (esc == 0 && key == '\n') {
-            writeitem(tailLine(),tailMatch());
-            writechr('\n');
+            writeitem(tailLine(),tailMatch()); writechr('\n');
             enum Menu line = tailLine();
             enum Menu collect = item[line].collect;
             enum Mode mode = item[line].mode;
-            while (item[tailLine()].collect == collect && sizeLine() > 1) {
+            // roll back to first character of selected line
+            while (validLine() && item[tailLine()].collect == collect) {
                 unqueLine(); unqueMatch();}
-            if (item[tailLine()].collect != collect) {
-                enqueLine(line); enqueMatch(0);}
-            if (collect != Menus && item[collect].mode == mode) {
+            enqueLine(line); enqueMatch(0);
+            if (collect != Menus && mode == item[collect].mode) {
+                // change mode to selected leaf
                 mark[mode] = line; enqueScan(line+128); enqueScan('\n');}
             else {
+                // go to line in selected menu indicated by mode
                 enqueLine(mark[mode]); enqueMatch(0);}}
         else if (esc == 0 && key == 127 && sizeLine() > 1) {unqueLine(); unqueMatch();}
         else if (esc == 0 && key == 127 && sizeLine() == 1) writemenu();
