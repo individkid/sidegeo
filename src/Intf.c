@@ -120,7 +120,7 @@ enum Shader { // one value per shader; state for bringup
     Copoint, // construct planes
     Adplane, // intersect and classify
     Adpoint, //  classify only
-    Shaders} display = Dipoint;
+    Shaders} shader = Dipoint;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
     Reque, // yield to other commands
@@ -1274,11 +1274,11 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-        SWITCH(display,Dipoint) if (dipointState != DipointIdle) {DEFER(process)}
+        SWITCH(shader,Dipoint) if (dipointState != DipointIdle) {DEFER(process)}
         CASE(Diplane) if (diplaneState != DiplaneIdle) {DEFER(process)}
         DEFAULT(exitErrstr("invalid display mode\n");)
         LINK(configure,Configure)
-        SWITCH(display,Dipoint) {ENQUE(dipoint,Dipoint)}
+        SWITCH(shader,Dipoint) {ENQUE(dipoint,Dipoint)}
         CASE(Diplane) {ENQUE(diplane,Diplane)}
         DEFAULT(exitErrstr("invalid display mode\n");)    
         dequeOption(); DEQUE(process,Process)}
@@ -1310,7 +1310,7 @@ void menu()
 
 void enqueDisplay()
 {
-    SWITCH(display,Dipoint) {MAYBE(dipoint,Dipoint)}
+    SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
     CASE(Diplane) {MAYBE(diplane,Diplane)}
     DEFAULT(exitErrstr("invalid display mode\n");)    
 }
@@ -1399,9 +1399,9 @@ void transformRotate()
     identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
     copymat(modelCur,modelMat,16,16,16);
     jumpmat(modelCur,u,4); jumpmat(modelCur,w,4); jumpmat(modelCur,v,4);
-    glUseProgram(program[display]);
-    glUniformMatrix4fv(uniform[display][Model],1,GL_FALSE,modelCur);
-    glUniformMatrix3fv(uniform[display][Normal],1,GL_FALSE,normalCur);
+    glUseProgram(program[shader]);
+    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
+    glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalCur);
     glUseProgram(0);
     enqueDisplay();
 }
@@ -1412,8 +1412,8 @@ void transformTranslate()
     v[12] = xPos-xPoint; v[13] = yPos-yPoint;
     copymat(modelCur,modelMat,16,16,16);
     jumpmat(modelCur,v,4);
-    glUseProgram(program[display]);
-    glUniformMatrix4fv(uniform[display][Model],1,GL_FALSE,modelCur);
+    glUseProgram(program[shader]);
+    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
     glUseProgram(0);
     enqueDisplay();
 }
