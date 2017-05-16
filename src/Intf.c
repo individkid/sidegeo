@@ -906,18 +906,6 @@ void bringup()
         6.0,7.0,8.0,
         9.0,0.1,1.1,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), bringup, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = NUM_PLANES; planeBuf.done = 0;
-
-    GLuint versor[NUM_PLANES] = {
-        0,0,0,0,
-    };
-    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), NULL, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
 
     // f = 1
     // h^2 = f^2 - 0.5^2
@@ -957,10 +945,38 @@ void bringup()
          z, z,-p,
     };
     base = q;
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
+
+    GLfloat *plane = 0;
+    GLfloat *point = 0;
+    SWITCH(shader,Diplane) {
+        planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
+        versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
+        pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
+        plane = bringup; point = tetrahedron;
+        planeBuf.done = 0; versorBuf.done = 0;}
+    CASE(Dipoint) {
+        planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
+        versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
+        pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
+        plane = bringup; point = tetrahedron;
+        plane = tetrahedron; point = bringup;
+        pointBuf.done = 0;}
+    DEFAULT(exitErrstr("invalid shader\n");)
+
+    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), plane, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
+
+    GLuint versor[NUM_PLANES] = {
+        0,0,0,0,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), versor, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), point, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint face[NUM_FACES*FACE_PLANES] = {
         0,1,2,3,3,0,
@@ -1059,10 +1075,10 @@ enum Action renderEnqued(
     if (base > limit) exitErrstr("%s too done\n",name);
     if (feedback0) {
         exitErrbuf(feedback0,name);
+        if (base == feedback0->todo) return Advance;
         if (feedback0->todo > feedback0->limit && feedback0->wrap == feedback0->limit) {
             feedback0->wrap = feedback0->todo; enqueBuffer(feedback0); ENQUES(wrap,Wrap) return Defer;}
         if (feedback0->todo > feedback0->limit && feedback0->wrap > feedback0->limit) return Defer;
-        if (base == feedback0->todo) exitErrstr("%s already done\n", name);
         if (base == limit) return Defer;
         feedback0->ready = limit;}
     glUseProgram(program[shader]);
@@ -1104,14 +1120,16 @@ enum Action renderEnqued(
 
 enum Action renderWait(struct Buffer *feedback, const char *name)
 {
+    exitErrbuf(feedback,name);
+    if (feedback->done == feedback->todo) return Advance;
     GLuint count = 0;
     glGetQueryObjectuiv(feedback->query, GL_QUERY_RESULT_AVAILABLE, &count);
     if (count == GL_FALSE) count = 0;
     else glGetQueryObjectuiv(feedback->query, GL_QUERY_RESULT, &count);
-    if (feedback->done+count < feedback->ready) {enqueMsgstr("%s query defer\n",name); return Defer;}
+    if (feedback->done+count < feedback->ready) return Defer;
     if (feedback->done+count > feedback->ready) exitErrstr("%s too ready\n",name);
     feedback->done = feedback->ready;
-    if (feedback->done < feedback->todo) {return Restart;}
+    if (feedback->done < feedback->todo) return Restart;
     return Advance;
 }
 
@@ -1275,13 +1293,26 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-        SWITCH(shader,Dipoint) if (dipointState != DipointIdle) {REQUE(process)}
-        CASE(Diplane) if (diplaneState != DiplaneIdle) {REQUE(process)}
+#ifdef BRINGUP
+        SWITCH(shader,Diplane) {
+            if (diplaneState != DiplaneIdle) {REQUE(process)}
+            if (copointState != CopointIdle) {REQUE(process)}
+            LINK(configure,Configure)
+            LINK(copoint,Copoint)
+            ENQUE(diplane,Diplane)}
+#else
+        SWITCH(shader,Diplane) {
+            if (diplaneState != DiplaneIdle) {REQUE(process)}
+            LINK(configure,Configure)
+            ENQUE(diplane,Diplane)}
+#endif
+        CASE(Dipoint) {
+            if (dipointState != DipointIdle) {REQUE(process)}
+            if (coplaneState != CoplaneIdle) {REQUE(process)}
+            LINK(configure,Configure)
+            LINK(coplane,Coplane)
+            ENQUE(dipoint,Dipoint)}
         DEFAULT(exitErrstr("invalid display mode\n");)
-        LINK(configure,Configure)
-        SWITCH(shader,Dipoint) {ENQUE(dipoint,Dipoint)}
-        CASE(Diplane) {ENQUE(diplane,Diplane)}
-        DEFAULT(exitErrstr("invalid display mode\n");)    
         dequeOption(); DEQUE(process,Process)}
     else if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
