@@ -552,6 +552,7 @@ const GLchar *intersectCode = "\
         gl_Position = vec4(xformed[i], 1.0);\n\
         cross = rotated[i];\n\
         vector = xpanded[i];\n\
+        index = uint(0);\n\
         scalar = xpanded[i][0];\n\
         EmitVertex();}\n\
         EndPrimitive();\n\
@@ -1033,11 +1034,20 @@ void initFile()
 #endif
 }
 
+size_t renderSize(int size)
+{
+    size_t retval = 0;
+    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
+    CASE(GL_FLOAT) retval = sizeof(GLfloat);
+    DEFAULT(exitErrstr("unknown render type\n");)
+    return retval;
+}
+
 enum Action renderEnqued(
     struct Buffer *vertex0, struct Buffer *vertex1,
     struct Buffer *element, struct Buffer *feedback0, struct Buffer *feedback1,
     int elements, int feedbacks0, int feedbacks1,
-    size_t elementz, size_t feedbackz0, size_t feedbackz1,
+    int elementz, int feedbackz0, int feedbackz1,
     enum Shader shader, const char *name)
 {
     // NOTE: assume one-to-one between element feedback0 feedback1
@@ -1057,10 +1067,10 @@ enum Action renderEnqued(
     glUseProgram(program[shader]);
     if (feedback0)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, feedback0->base,
-            base*feedbacks0*feedbackz0,(limit-base)*feedbacks0*feedbackz0);
+            base*feedbacks0*renderSize(feedbackz0),(limit-base)*feedbacks0*renderSize(feedbackz0));
     if (feedback1)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 1, feedback1->base,
-            base*feedbacks1*feedbackz1,(limit-base)*feedbacks1*feedbackz1);
+            base*feedbacks1*renderSize(feedbackz1),(limit-base)*feedbacks1*renderSize(feedbackz1));
     if (feedback0 || feedback1) {
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback0->query);
         // NOTE: is it possible or necessary to query on the other feedback buffer
@@ -1069,8 +1079,13 @@ enum Action renderEnqued(
     if (vertex1) glEnableVertexAttribArray(vertex1->loc);
     glEnableVertexAttribArray(vertex0->loc);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element->base);
-    glDrawElements(GL_TRIANGLES, (limit-base)*elements, GL_UNSIGNED_INT,
-        (void *)(base*elements*elementz));
+    if (!feedback0) {
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);}
+    glDrawElements(GL_TRIANGLES, (limit-base)*elements, elementz,
+        (void *)(base*elements*renderSize(elementz)));
+    if (!feedback0) {
+        glfwSwapBuffers(windowHandle);}
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glDisableVertexAttribArray(vertex0->loc);
     if (vertex1) glDisableVertexAttribArray(vertex1->loc);
@@ -1105,7 +1120,7 @@ enum Action coplaneEnqued()
         &planeBuf,&versorBuf,
         &vertexSub,&pointBuf,0,
         POINT_INCIDENCES,POINT_DIMENSIONS,0,
-        sizeof(GL_UNSIGNED_INT),sizeof(GLfloat),0,
+        GL_UNSIGNED_INT,GL_FLOAT,0,
         Coplane,"coplane");
 }
 
@@ -1120,7 +1135,7 @@ enum Action copointEnqued()
         &pointBuf,0,
         &constructSub,&planeBuf,&versorBuf,
         PLANE_INCIDENCES,PLANE_DIMENSIONS,1,
-        sizeof(GL_UNSIGNED_INT),sizeof(GLfloat),sizeof(GL_UNSIGNED_INT),
+        GL_UNSIGNED_INT,GL_FLOAT,GL_UNSIGNED_INT,
         Copoint,"copoint");
 }
 
@@ -1135,7 +1150,7 @@ enum Action diplaneEnqued()
         &planeBuf,&versorBuf,
         &faceSub,0,0,
         FACE_PLANES,0,0,
-        sizeof(PLANE_DIMENSIONS),0,0,
+        GL_UNSIGNED_INT,0,0,
         Diplane,"diplane");
 }
 
@@ -1145,7 +1160,7 @@ enum Action dipointEnqued()
         &pointBuf,0,
         &polygonSub,0,0,
         POLYGON_POINTS,0,0,
-        sizeof(POINT_DIMENSIONS),0,0,
+        GL_UNSIGNED_INT,0,0,
         Dipoint,"dipoint");
 }
 
@@ -1206,7 +1221,6 @@ void diplane()
         SWITCH(diplaneEnqued(),Advance) diplaneState = DiplaneIdle;
         DEFAULT(exitErrstr("invalid diplane action\n");)}
     DEFAULT(exitErrstr("invalid diplane state\n");)
-    glfwSwapBuffers(windowHandle);
     DEQUE(diplane,Diplane)
 }
 
@@ -1217,7 +1231,6 @@ void dipoint()
         SWITCH(dipointEnqued(),Advance) dipointState = DipointIdle;
         DEFAULT(exitErrstr("invalid dipoint action\n");)}
     DEFAULT(exitErrstr("invalid dipoint state\n");)
-    glfwSwapBuffers(windowHandle);
     DEQUE(dipoint,Dipoint)
 }
 
@@ -1239,6 +1252,7 @@ void configure()
             if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));}
         if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
         configureState = ConfigureWait; REQUE(configure)}
+    enqueMsgstr("configure done\n");
     DEQUE(configure,Configure)
 }
 
