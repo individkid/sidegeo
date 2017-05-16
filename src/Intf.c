@@ -607,8 +607,8 @@ void exitErrstr(const char *fmt, ...)
 
 void exitErrbuf(struct Buffer *buf, const char *str)
 {
-    if (buf->done > buf->ready) exitErrstr("%s too done\n",str);
-    if (buf->ready > buf->todo) exitErrstr("%s too ready\n",str);
+    if (buf->done > buf->ready || buf->done > buf->limit) exitErrstr("%s too done\n",str);
+    if (buf->ready > buf->todo || buf->ready > buf->limit) exitErrstr("%s too ready\n",str);
     if (buf->limit > buf->wrap) exitErrstr("%s too limit\n",str);
 }
 
@@ -890,9 +890,10 @@ void link() // only works on single-instance commands with global state
 
 void wrap()
 {
+    struct Buffer *buffer = headBuffer(); dequeBuffer(); enqueBuffer(buffer);
     CHECKS(wrap,Wrap)
-    struct Buffer *buffer = headBuffer(); dequeBuffer();
-    DEQUES()
+    // TODO
+    unqueBuffer(); DEQUES()
 }
 
 #ifdef BRINGUP
@@ -1072,7 +1073,7 @@ enum Action renderEnqued(
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 1, feedback1->base,
             base*feedbacks1*renderSize(feedbackz1),(limit-base)*feedbacks1*renderSize(feedbackz1));
     if (feedback0 || feedback1) {
-        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback0->query);
+        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, (feedback0?feedback0:feedback1)->query);
         // NOTE: is it possible or necessary to query on the other feedback buffer
         glEnable(GL_RASTERIZER_DISCARD);
         glBeginTransformFeedback(GL_POINTS);}
@@ -1274,8 +1275,8 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-        SWITCH(shader,Dipoint) if (dipointState != DipointIdle) {DEFER(process)}
-        CASE(Diplane) if (diplaneState != DiplaneIdle) {DEFER(process)}
+        SWITCH(shader,Dipoint) if (dipointState != DipointIdle) {REQUE(process)}
+        CASE(Diplane) if (diplaneState != DiplaneIdle) {REQUE(process)}
         DEFAULT(exitErrstr("invalid display mode\n");)
         LINK(configure,Configure)
         SWITCH(shader,Dipoint) {ENQUE(dipoint,Dipoint)}
