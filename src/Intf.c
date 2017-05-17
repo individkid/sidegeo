@@ -120,6 +120,12 @@ enum Shader { // one value per shader; state for bringup
     Copoint, // construct planes
     Adplane, // intersect and classify
     Adpoint, //  classify only
+    Perplane, // find points that minimize area
+    Perpoint, // points are base of tetrahedron
+    Explane, // whether planes are parallel
+    Expoint, // whether points are equidistant
+    Conplane, // whether vertices are incident
+    Conpoint, // whether points are incident
     Shaders} shader = Dipoint;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
@@ -590,6 +596,30 @@ const GLchar *adplaneFragment = 0;
 const GLchar *adpointVertex = VertexCode("point");
 const GLchar *adpointGeometry = GeometryCode("points", "1", "points", "1");
 const GLchar *adpointFragment = 0;
+
+const GLchar *perplaneVertex = VertexCode("plane");
+const GLchar *perplaneGeometry = GeometryCode("triangles_adjacency", "6", "points", "1");
+const GLchar *perplaneFragment = 0;
+
+const GLchar *perpointVertex = VertexCode("point");
+const GLchar *perpointGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *perpointFragment = 0;
+
+const GLchar *explaneVertex = VertexCode("plane");
+const GLchar *explaneGeometry = GeometryCode("points", "1", "points", "1");
+const GLchar *explaneFragment = 0;
+
+const GLchar *expointVertex = VertexCode("point");
+const GLchar *expointGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *expointFragment = 0;
+
+const GLchar *conplaneVertex = VertexCode("plane");
+const GLchar *conplaneGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *conplaneFragment = 0;
+
+const GLchar *conpointVertex = VertexCode("point");
+const GLchar *conpointGeometry = GeometryCode("points", "1", "points", "1");
+const GLchar *conpointFragment = 0;
 
 /*
  * fifo stack mutex message
@@ -2043,22 +2073,22 @@ void initialize(int argc, char **argv)
     glVertexAttribPointer(pointBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment,
-        0, 0, "diplane");
-    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment,
-        0, 0, "dipoint");
-    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment,
-        "vector", 0, "coplane");
-    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment,
-        "vector", "index", "copoint");
-    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment,
-        "scalar", 0, "adplane");
-    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment,
-        "scalar", 0, "adpoint");
-
     for (int i = 0; i < 16; i++) modelCur[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) normalCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+
+    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane");
+    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, 0, "dipoint");
+    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "vector", 0, "coplane");
+    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment, "vector", "index", "copoint");
+    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, "scalar", 0, "adplane");
+    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", 0, "adpoint");
+    program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, "vector", 0, "perplane");
+    program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, "vector", 0, "perpoint");
+    program[Explane] = compileProgram(explaneVertex, explaneGeometry, explaneFragment, "vector", 0, "explane");
+    program[Expoint] = compileProgram(expointVertex, expointGeometry, expointFragment, "vector", 0, "expoint");
+    program[Conplane] = compileProgram(conplaneVertex, conplaneGeometry, conplaneFragment, "vector", 0, "conplane");
+    program[Conpoint] = compileProgram(conpointVertex, conpointGeometry, conpointFragment, "vector", 0, "conpoint");
 
     glUseProgram(program[Diplane]);
     uniform[Diplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
@@ -2093,7 +2123,7 @@ void initialize(int argc, char **argv)
     glUseProgram(0);
 
     glUseProgram(program[Adplane]);
-    uniform[Adplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
+    uniform[Adplane][Invalid] = glGetUniformLocation(program[Adplane], "invalid");
     uniform[Adplane][Basis] = glGetUniformLocation(program[Adplane], "basis");
     uniform[Adplane][Feather] = glGetUniformLocation(program[Adplane], "feather");
     uniform[Adplane][Arrow] = glGetUniformLocation(program[Adplane], "arrow");
@@ -2102,6 +2132,45 @@ void initialize(int argc, char **argv)
     glUseProgram(program[Adpoint]);
     uniform[Adpoint][Feather] = glGetUniformLocation(program[Adpoint], "feather");
     uniform[Adpoint][Arrow] = glGetUniformLocation(program[Adpoint], "arrow");
+    glUseProgram(0);
+
+    glUseProgram(program[Perplane]);
+    uniform[Perplane][Invalid] = glGetUniformLocation(program[Perplane], "invalid");
+    uniform[Perplane][Basis] = glGetUniformLocation(program[Perplane], "basis");
+    uniform[Perplane][Feather] = glGetUniformLocation(program[Perplane], "feather");
+    uniform[Perplane][Arrow] = glGetUniformLocation(program[Perplane], "arrow");
+    glUseProgram(0);
+
+    glUseProgram(program[Perpoint]);
+    uniform[Perpoint][Invalid] = glGetUniformLocation(program[Perpoint], "invalid");
+    uniform[Perpoint][Feather] = glGetUniformLocation(program[Perpoint], "feather");
+    uniform[Perpoint][Arrow] = glGetUniformLocation(program[Perpoint], "arrow");
+    glUseProgram(0);
+
+    glUseProgram(program[Explane]);
+    uniform[Explane][Invalid] = glGetUniformLocation(program[Explane], "invalid");
+    uniform[Explane][Basis] = glGetUniformLocation(program[Explane], "basis");
+    uniform[Explane][Feather] = glGetUniformLocation(program[Explane], "feather");
+    uniform[Explane][Arrow] = glGetUniformLocation(program[Explane], "arrow");
+    glUseProgram(0);
+ 
+    glUseProgram(program[Expoint]);
+    uniform[Expoint][Invalid] = glGetUniformLocation(program[Expoint], "invalid");
+    uniform[Expoint][Feather] = glGetUniformLocation(program[Expoint], "feather");
+    uniform[Expoint][Arrow] = glGetUniformLocation(program[Expoint], "arrow");
+    glUseProgram(0);
+
+    glUseProgram(program[Conplane]);
+    uniform[Conplane][Invalid] = glGetUniformLocation(program[Conplane], "invalid");
+    uniform[Conplane][Basis] = glGetUniformLocation(program[Conplane], "basis");
+    uniform[Conplane][Feather] = glGetUniformLocation(program[Conplane], "feather");
+    uniform[Conplane][Arrow] = glGetUniformLocation(program[Conplane], "arrow");
+    glUseProgram(0);
+
+    glUseProgram(program[Conpoint]);
+    uniform[Conpoint][Invalid] = glGetUniformLocation(program[Conpoint], "invalid");
+    uniform[Conpoint][Feather] = glGetUniformLocation(program[Conpoint], "feather");
+    uniform[Conpoint][Arrow] = glGetUniformLocation(program[Conpoint], "arrow");
     glUseProgram(0);
 
     ENQUE(process,Process)
