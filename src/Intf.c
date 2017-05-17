@@ -421,6 +421,37 @@ const GLchar *expandCode = "\
         for (int i = 0; i < 3; i++) points[i][index] = plane[i];\n\
     }\n";
 
+const GLchar *projectCode = "\
+    void project2(in mat2 points, in uint versor, in vec2 inp, out float outp)\n\
+    {\n\
+        float system;\n\
+        float augment;\n\
+        int index = 0;\n\
+        if (0 >= int(versor)) index++;\n\
+        system = points[1][index] - points[0][index];\n\
+        augment = inp[index] - points[0][index];\n\
+        float solution = (1.0/system)*augment;\n\
+        float difference;\n\
+        difference = points[1][versor] - points[0][versor];\n\
+        outp = (solution*difference) + points[0][versor];\n\
+    }\n\
+    void project3(in mat3 points, in uint versor, in vec3 inp, out float outp)\n\
+    {\n\
+        mat2 system;\n\
+        vec2 augment;\n\
+        for (int i = 0; i < 2; i++) {\n\
+            int index = i;\n\
+            if (i >= int(versor)) index++;\n\
+            system[0][i] = points[1][index] - points[0][index];\n\
+            system[1][i] = points[2][index] - points[0][index];\n\
+            augment[i] = inp[index] - points[0][index];}\n\
+        vec2 solution = inverse(system)*augment;\n\
+        vec2 difference;\n\
+        difference[0] = points[1][versor] - points[0][versor];\n\
+        difference[1] = points[2][versor] - points[0][versor];\n\
+        outp = dot(solution,difference) + points[0][versor];\n\
+    }\n";
+
 const GLchar *constructCode = "\
     void construct(in mat3 points, out vec3 plane, out uint versor)\n\
     {\n\
@@ -437,20 +468,8 @@ const GLchar *constructCode = "\
         for (int i = 1; i < 3; i++) if (delta[i] < mini) {\n\
             mini = delta[i];\n\
             versor = uint(i);}\n\
-        for (int i = 0; i < 3; i++) {\n\
-            mat2 system;\n\
-            vec2 augment;\n\
-            for (int j = 0; j < 2; j++) {\n\
-                int index = j;\n\
-                if (j >= int(versor)) index++;\n\
-                system[0][j] = points[1][index] - points[0][index];\n\
-                system[1][j] = points[2][index] - points[0][index];\n\
-                augment[j] = basis[versor][i][index];}\n\
-            vec2 solution = inverse(system)*augment;\n\
-            vec2 difference;\n\
-            difference[0] = points[1][versor] - points[0][versor];\n\
-            difference[1] = points[2][versor] - points[0][versor];\n\
-            plane[i] = dot(solution,difference) + points[0][versor];}\n\
+        for (int i = 0; i < 3; i++)\n\
+            project3(points,versor,basis[versor][i],plane[i]);\n\
     }\n";
 
 const GLchar *intersectCode = "\
@@ -1721,11 +1740,13 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
 {
     GLint success = 0;
     GLchar infoLog[512];
-    const GLchar *code[4] = {0};
+    const GLchar *code[6] = {0};
     GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[0] = uniformCode; code[1] = expandCode; code[2] = constructCode; code[3] = vertexCode;
-    glShaderSource(vertex, 4, code, NULL);
+    code[0] = uniformCode; code[1] = expandCode; code[2] = projectCode;
+    code[3] = constructCode; code[4] = intersectCode;
+    code[5] = vertexCode;
+    glShaderSource(vertex, 6, code, NULL);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
@@ -1735,8 +1756,8 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     GLuint geometry = 0;
     if (geometryCode) {
         geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        code[3] = geometryCode;
-        glShaderSource(geometry, 4, code, NULL);
+        code[5] = geometryCode;
+        glShaderSource(geometry, 6, code, NULL);
         glCompileShader(geometry);
         glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
         if(!success) {
@@ -1746,8 +1767,8 @@ GLuint compileProgram(const GLchar *vertexCode, const GLchar *geometryCode, cons
     GLuint fragment = 0;
     if (fragmentCode) {
         fragment = glCreateShader(GL_FRAGMENT_SHADER);
-        code[3] = fragmentCode;
-        glShaderSource(fragment, 4, code, NULL);
+        code[5] = fragmentCode;
+        glShaderSource(fragment, 6, code, NULL);
         glCompileShader(fragment);
         glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
         if(!success) {
