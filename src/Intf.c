@@ -118,14 +118,10 @@ enum Shader { // one value per shader; state for bringup
     Dipoint, // display points
     Coplane, // calculate intersections
     Copoint, // construct planes
-    Adplane, // intersect and classify
-    Adpoint, //  classify only
+    Adplane, // classify point by planes
+    Adpoint, //  classify planes by points
     Perplane, // find points that minimize area
     Perpoint, // points are base of tetrahedron
-    Explane, // whether planes are parallel
-    Expoint, // whether points are equidistant
-    Conplane, // whether vertices are incident
-    Conpoint, // whether points are incident
     Shaders} shader = Dipoint;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
@@ -413,14 +409,6 @@ const GLchar *uniformCode = "\
     uniform mat3 basis[3];\n\
     uniform float invalid;\n";
 
-const GLchar *expandCode = "\
-    void expand(in vec3 plane, in uint versor, out mat3 points)\n\
-    {\n\
-        uint index = uint(abs(versor));\n\
-        points = basis[index];\n\
-        for (int i = 0; i < 3; i++) points[i][index] = plane[i];\n\
-    }\n";
-
 const GLchar *projectCode = "\
     void project2(in mat2 points, in uint versor, in vec2 inp, out float outp)\n\
     {\n\
@@ -450,6 +438,72 @@ const GLchar *projectCode = "\
         difference[0] = points[1][versor] - points[0][versor];\n\
         difference[1] = points[2][versor] - points[0][versor];\n\
         outp = dot(solution,difference) + points[0][versor];\n\
+    }\n";
+
+const GLchar *pierceCode = "\
+    void onside(in mat2 base, in vec2 vertex, in vec2 point, out uint result)\n\
+    {\n\
+        uint versor;\n\
+        float one;\n\
+        float other;\n\
+        if (abs(base[0][0]-base[1][0]) < abs(base[0][1]-base[1][1])) versor = 0;\n\
+        else versor = 1;\n\
+        project2(base,versor,vertex,one);\n\
+        project2(base,versor,point,other);\n\
+        result = ((one>vertex[versor]) == (other>point[versor]));\n\
+    }\n\
+    void inside(in vec2 points[3], in vec2 point, out uint result)\n\
+    {\n\
+        result = 1;\n\
+        for (int i = 0; i < 3; i++) {\n\
+            mat2 base;\n\
+            vec2 vertex;\n\
+            uint subsult;\n\
+            int index[3];\n\
+            for (int j = 0; j < 3; j++) {\n\
+                index[j] = i+j;\n\
+                if (index[j] >= 3) index[j] -= 3;}\n\
+            for (int j = 0; j < 2; j++)\n\
+                base[j] = points[index[j]];\n\
+            vertex = points[index[2]];\n\
+            onside(base,vertex,point,subsult);\n\
+            result = result && subsult;}\n\
+    }\n\
+    void pierce(in mat3 points, in uint versor, out vec3 point)\n\
+    {\n\
+        float tail;\n\
+        float head;\n\
+        float numer;\n\
+        float denom;\n\
+        float ratio;\n\
+        vec2 points[3];\n\
+        vec2 point;\n\
+        uint result;\n\
+        project3(points,versor,feather,tail);\n\
+        project3(points,versor,arrow,head);\n\
+        numer = head-tail;\n\
+        denom = arrow[versor]-feather[versor];\n\
+        ratio = numer/denom;\n\
+        point = feather+(arrow-feather)*ratio;\n\
+        for (int i = 0; i < 3; i++) {\n\
+            for (int j = 0; j < 2; j++) {\n\
+                int index = j;\n\
+                if (index >= versor) index++;\n\
+                points2[i][j] = points[i][index];}}\n\
+        for (int i = 0; i < 2; i++) {\n\
+            int index = i;\n\
+            if (index >= versor) index++;\n\
+            point2[i] = point[index];}\n\
+        inside(points2,point2,result);\n\
+        if (!result) point = vec3(invalid,invalid,invalid);\n\
+    }\n";
+
+const GLchar *expandCode = "\
+    void expand(in vec3 plane, in uint versor, out mat3 points)\n\
+    {\n\
+        uint index = uint(abs(versor));\n\
+        points = basis[index];\n\
+        for (int i = 0; i < 3; i++) points[i][index] = plane[i];\n\
     }\n";
 
 const GLchar *constructCode = "\
@@ -609,7 +663,7 @@ const GLchar *copointGeometry = GeometryCode("triangles", "3", "points", "1");
 const GLchar *copointFragment = 0;
 
 const GLchar *adplaneVertex = VertexCode("plane");
-const GLchar *adplaneGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *adplaneGeometry = GeometryCode("points", "1", "points", "1");
 const GLchar *adplaneFragment = 0;
 
 const GLchar *adpointVertex = VertexCode("point");
@@ -623,22 +677,6 @@ const GLchar *perplaneFragment = 0;
 const GLchar *perpointVertex = VertexCode("point");
 const GLchar *perpointGeometry = GeometryCode("triangles", "3", "points", "1");
 const GLchar *perpointFragment = 0;
-
-const GLchar *explaneVertex = VertexCode("plane");
-const GLchar *explaneGeometry = GeometryCode("points", "1", "points", "1");
-const GLchar *explaneFragment = 0;
-
-const GLchar *expointVertex = VertexCode("point");
-const GLchar *expointGeometry = GeometryCode("triangles", "3", "points", "1");
-const GLchar *expointFragment = 0;
-
-const GLchar *conplaneVertex = VertexCode("plane");
-const GLchar *conplaneGeometry = GeometryCode("triangles", "3", "points", "1");
-const GLchar *conplaneFragment = 0;
-
-const GLchar *conpointVertex = VertexCode("point");
-const GLchar *conpointGeometry = GeometryCode("points", "1", "points", "1");
-const GLchar *conpointFragment = 0;
 
 /*
  * fifo stack mutex message
@@ -2106,10 +2144,6 @@ void initialize(int argc, char **argv)
     program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "scalar", 0, "adpoint");
     program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, "vector", 0, "perplane");
     program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, "vector", 0, "perpoint");
-    program[Explane] = compileProgram(explaneVertex, explaneGeometry, explaneFragment, "vector", 0, "explane");
-    program[Expoint] = compileProgram(expointVertex, expointGeometry, expointFragment, "vector", 0, "expoint");
-    program[Conplane] = compileProgram(conplaneVertex, conplaneGeometry, conplaneFragment, "vector", 0, "conplane");
-    program[Conpoint] = compileProgram(conpointVertex, conpointGeometry, conpointFragment, "vector", 0, "conpoint");
 
     glUseProgram(program[Diplane]);
     uniform[Diplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
@@ -2166,32 +2200,6 @@ void initialize(int argc, char **argv)
     uniform[Perpoint][Invalid] = glGetUniformLocation(program[Perpoint], "invalid");
     uniform[Perpoint][Feather] = glGetUniformLocation(program[Perpoint], "feather");
     uniform[Perpoint][Arrow] = glGetUniformLocation(program[Perpoint], "arrow");
-    glUseProgram(0);
-
-    glUseProgram(program[Explane]);
-    uniform[Explane][Invalid] = glGetUniformLocation(program[Explane], "invalid");
-    uniform[Explane][Basis] = glGetUniformLocation(program[Explane], "basis");
-    uniform[Explane][Feather] = glGetUniformLocation(program[Explane], "feather");
-    uniform[Explane][Arrow] = glGetUniformLocation(program[Explane], "arrow");
-    glUseProgram(0);
- 
-    glUseProgram(program[Expoint]);
-    uniform[Expoint][Invalid] = glGetUniformLocation(program[Expoint], "invalid");
-    uniform[Expoint][Feather] = glGetUniformLocation(program[Expoint], "feather");
-    uniform[Expoint][Arrow] = glGetUniformLocation(program[Expoint], "arrow");
-    glUseProgram(0);
-
-    glUseProgram(program[Conplane]);
-    uniform[Conplane][Invalid] = glGetUniformLocation(program[Conplane], "invalid");
-    uniform[Conplane][Basis] = glGetUniformLocation(program[Conplane], "basis");
-    uniform[Conplane][Feather] = glGetUniformLocation(program[Conplane], "feather");
-    uniform[Conplane][Arrow] = glGetUniformLocation(program[Conplane], "arrow");
-    glUseProgram(0);
-
-    glUseProgram(program[Conpoint]);
-    uniform[Conpoint][Invalid] = glGetUniformLocation(program[Conpoint], "invalid");
-    uniform[Conpoint][Feather] = glGetUniformLocation(program[Conpoint], "feather");
-    uniform[Conpoint][Arrow] = glGetUniformLocation(program[Conpoint], "arrow");
     glUseProgram(0);
 
     ENQUE(process,Process)
