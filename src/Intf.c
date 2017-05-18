@@ -182,9 +182,9 @@ struct Ints {DECLARE_QUEUE(int)} matchs = {0};
 float modelMat[16]; // transformation state at click time
 float normalMat[9];
 float projectMat[9];
-float modelCur[16]; // current transformation state
-float normalCur[9];
-float projectCur[9];
+float modelMatz[16]; // current transformation state
+float normalMatz[9];
+float projectMatz[9];
 float xPoint = 0;  // position of pierce point at click time
 float yPoint = 0;
 float zPoint = 0;
@@ -194,7 +194,6 @@ float zWarp = 0;
 float xPos = 0; // current mouse position
 float yPos = 0;
 float zPos = 0; // cumulative roller activity
-float aspect = 0; // ratio between xSiz and ySiz
 int xSiz = 0; // size of window
 int ySiz = 0;
 int xLoc = 0; // window location
@@ -1453,24 +1452,18 @@ void leftRefine()
 
 void leftTransform()
 {
-    xPoint = xPos; yPoint = yPos;
+    xPoint = xPos; yPoint = yPos; zPoint = zPos;
     enqueMsgstr("leftTransform %f %f\n",xPoint,yPoint);
-#ifdef BRINGUP
-    zPoint = base;
-#endif
-    for (int i = 0; i < 16; i++) modelMat[i] = modelCur[i];
-    for (int i = 0; i < 9; i++) normalMat[i] = normalCur[i];
-    for (int i = 0; i < 9; i++) projectMat[i] = projectCur[i];
+    for (int i = 0; i < 16; i++) modelMat[i] = modelMatz[i];
+    for (int i = 0; i < 9; i++) normalMat[i] = normalMatz[i];
+    for (int i = 0; i < 9; i++) projectMat[i] = projectMatz[i];
     click = Left;
 }
 
 void leftManipulate()
 {
-    xPoint = xPos; yPoint = yPos;
+    xPoint = xPos; yPoint = yPos; zPoint = zPos;
     enqueMsgstr("leftManipulate %f %f\n",xPoint,yPoint);
-#ifdef BRINGUP
-    zPoint = base;
-#endif
     click = Left;
 }
 
@@ -1486,8 +1479,8 @@ void rightRight()
     XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
 #endif
 #ifdef __APPLE__
-    int xpos, ypos;
-    glfwGetWindowPos(windowHandle,&xpos,&ypos);
+    int xloc, yloc;
+    glfwGetWindowPos(windowHandle,&xloc,&yloc);
     struct CGPoint point; point.x = xpos+xwarp; point.y = ypos+ywarp;
     CGWarpMouseCursorPosition(point);
 #endif
@@ -1512,15 +1505,15 @@ void transformRotate()
     copymat(v,crossmat(u),9,9,9);
     scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
     float w[16]; plusvec(u,plusvec(v,identmat(w,3),9),9);
-    jumpmat(copymat(normalCur,normalMat,9,9,9),u,3);
+    jumpmat(copymat(normalMatz,normalMat,9,9,9),u,3);
     copymat(identmat(w,4),u,3,4,9);
     identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
     identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
-    copymat(modelCur,modelMat,16,16,16);
-    jumpmat(modelCur,u,4); jumpmat(modelCur,w,4); jumpmat(modelCur,v,4);
+    copymat(modelMatz,modelMat,16,16,16);
+    jumpmat(modelMatz,u,4); jumpmat(modelMatz,w,4); jumpmat(modelMatz,v,4);
     glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
-    glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalCur);
+    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelMatz);
+    glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalMatz);
     glUseProgram(0);
     enqueDisplay();
 }
@@ -1529,10 +1522,10 @@ void transformTranslate()
 {
     float v[16]; identmat(v,4);
     v[12] = xPos-xPoint; v[13] = yPos-yPoint;
-    copymat(modelCur,modelMat,16,16,16);
-    jumpmat(modelCur,v,4);
+    copymat(modelMatz,modelMat,16,16,16);
+    jumpmat(modelMatz,v,4);
     glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelCur);
+    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelMatz);
     glUseProgram(0);
     enqueDisplay();
 }
@@ -1650,9 +1643,6 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {button = GLFW_MOUSE_BUTTON_RIGHT;}
-    double xpos, ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    xPos = 2.0*xpos/xSiz-1.0; yPos = -2.0*ypos/ySiz+1.0;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
         SWITCH(mode[Sculpt],Additive) {
             SWITCH(click,Init) leftAdditive();
@@ -1712,6 +1702,9 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     zPos = zPos + yoffset;
+#ifdef BRINGUP
+    zPos = base;
+#endif
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
@@ -1741,12 +1734,6 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 void displayLocation(GLFWwindow *window, int xloc, int yloc)
 {
     xLoc = xloc; yLoc = yloc;
-#ifdef __APPLE__
-    glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
-#ifdef __linux__
-    glViewport(0, 0, xSiz, ySiz);
-#endif
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
     enqueDisplay();
 }
@@ -2079,7 +2066,7 @@ void initialize(int argc, char **argv)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    windowHandle = glfwCreateWindow(xSiz = 800, ySiz = 600, "Sculpt", NULL, NULL);
+    windowHandle = glfwCreateWindow(800, 600, "Sculpt", NULL, NULL);
     if (!windowHandle) {exitErrstr("could not create window\n");}
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetWindowSizeCallback(windowHandle, displaySize);
@@ -2091,6 +2078,15 @@ void initialize(int argc, char **argv)
     glfwSetCursorPosCallback(windowHandle, displayCursor);
     glfwSetScrollCallback(windowHandle, displayScroll);
     glfwMakeContextCurrent(windowHandle);
+
+    glfwGetWindowSize(windowHandle,&xSiz,&ySiz);
+    glfwGetWindowPos(windowHandle,&xLoc,&yLoc);
+    double xpos,ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    xPos = xpos; yPos = ypos; zPos = 0.0;
+#ifdef BRINGUP
+    zPos = base;
+#endif
 
 #ifdef __linux__
     glewExperimental = GL_TRUE;
@@ -2132,9 +2128,9 @@ void initialize(int argc, char **argv)
     glVertexAttribPointer(pointBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    for (int i = 0; i < 16; i++) modelCur[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) normalCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) projectCur[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) modelMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) normalMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
 
     program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane");
     program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, 0, "dipoint");
@@ -2152,9 +2148,9 @@ void initialize(int argc, char **argv)
     uniform[Diplane][Normal] = glGetUniformLocation(program[Diplane], "normal");
     uniform[Diplane][Project] = glGetUniformLocation(program[Diplane], "project");
     uniform[Diplane][Light] = glGetUniformLocation(program[Diplane], "light");
-    glUniformMatrix4fv(uniform[Diplane][Model],1,GL_FALSE,modelCur);
-    glUniformMatrix3fv(uniform[Diplane][Normal],1,GL_FALSE,normalCur);
-    glUniformMatrix3fv(uniform[Diplane][Project],1,GL_FALSE,projectCur);
+    glUniformMatrix4fv(uniform[Diplane][Model],1,GL_FALSE,modelMatz);
+    glUniformMatrix3fv(uniform[Diplane][Normal],1,GL_FALSE,normalMatz);
+    glUniformMatrix3fv(uniform[Diplane][Project],1,GL_FALSE,projectMatz);
     glUseProgram(0);
 
     glUseProgram(program[Dipoint]);
@@ -2162,9 +2158,9 @@ void initialize(int argc, char **argv)
     uniform[Dipoint][Normal] = glGetUniformLocation(program[Dipoint], "normal");
     uniform[Dipoint][Project] = glGetUniformLocation(program[Dipoint], "project");
     uniform[Dipoint][Light] = glGetUniformLocation(program[Dipoint], "light");
-    glUniformMatrix4fv(uniform[Dipoint][Model],1,GL_FALSE,modelCur);
-    glUniformMatrix3fv(uniform[Dipoint][Normal],1,GL_FALSE,normalCur);
-    glUniformMatrix3fv(uniform[Dipoint][Project],1,GL_FALSE,projectCur);
+    glUniformMatrix4fv(uniform[Dipoint][Model],1,GL_FALSE,modelMatz);
+    glUniformMatrix3fv(uniform[Dipoint][Normal],1,GL_FALSE,normalMatz);
+    glUniformMatrix3fv(uniform[Dipoint][Project],1,GL_FALSE,projectMatz);
     glUseProgram(0);
 
     glUseProgram(program[Coplane]);
