@@ -67,6 +67,7 @@ extern void __stginit_Main(void);
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
+#define CORNER_LOCATION 3
 #define POLL_DELAY 0.1
 
 #define DECLARE_QUEUE(TYPE) \
@@ -98,9 +99,11 @@ struct Buffer {
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
 struct Buffer versorBuf = {0}; // per boundary base selector
 struct Buffer pointBuf = {0}; // shared point per boundary triple
+struct Buffer cornerBuf = {0}; // shared points organized by region
 struct Buffer faceSub = {0}; // subscripts into planes
 struct Buffer polygonSub = {0}; // subscripts into points
 struct Buffer vertexSub = {0}; // every triple of planes
+struct Buffer cornerSub = {0}; // plane triples organized by region
 struct Buffer constructSub = {0}; // per plane triple of points
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
@@ -182,6 +185,7 @@ struct Ints {DECLARE_QUEUE(int)} matchs = {0};
 float modelMat[16]; // transformation state at click time
 float normalMat[9];
 float projectMat[9];
+float basisMatz[27]; // per versor base points
 float modelMatz[16]; // current transformation state
 float normalMatz[9];
 float projectMatz[9];
@@ -658,7 +662,19 @@ const GLchar *coplaneGeometry = GeometryCode("triangles", "3", "points", "1");
 const GLchar *coplaneFragment = 0;
 
 const GLchar *copointVertex = VertexCode("point");
-const GLchar *copointGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *copointGeometry = "\
+    layout (triangles) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in vec3 xpanded[3];\n\
+    out vec3 vector;\n\
+    out uint index;\n\
+    void main()\n\
+    {\n\
+        mat3 system = mat3(xpanded[0],xpanded[1],xpanded[2]);\n\
+        construct(system,vector,index);\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
 const GLchar *copointFragment = 0;
 
 const GLchar *adplaneVertex = VertexCode("plane");
@@ -982,6 +998,20 @@ void wrap()
     unqueBuffer(); DEQUES()
 }
 
+void menu()
+{
+    CHECK(menu,Menu)
+    char *buf = arrayChar();
+    int len = strstr(buf,"\n")-buf;
+    if (len == 1 && buf[0] < 0) {
+        enum Menu line = buf[0]+128;
+        click = Init; mode[item[line].mode] = line;}
+    else {
+        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
+    delocChar(len+1);
+    DEQUE(menu,Menu)
+}
+
 #ifdef BRINGUP
 GLfloat base = 0;
 void bringup()
@@ -1034,19 +1064,20 @@ void bringup()
 
     GLfloat *plane = 0;
     GLfloat *point = 0;
+    GLfloat *extra = 0;
     SWITCH(shader,Diplane) {
         planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
         versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
         pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
-        plane = bringup; point = tetrahedron;
-        planeBuf.done = 0; versorBuf.done = 0;}
+        plane = tetrahedron; point = bringup; extra = bringup;
+        pointBuf.done = 0;}
     CASE(Dipoint) {
         planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
         versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
         pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
-        plane = bringup; point = tetrahedron;
-        plane = tetrahedron; point = bringup;
-        pointBuf.done = 0;}
+        for (int i = 0; i < 12; i++) enqueMsgstr("%f\n",tetrahedron[i]);
+        plane = bringup; point = tetrahedron; extra = bringup;
+        planeBuf.done = 0; versorBuf.done = 0;}
     DEFAULT(exitErrstr("invalid shader\n");)
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
@@ -1062,6 +1093,10 @@ void bringup()
 
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), point, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, cornerBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), extra, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     GLuint face[NUM_FACES*FACE_PLANES] = {
@@ -1094,6 +1129,17 @@ void bringup()
     glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), vertex, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     vertexSub.wrap = vertexSub.limit = vertexSub.todo = vertexSub.ready = vertexSub.done = NUM_POINTS;
+
+    GLuint corner[NUM_POINTS*POINT_INCIDENCES] = {
+        0,1,2,
+        1,2,3,
+        2,3,0,
+        3,0,1,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, cornerSub.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), corner, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    cornerSub.wrap = cornerSub.limit = cornerSub.todo = cornerSub.ready = cornerSub.done = NUM_POINTS;
 
     GLuint construct[NUM_PLANES*PLANE_INCIDENCES] = {
         0,1,2,
@@ -1147,8 +1193,8 @@ size_t renderSize(int size)
 }
 
 enum Action renderEnqued(
-    struct Buffer *vertex0, struct Buffer *vertex1,
-    struct Buffer *element, struct Buffer *feedback0, struct Buffer *feedback1,
+    struct Buffer *vertex0, struct Buffer *vertex1, struct Buffer *element,
+    struct Buffer *feedback0, struct Buffer *feedback1,
     int elements, int feedbacks0, int feedbacks1,
     int elementz, int feedbackz0, int feedbackz1,
     enum Shader shader, const char *name)
@@ -1159,6 +1205,7 @@ enum Action renderEnqued(
     if (vertex1) exitErrbuf(vertex1,name);
     exitErrbuf(element,name);
     if (base > limit) exitErrstr("%s too done\n",name);
+    if (!feedback0 && feedback1) exitErrstr("wrong parameter order\n");
     if (feedback0) {
         exitErrbuf(feedback0,name);
         if (base == feedback0->todo) return Advance;
@@ -1167,6 +1214,7 @@ enum Action renderEnqued(
         if (feedback0->todo > feedback0->limit && feedback0->wrap > feedback0->limit) return Defer;
         if (base == limit) return Defer;
         feedback0->ready = limit;}
+    if (feedback1) exitErrbuf(feedback1,name);
     glUseProgram(program[shader]);
     if (feedback0)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, feedback0->base,
@@ -1219,19 +1267,19 @@ enum Action renderWait(struct Buffer *feedback, const char *name)
     return Advance;
 }
 
-enum Action coplaneEnqued()
+enum Action coplaneEnqued(struct Buffer *sub, struct Buffer *buf)
 {
     return renderEnqued(
         &planeBuf,&versorBuf,
-        &vertexSub,&pointBuf,0,
+        sub,buf,0,
         POINT_INCIDENCES,POINT_DIMENSIONS,0,
         GL_UNSIGNED_INT,GL_FLOAT,0,
         Coplane,"coplane");
 }
 
-enum Action coplaneWait()
+enum Action coplaneWait(struct Buffer *buf)
 {
-    return renderWait(&pointBuf,"coplane");
+    return renderWait(buf,"coplane");
 }
 
 enum Action copointEnqued()
@@ -1271,14 +1319,15 @@ enum Action dipointEnqued()
 
 void coplane()
 {
-    // enloc and deloc arguments incaseof REQUE or DEQUE
+    struct Buffer *sub = headBuffer(); dequeBuffer(); enqueBuffer(sub);
+    struct Buffer *buf = headBuffer(); dequeBuffer(); enqueBuffer(buf);
     CHECK(coplane,Coplane)
     SWITCH(coplaneState,CoplaneEnqued) {
-        SWITCH(coplaneEnqued(),Defer) {DEFER(coplane)}
+        SWITCH(coplaneEnqued(sub,buf),Defer) {DEFER(coplane)}
         CASE(Advance) coplaneState = CoplaneWait;
         DEFAULT(exitErrstr("invalid coplane action\n");)}
     FALL(CoplaneWait) {
-        SWITCH(coplaneWait(),Restart) {coplaneState = CoplaneEnqued; REQUE(coplane)}
+        SWITCH(coplaneWait(buf),Restart) {coplaneState = CoplaneEnqued; REQUE(coplane)}
         CASE(Defer) {DEFER(coplane)}
         CASE(Advance) coplaneState = CoplaneIdle;
         DEFAULT(exitErrstr("invalid coplane action\n");)}
@@ -1289,9 +1338,9 @@ void coplane()
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) enqueMsgstr("%f\n", result[i]);
+    enqueMsgstr("coplane done\n");
 #endif
-    // unloc the arguments
-    DEQUE(coplane,Coplane)
+    unqueBuffer(); unqueBuffer(); DEQUE(coplane,Coplane)
 }
 
 void copoint()
@@ -1314,6 +1363,7 @@ void copoint()
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (int i = 0; i < NUM_PLANES*PLANE_DIMENSIONS; i++) enqueMsgstr("%f\n", result[i]);
+    enqueMsgstr("copint done\n");
 #endif
     // unloc the arguments
     DEQUE(copoint,Copoint)
@@ -1382,22 +1432,29 @@ void process()
 #ifdef BRINGUP
         SWITCH(shader,Diplane) {
             if (diplaneState != DiplaneIdle) {REQUE(process)}
+            if (coplaneState != CoplaneIdle) {REQUE(process)}
+            LINK(configure,Configure)
+            enqueBuffer(&vertexSub); enqueBuffer(&pointBuf); LINK(coplane,Coplane)
+            ENQUE(diplane,Diplane)}
+        CASE(Dipoint) {
+            if (dipointState != DipointIdle) {REQUE(process)}
             if (copointState != CopointIdle) {REQUE(process)}
             LINK(configure,Configure)
             LINK(copoint,Copoint)
-            ENQUE(diplane,Diplane)}
+            enqueBuffer(&cornerSub); enqueBuffer(&cornerBuf); LINK(coplane,Coplane)
+            ENQUE(dipoint,Dipoint)}
 #else
         SWITCH(shader,Diplane) {
             if (diplaneState != DiplaneIdle) {REQUE(process)}
             LINK(configure,Configure)
             ENQUE(diplane,Diplane)}
-#endif
         CASE(Dipoint) {
             if (dipointState != DipointIdle) {REQUE(process)}
             if (coplaneState != CoplaneIdle) {REQUE(process)}
             LINK(configure,Configure)
-            LINK(coplane,Coplane)
+            enqueBuffer(&vertexSub); enqueBuffer(&pointBuf); LINK(coplane,Copoint)
             ENQUE(dipoint,Dipoint)}
+#endif
         DEFAULT(exitErrstr("invalid display mode\n");)
         dequeOption(); DEQUE(process,Process)}
     else if (strcmp(headOption(), "-c") == 0) {
@@ -1406,20 +1463,6 @@ void process()
             enqueErrstr("missing file argument\n"); return;}
         enqueFilename(headOption());}
     dequeOption(); REQUE(process)
-}
-
-void menu()
-{
-    CHECK(menu,Menu)
-    char *buf = arrayChar();
-    int len = strstr(buf,"\n")-buf;
-    if (len == 1 && buf[0] < 0) {
-        enum Menu line = buf[0]+128;
-        click = Init; mode[item[line].mode] = line;}
-    else {
-        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
-    delocChar(len+1);
-    DEQUE(menu,Menu)
 }
 
 /*
@@ -1471,8 +1514,8 @@ void rightRight()
 {
     xPos = xWarp; yPos = yWarp; zPos = zWarp;
     enqueMsgstr("rightRight %f %f\n",xPos,yPos);
-    int xwarp = (xWarp+1.0)*xSiz/2.0;
-    int ywarp = -(yWarp-1.0)*ySiz/2.0;
+    double xwarp = (xWarp+1.0)*xSiz/2.0;
+    double ywarp = -(yWarp-1.0)*ySiz/2.0;
 #ifdef __linux__
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
@@ -1481,7 +1524,7 @@ void rightRight()
 #ifdef __APPLE__
     int xloc, yloc;
     glfwGetWindowPos(windowHandle,&xloc,&yloc);
-    struct CGPoint point; point.x = xpos+xwarp; point.y = ypos+ywarp;
+    struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
     CGWarpMouseCursorPosition(point);
 #endif
     click = Left;
@@ -2111,9 +2154,11 @@ void initialize(int argc, char **argv)
     glGenBuffers(1, &planeBuf.base); glGenQueries(1, &planeBuf.query); planeBuf.loc = PLANE_LOCATION;
     glGenBuffers(1, &versorBuf.base); glGenQueries(1, &versorBuf.query); versorBuf.loc = VERSOR_LOCATION;
     glGenBuffers(1, &pointBuf.base); glGenQueries(1, &pointBuf.query); pointBuf.loc = POINT_LOCATION;
+    glGenBuffers(1, &cornerBuf.base); glGenQueries(1, &cornerBuf.query); cornerBuf.loc = CORNER_LOCATION;
     glGenBuffers(1, &faceSub.base); glGenQueries(1, &faceSub.query);
     glGenBuffers(1, &polygonSub.base); glGenQueries(1, &polygonSub.query);
     glGenBuffers(1, &vertexSub.base); glGenQueries(1, &vertexSub.query);
+    glGenBuffers(1, &cornerSub.base); glGenQueries(1, &cornerSub.query);
     glGenBuffers(1, &constructSub.base); glGenQueries(1, &constructSub.query);
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
@@ -2128,6 +2173,17 @@ void initialize(int argc, char **argv)
     glVertexAttribPointer(pointBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    glBindBuffer(GL_ARRAY_BUFFER, cornerBuf.base);
+    glVertexAttribPointer(cornerBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    for (int i = 0; i < 27; i++) {
+        int versor = i / 9;
+        int column = (i % 9) / 3;
+        int row = i % 3;
+        int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
+        basisMatz[i] = (one ? 1.0 : 0.0);}
+    for (int i = 0; i < 3; i++) printf("basisMatz[0][1][%d] %f\n",i,basisMatz[0+3+i]);
     for (int i = 0; i < 16; i++) modelMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) normalMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
@@ -2148,6 +2204,7 @@ void initialize(int argc, char **argv)
     uniform[Diplane][Normal] = glGetUniformLocation(program[Diplane], "normal");
     uniform[Diplane][Project] = glGetUniformLocation(program[Diplane], "project");
     uniform[Diplane][Light] = glGetUniformLocation(program[Diplane], "light");
+    glUniformMatrix3fv(uniform[Diplane][Basis],3,GL_FALSE,basisMatz);
     glUniformMatrix4fv(uniform[Diplane][Model],1,GL_FALSE,modelMatz);
     glUniformMatrix3fv(uniform[Diplane][Normal],1,GL_FALSE,normalMatz);
     glUniformMatrix3fv(uniform[Diplane][Project],1,GL_FALSE,projectMatz);
@@ -2166,11 +2223,13 @@ void initialize(int argc, char **argv)
     glUseProgram(program[Coplane]);
     uniform[Coplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
     uniform[Coplane][Basis] = glGetUniformLocation(program[Coplane], "basis");
+    glUniformMatrix3fv(uniform[Coplane][Basis],3,GL_FALSE,basisMatz);
     glUseProgram(0);
 
     glUseProgram(program[Copoint]);
     uniform[Copoint][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
     uniform[Copoint][Basis] = glGetUniformLocation(program[Copoint], "basis");
+    glUniformMatrix3fv(uniform[Copoint][Basis],3,GL_FALSE,basisMatz);
     glUseProgram(0);
 
     glUseProgram(program[Adplane]);
@@ -2178,6 +2237,7 @@ void initialize(int argc, char **argv)
     uniform[Adplane][Basis] = glGetUniformLocation(program[Adplane], "basis");
     uniform[Adplane][Feather] = glGetUniformLocation(program[Adplane], "feather");
     uniform[Adplane][Arrow] = glGetUniformLocation(program[Adplane], "arrow");
+    glUniformMatrix3fv(uniform[Adplane][Basis],3,GL_FALSE,basisMatz);
     glUseProgram(0);
  
     glUseProgram(program[Adpoint]);
@@ -2190,6 +2250,7 @@ void initialize(int argc, char **argv)
     uniform[Perplane][Basis] = glGetUniformLocation(program[Perplane], "basis");
     uniform[Perplane][Feather] = glGetUniformLocation(program[Perplane], "feather");
     uniform[Perplane][Arrow] = glGetUniformLocation(program[Perplane], "arrow");
+    glUniformMatrix3fv(uniform[Perplane][Basis],3,GL_FALSE,basisMatz);
     glUseProgram(0);
 
     glUseProgram(program[Perpoint]);
