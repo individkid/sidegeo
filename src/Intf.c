@@ -657,11 +657,40 @@ const GLchar *dipointVertex = VertexCode("point");
 const GLchar *dipointGeometry = GeometryCode("triangles", "3", "triangle_strip", "3");
 const GLchar *dipointFragment = FragmentCode;
 
-const GLchar *coplaneVertex = VertexCode("plane");
-const GLchar *coplaneGeometry = GeometryCode("triangles", "3", "points", "1");
+const GLchar *coplaneVertex = "\
+    layout (location = 0) in vec3 plane;\n\
+    layout (location = 1) in uint versor;\n\
+    out vec3 xpanded;\n\
+    out uint uipanded;\n\
+    void main()\n\
+    {\n\
+        xpanded = plane;\n\
+        uipanded = versor;\n\
+    }\n";
+const GLchar *coplaneGeometry = "\
+    layout (triangles) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in vec3 xpanded[3];\n\
+    in uint uipanded[3];\n\
+    out vec3 vector;\n\
+    void main()\n\
+    {\n\
+        mat3 points[3];\n\
+        for (int i = 0; i < 3; i++)\n\
+            expand(xpanded[i],uipanded[i],points[i]);\n\
+        intersect(points,vector);\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
 const GLchar *coplaneFragment = 0;
 
-const GLchar *copointVertex = VertexCode("point");
+const GLchar *copointVertex = "\
+    layout (location = 2) in vec3 point;\n\
+    out vec3 xpanded;\n\
+    void main()\n\
+    {\n\
+        xpanded = point;\n\
+    }\n";
 const GLchar *copointGeometry = "\
     layout (triangles) in;\n\
     layout (points, max_vertices = 1) out;\n\
@@ -1022,6 +1051,12 @@ void bringup()
         6.0,7.0,8.0,
         9.0,0.1,1.1,
     };
+    GLfloat bringup2[NUM_PLANES*PLANE_DIMENSIONS] = {
+        0.2,1.2,2.2,
+        3.2,4.2,5.2,
+        6.2,7.2,8.2,
+        9.2,0.3,1.3,
+    };
 
     // f = 1
     // h^2 = f^2 - 0.5^2
@@ -1069,15 +1104,17 @@ void bringup()
         planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
         versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
         pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
-        plane = tetrahedron; point = bringup; extra = bringup;
+        cornerBuf.wrap = cornerBuf.limit = cornerBuf.todo = cornerBuf.ready = cornerBuf.done = NUM_POINTS;
+        plane = tetrahedron; point = bringup; extra = bringup2;
         pointBuf.done = 0;}
     CASE(Dipoint) {
         planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
         versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
         pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
+        cornerBuf.wrap = cornerBuf.limit = cornerBuf.todo = cornerBuf.ready = cornerBuf.done = NUM_POINTS;
         for (int i = 0; i < 12; i++) enqueMsgstr("%f\n",tetrahedron[i]);
-        plane = bringup; point = tetrahedron; extra = bringup;
-        planeBuf.done = 0; versorBuf.done = 0;}
+        plane = bringup; point = tetrahedron; extra = bringup2;
+        planeBuf.done = 0; versorBuf.done = 0; cornerBuf.done = 0;}
     DEFAULT(exitErrstr("invalid shader\n");)
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
@@ -1334,7 +1371,7 @@ void coplane()
     DEFAULT(exitErrstr("invalid coplane state\n");)
 #ifdef BRINGUP
     GLfloat result[NUM_POINTS*POINT_DIMENSIONS];
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
+    glBindBuffer(GL_ARRAY_BUFFER, buf->base);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (int i = 0; i < NUM_POINTS*POINT_DIMENSIONS; i++) enqueMsgstr("%f\n", result[i]);
@@ -1452,7 +1489,7 @@ void process()
             if (dipointState != DipointIdle) {REQUE(process)}
             if (coplaneState != CoplaneIdle) {REQUE(process)}
             LINK(configure,Configure)
-            enqueBuffer(&vertexSub); enqueBuffer(&pointBuf); LINK(coplane,Copoint)
+            enqueBuffer(&vertexSub); enqueBuffer(&pointBuf); LINK(coplane,Coplane)
             ENQUE(dipoint,Dipoint)}
 #endif
         DEFAULT(exitErrstr("invalid display mode\n");)
@@ -2183,7 +2220,6 @@ void initialize(int argc, char **argv)
         int row = i % 3;
         int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
         basisMatz[i] = (one ? 1.0 : 0.0);}
-    for (int i = 0; i < 3; i++) printf("basisMatz[0][1][%d] %f\n",i,basisMatz[0+3+i]);
     for (int i = 0; i < 16; i++) modelMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) normalMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
