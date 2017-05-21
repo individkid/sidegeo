@@ -776,7 +776,11 @@ void bringup()
          z, a, q,
          z, z,-p,
     };
+    for (int i = 0; i < NUM_POINTS; i++) {
+        for (int j = 0; j < POINT_DIMENSIONS; j++) enqueMsgstr(" %f", tetrahedron[i*POINT_DIMENSIONS+j]);
+        enqueMsgstr("\n");}
     base = q;
+    zPos = base;
 
     GLfloat *plane = 0;
     GLfloat *point = 0;
@@ -793,7 +797,6 @@ void bringup()
         versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
         pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
         cornerBuf.wrap = cornerBuf.limit = cornerBuf.todo = cornerBuf.ready = cornerBuf.done = NUM_POINTS;
-        for (int i = 0; i < 12; i++) enqueMsgstr("%f\n",tetrahedron[i]);
         plane = bringup; point = tetrahedron; extra = bringup2;
         planeBuf.done = 0; versorBuf.done = 0; cornerBuf.done = 0;}
     DEFAULT(exitErrstr("invalid shader\n");)
@@ -1086,7 +1089,7 @@ void copoint()
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*sizeof(GLuint), uisult);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     for (int i = 0; i < NUM_PLANES; i++) {
-        enqueMsgstr("%d\n",uisult[i]);
+        enqueMsgstr("%d",uisult[i]);
         for (int j = 0; j < PLANE_DIMENSIONS; j++) enqueMsgstr(" %f", result[i*PLANE_DIMENSIONS+j]);
         enqueMsgstr("\n");}
     enqueMsgstr("copoint done\n");
@@ -1861,9 +1864,6 @@ void initialize(int argc, char **argv)
     double xpos,ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
     xPos = xpos; yPos = ypos; zPos = 0.0;
-#ifdef BRINGUP
-    zPos = base;
-#endif
 
 #ifdef __linux__
     glewExperimental = GL_TRUE;
@@ -2269,55 +2269,6 @@ void initialize(int argc, char **argv)
     const GLchar *perpointVertex = VertexCode("point");
     const GLchar *perpointGeometry = GeometryCode("triangles", "3", "points", "1");
     const GLchar *perpointFragment = 0;
-
-    coplaneVertex = "\
-    layout (location = 0) in vec3 plane;\n\
-    layout (location = 1) in uint versor;\n\
-    out data {\n\
-        vec3 plane;\n\
-        uint versor;\n\
-    } od;\n\
-    void main()\n\
-    {\n\
-        od.plane = plane;\n\
-        od.versor = versor;\n\
-    }\n";
-
-    coplaneGeometry = "\
-    layout (triangles) in;\n\
-    layout (points, max_vertices = 1) out;\n\
-    in data {\n\
-        vec3 plane;\n\
-        uint versor;\n\
-    } id[3];\n\
-    out vec3 vector;\n\
-    void main()\n\
-    {\n\
-        mat3 points[3];\n\
-        uint versor[3];\n\
-        for (int i = 0; i < 3; i++) {\n\
-            expand(id[i].plane,id[i].versor,points[i]);\n\
-            versor[i] = id[i].versor;}\n\
-        // intersect(points, versor, vector);\n\
-        // pierce(points[0],versor[0],points[1][1],points[1][0],vector);\n\
-        float proj0;\n\
-        float proj1;\n\
-        float diff0;\n\
-        float diff1;\n\
-        float ratio;\n\
-        vec3 diff;\n\
-        project3(points[0],versor[0],points[1][1],proj0);\n\
-        project3(points[0],versor[0],points[1][0],proj1);\n\
-        switch (versor[0]) {\n\
-            case (uint(0)): diff0 = proj0-points[1][1][0]; diff1 = proj1-points[1][0][0]; break;\n\
-            case (uint(1)): diff0 = proj0-points[1][1][1]; diff1 = proj1-points[1][0][1]; break;\n\
-            case (uint(2)): diff0 = proj0-points[1][1][2]; diff1 = proj1-points[1][0][2]; break;\n\
-            default: diff0 = invalid; diff1 = invalid; break;}\n\
-        ratio = diff0/(diff0-diff1);\n\
-        vector = vec3(ratio,diff0,diff1);\n\
-        EmitVertex();\n\
-        EndPrimitive();\n\
-    }\n";
 
     program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane");
     program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, 0, "dipoint");
