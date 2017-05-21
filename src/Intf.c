@@ -1532,12 +1532,13 @@ void displayRefresh(GLFWwindow *window)
  * helpers for initialization
  */
 
-const GLchar *intersectCode = 0;
-const GLchar *constructCode = 0;
-const GLchar *expandCode = 0;
-const GLchar *pierceCode = 0;
-const GLchar *projectCode = 0;
 const GLchar *uniformCode = 0;
+const GLchar *projectCode = 0;
+const GLchar *pierceCode = 0;
+const GLchar *sideCode = 0;
+const GLchar *expandCode = 0;
+const GLchar *constructCode = 0;
+const GLchar *intersectCode = 0;
 
 GLuint compileProgram(
     const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
@@ -1928,8 +1929,7 @@ void initialize(int argc, char **argv)
     uniformCode = "\
     #version 330 core\n\
     uniform mat3 basis[3];\n\
-    uniform float invalid;\n\
-    uniform vec3 invalid3;\n";
+    uniform float invalid;\n";
 
     projectCode = "\
     void project2(in mat2 points, in uint versor, in vec2 inp, out float outp)\n\
@@ -1960,49 +1960,12 @@ void initialize(int argc, char **argv)
             case (uint(0)): system = mat2(diff1.yz,diff2.yz); augment = diff0.yz; difference = vec2(diff1.x,diff2.x); origin = points[0].x; break;\n\
             case (uint(1)): system = mat2(diff1.xz,diff2.xz); augment = diff0.xz; difference = vec2(diff1.y,diff2.y); origin = points[0].y; break;\n\
             case (uint(2)): system = mat2(diff1.xy,diff2.xy); augment = diff0.xy; difference = vec2(diff1.z,diff2.z); origin = points[0].z; break;\n\
-            default: system = mat2(invalid3.xy,invalid3.xy); augment = invalid3.xy; difference = invalid3.xy; origin = invalid; break;}\n\
+            default: system = mat2(invalid,invalid,invalid,invalid); augment = vec2(invalid,invalid); difference = augment; origin = invalid; break;}\n\
         vec2 solution = inverse(system)*augment;\n\
         outp = dot(solution,difference) + origin;\n\
     }\n";
 
     pierceCode = "\
-    void onside(in mat2 base, in vec2 vertex, in vec2 point, out uint result)\n\
-    {\n\
-        uint versor;\n\
-        float more0;\n\
-        float more1;\n\
-        float less0;\n\
-        float less1;\n\
-        if (abs(base[0][0]-base[1][0]) < abs(base[0][1]-base[1][1])) versor = uint(0); else versor = uint(1);\n\
-        project2(base,versor,vertex,more0);\n\
-        project2(base,versor,point,more1);\n\
-        switch (versor) {\n\
-            case (uint(0)): less0 = vertex.x; less1 = point.x; break;\n\
-            case (uint(1)): less0 = vertex.y; less1 = point.y; break;\n\
-            default: less0 = invalid; less1 = invalid; break;}\n\
-        if ((more0>less0) == (more1>less1)) result = uint(1); else result = uint(0);\n\
-    }\n\
-    void inside(in vec2 points[3], in vec2 point, out uint result)\n\
-    {\n\
-        mat2 base;\n\
-        vec2 vertex;\n\
-        uint result0;\n\
-        uint result1;\n\
-        uint result2;\n\
-        base[0] = points[1];\n\
-        base[1] = points[2];\n\
-        vertex = points[0];\n\
-        onside(base,vertex,point,result0);\n\
-        base[0] = points[0];\n\
-        base[1] = points[2];\n\
-        vertex = points[1];\n\
-        onside(base,vertex,point,result1);\n\
-        base[0] = points[1];\n\
-        base[1] = points[2];\n\
-        vertex = points[0];\n\
-        onside(base,vertex,point,result2);\n\
-        if ((result0 == uint(1)) && (result1 == uint(1)) && (result2 == uint(1))) result = uint(1); else result = uint(0);\n\
-    }\n\
     void pierce(in mat3 points, in uint versor, in vec3 point0, in vec3 point1, out vec3 point)\n\
     {\n\
         float proj0;\n\
@@ -2062,7 +2025,46 @@ void initialize(int argc, char **argv)
             pierce(points0,versor0,points1[0],points1[2],point0);\n\
             pierce(points0,versor0,points1[1],points1[2],point1);\n\
             break;\n\
-            default: point0 = invalid3; point1 = invalid3; break;}\n\
+            default: point0 = vec3(invalid,invalid,invalid); point1 = point0; break;}\n\
+    }\n";
+
+    sideCode = "\
+    void onside(in mat2 base, in vec2 vertex, in vec2 point, out uint result)\n\
+    {\n\
+        uint versor;\n\
+        float more0;\n\
+        float more1;\n\
+        float less0;\n\
+        float less1;\n\
+        if (abs(base[0][0]-base[1][0]) < abs(base[0][1]-base[1][1])) versor = uint(0); else versor = uint(1);\n\
+        project2(base,versor,vertex,more0);\n\
+        project2(base,versor,point,more1);\n\
+        switch (versor) {\n\
+            case (uint(0)): less0 = vertex.x; less1 = point.x; break;\n\
+            case (uint(1)): less0 = vertex.y; less1 = point.y; break;\n\
+            default: less0 = invalid; less1 = invalid; break;}\n\
+        if ((more0>less0) == (more1>less1)) result = uint(1); else result = uint(0);\n\
+    }\n\
+    void inside(in vec2 points[3], in vec2 point, out uint result)\n\
+    {\n\
+        mat2 base;\n\
+        vec2 vertex;\n\
+        uint result0;\n\
+        uint result1;\n\
+        uint result2;\n\
+        base[0] = points[1];\n\
+        base[1] = points[2];\n\
+        vertex = points[0];\n\
+        onside(base,vertex,point,result0);\n\
+        base[0] = points[0];\n\
+        base[1] = points[2];\n\
+        vertex = points[1];\n\
+        onside(base,vertex,point,result1);\n\
+        base[0] = points[1];\n\
+        base[1] = points[2];\n\
+        vertex = points[0];\n\
+        onside(base,vertex,point,result2);\n\
+        if ((result0 == uint(1)) && (result1 == uint(1)) && (result2 == uint(1))) result = uint(1); else result = uint(0);\n\
     }\n\
     void contain(in mat3 points, in uint versor, inout vec3 point)\n\
     {\n\
@@ -2073,7 +2075,7 @@ void initialize(int argc, char **argv)
             case (uint(0)): for (int i = 0; i < 3; i++) points2[i] = points[i].yz; point2 = point.yz; break;\n\
             case (uint(1)): for (int i = 0; i < 3; i++) points2[i] = points[i].xz; point2 = point.xz; break;\n\
             case (uint(2)): for (int i = 0; i < 3; i++) points2[i] = points[i].xy; point2 = point.xy; break;\n\
-            default: for (int i = 0; i < 3; i++) points2[i] = invalid3.xy; point2 = invalid3.xy; break;}\n\
+            default: point2 = vec2(invalid,invalid); for (int i = 0; i < 3; i++) points2[i] = point2; break;}\n\
         inside(points2,point2,result);\n\
         if (result == uint(0)) point = vec3(invalid,invalid,invalid);\n\
     }\n";
@@ -2085,7 +2087,7 @@ void initialize(int argc, char **argv)
             case (uint(0)): points = basis[0]; for (int i = 0; i < 3; i++) points[i][0] = plane[i]; break;\n\
             case (uint(1)): points = basis[1]; for (int i = 0; i < 3; i++) points[i][1] = plane[i]; break;\n\
             case (uint(2)): points = basis[2]; for (int i = 0; i < 3; i++) points[i][2] = plane[i]; break;\n\
-            default: for (int i = 0; i < 3; i++) points[i] = invalid3; break;}\n\
+            default: for (int i = 0; i < 3; i++) points[i] = vec3(invalid,invalid,invalid); break;}\n\
     }\n";
 
     constructCode = "\
@@ -2110,7 +2112,7 @@ void initialize(int argc, char **argv)
             case (uint(0)): base = basis[0]; break;\n\
             case (uint(1)): base = basis[1]; break;\n\
             case (uint(2)): base = basis[2]; break;\n\
-            default: base = mat3(invalid3,invalid3,invalid3);}\n\
+            default: for (int i = 0; i < 3; i++) base[i] = vec3(invalid,invalid,invalid);}\n\
         index = versor;\n\
         float horizontal;\n\
         float vertical;\n\
@@ -2199,19 +2201,19 @@ void initialize(int argc, char **argv)
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
     out data {\n\
-        vec3 plane;\n\
+        mat3 points;\n\
         uint versor;\n\
     } od;\n\
     void main()\n\
     {\n\
-        od.plane = plane;\n\
+        expand(plane,versor,od.points);\n\
         od.versor = versor;\n\
     }\n";
     const GLchar *coplaneGeometry = "\
     layout (triangles) in;\n\
     layout (points, max_vertices = 1) out;\n\
     in data {\n\
-        vec3 plane;\n\
+        mat3 points;\n\
         uint versor;\n\
     } id[3];\n\
     out vec3 vector;\n\
@@ -2220,7 +2222,7 @@ void initialize(int argc, char **argv)
         mat3 points[3];\n\
         uint versor[3];\n\
         for (int i = 0; i < 3; i++) {\n\
-            expand(id[i].plane,id[i].versor,points[i]);\n\
+            points[i] = id[i].points;\n\
             versor[i] = id[i].versor;}\n\
         intersect(points,versor,vector);\n\
         EmitVertex();\n\
