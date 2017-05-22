@@ -791,8 +791,8 @@ void bringup()
         versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
         pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
         cornerBuf.wrap = cornerBuf.limit = cornerBuf.todo = cornerBuf.ready = cornerBuf.done = NUM_POINTS;
-        plane = tetrahedron; point = bringup; extra = bringup2;
-        pointBuf.done = 0;}
+        plane = bringup; point = tetrahedron; extra = bringup2;
+        planeBuf.done = 0; versorBuf.done = 0; cornerBuf.done = 0;}
     CASE(Dipoint) {
         planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
         versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
@@ -1159,33 +1159,29 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     else if (strcmp(headOption(), "-i") == 0) {
+        SWITCH(shader,Diplane) if (diplaneState != DiplaneIdle) {REQUE(process)}
+        CASE(Dipoint) if (dipointState != DipointIdle) {REQUE(process)}
+        DEFAULT(exitErrstr("invalid display mode\n");)
 #ifdef BRINGUP
-        SWITCH(shader,Diplane) {
-            if (diplaneState != DiplaneIdle) {REQUE(process)}
-            if (coplaneState != CoplaneIdle) {REQUE(process)}
-            LINK(configure,Configure)
-            enqueBuffer(&vertexSub); enqueBuffer(&pointBuf); LINK(coplane,Coplane)
-            ENQUE(diplane,Diplane)}
-        CASE(Dipoint) {
-            if (dipointState != DipointIdle) {REQUE(process)}
-            if (copointState != CopointIdle) {REQUE(process)}
-            LINK(configure,Configure)
-            LINK(copoint,Copoint)
-            enqueBuffer(&cornerSub); enqueBuffer(&cornerBuf); LINK(coplane,Coplane)
-            ENQUE(dipoint,Dipoint)}
+        if (coplaneState != CoplaneIdle) {REQUE(process)}
+        if (copointState != CopointIdle) {REQUE(process)}
+        LINK(configure,Configure)
+        LINK(copoint,Copoint)
+        enqueBuffer(&cornerSub); enqueBuffer(&cornerBuf); LINK(coplane,Coplane)
+        SWITCH(shader,Diplane) {ENQUE(diplane,Diplane)}
+        CASE(Dipoint) {ENQUE(dipoint,Dipoint)}
+        DEFAULT(exitErrstr("invalid display mode\n");)
 #else
         SWITCH(shader,Diplane) {
-            if (diplaneState != DiplaneIdle) {REQUE(process)}
             LINK(configure,Configure)
             ENQUE(diplane,Diplane)}
         CASE(Dipoint) {
-            if (dipointState != DipointIdle) {REQUE(process)}
             if (coplaneState != CoplaneIdle) {REQUE(process)}
             LINK(configure,Configure)
             enqueBuffer(&vertexSub); enqueBuffer(&pointBuf); LINK(coplane,Coplane)
             ENQUE(dipoint,Dipoint)}
-#endif
         DEFAULT(exitErrstr("invalid display mode\n");)
+#endif
         dequeOption(); DEQUE(process,Process)}
     else if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
@@ -2132,81 +2128,83 @@ void initialize(int argc, char **argv)
         pierce(points[2],versor[2],point0,point1,point);\n\
     }\n";
 
-#define INTERSECT "\
-        vec3 point0;\n\
-        vec3 point1;\n\
-        vec3 point2;\n\
-        mat3 points[3];\n\
-        uint versor[3];\n\
-        points[0] = id[0].points;\n\
-        versor[0] = id[0].versor;\n\
-        points[1] = id[1].points;\n\
-        versor[1] = id[1].versor;\n\
-        points[2] = id[2].points;\n\
-        versor[2] = id[2].versor;\n\
-        intersect(points,versor,point0);\n\
-        points[0] = id[0].points;\n\
-        versor[0] = id[0].versor;\n\
-        points[1] = id[1].points;\n\
-        versor[1] = id[1].versor;\n\
-        points[2] = id[3].points;\n\
-        versor[2] = id[3].versor;\n\
-        intersect(points,versor,point1);\n\
-        points[0] = id[0].points;\n\
-        versor[0] = id[0].versor;\n\
-        points[1] = id[4].points;\n\
-        versor[1] = id[4].versor;\n\
-        points[2] = id[5].points;\n\
-        versor[2] = id[5].versor;\n\
-        intersect(points,versor,point2);"
+#define INTERSECT(POINTS,VERSOR,POINT,POINT0,POINT1,POINT2) "\
+        points[0] = id["#POINT0"]."#POINTS";\n\
+        points[1] = id["#POINT1"]."#POINTS";\n\
+        points[2] = id["#POINT2"]."#POINTS";\n\
+        versor[0] = id["#POINT0"]."#VERSOR";\n\
+        versor[1] = id["#POINT1"]."#VERSOR";\n\
+        versor[2] = id["#POINT2"]."#VERSOR";\n\
+        intersect(points,versor,point"#POINT")"
 
 #ifdef BRINGUP
 #define CODE0 "point"
 #define CODE1(I) "id["#I"].rotated"
+#define CODE2 "xpanded[i]"
+#define CODE3(I) "id["#I"].rotated[0]"
 #else
 #define CODE0 "linear*point"
 #define CODE1(I) "point"
+#define CODE2 "linear*xpanded[i]"
+#define CODE3(I) "point"
 #endif
 
     const GLchar *diplaneVertex = "\
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
     out data {\n\
-        mat3 points;\n\
-        uint versor;\n\
+        mat3 xformed;\n\
+        uint vformed;\n\
+        mat3 rotated;\n\
+        uint vtated;\n\
     } od;\n\
     void main()\n\
     {\n\
+        mat3 xpanded;\n\
         mat3 points;\n\
-        uint versor;\n\
-        expand(plane,versor,points);\n\
+        expand(plane,versor,xpanded);\n\
         for (int i = 0; i < 3; i++)\n\
-            points[i] = (affine*vec4(points[i],1.0)).xyz;\n\
-        minimum(points,versor);\n\
-        od.points = points;\n\
-        od.versor = versor;\n\
+            points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
+        minimum(points,od.vformed);\n\
+        od.xformed = points;\n\
+        for (int i = 0; i < 3; i++)\n\
+            points[i] = "CODE2";\n\
+        minimum(points,od.vtated);\n\
+        od.rotated = points;\n\
     }\n";
     const GLchar *diplaneGeometry = "\
     layout (triangles_adjacency) in;\n\
     layout (triangle_strip, max_vertices = 3) out;\n\
     in data {\n\
-        mat3 points;\n\
-        uint versor;\n\
+        mat3 xformed;\n\
+        uint vformed;\n\
+        mat3 rotated;\n\
+        uint vtated;\n\
     } id[6];\n\
     out vec3 normal;\n\
     void main()\n\
     {\n\
         vec3 point;\n\
-        "INTERSECT"\n\
+        vec3 point0;\n\
+        vec3 point1;\n\
+        vec3 point2;\n\
+        mat3 points[3];\n\
+        uint versor[3];\n\
+        "INTERSECT(rotated,vtated,0,0,1,2)";\n\
+        "INTERSECT(rotated,vtated,1,0,1,3)";\n\
+        "INTERSECT(rotated,vtated,2,0,4,5)";\n\
         point = normalize(cross((point1-point0),(point2-point0)));\n\
+        "INTERSECT(xformed,vformed,0,0,1,2)";\n\
+        "INTERSECT(xformed,vformed,1,0,1,3)";\n\
+        "INTERSECT(xformed,vformed,2,0,4,5)";\n\
         gl_Position = vec4(point0,1.0);\n\
-        normal = point;\n\
+        normal = "CODE3(0)";\n\
         EmitVertex();\n\
         gl_Position = vec4(point1,1.0);\n\
-        normal = point;\n\
+        normal = "CODE3(1)";\n\
         EmitVertex();\n\
         gl_Position = vec4(point2,1.0);\n\
-        normal = point;\n\
+        normal = "CODE3(2)";\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
@@ -2383,7 +2381,15 @@ void initialize(int argc, char **argv)
         vec3 tail = feather;\n\
         mat3 corners;\n\
         uint index;\n\
-        "INTERSECT"\n\
+        vec3 point;\n\
+        vec3 point0;\n\
+        vec3 point1;\n\
+        vec3 point2;\n\
+        mat3 points[3];\n\
+        uint versor[3];\n\
+        "INTERSECT(points,versor,0,0,1,2)";\n\
+        "INTERSECT(points,versor,1,0,1,3)";\n\
+        "INTERSECT(points,versor,2,0,4,5)";\n\
         corners[0] = point0;\n\
         corners[1] = point1;\n\
         corners[2] = point2;\n\
