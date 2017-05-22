@@ -122,7 +122,7 @@ enum Shader { // one value per shader; state for bringup
     Coplane, // calculate intersections
     Copoint, // construct planes
     Adplane, // classify point by planes
-    Adpoint, //  classify planes by points
+    Adpoint, //  classify plane by points
     Perplane, // find points that minimize area
     Perpoint, // points are base of tetrahedron
     Shaders} shader = Dipoint;
@@ -136,8 +136,8 @@ enum Action { // return values for command helpers
 enum Uniform { // one value per uniform; no associated state
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin
-    Model, // rotation and translation of polytope
-    Normal, // rotation only to find normals
+    Affine, // rotation and translation of polytope
+    Linear, // rotation only to find normals
     Project, // specification of a frustrum
     Light, // transformation of normal into color
     Feather, // point on plane to classify
@@ -166,7 +166,7 @@ struct Item { // per-menu-line info
     {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
     {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
-    {Sculpts,Sculpt,1,"Transform","modify model or perspective matrix"},
+    {Sculpts,Sculpt,1,"Transform","modify affine or perspective matrix"},
     {Sculpts,Sculpt,1,"Manipulate","modify pierced plane"},
     {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform/Manipulate modes"},
     {Mouses,Mouse,2,"Rotate","tilt polytope/plane around pierce point"},
@@ -182,13 +182,14 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints {DECLARE_QUEUE(int)} matchs = {0};
  // index into item[line].name for console undo
-float modelMat[16]; // transformation state at click time
-float normalMat[9];
+float affineMat[16]; // transformation state at click time
+float linearMat[9];
 float projectMat[9];
 float basisMatz[27]; // per versor base points
-float modelMatz[16]; // current transformation state
-float normalMatz[9];
+float affineMatz[16]; // current transformation state
+float linearMatz[9];
 float projectMatz[9];
+float lightMatz[16];
 float xPoint = 0;  // position of pierce point at click time
 float yPoint = 0;
 float zPoint = 0;
@@ -1226,8 +1227,8 @@ void leftTransform()
 {
     xPoint = xPos; yPoint = yPos; zPoint = zPos;
     enqueMsgstr("leftTransform %f %f\n",xPoint,yPoint);
-    for (int i = 0; i < 16; i++) modelMat[i] = modelMatz[i];
-    for (int i = 0; i < 9; i++) normalMat[i] = normalMatz[i];
+    for (int i = 0; i < 16; i++) affineMat[i] = affineMatz[i];
+    for (int i = 0; i < 9; i++) linearMat[i] = linearMatz[i];
     for (int i = 0; i < 9; i++) projectMat[i] = projectMatz[i];
     click = Left;
 }
@@ -1277,15 +1278,15 @@ void transformRotate()
     copymat(v,crossmat(u),9,9,9);
     scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
     float w[16]; plusvec(u,plusvec(v,identmat(w,3),9),9);
-    jumpmat(copymat(normalMatz,normalMat,9,9,9),u,3);
+    jumpmat(copymat(linearMatz,linearMat,9,9,9),u,3);
     copymat(identmat(w,4),u,3,4,9);
     identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
     identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
-    copymat(modelMatz,modelMat,16,16,16);
-    jumpmat(modelMatz,u,4); jumpmat(modelMatz,w,4); jumpmat(modelMatz,v,4);
+    copymat(affineMatz,affineMat,16,16,16);
+    jumpmat(affineMatz,u,4); jumpmat(affineMatz,w,4); jumpmat(affineMatz,v,4);
     glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelMatz);
-    glUniformMatrix3fv(uniform[shader][Normal],1,GL_FALSE,normalMatz);
+    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
+    glUniformMatrix3fv(uniform[shader][Linear],1,GL_FALSE,linearMatz);
     glUseProgram(0);
     enqueDisplay();
 }
@@ -1294,10 +1295,10 @@ void transformTranslate()
 {
     float v[16]; identmat(v,4);
     v[12] = xPos-xPoint; v[13] = yPos-yPoint;
-    copymat(modelMatz,modelMat,16,16,16);
-    jumpmat(modelMatz,v,4);
+    copymat(affineMatz,affineMat,16,16,16);
+    jumpmat(affineMatz,v,4);
     glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Model],1,GL_FALSE,modelMatz);
+    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
     glUseProgram(0);
     enqueDisplay();
 }
@@ -1912,24 +1913,16 @@ void initialize(int argc, char **argv)
     glVertexAttribPointer(cornerBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    for (int i = 0; i < 27; i++) {
-        int versor = i / 9;
-        int column = (i % 9) / 3;
-        int row = i % 3;
-        int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
-        basisMatz[i] = (one ? 1.0 : 0.0);}
-    for (int i = 0; i < 16; i++) modelMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) normalMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-
-/*
- * shader programs
- */
-
     uniformCode = "\
     #version 330 core\n\
     uniform mat3 basis[3];\n\
-    uniform float invalid;\n";
+    uniform float invalid;\n\
+    uniform mat4 affine;\n\
+    uniform mat3 linear;\n\
+    uniform mat3 project;\n\
+    uniform mat4 light;\n\
+    uniform vec3 feather;\n\
+    uniform vec3 arrow;\n";
 
     projectCode = "\
     void project2(in mat2 points, in uint versor, in vec2 inp, out float outp)\n\
@@ -2091,10 +2084,11 @@ void initialize(int argc, char **argv)
     }\n";
 
     constructCode = "\
-    void construct(in mat3 points, out vec3 vector, out uint index)\n\
+    void minimum(in mat3 points, out uint versor)\n\
     {\n\
+        uint index;\n\
         vec3 delta;\n\
-        uint versor;\n\
+        float mini;\n\
         for (int i = 0; i < 3; i++) {\n\
             float mini = points[0][i];\n\
             float maxi = points[0][i];\n\
@@ -2102,25 +2096,31 @@ void initialize(int argc, char **argv)
                 mini = min(mini,points[j][i]);\n\
                 maxi = max(maxi,points[j][i]);}\n\
             delta[i] = maxi - mini;}\n\
-        float mini = delta[0];\n\
-        versor = uint(0);\n\
+        mini = delta[0];\n\
+        index = uint(0);\n\
         for (int i = 1; i < 3; i++) if (delta[i] < mini) {\n\
             mini = delta[i];\n\
-            versor = uint(i);}\n\
+            index = uint(i);}\n\
+        versor = index;\n\
+    }\n\
+    void construct(in mat3 points, out vec3 plane, out uint versor)\n\
+    {\n\
+        uint index;\n\
+        minimum(points,index);\n\
         mat3 base;\n\
-        switch (versor) {\n\
+        switch (index) {\n\
             case (uint(0)): base = basis[0]; break;\n\
             case (uint(1)): base = basis[1]; break;\n\
             case (uint(2)): base = basis[2]; break;\n\
             default: for (int i = 0; i < 3; i++) base[i] = vec3(invalid,invalid,invalid);}\n\
-        index = versor;\n\
         float horizontal;\n\
         float vertical;\n\
         float tabular;\n\
-        project3(points,versor,base[0],horizontal);\n\
-        project3(points,versor,base[1],vertical);\n\
-        project3(points,versor,base[2],tabular);\n\
-        vector = vec3(horizontal,vertical,tabular);\n\
+        project3(points,index,base[0],horizontal);\n\
+        project3(points,index,base[1],vertical);\n\
+        project3(points,index,base[2],tabular);\n\
+        plane = vec3(horizontal,vertical,tabular);\n\
+        versor = index;\n\
     }\n";
 
     intersectCode = "\
@@ -2132,70 +2132,133 @@ void initialize(int argc, char **argv)
         pierce(points[2],versor[2],point0,point1,point);\n\
     }\n";
 
-#define VertexCode(INPUT) "\
+#define INTERSECT "\
+        vec3 point0;\n\
+        vec3 point1;\n\
+        vec3 point2;\n\
+        mat3 points[3];\n\
+        uint versor[3];\n\
+        points[0] = id[0].points;\n\
+        versor[0] = id[0].versor;\n\
+        points[1] = id[1].points;\n\
+        versor[1] = id[1].versor;\n\
+        points[2] = id[2].points;\n\
+        versor[2] = id[2].versor;\n\
+        intersect(points,versor,point0);\n\
+        points[0] = id[0].points;\n\
+        versor[0] = id[0].versor;\n\
+        points[1] = id[1].points;\n\
+        versor[1] = id[1].versor;\n\
+        points[2] = id[3].points;\n\
+        versor[2] = id[3].versor;\n\
+        intersect(points,versor,point1);\n\
+        points[0] = id[0].points;\n\
+        versor[0] = id[0].versor;\n\
+        points[1] = id[4].points;\n\
+        versor[1] = id[4].versor;\n\
+        points[2] = id[5].points;\n\
+        versor[2] = id[5].versor;\n\
+        intersect(points,versor,point2);"
+
+#ifdef BRINGUP
+#define CODE0 "point"
+#define CODE1(I) "id["#I"].rotated"
+#else
+#define CODE0 "linear*point"
+#define CODE1(I) "point"
+#endif
+
+    const GLchar *diplaneVertex = "\
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
-    layout (location = 2) in vec3 point;\n\
-    layout (location = 3) in vec3 corner;\n\
-    out vec3 xformed;\n\
-    out uint uiformed;\n\
-    out vec3 rotated;\n\
-    out uint uitated;\n\
-    out vec3 xpanded;\n\
-    out uint uipanded;\n\
-    uniform mat4 model;\n\
-    uniform mat3 normal;\n\
+    out data {\n\
+        mat3 points;\n\
+        uint versor;\n\
+    } od;\n\
     void main()\n\
     {\n\
-        xpanded = "INPUT";\n\
-        xformed = (model*vec4(xpanded,1.0)).xyz;\n\
-        rotated = "INPUT";\n\
-   }\n";
-
-#define GeometryCode(LAYOUT0,LAYOUT3,LAYOUT1,LAYOUT2) "\
-    layout ("LAYOUT0") in;\n\
-    layout ("LAYOUT1", max_vertices = "LAYOUT2") out;\n\
-    in vec3 xformed["LAYOUT3"];\n\
-    in uint uiformed["LAYOUT3"];\n\
-    in vec3 rotated["LAYOUT3"];\n\
-    in uint uitated["LAYOUT3"];\n\
-    in vec3 xpanded["LAYOUT3"];\n\
-    in uint uipanded["LAYOUT3"];\n\
-    out vec3 cross;\n\
-    out vec3 vector;\n\
-    out float scalar;\n\
-    out uint index;\n\
-    uniform mat3 project;\n\
-    uniform vec3 feather;\n\
-    uniform vec3 arrow;\n\
+        mat3 points;\n\
+        uint versor;\n\
+        expand(plane,versor,points);\n\
+        for (int i = 0; i < 3; i++)\n\
+            points[i] = (affine*vec4(points[i],1.0)).xyz;\n\
+        minimum(points,versor);\n\
+        od.points = points;\n\
+        od.versor = versor;\n\
+    }\n";
+    const GLchar *diplaneGeometry = "\
+    layout (triangles_adjacency) in;\n\
+    layout (triangle_strip, max_vertices = 3) out;\n\
+    in data {\n\
+        mat3 points;\n\
+        uint versor;\n\
+    } id[6];\n\
+    out vec3 normal;\n\
     void main()\n\
     {\n\
-        for (int i = 0; i < "LAYOUT2"; i++) {\n\
-        gl_Position = vec4(xformed[i], 1.0);\n\
-        cross = rotated[i];\n\
-        vector = xpanded[i];\n\
-        index = uint(0);\n\
-        scalar = xpanded[i][0];\n\
-        EmitVertex();}\n\
+        vec3 point;\n\
+        "INTERSECT"\n\
+        point = normalize(cross((point1-point0),(point2-point0)));\n\
+        gl_Position = vec4(point0,1.0);\n\
+        normal = point;\n\
+        EmitVertex();\n\
+        gl_Position = vec4(point1,1.0);\n\
+        normal = point;\n\
+        EmitVertex();\n\
+        gl_Position = vec4(point2,1.0);\n\
+        normal = point;\n\
+        EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
-
-#define FragmentCode "\
-    in vec3 cross;\n\
+    const GLchar *diplaneFragment = "\
+    in vec3 normal;\n\
     out vec4 result;\n\
-    uniform vec4 light;\n\
     void main()\n\
     {\n\
-        result = vec4(cross, 1.0f);\n\
+        result = light*vec4(normal, 1.0f);\n\
     }\n";
 
-    const GLchar *diplaneVertex = VertexCode("plane");
-    const GLchar *diplaneGeometry = GeometryCode("triangles_adjacency", "6", "triangle_strip", "3");
-    const GLchar *diplaneFragment = FragmentCode;
-
-    const GLchar *dipointVertex = VertexCode("point");
-    const GLchar *dipointGeometry = GeometryCode("triangles", "3", "triangle_strip", "3");
-    const GLchar *dipointFragment = FragmentCode;
+    const GLchar *dipointVertex = "\
+    layout (location = 2) in vec3 point;\n\
+    out data {\n\
+        vec3 xformed;\n\
+        vec3 rotated;\n\
+    } od;\n\
+    void main()\n\
+    {\n\
+        od.xformed = (affine*vec4(point,1.0)).xyz;\n\
+        od.rotated = "CODE0";\n\
+    }\n";
+    const GLchar *dipointGeometry = "\
+    layout (triangles) in;\n\
+    layout (triangle_strip, max_vertices = 3) out;\n\
+    in data {\n\
+        vec3 xformed;\n\
+        vec3 rotated;\n\
+    } id[3];\n\
+    out vec3 normal;\n\
+    void main()\n\
+    {\n\
+        vec3 point;\n\
+        point = normalize(cross((id[1].rotated-id[0].rotated),(id[2].rotated-id[0].rotated)));\n\
+        gl_Position = vec4(id[0].xformed,1.0);\n\
+        normal = "CODE1(0)";\n\
+        EmitVertex();\n\
+        gl_Position = vec4(id[1].xformed,1.0);\n\
+        normal = "CODE1(1)";\n\
+        EmitVertex();\n\
+        gl_Position = vec4(id[2].xformed,1.0);\n\
+        normal = "CODE1(2)";\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
+    const GLchar *dipointFragment = "\
+    in vec3 normal;\n\
+    out vec4 result;\n\
+    void main()\n\
+    {\n\
+        result = light*vec4(normal, 1.0f);\n\
+    }\n";
 
     const GLchar *coplaneVertex = "\
     layout (location = 0) in vec3 plane;\n\
@@ -2256,20 +2319,105 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *copointFragment = 0;
 
-    const GLchar *adplaneVertex = VertexCode("plane");
-    const GLchar *adplaneGeometry = GeometryCode("points", "1", "points", "1");
+    const GLchar *adplaneVertex = coplaneVertex;
+    const GLchar *adplaneGeometry = "\
+    layout (points) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in data {\n\
+        mat3 points;\n\
+        uint versor;\n\
+    } id[1];\n\
+    out float scalar;\n\
+    void main()\n\
+    {\n\
+        vec3 head = feather + arrow;\n\
+        vec3 tail = feather;\n\
+        float proj0;\n\
+        float proj1;\n\
+        float negate;\n\
+        project3(id[0].points,id[0].versor,head,proj0);\n\
+        project3(id[0].points,id[0].versor,tail,proj1);\n\
+        switch (id[0].versor) {\n\
+            case (uint(0)): if (tail[0] > proj1) negate = 1.0; else negate = -1.0; break;\n\
+            case (uint(1)): if (tail[1] > proj1) negate = 1.0; else negate = -1.0; break;\n\
+            case (uint(2)): if (tail[2] > proj1) negate = 1.0; else negate = -1.0; break;\n\
+            default: negate = invalid; break;}\n\
+        switch (id[0].versor) {\n\
+            case (uint(0)): scalar = negate*(head[0]-proj0); break;\n\
+            case (uint(1)): scalar = negate*(head[1]-proj0); break;\n\
+            case (uint(2)): scalar = negate*(head[2]-proj0); break;\n\
+            default: scalar = invalid; break;}\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
     const GLchar *adplaneFragment = 0;
 
-    const GLchar *adpointVertex = VertexCode("point");
-    const GLchar *adpointGeometry = GeometryCode("points", "1", "points", "1");
+    const GLchar *adpointVertex = copointVertex;
+    const GLchar *adpointGeometry = "\
+    layout (points) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in data {\n\
+        vec3 point;\n\
+    } id[1];\n\
+    out float scalar;\n\
+    void main()\n\
+    {\n\
+        scalar = dot(arrow,(id[0].point-feather));\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
     const GLchar *adpointFragment = 0;
 
-    const GLchar *perplaneVertex = VertexCode("plane");
-    const GLchar *perplaneGeometry = GeometryCode("triangles_adjacency", "6", "points", "1");
+    const GLchar *perplaneVertex = coplaneVertex;
+    const GLchar *perplaneGeometry = "\
+    layout (triangles_adjacency) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in data {\n\
+        mat3 points;\n\
+        uint versor;\n\
+    } id[6];\n\
+    out vec3 vector;\n\
+    void main()\n\
+    {\n\
+        vec3 head = feather + arrow;\n\
+        vec3 tail = feather;\n\
+        mat3 corners;\n\
+        uint index;\n\
+        "INTERSECT"\n\
+        corners[0] = point0;\n\
+        corners[1] = point1;\n\
+        corners[2] = point2;\n\
+        minimum(corners,index);\n\
+        pierce(corners, index, head, tail, vector);\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
     const GLchar *perplaneFragment = 0;
 
-    const GLchar *perpointVertex = VertexCode("point");
-    const GLchar *perpointGeometry = GeometryCode("triangles", "3", "points", "1");
+    const GLchar *perpointVertex = copointVertex;
+    const GLchar *perpointGeometry = "\
+    layout (triangles) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in data {\n\
+        vec3 point;\n\
+    } id[3];\n\
+    out vec3 vector;\n\
+    void main()\n\
+    {\n\
+        vec3 head;\n\
+        vec3 tail;\n\
+        mat3 corners;\n\
+        uint index;\n\
+        corners[0] = id[0].point;\n\
+        corners[1] = id[1].point;\n\
+        corners[2] = id[2].point;\n\
+        minimum(corners,index);\n\
+        head = feather + arrow;\n\
+        tail = feather;\n\
+        pierce(corners, index, head, tail, vector);\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
     const GLchar *perpointFragment = 0;
 
     program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane");
@@ -2281,27 +2429,40 @@ void initialize(int argc, char **argv)
     program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, "vector", 0, "perplane");
     program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, "vector", 0, "perpoint");
 
+    for (int i = 0; i < 27; i++) {
+        int versor = i / 9;
+        int column = (i % 9) / 3;
+        int row = i % 3;
+        int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
+        basisMatz[i] = (one ? 1.0 : 0.0);}
+    for (int i = 0; i < 16; i++) affineMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) linearMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) lightMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+
     glUseProgram(program[Diplane]);
     uniform[Diplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
     uniform[Diplane][Basis] = glGetUniformLocation(program[Diplane], "basis");
-    uniform[Diplane][Model] = glGetUniformLocation(program[Diplane], "model");
-    uniform[Diplane][Normal] = glGetUniformLocation(program[Diplane], "normal");
+    uniform[Diplane][Affine] = glGetUniformLocation(program[Diplane], "affine");
+    uniform[Diplane][Linear] = glGetUniformLocation(program[Diplane], "linear");
     uniform[Diplane][Project] = glGetUniformLocation(program[Diplane], "project");
     uniform[Diplane][Light] = glGetUniformLocation(program[Diplane], "light");
     glUniformMatrix3fv(uniform[Diplane][Basis],3,GL_FALSE,basisMatz);
-    glUniformMatrix4fv(uniform[Diplane][Model],1,GL_FALSE,modelMatz);
-    glUniformMatrix3fv(uniform[Diplane][Normal],1,GL_FALSE,normalMatz);
+    glUniformMatrix4fv(uniform[Diplane][Affine],1,GL_FALSE,affineMatz);
+    glUniformMatrix3fv(uniform[Diplane][Linear],1,GL_FALSE,linearMatz);
     glUniformMatrix3fv(uniform[Diplane][Project],1,GL_FALSE,projectMatz);
+    glUniformMatrix4fv(uniform[Diplane][Light],1,GL_FALSE,lightMatz);
     glUseProgram(0);
 
     glUseProgram(program[Dipoint]);
-    uniform[Dipoint][Model] = glGetUniformLocation(program[Dipoint], "model");
-    uniform[Dipoint][Normal] = glGetUniformLocation(program[Dipoint], "normal");
+    uniform[Dipoint][Affine] = glGetUniformLocation(program[Dipoint], "affine");
+    uniform[Dipoint][Linear] = glGetUniformLocation(program[Dipoint], "linear");
     uniform[Dipoint][Project] = glGetUniformLocation(program[Dipoint], "project");
     uniform[Dipoint][Light] = glGetUniformLocation(program[Dipoint], "light");
-    glUniformMatrix4fv(uniform[Dipoint][Model],1,GL_FALSE,modelMatz);
-    glUniformMatrix3fv(uniform[Dipoint][Normal],1,GL_FALSE,normalMatz);
+    glUniformMatrix4fv(uniform[Dipoint][Affine],1,GL_FALSE,affineMatz);
+    glUniformMatrix3fv(uniform[Dipoint][Linear],1,GL_FALSE,linearMatz);
     glUniformMatrix3fv(uniform[Dipoint][Project],1,GL_FALSE,projectMatz);
+    glUniformMatrix4fv(uniform[Dipoint][Light],1,GL_FALSE,lightMatz);
     glUseProgram(0);
 
     glUseProgram(program[Coplane]);
