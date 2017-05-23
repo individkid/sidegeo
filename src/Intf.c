@@ -87,14 +87,17 @@ struct termios savedTermios = {0}; // for restoring from non canonical unechoed 
 int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Buffer {
-    GLuint base;
-    GLuint loc;
-    int wrap;
-    int limit;
-    int todo;
-    int ready;
-    int done;
-    GLuint query;
+    GLuint base; // gpu memory handle
+    GLuint query; // feedback completion test
+    GLuint loc; // vertex shader input
+    int wrap; // desired buffer size
+    int limit; // current buffer size
+    int todo; // desired initialized data
+    int ready; // volatile initialized data
+    int done; // stable initialized data
+    int type; // type of data elements
+    int dimension; // elements per item
+    int primitive; // type of item chunks
 }; // for use by *Bind* and *Map*
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
 struct Buffer versorBuf = {0}; // per boundary base selector
@@ -915,10 +918,8 @@ size_t renderSize(int size)
 }
 
 enum Action renderEnqued(
-    struct Buffer *vertex0, struct Buffer *vertex1,
-    struct Buffer *element, struct Buffer *feedback0, struct Buffer *feedback1,
-    int elements, int feedbacks0, int feedbacks1,
-    int elementz, int feedbackz0, int feedbackz1,
+    struct Buffer *vertex0, struct Buffer *vertex1, struct Buffer *element,
+    struct Buffer *feedback0, struct Buffer *feedback1,
     enum Shader shader, const char *name)
 {
     // NOTE: assume one-to-one between element feedback0 feedback1
@@ -940,29 +941,30 @@ enum Action renderEnqued(
     glUseProgram(program[shader]);
     if (feedback0)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, feedback0->base,
-            base*feedbacks0*renderSize(feedbackz0),(limit-base)*feedbacks0*renderSize(feedbackz0));
+            base*feedback0->dimension*renderSize(feedback0->type),
+            (limit-base)*feedback0->dimension*renderSize(feedback0->type));
     if (feedback1)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 1, feedback1->base,
-            base*feedbacks1*renderSize(feedbackz1),(limit-base)*feedbacks1*renderSize(feedbackz1));
-    if (feedback0 || feedback1) {
-        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, (feedback0?feedback0:feedback1)->query);
-        // NOTE: is it possible or necessary to query on the other feedback buffer
+            base*feedback1->dimension*renderSize(feedback1->type),
+            (limit-base)*feedback1->dimension*renderSize(feedback1->type));
+    if (feedback0) {
+        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback0->query);
         glEnable(GL_RASTERIZER_DISCARD);
-        glBeginTransformFeedback(GL_POINTS);}
+        glBeginTransformFeedback(feedback0->primitive);}
     if (vertex1) glEnableVertexAttribArray(vertex1->loc);
     glEnableVertexAttribArray(vertex0->loc);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element->base);
     if (!feedback0) {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);}
-    glDrawElements(GL_TRIANGLES, (limit-base)*elements, elementz,
-        (void *)(base*elements*renderSize(elementz)));
+    glDrawElements(GL_TRIANGLES, (limit-base)*element->dimension, element->type,
+        (void *)(base*element->dimension*renderSize(element->type)));
     if (!feedback0) {
         glfwSwapBuffers(windowHandle);}
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glDisableVertexAttribArray(vertex0->loc);
     if (vertex1) glDisableVertexAttribArray(vertex1->loc);
-    if (feedback0 || feedback1) {
+    if (feedback0) {
         glEndTransformFeedback();
         glDisable(GL_RASTERIZER_DISCARD);
         glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);}
@@ -991,12 +993,7 @@ enum Action renderWait(struct Buffer *feedback, const char *name)
 
 enum Action coplaneEnqued(struct Buffer *sub, struct Buffer *buf)
 {
-    return renderEnqued(
-        &planeBuf,&versorBuf,
-        sub,buf,0,
-        POINT_INCIDENCES,POINT_DIMENSIONS,0,
-        GL_UNSIGNED_INT,GL_FLOAT,0,
-        Coplane,"coplane");
+    return renderEnqued(&planeBuf,&versorBuf,sub,buf,0,Coplane,"coplane");
 }
 
 enum Action coplaneWait(struct Buffer *buf)
@@ -1006,37 +1003,22 @@ enum Action coplaneWait(struct Buffer *buf)
 
 enum Action copointEnqued()
 {
-    return renderEnqued(
-        &pointBuf,0,
-        &constructSub,&planeBuf,&versorBuf,
-        PLANE_INCIDENCES,PLANE_DIMENSIONS,1,
-        GL_UNSIGNED_INT,GL_FLOAT,GL_UNSIGNED_INT,
-        Copoint,"copoint");
+    return renderEnqued(&pointBuf,0,&constructSub,&planeBuf,&versorBuf,Copoint,"copoint");
 }
 
 enum Action copointWait()
 {
-    return renderWait(&pointBuf,"copoint");
+    return renderWait(&planeBuf,"copoint");
 }
 
 enum Action diplaneEnqued()
 {
-    return renderEnqued(
-        &planeBuf,&versorBuf,
-        &faceSub,0,0,
-        FACE_PLANES,0,0,
-        GL_UNSIGNED_INT,0,0,
-        Diplane,"diplane");
+    return renderEnqued(&planeBuf,&versorBuf,&faceSub,0,0,Diplane,"diplane");
 }
 
 enum Action dipointEnqued()
 {
-    return renderEnqued(
-        &pointBuf,0,
-        &polygonSub,0,0,
-        POLYGON_POINTS,0,0,
-        GL_UNSIGNED_INT,0,0,
-        Dipoint,"dipoint");
+    return renderEnqued(&pointBuf,0,&polygonSub,0,0,Dipoint,"dipoint");
 }
 
 void coplane()
@@ -1883,30 +1865,43 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    glGenBuffers(1, &planeBuf.base); glGenQueries(1, &planeBuf.query); planeBuf.loc = PLANE_LOCATION;
-    glGenBuffers(1, &versorBuf.base); glGenQueries(1, &versorBuf.query); versorBuf.loc = VERSOR_LOCATION;
-    glGenBuffers(1, &pointBuf.base); glGenQueries(1, &pointBuf.query); pointBuf.loc = POINT_LOCATION;
-    glGenBuffers(1, &cornerBuf.base); glGenQueries(1, &cornerBuf.query); cornerBuf.loc = CORNER_LOCATION;
-    glGenBuffers(1, &faceSub.base); glGenQueries(1, &faceSub.query);
-    glGenBuffers(1, &polygonSub.base); glGenQueries(1, &polygonSub.query);
-    glGenBuffers(1, &vertexSub.base); glGenQueries(1, &vertexSub.query);
-    glGenBuffers(1, &cornerSub.base); glGenQueries(1, &cornerSub.query);
-    glGenBuffers(1, &constructSub.base); glGenQueries(1, &constructSub.query);
+    glGenBuffers(1, &planeBuf.base);
+    glGenBuffers(1, &versorBuf.base);
+    glGenBuffers(1, &pointBuf.base);
+    glGenBuffers(1, &cornerBuf.base);
+    glGenBuffers(1, &faceSub.base);
+    glGenBuffers(1, &polygonSub.base);
+    glGenBuffers(1, &vertexSub.base);
+    glGenBuffers(1, &cornerSub.base);
+    glGenBuffers(1, &constructSub.base);
+
+    glGenQueries(1, &planeBuf.query);
+    glGenQueries(1, &pointBuf.query);
+    glGenQueries(1, &cornerBuf.query);
+
+    planeBuf.loc = PLANE_LOCATION; planeBuf.primitive = GL_POINTS;
+    versorBuf.loc = VERSOR_LOCATION;
+    pointBuf.loc = POINT_LOCATION; pointBuf.primitive = GL_POINTS;
+    cornerBuf.loc = CORNER_LOCATION; cornerBuf.primitive = GL_POINTS;
+
+    planeBuf.type = GL_FLOAT; planeBuf.dimension = PLANE_DIMENSIONS;
+    versorBuf.type = GL_UNSIGNED_INT; versorBuf.dimension = 1;
+    pointBuf.type = GL_FLOAT; pointBuf.dimension = POINT_DIMENSIONS;
+    cornerBuf.type = GL_FLOAT; cornerBuf.dimension = POINT_DIMENSIONS;
+    faceSub.type = GL_UNSIGNED_INT; faceSub.dimension = FACE_PLANES;
+    polygonSub.type = GL_UNSIGNED_INT; polygonSub.dimension = POLYGON_POINTS;
+    vertexSub.type = GL_UNSIGNED_INT; vertexSub.dimension = POINT_INCIDENCES;
+    cornerSub.type = GL_UNSIGNED_INT; cornerSub.dimension = POINT_INCIDENCES;
+    constructSub.type = GL_UNSIGNED_INT; constructSub.dimension = PLANE_INCIDENCES;
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glVertexAttribPointer(planeBuf.loc, PLANE_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+    glVertexAttribPointer(planeBuf.loc, planeBuf.dimension, planeBuf.type, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
-    glVertexAttribIPointer(versorBuf.loc, 1, GL_UNSIGNED_INT, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+    glVertexAttribIPointer(versorBuf.loc, versorBuf.dimension, versorBuf.type, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glVertexAttribPointer(pointBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+    glVertexAttribPointer(pointBuf.loc, pointBuf.dimension, pointBuf.type, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, cornerBuf.base);
-    glVertexAttribPointer(cornerBuf.loc, POINT_DIMENSIONS, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(cornerBuf.loc, cornerBuf.dimension, cornerBuf.type, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     uniformCode = "\
