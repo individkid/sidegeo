@@ -87,13 +87,13 @@ struct termios savedTermios = {0}; // for restoring from non canonical unechoed 
 int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Buffer {
+    const char *name;
     GLuint base; // gpu memory handle
     GLuint query; // feedback completion test
     GLuint loc; // vertex shader input
+    int copy; // new buffer size
+    int room; // current buffer size
     int wrap; // desired buffer size
-    int limit; // current buffer size
-    int todo; // desired initialized data
-    int ready; // volatile initialized data
     int done; // stable initialized data
     int type; // type of data elements
     int dimension; // elements per item
@@ -208,16 +208,27 @@ int xLoc = 0; // window location
 int yLoc = 0;
 struct Chars generics = {0};
  // sized formatted packets of bytes
-enum WrapState {WrapEnqued,WrapWait};
-struct Wraps {DECLARE_QUEUE(enum WrapState)} wraps = {0};
 enum DiplaneState {DiplaneIdle,DiplaneEnqued} diplaneState = DiplaneIdle;
 enum DipointState {DipointIdle,DipointEnqued} dipointState = DipointIdle;
-enum CoplaneState {CoplaneIdle,CoplaneEnqued,CoplaneWait} coplaneState = CoplaneIdle;
-enum CopointState {CopointIdle,CopointEnqued,CopointWait} copointState = CopointIdle;
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureWait} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 enum ConsoleState {ConsoleIdle,ConsoleEnqued} consoleState = ConsoleIdle;
+enum WrapState {WrapIdle,WrapEnqued,WrapWait};
 enum MenuState {MenuIdle,MenuEnqued} menuState = MenuIdle;
+enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
+struct Render {
+    struct Buffer *blocker; // blockee input
+    struct Buffer *vertex0; // blocker input
+    struct Buffer *vertex1; // blocker input
+    struct Buffer *element; // blockee input
+    struct Buffer *feedback0; // blocker output
+    struct Buffer *feedback1; // blocker output
+    enum Shader shader;
+    enum RenderState state;
+    const char *name;
+}; // argument to render functions
+struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
+int shaderCount[Shaders] = {0};
 int linkCheck = 0;
 int sequenceNumber = 0;
 struct Ints defers = {0};
@@ -247,34 +258,35 @@ struct Chars injects = {0}; // for staging opengl keys in console
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
 /*return pointer valid only until next call to enloc##NAME array##NAME enque##NAME entry##NAME */  \
-inline TYPE *enloc##NAME(int size) \
+TYPE *enloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
         INSTANCE.base = malloc(10*sizeof*INSTANCE.base); \
         INSTANCE.limit = INSTANCE.base + 10; \
         INSTANCE.head = INSTANCE.base; \
         INSTANCE.tail = INSTANCE.base;} \
-    while (INSTANCE.tail + size >= INSTANCE.limit) { \
-        int head = INSTANCE.head - INSTANCE.base; \
-        int tail = INSTANCE.tail - INSTANCE.base; \
-        int limit = INSTANCE.limit - INSTANCE.base; \
-        INSTANCE.base = realloc(INSTANCE.base, (limit+10)*sizeof*INSTANCE.base); \
-        INSTANCE.head = INSTANCE.base + head; \
-        INSTANCE.tail = INSTANCE.base + tail; \
-        INSTANCE.limit = INSTANCE.base + limit + 10;} \
-    INSTANCE.tail = INSTANCE.tail + size; \
-    return INSTANCE.tail - size; \
-} \
-\
-/*return pointer valid only until next call to enloc##NAME array##NAME enque##NAME entry##NAME */  \
-inline TYPE *array##NAME() \
-{ \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
         int tail = INSTANCE.tail - INSTANCE.base; \
         for (int i = 10; i < tail; i++) { \
             INSTANCE.base[i-10] = INSTANCE.base[i];} \
         INSTANCE.head = INSTANCE.head - 10; \
         INSTANCE.tail = INSTANCE.tail - 10;} \
+    while (INSTANCE.tail + size >= INSTANCE.limit) { \
+        int limit = INSTANCE.limit - INSTANCE.base; \
+        int size = INSTANCE.tail - INSTANCE.head; \
+        TYPE *temp = malloc((limit+10)*sizeof*INSTANCE.base); \
+        memcpy(temp,INSTANCE.head,size*sizeof*INSTANCE.base); \
+        free(INSTANCE.base); INSTANCE.base = temp; \
+        INSTANCE.head = INSTANCE.base; \
+        INSTANCE.tail = INSTANCE.base + size; \
+        INSTANCE.limit = INSTANCE.base + limit + 10;} \
+    INSTANCE.tail = INSTANCE.tail + size; \
+    return INSTANCE.tail - size; \
+} \
+\
+\
+inline TYPE *array##NAME() \
+{ \
     return INSTANCE.head; \
 } \
 \
@@ -323,7 +335,7 @@ inline void unque##NAME() \
     unloc##NAME(1); \
 } \
 /*only one writer supported; for multiple writers, round robin required*/ \
-int entry##NAME(TYPE *val, TYPE term, int len) \
+int entry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 { \
     if (len <= 0) return -1; \
     if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
@@ -331,7 +343,7 @@ int entry##NAME(TYPE *val, TYPE term, int len) \
     int retval = 0; \
     for (int i = 0; i < len; i++) { \
         buf[i] = val[i]; \
-        if (val[i] == term) { \
+        if ((*isterm)(val+i)) { \
             INSTANCE.valid++; \
             retval = i+1; \
             break;}} \
@@ -341,7 +353,7 @@ int entry##NAME(TYPE *val, TYPE term, int len) \
 } \
 \
 /*only one reader supported; for multiple readers, round robin required*/ \
-int detry##NAME(TYPE *val, TYPE term, int len) \
+int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 { \
     if (len <= 0) return -1; \
     if (INSTANCE.valid == 0) return -1; \
@@ -351,7 +363,7 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
     for (int i = 0; i < len; i++) { \
         if (i == size##NAME()) exitErrstr("valid but no terminator: %s\n", strerror(errno)); \
         val[i] = buf[i]; \
-        if (val[i] == term) { \
+        if ((*isterm)(val+i)) { \
             INSTANCE.valid--; \
             retval = i+1; \
             break;}} \
@@ -363,7 +375,7 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 
 #define CHECK(command,Command) \
     if (command##State == Command##Idle) exitErrstr(#command" command not enqued\n"); \
-    if (linkCheck > 0) {linkCheck = 0; enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
+    if (linkCheck > 0) {linkCheck--; enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
 
 #define ENQUE(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle\n"); \
@@ -382,24 +394,8 @@ int detry##NAME(TYPE *val, TYPE term, int len) \
 #define DEQUE(command,Command) \
     command##State = Command##Idle; return;
 
-#define CHECKS(command,Command) \
-    if (linkCheck > 0) exitErrstr(#command" command not linkable\n"); \
-    enum Command##State command##State = head##Command(); deque##Command();
-
-#define ENQUES(command,Command) \
-    enque##Command(Command##Enqued); enqueCommand(command);
-
-#define REQUES(command,Command) \
-    enque##Command(command##State); REQUE(command)
-
-#define DEFERS(command,Command) \
-    enque##Command(command##State); DEFER(command)
-
-#define DEQUES() \
-    return;
-
-#define LINK(command,Command) \
-    ENQUE(command,Command) enqueLink(&command); enqueCommand(&link);
+#define LINK(command,Command,Count) \
+    ENQUE(command,Command) enqueLink(&command); enqueInt(Count); enqueCommand(&link);
 
 #define SWITCH(EXP,VAL) switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
@@ -423,9 +419,7 @@ void exitErrstr(const char *fmt, ...)
 
 void exitErrbuf(struct Buffer *buf, const char *str)
 {
-    if (buf->done > buf->ready || buf->done > buf->limit) exitErrstr("%s too done\n",str);
-    if (buf->ready > buf->todo || buf->ready > buf->limit) exitErrstr("%s too ready\n",str);
-    if (buf->limit > buf->wrap) exitErrstr("%s too limit\n",str);
+    if (buf->done > buf->wrap || buf->done > buf->room) exitErrstr("%s too done\n",str);
 }
 
 ACCESS_QUEUE(Option,char *,options)
@@ -442,7 +436,7 @@ ACCESS_QUEUE(Match,int,matchs)
 
 ACCESS_QUEUE(Generic,char,generics)
 
-ACCESS_QUEUE(Wrap,enum WrapState,wraps)
+ACCESS_QUEUE(Render,struct Render,renders)
 
 ACCESS_QUEUE(Defer,int,defers)
 
@@ -490,105 +484,6 @@ void enqueErrstr(const char *fmt, ...)
 void enqueEscape(int val)
 {
     enquePrint(27); enquePrint(val); enquePrint('\n');
-}
-
-/*
- * helpers for parsing config file
- */
-
-int toHumanH(void/*char*/ *format, void/*char*/ *bytes, int size, void/*char*/ *buf);
-
-int fromHumanH(void/*char*/ *format, void/*char*/ *digits, int size, void/*char*/ *buf);
-
-int intlen(int *ints)
-{
-    int count = 0;
-    while (*ints >= 0) {ints++; count++;}
-    return count;
-}
-
-void intcpy(int *dst, int *src)
-{
-    while (*src >= 0) {*(dst++) = *(src++);}
-    *dst = *src;
-}
-
-char *readLine(FILE *file) // caller must call unlocChar
-{
-    int depth = 0;
-    int count = 0;
-    int chr = 0;
-    char nest[100];
-    char *buf = enlocChar(0);
-    while ((buf == enlocChar(0) || depth) && depth < 100 && (chr = fgetc(file)) != EOF) {
-        if (chr == '(') nest[depth++] = ')';
-        else if (chr == '[') nest[depth++] = ']';
-        else if (chr == '{') nest[depth++] = '}';
-        else if (depth && chr == nest[depth-1]) depth--;
-        if (!isspace(chr)) enqueChar(chr);}
-    enqueChar(0);
-    if (depth) {unlocChar(strlen(buf)); return 0;}
-    return buf;
-}
-
-char *copyStrings(char **bufs) // caller must call unlocChar
-{
-    char *buf = enlocChar(0);
-    for (int i = 0; bufs[i]; i++) {
-        for (int j = 0; bufs[i][j]; j++) {
-            *enlocChar(1) = bufs[i][j];}}
-    *enlocChar(1) = 0;
-    return buf;
-}
-
-char *partsToLine(char *part[2]) // caller must call unlocChar
-{
-    return 0;
-}
-
-char *lineToPart(char **line) // caller must call unlocChar
-{
-    return 0;
-}
-
-int *partToIndices(char *part) // caller must call unlocInt
-{
-    return 0;
-}
-
-char *indicesToPart(int *indices) // caller must call unlocChar
-{
-    return 0;
-}
-
-char *partToBytes(char *part) // caller must call unlocChar
-{
-    return 0;
-}
-
-char *bytesToPart(char *bytes, char *format) // caller must call unlocChar
-{
-    return 0;
-}
-
-char *partToFormat(char *part) // caller must call unlocChar
-{
-    return 0;
-}
-
-char *indicesToFormat(int *indices, char *format) // caller must call unlocChar
-{
-    return 0;
-}
-
-int bytesToSize(char *bytes, char *format)
-{
-    return -1;
-}
-
-int indicesToRange(int *indices, char *format, char *bytes, char **base, char **limit)
-{
-    return -1;
 }
 
 /*
@@ -693,56 +588,10 @@ float *crossvec(float *u, float *v)
  * functions put on command queue, and their helpers
  */
 
-void link() // only works on single-instance commands with global state
-{
-    for (int i = 0; i < commands.tail - commands.head; i++) {
-        if (commands.head[i] == headLink()) {linkCheck = 1; break;}}
-    if (linkCheck) {
-        enqueDefer(sequenceNumber + sizeCommand());
-        enqueCommand(&link);
-        enqueLink(headLink());}
-    dequeLink();
-}
-
-void wrap()
-{
-    struct Buffer *buffer = headBuffer(); dequeBuffer(); enqueBuffer(buffer);
-    CHECKS(wrap,Wrap)
-    // TODO
-    unqueBuffer(); DEQUES()
-}
-
-void menu()
-{
-    CHECK(menu,Menu)
-    char *buf = arrayChar();
-    int len = strstr(buf,"\n")-buf;
-    if (len == 1 && buf[0] < 0) {
-        enum Menu line = buf[0]+128;
-        click = Init; mode[item[line].mode] = line;}
-    else {
-        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
-    delocChar(len+1);
-    DEQUE(menu,Menu)
-}
-
 #ifdef BRINGUP
 GLfloat base = 0;
 void bringup()
 {
-    GLfloat bringup[NUM_PLANES*PLANE_DIMENSIONS] = {
-        0.0,1.0,2.0,
-        3.0,4.0,5.0,
-        6.0,7.0,8.0,
-        9.0,0.1,1.1,
-    };
-    GLfloat bringup2[NUM_PLANES*PLANE_DIMENSIONS] = {
-        0.2,1.2,2.2,
-        3.2,4.2,5.2,
-        6.2,7.2,8.2,
-        9.2,0.3,1.3,
-    };
-
     // f = 1
     // h^2 = f^2 - 0.5^2
     // a + b = h
@@ -774,6 +623,30 @@ void bringup()
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
     enqueMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
+    base = q;
+    zPos = base;
+
+    GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
+        0.0,1.0,2.0,
+        3.0,4.0,5.0,
+        6.0,7.0,8.0,
+        9.0,0.1,1.1,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), plane, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    planeBuf.wrap = planeBuf.room = NUM_PLANES;
+    planeBuf.done = 0;
+
+    GLuint versor[NUM_PLANES] = {
+        0,0,0,0,
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
+    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), versor, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    versorBuf.wrap = versorBuf.room = NUM_PLANES;
+    versorBuf.done = 0;
+
     GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
         -g,-b, q,
          g,-b, q,
@@ -783,46 +656,22 @@ void bringup()
     for (int i = 0; i < NUM_POINTS; i++) {
         for (int j = 0; j < POINT_DIMENSIONS; j++) enqueMsgstr(" %f", tetrahedron[i*POINT_DIMENSIONS+j]);
         enqueMsgstr("\n");}
-    base = q;
-    zPos = base;
-
-    GLfloat *plane = 0;
-    GLfloat *point = 0;
-    GLfloat *extra = 0;
-    SWITCH(shader,Diplane) {
-        planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
-        versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
-        pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
-        cornerBuf.wrap = cornerBuf.limit = cornerBuf.todo = cornerBuf.ready = cornerBuf.done = NUM_POINTS;
-        plane = bringup; point = tetrahedron; extra = bringup2;
-        planeBuf.done = 0; versorBuf.done = 0; cornerBuf.done = 0;}
-    CASE(Dipoint) {
-        planeBuf.wrap = planeBuf.limit = planeBuf.todo = planeBuf.ready = planeBuf.done = NUM_PLANES;
-        versorBuf.wrap = versorBuf.limit = versorBuf.todo = versorBuf.ready = versorBuf.done = NUM_PLANES;
-        pointBuf.wrap = pointBuf.limit = pointBuf.todo = pointBuf.ready = pointBuf.done = NUM_POINTS;
-        cornerBuf.wrap = cornerBuf.limit = cornerBuf.todo = cornerBuf.ready = cornerBuf.done = NUM_POINTS;
-        plane = bringup; point = tetrahedron; extra = bringup2;
-        planeBuf.done = 0; versorBuf.done = 0; cornerBuf.done = 0;}
-    DEFAULT(exitErrstr("invalid shader\n");)
-
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), plane, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    GLuint versor[NUM_PLANES] = {
-        0,0,0,0,
-    };
-    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), versor, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), point, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    pointBuf.wrap = pointBuf.room = pointBuf.done = NUM_POINTS;
 
+    GLfloat corner[NUM_PLANES*PLANE_DIMENSIONS] = {
+        0.2,1.2,2.2,
+        3.2,4.2,5.2,
+        6.2,7.2,8.2,
+        9.2,0.3,1.3,
+    };
     glBindBuffer(GL_ARRAY_BUFFER, cornerBuf.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), extra, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), corner, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    cornerBuf.wrap = cornerBuf.room = NUM_POINTS;
+    cornerBuf.done = 0;
 
     GLuint face[NUM_FACES*FACE_PLANES] = {
         0,1,2,3,3,0,
@@ -832,7 +681,7 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), face, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    faceSub.wrap = faceSub.limit = faceSub.todo = faceSub.ready = faceSub.done = NUM_FACES;
+    faceSub.wrap = faceSub.room = faceSub.done = NUM_FACES;
 
     GLuint polygon[NUM_POLYGONS*POLYGON_POINTS] = {
         0,1,2,
@@ -842,7 +691,7 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, polygonSub.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_POLYGONS*POLYGON_POINTS*sizeof(GLuint), polygon, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    polygonSub.wrap = polygonSub.limit = polygonSub.todo = polygonSub.ready = polygonSub.done = NUM_POLYGONS;
+    polygonSub.wrap = polygonSub.room = polygonSub.done = NUM_POLYGONS;
 
     GLuint vertex[NUM_POINTS*POINT_INCIDENCES] = {
         0,1,2,
@@ -853,18 +702,18 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, vertexSub.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), vertex, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    vertexSub.wrap = vertexSub.limit = vertexSub.todo = vertexSub.ready = vertexSub.done = NUM_POINTS;
+    vertexSub.wrap = vertexSub.room = vertexSub.done = NUM_POINTS;
 
-    GLuint corner[NUM_POINTS*POINT_INCIDENCES] = {
+    GLuint region[NUM_POINTS*POINT_INCIDENCES] = {
         0,1,2,
         1,2,3,
         2,3,0,
         3,0,1,
     };
     glBindBuffer(GL_ARRAY_BUFFER, cornerSub.base);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), corner, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), region, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    cornerSub.wrap = cornerSub.limit = cornerSub.todo = cornerSub.ready = cornerSub.done = NUM_POINTS;
+    cornerSub.wrap = cornerSub.room = cornerSub.done = NUM_POINTS;
 
     GLuint construct[NUM_PLANES*PLANE_INCIDENCES] = {
         0,1,2,
@@ -875,7 +724,7 @@ void bringup()
     glBindBuffer(GL_ARRAY_BUFFER, constructSub.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), construct, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    constructSub.wrap = constructSub.limit = constructSub.todo = constructSub.ready = constructSub.done = NUM_PLANES;
+    constructSub.wrap = constructSub.room = constructSub.done = NUM_PLANES;
 }
 #endif
 
@@ -908,199 +757,6 @@ void initFile()
 #endif
 }
 
-size_t renderSize(int size)
-{
-    size_t retval = 0;
-    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
-    CASE(GL_FLOAT) retval = sizeof(GLfloat);
-    DEFAULT(exitErrstr("unknown render type\n");)
-    return retval;
-}
-
-enum Action renderEnqued(
-    struct Buffer *vertex0, struct Buffer *vertex1, struct Buffer *element,
-    struct Buffer *feedback0, struct Buffer *feedback1,
-    enum Shader shader, const char *name)
-{
-    // NOTE: assume one-to-one between element feedback0 feedback1
-    int base = (feedback0 ? feedback0->done : 0); int limit = element->done;
-    exitErrbuf(vertex0,name);
-    if (vertex1) exitErrbuf(vertex1,name);
-    exitErrbuf(element,name);
-    if (base > limit) exitErrstr("%s too done\n",name);
-    if (!feedback0 && feedback1) exitErrstr("wrong parameter order\n");
-    if (feedback0) {
-        exitErrbuf(feedback0,name);
-        if (base == feedback0->todo) return Advance;
-        if (feedback0->todo > feedback0->limit && feedback0->wrap == feedback0->limit) {
-            feedback0->wrap = feedback0->todo; enqueBuffer(feedback0); ENQUES(wrap,Wrap) return Defer;}
-        if (feedback0->todo > feedback0->limit && feedback0->wrap > feedback0->limit) return Defer;
-        if (base == limit) return Defer;
-        feedback0->ready = limit;}
-    if (feedback1) exitErrbuf(feedback1,name);
-    glUseProgram(program[shader]);
-    if (feedback0)
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, feedback0->base,
-            base*feedback0->dimension*renderSize(feedback0->type),
-            (limit-base)*feedback0->dimension*renderSize(feedback0->type));
-    if (feedback1)
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 1, feedback1->base,
-            base*feedback1->dimension*renderSize(feedback1->type),
-            (limit-base)*feedback1->dimension*renderSize(feedback1->type));
-    if (feedback0) {
-        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback0->query);
-        glEnable(GL_RASTERIZER_DISCARD);
-        glBeginTransformFeedback(feedback0->primitive);}
-    if (vertex1) glEnableVertexAttribArray(vertex1->loc);
-    glEnableVertexAttribArray(vertex0->loc);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element->base);
-    if (!feedback0) {
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);}
-    glDrawElements(GL_TRIANGLES, (limit-base)*element->dimension, element->type,
-        (void *)(base*element->dimension*renderSize(element->type)));
-    if (!feedback0) {
-        glfwSwapBuffers(windowHandle);}
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableVertexAttribArray(vertex0->loc);
-    if (vertex1) glDisableVertexAttribArray(vertex1->loc);
-    if (feedback0) {
-        glEndTransformFeedback();
-        glDisable(GL_RASTERIZER_DISCARD);
-        glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);}
-    if (feedback1)
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 1, 0, 0, 0);
-    if (feedback0)
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
-    glUseProgram(0);
-    return Advance;
-}
-
-enum Action renderWait(struct Buffer *feedback, const char *name)
-{
-    exitErrbuf(feedback,name);
-    if (feedback->done == feedback->todo) return Advance;
-    GLuint count = 0;
-    glGetQueryObjectuiv(feedback->query, GL_QUERY_RESULT_AVAILABLE, &count);
-    if (count == GL_FALSE) count = 0;
-    else glGetQueryObjectuiv(feedback->query, GL_QUERY_RESULT, &count);
-    if (feedback->done+count < feedback->ready) return Defer;
-    if (feedback->done+count > feedback->ready) exitErrstr("%s too ready\n",name);
-    feedback->done = feedback->ready;
-    if (feedback->done < feedback->todo) return Restart;
-    return Advance;
-}
-
-enum Action coplaneEnqued(struct Buffer *sub, struct Buffer *buf)
-{
-    return renderEnqued(&planeBuf,&versorBuf,sub,buf,0,Coplane,"coplane");
-}
-
-enum Action coplaneWait(struct Buffer *buf)
-{
-    return renderWait(buf,"coplane");
-}
-
-enum Action copointEnqued()
-{
-    return renderEnqued(&pointBuf,0,&constructSub,&planeBuf,&versorBuf,Copoint,"copoint");
-}
-
-enum Action copointWait()
-{
-    return renderWait(&planeBuf,"copoint");
-}
-
-enum Action diplaneEnqued()
-{
-    return renderEnqued(&planeBuf,&versorBuf,&faceSub,0,0,Diplane,"diplane");
-}
-
-enum Action dipointEnqued()
-{
-    return renderEnqued(&pointBuf,0,&polygonSub,0,0,Dipoint,"dipoint");
-}
-
-void coplane()
-{
-    struct Buffer *sub = headBuffer(); dequeBuffer(); enqueBuffer(sub);
-    struct Buffer *buf = headBuffer(); dequeBuffer(); enqueBuffer(buf);
-    CHECK(coplane,Coplane)
-    SWITCH(coplaneState,CoplaneEnqued) {
-        SWITCH(coplaneEnqued(sub,buf),Defer) {DEFER(coplane)}
-        CASE(Advance) coplaneState = CoplaneWait;
-        DEFAULT(exitErrstr("invalid coplane action\n");)}
-    FALL(CoplaneWait) {
-        SWITCH(coplaneWait(buf),Restart) {coplaneState = CoplaneEnqued; REQUE(coplane)}
-        CASE(Defer) {DEFER(coplane)}
-        CASE(Advance) coplaneState = CoplaneIdle;
-        DEFAULT(exitErrstr("invalid coplane action\n");)}
-    DEFAULT(exitErrstr("invalid coplane state\n");)
-#ifdef BRINGUP
-    GLfloat result[NUM_POINTS*POINT_DIMENSIONS];
-    glBindBuffer(GL_ARRAY_BUFFER, buf->base);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), result);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_POINTS; i++) {
-        for (int j = 0; j < POINT_DIMENSIONS; j++) enqueMsgstr(" %f", result[i*POINT_DIMENSIONS+j]);
-        enqueMsgstr("\n");}
-    enqueMsgstr("coplane done\n");
-#endif
-    unqueBuffer(); unqueBuffer(); DEQUE(coplane,Coplane)
-}
-
-void copoint()
-{
-    // enloc and deloc arguments incaseof REQUE or DEQUE
-    CHECK(copoint,Copoint)
-    SWITCH(copointState,CopointEnqued) {
-        SWITCH(copointEnqued(),Defer) {DEFER(copoint)}
-        CASE(Advance) copointState = CopointWait;
-        DEFAULT(exitErrstr("invalid copoint action\n");)}
-    FALL(CopointWait) {
-        SWITCH(copointWait(),Restart) {copointState = CopointEnqued; REQUE(copoint)}
-        CASE(Defer) {DEFER(copoint)}
-        CASE(Advance) copointState = CopointIdle;
-        DEFAULT(exitErrstr("invalid copoint action\n");)}
-    DEFAULT(exitErrstr("invalid copoint state\n");)
-#ifdef BRINGUP
-    GLfloat result[NUM_PLANES*PLANE_DIMENSIONS];
-    GLuint uisult[NUM_PLANES];
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.base);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), result);
-    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.base);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, NUM_PLANES*sizeof(GLuint), uisult);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < NUM_PLANES; i++) {
-        enqueMsgstr("%d",uisult[i]);
-        for (int j = 0; j < PLANE_DIMENSIONS; j++) enqueMsgstr(" %f", result[i*PLANE_DIMENSIONS+j]);
-        enqueMsgstr("\n");}
-    enqueMsgstr("copoint done\n");
-#endif
-    // unloc the arguments
-    DEQUE(copoint,Copoint)
-}
-
-void diplane()
-{
-    CHECK(diplane,Diplane)
-    SWITCH(diplaneState,DiplaneEnqued) {
-        SWITCH(diplaneEnqued(),Advance) diplaneState = DiplaneIdle;
-        DEFAULT(exitErrstr("invalid diplane action\n");)}
-    DEFAULT(exitErrstr("invalid diplane state\n");)
-    DEQUE(diplane,Diplane)
-}
-
-void dipoint()
-{
-    CHECK(dipoint,Dipoint)
-    SWITCH(dipointState,DipointEnqued) {
-        SWITCH(dipointEnqued(),Advance) dipointState = DipointIdle;
-        DEFAULT(exitErrstr("invalid dipoint action\n");)}
-    DEFAULT(exitErrstr("invalid dipoint state\n");)
-    DEQUE(dipoint,Dipoint)
-}
-
 void configure()
 {
     CHECK(configure,Configure)
@@ -1121,6 +777,252 @@ void configure()
         configureState = ConfigureWait; REQUE(configure)}
     enqueMsgstr("configure done\n");
     DEQUE(configure,Configure)
+}
+
+void wrap()
+{
+    struct Buffer *buffer = headBuffer(); dequeBuffer(); enqueBuffer(buffer);
+    enum WrapState wrapState = headInt(); dequeInt(); enqueInt(wrapState);
+    CHECK(wrap,Wrap)
+    // TODO
+    unqueBuffer(); unqueInt(); DEQUE(wrap,Wrap)
+}
+
+enum Action enqueWrap(struct Buffer *buffer)
+{
+    if (buffer->wrap > buffer->room) {
+        if (buffer->copy == 0) {
+            enqueBuffer(buffer); enqueInt(WrapEnqued); enqueCommand(wrap);}
+        return Defer;}
+    buffer->copy = 0;
+    return Advance;
+}
+
+size_t renderType(int size)
+{
+    size_t retval = 0;
+    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
+    CASE(GL_FLOAT) retval = sizeof(GLfloat);
+    DEFAULT(exitErrstr("unknown render type\n");)
+    return retval;
+}
+
+int renderPrimitive(int size)
+{
+    int retval = 0;
+    SWITCH(size,GL_POINTS) retval = 1;
+    CASE(GL_TRIANGLES) retval = 3;
+    CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
+    DEFAULT(exitErrstr("unknown render primitive\n");)
+    return retval;
+}
+
+enum Action renderWrap(struct Render *arg)
+{
+    if (arg->feedback0 && arg->feedback1 && arg->feedback0->primitive != arg->feedback1->primitive) exitErrstr("%s too primitive\n",arg->name);
+    if (!arg->vertex0) exitErrstr("%s too vertex\n",arg->name);
+    if (!arg->element) exitErrstr("%s too element\n",arg->name);
+    if (!arg->feedback0 && arg->feedback1) exitErrstr("%s too feedback\n",arg->name);
+    if (arg->blocker) exitErrbuf(arg->blocker,arg->name);
+    exitErrbuf(arg->vertex0,arg->name);
+    if (arg->vertex1) exitErrbuf(arg->vertex1,arg->name);
+    exitErrbuf(arg->element,arg->name);
+    if (arg->feedback0) exitErrbuf(arg->feedback0,arg->name);
+    if (arg->feedback1) exitErrbuf(arg->feedback1,arg->name);
+    if (arg->feedback0 && arg->feedback0->done > arg->element->done) exitErrstr("%s too done\n",arg->name);
+    if (arg->feedback0 && arg->feedback0->room < arg->element->done) {
+        arg->feedback0->wrap = arg->element->done;
+        SWITCH(enqueWrap(arg->feedback0),Defer) return Defer;
+        CASE(Advance) arg->feedback0->room = arg->feedback0->wrap;
+        DEFAULT(exitErrstr("invalid wrap action\n");)}
+    if (arg->feedback1 && arg->feedback1->room < arg->element->done) {
+        arg->feedback1->wrap = arg->element->done;
+        SWITCH(enqueWrap(arg->feedback1),Defer) return Defer;
+        CASE(Advance) arg->feedback1->room = arg->feedback1->wrap;
+        DEFAULT(exitErrstr("invalid wrap action\n");)}
+    return Advance;
+}
+
+
+enum Action renderDraw(struct Render *arg)
+{
+    int done = 0; // in units of number of primitives
+    int todo = 0; // in units of number of primitives
+    if (arg->feedback0) done = arg->feedback0->done;
+    todo = arg->element->done - done;
+    if (todo == 0) return Advance;
+    if (arg->blocker && arg->vertex0->done < arg->blocker->done) return Defer;
+    if (arg->blocker && arg->vertex1 && arg->vertex1->done < arg->blocker->done) return Defer;
+    glUseProgram(program[arg->shader]);
+    if (arg->feedback0) glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, arg->feedback0->base,
+        done*renderPrimitive(arg->feedback0->primitive)*arg->feedback0->dimension*renderType(arg->feedback0->type),
+        todo*renderPrimitive(arg->feedback0->primitive)*arg->feedback0->dimension*renderType(arg->feedback0->type));
+    if (arg->feedback1) glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 1, arg->feedback1->base,
+        done*renderPrimitive(arg->feedback1->primitive)*arg->feedback1->dimension*renderType(arg->feedback1->type),
+        todo*renderPrimitive(arg->feedback1->primitive)*arg->feedback1->dimension*renderType(arg->feedback1->type));
+    if (arg->feedback0) {
+        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, arg->feedback0->query);
+        glEnable(GL_RASTERIZER_DISCARD);
+        glBeginTransformFeedback(arg->feedback0->primitive);}
+    glEnableVertexAttribArray(arg->vertex0->loc);
+    if (arg->vertex1) glEnableVertexAttribArray(arg->vertex1->loc);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arg->element->base);
+    if (!arg->feedback0) glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glDrawElements(arg->element->primitive, todo*renderPrimitive(arg->element->primitive)*arg->element->dimension, arg->element->type,
+        (void *)(done*renderPrimitive(arg->element->primitive)*arg->element->dimension*renderType(arg->element->type)));
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    if (arg->vertex1) glDisableVertexAttribArray(arg->vertex1->loc);
+    glDisableVertexAttribArray(arg->vertex0->loc);
+    if (arg->feedback0) {
+        glEndTransformFeedback();
+        glDisable(GL_RASTERIZER_DISCARD);
+        glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);}
+    if (arg->feedback1) glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 1, 0, 0, 0);
+    if (arg->feedback0) glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
+    glUseProgram(0);
+    if (!arg->feedback0) glfwSwapBuffers(windowHandle);
+    return Advance;
+}
+
+enum Action renderWait(struct Render *arg)
+{
+    if (!arg->feedback0) return Advance;
+    if (arg->feedback0->done == arg->element->done) return Advance;
+    GLuint count = 0;
+    glGetQueryObjectuiv(arg->feedback0->query, GL_QUERY_RESULT_AVAILABLE, &count);
+    if (count == GL_FALSE) count = 0;
+    else glGetQueryObjectuiv(arg->feedback0->query, GL_QUERY_RESULT, &count);
+    if (arg->feedback0->done+count < arg->element->done) return Defer;
+    if (arg->feedback0->done+count > arg->element->done) exitErrstr("%s too count\n",arg->name);
+    arg->feedback0->done = arg->element->done;
+    if (arg->feedback1) arg->feedback1->done = arg->element->done;
+    return Advance;
+}
+
+#ifdef BRINGUP
+void renderMsgstr(struct Buffer *feedback, int size)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, feedback->base);
+    SWITCH(feedback->type,GL_FLOAT) {
+        GLfloat result[size*feedback->dimension];
+        glGetBufferSubData(GL_ARRAY_BUFFER, 0, size*feedback->dimension*renderType(feedback->type), result);
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < feedback->dimension; j++) enqueMsgstr(" %f", result[i*feedback->dimension+j]);
+            enqueMsgstr("\n");}}
+    CASE(GL_UNSIGNED_INT) {
+        GLuint result[size*feedback->dimension];
+        glGetBufferSubData(GL_ARRAY_BUFFER, 0, size*feedback->dimension*renderType(feedback->type), result);
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < feedback->dimension; j++) enqueMsgstr(" %d", result[i*feedback->dimension+j]);
+            enqueMsgstr("\n");}}
+    DEFAULT(exitErrstr("unknown buffer type\n");)
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+#endif
+
+void render()
+{
+    struct Render *arg = enlocRender(1); *arg = headRender(); dequeRender();
+    enum RenderState renderState = arg->state; CHECK(render,Render)
+    SWITCH(renderState,RenderEnqued) {
+        SWITCH(renderWrap(arg),Defer) {DEFER(render)}
+        CASE(Advance) arg->state = renderState = RenderDraw;
+        DEFAULT(exitErrstr("invalid render action\n");)}
+    FALL(RenderDraw) {
+        SWITCH(renderDraw(arg),Defer) {DEFER(render)}
+        CASE(Advance) arg->state = renderState = RenderWait;
+        DEFAULT(exitErrstr("invalid render action\n");)}
+    FALL(RenderWait) {
+        SWITCH(renderWait(arg),Restart) {arg->state = renderState = RenderEnqued; REQUE(render)}
+        CASE(Defer) {DEFER(render)}
+        CASE(Advance) arg->state = renderState = RenderIdle;
+        DEFAULT(exitErrstr("invalid render action\n");)}
+    DEFAULT(exitErrstr("invalid render state\n");)
+#ifdef BRINGUP
+    if (arg->feedback0) renderMsgstr(arg->feedback0,arg->feedback0->done);
+    if (arg->feedback1) renderMsgstr(arg->feedback1,arg->feedback1->done);
+    enqueMsgstr("%s done\n",arg->name);
+#endif
+    shaderCount[arg->shader]--; unqueRender(); DEQUE(render,Render)
+}
+
+void enqueDiplane()
+{
+    struct Render *arg = enlocRender(1);
+    arg->blocker = 0;
+    arg->vertex0 = &planeBuf;
+    arg->vertex1 = &versorBuf;
+    arg->element = &faceSub;
+    arg->feedback0 = 0;
+    arg->feedback1 = 0;
+    arg->shader = Diplane;
+    arg->state = RenderEnqued;
+    arg->name = "diplane";
+    enqueCommand(render); shaderCount[Diplane]++;
+}
+
+void enqueDipoint()
+{
+    struct Render *arg = enlocRender(1);
+    arg->blocker = 0;
+    arg->vertex0 = &pointBuf;
+    arg->vertex1 = 0;
+    arg->element = &polygonSub;
+    arg->feedback0 = 0;
+    arg->feedback1 = 0;
+    arg->shader = Dipoint;
+    arg->state = RenderEnqued;
+    arg->name = "dipoint";
+    enqueCommand(render); shaderCount[Dipoint]++;
+}
+
+void enqueCoplane()
+{
+    struct Render *arg = enlocRender(1);
+    arg->blocker = &constructSub;
+    arg->vertex0 = &planeBuf;
+    arg->vertex1 = &versorBuf;
+#ifdef BRINGUP
+    arg->element = &cornerSub;
+    arg->feedback0 = &cornerBuf;
+#else
+    arg->element = &vertexSub;
+    arg->feedback0 = &pointBuf;
+#endif
+    arg->feedback1 = 0;
+    arg->shader = Coplane;
+    arg->name = "coplane";
+    arg->state = RenderEnqued;
+    enqueCommand(render); shaderCount[Coplane]++;
+}
+
+void enqueCopoint()
+{
+    struct Render *arg = enlocRender(1);
+    arg->blocker = &vertexSub;
+    arg->vertex0 = &pointBuf;
+    arg->vertex1 = 0;
+    arg->element = &constructSub;
+    arg->feedback0 = &planeBuf;
+    arg->feedback1 = &versorBuf;
+    arg->shader = Copoint;
+    arg->name = "copoint";
+    arg->state = RenderEnqued;
+    enqueCommand(render); shaderCount[Copoint]++;
+}
+
+void link() // only works on single-instance commands with global state
+{
+    for (int i = 0; i < commands.tail - commands.head; i++) {
+        if (commands.head[i] == headLink()) {
+            linkCheck += headInt(); break;}}
+    if (linkCheck) {
+        enqueDefer(sequenceNumber + sizeCommand());
+        enqueCommand(&link);
+        enqueLink(headLink());
+        enqueInt(headInt());}
+    dequeLink();
+    dequeInt();
 }
 
 void process()
@@ -1145,23 +1047,25 @@ void process()
         CASE(Dipoint) if (dipointState != DipointIdle) {REQUE(process)}
         DEFAULT(exitErrstr("invalid display mode\n");)
 #ifdef BRINGUP
-        if (coplaneState != CoplaneIdle) {REQUE(process)}
-        if (copointState != CopointIdle) {REQUE(process)}
-        LINK(configure,Configure)
-        LINK(copoint,Copoint)
-        enqueBuffer(&cornerSub); enqueBuffer(&cornerBuf); LINK(coplane,Coplane)
-        SWITCH(shader,Diplane) {ENQUE(diplane,Diplane)}
-        CASE(Dipoint) {ENQUE(dipoint,Dipoint)}
+        SWITCH(shader,Diplane) if (diplaneState != DiplaneIdle) {REQUE(process)}
+        CASE(Dipoint) if (dipointState != DipointIdle) {REQUE(process)}
+        DEFAULT(exitErrstr("invalid display mode\n");)
+        LINK(configure,Configure,3)
+        enqueCopoint(); // wont start until configure provides points
+        enqueCoplane(); // wont start until copoint provides planes
+        SWITCH(shader,Diplane) {enqueDiplane();}
+        CASE(Dipoint) {enqueDipoint();}
         DEFAULT(exitErrstr("invalid display mode\n");)
 #else
         SWITCH(shader,Diplane) {
-            LINK(configure,Configure)
-            ENQUE(diplane,Diplane)}
+            if (diplaneState != DiplaneIdle) {REQUE(process)}
+            LINK(configure,Configure,1)
+            enqueDiplane();}
         CASE(Dipoint) {
-            if (coplaneState != CoplaneIdle) {REQUE(process)}
-            LINK(configure,Configure)
-            enqueBuffer(&vertexSub); enqueBuffer(&pointBuf); LINK(coplane,Coplane)
-            ENQUE(dipoint,Dipoint)}
+            if (dipointState != DipointIdle) {REQUE(process)}
+            LINK(configure,Configure,2)
+            enqueCoplane(); // wont start until configure provides planes
+            enqueDipoint();}
         DEFAULT(exitErrstr("invalid display mode\n");)
 #endif
         dequeOption(); DEQUE(process,Process)}
@@ -1173,338 +1077,18 @@ void process()
     dequeOption(); REQUE(process)
 }
 
-/*
- * helpers for display callbacks
- */
-
-void enqueDisplay()
+void menu()
 {
-    SWITCH(shader,Dipoint) {MAYBE(dipoint,Dipoint)}
-    CASE(Diplane) {MAYBE(diplane,Diplane)}
-    DEFAULT(exitErrstr("invalid display mode\n");)    
-}
-
-void leftAdditive()
-{
-    enqueMsgstr("leftAdditive %f %f\n",xPos,yPos);
-    enqueDisplay();
-}
-
-void leftSubtractive()
-{
-    enqueMsgstr("leftSubtractive %f %f\n",xPos,yPos);
-    enqueDisplay();
-}
-
-void leftRefine()
-{
-    enqueMsgstr("leftRefine %f %f\n",xPos,yPos);
-}
-
-void leftTransform()
-{
-    xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    enqueMsgstr("leftTransform %f %f\n",xPoint,yPoint);
-    for (int i = 0; i < 16; i++) affineMat[i] = affineMatz[i];
-    for (int i = 0; i < 9; i++) linearMat[i] = linearMatz[i];
-    for (int i = 0; i < 9; i++) projectMat[i] = projectMatz[i];
-    click = Left;
-}
-
-void leftManipulate()
-{
-    xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    enqueMsgstr("leftManipulate %f %f\n",xPoint,yPoint);
-    click = Left;
-}
-
-void rightRight()
-{
-    xPos = xWarp; yPos = yWarp; zPos = zWarp;
-    enqueMsgstr("rightRight %f %f\n",xPos,yPos);
-    double xwarp = (xWarp+1.0)*xSiz/2.0;
-    double ywarp = -(yWarp-1.0)*ySiz/2.0;
-#ifdef __linux__
-    double xpos, ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
-#endif
-#ifdef __APPLE__
-    int xloc, yloc;
-    glfwGetWindowPos(windowHandle,&xloc,&yloc);
-    struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
-    CGWarpMouseCursorPosition(point);
-#endif
-    click = Left;
-}
-
-void rightLeft()
-{
-    xWarp = xPos; yWarp = yPos; zWarp = zPos;
-    enqueMsgstr("rightLeft %f %f\n",xPos,yPos);
-    click = Right;
-}
-
-void transformRotate()
-{
-    float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
-    float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
-    float s = v[0]*v[0]+v[1]*v[1];
-    if (s > 1.0) {s = sqrt(s); v[0] /= s; v[1] /= s; v[2] = 0.0;}
-    else v[2] = -sqrt(1.0-s);
-    s = dotvec(u,v,3); crossvec(u,v);
-    copymat(v,crossmat(u),9,9,9);
-    scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
-    float w[16]; plusvec(u,plusvec(v,identmat(w,3),9),9);
-    jumpmat(copymat(linearMatz,linearMat,9,9,9),u,3);
-    copymat(identmat(w,4),u,3,4,9);
-    identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
-    identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
-    copymat(affineMatz,affineMat,16,16,16);
-    jumpmat(affineMatz,u,4); jumpmat(affineMatz,w,4); jumpmat(affineMatz,v,4);
-    glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
-    glUniformMatrix3fv(uniform[shader][Linear],1,GL_FALSE,linearMatz);
-    glUseProgram(0);
-    enqueDisplay();
-}
-
-void transformTranslate()
-{
-    float v[16]; identmat(v,4);
-    v[12] = xPos-xPoint; v[13] = yPos-yPoint;
-    copymat(affineMatz,affineMat,16,16,16);
-    jumpmat(affineMatz,v,4);
-    glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
-    glUseProgram(0);
-    enqueDisplay();
-}
-
-void transformLook()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void transformLever()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void transformClock()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void transformCylinder()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void transformScale()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void transformDrive()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateRotate()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateTranslate()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateLook()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateLever()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateClock()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateCylinder()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateScale()
-{
-    // TODO
-    enqueDisplay();
-}
-
-void manipulateDrive()
-{
-    // TODO
-    enqueDisplay();
-}
-
-/*
- * callbacks triggered by user actions and inputs
- */
-
-void displayClose(GLFWwindow* window)
-{
-    enqueEvent(Done); enqueCommand(0);
-}
-
-void displayFocus(GLFWwindow *window, int focused)
-{
-    if (focused) enqueMsgstr("displayFocus entry\n");
-    else enqueMsgstr("displayFocus leave\n");
-}
-
-void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (action != GLFW_PRESS) return;
-    SWITCH(key,GLFW_KEY_ESCAPE) {MAYBE(process,Process)}
-    CASE(GLFW_KEY_ENTER) enqueEscape(1);
-    CASE(GLFW_KEY_BACKSPACE) enqueEscape(2);
-    CASE(GLFW_KEY_SPACE) enqueEscape(' ');
-    DEFAULT({if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) enqueEscape(key-GLFW_KEY_A+'a');})
-}
-
-void displayClick(GLFWwindow *window, int button, int action, int mods)
-{
-    if (action != GLFW_PRESS) return;
-    if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {button = GLFW_MOUSE_BUTTON_RIGHT;}
-    SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
-        SWITCH(mode[Sculpt],Additive) {
-            SWITCH(click,Init) leftAdditive();
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Subtractive) {
-            SWITCH(click,Init) leftSubtractive();
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Refine) {
-            SWITCH(click,Init) leftRefine();
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Transform) {
-            SWITCH(click,Init) FALL(Right) leftTransform();
-            CASE(Left) click = Init;
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Manipulate) {
-            SWITCH(click,Init) FALL(Right) leftManipulate();
-            CASE(Left) click = Init;
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        DEFAULT(exitErrstr("invalid sculpt mode");)}
-    CASE(GLFW_MOUSE_BUTTON_RIGHT) {
-        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
-        CASE(Transform) FALL(Manipulate) {
-            SWITCH(click,Init) {/*ignore*/}
-            CASE(Right) rightRight();
-            CASE(Left) rightLeft();
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        DEFAULT(exitErrstr("invalid sculpt mode\n");)}
-    DEFAULT(enqueMsgstr("displayClick %d\n",button);)
-}
-
-void displayCursor(GLFWwindow *window, double xpos, double ypos)
-{
-    if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
-    xPos = 2.0*xpos/xSiz-1.0; yPos = -2.0*ypos/ySiz+1.0;
-    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
-    CASE(Transform) {
-        SWITCH(click,Init) FALL(Right) {/*ignore*/}
-        CASE(Left) {
-            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
-            SWITCH(mode[Mouse],Rotate) transformRotate();
-            CASE(Translate) transformTranslate();
-            CASE(Look) transformLook();
-            DEFAULT(exitErrstr("invalid mouse mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}
-    CASE(Manipulate) {
-        SWITCH(click,Init) FALL(Right) {/*ignore*/}
-        CASE(Left) {
-            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
-            SWITCH(mode[Mouse],Rotate) manipulateRotate();
-            CASE(Translate) manipulateTranslate();
-            CASE(Look) manipulateLook();
-            DEFAULT(exitErrstr("invalid mouse mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}
-    DEFAULT(exitErrstr("invalid sculpt mode\n");)
-}
-
-void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
-{
-    zPos = zPos + yoffset;
-#ifdef BRINGUP
-    zPos = base;
-#endif
-    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
-    CASE(Transform) {
-        SWITCH(click,Init) FALL(Right) {/*ignore*/}
-        CASE(Left) {
-            enqueMsgstr("displayScroll %f\n", zPos);
-            SWITCH(mode[Roller],Lever) transformLever();
-            CASE(Clock) transformClock();
-            CASE(Cylinder) transformCylinder();
-            CASE(Scale) transformScale();
-            CASE(Drive) transformDrive();
-            DEFAULT(exitErrstr("invalid roller mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}            
-    CASE(Manipulate) {
-        SWITCH(click,Init) FALL(Right) {/*ignore*/}
-        CASE(Left) {
-            enqueMsgstr("displayScroll %f\n", zPos);
-            SWITCH(mode[Roller],Lever) manipulateLever();
-            CASE(Clock) manipulateClock();
-            CASE(Cylinder) manipulateCylinder();
-            CASE(Scale) manipulateScale();
-            CASE(Drive) manipulateDrive();
-            DEFAULT(exitErrstr("invalid roller mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}
-    DEFAULT(exitErrstr("invalid sculpt mode");)
-}
-
-void displayLocation(GLFWwindow *window, int xloc, int yloc)
-{
-    xLoc = xloc; yLoc = yloc;
-    enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
-    enqueDisplay();
-}
-
-void displaySize(GLFWwindow *window, int width, int height)
-{
-    xSiz = width; ySiz = height;
-#ifdef __APPLE__
-    glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
-#ifdef __linux__
-    glViewport(0, 0, xSiz, ySiz);
-#endif
-    enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
-    enqueDisplay();
-}
-
-void displayRefresh(GLFWwindow *window)
-{
-    enqueDisplay();
+    CHECK(menu,Menu)
+    char *buf = arrayChar();
+    int len = strstr(buf,"\n")-buf;
+    if (len == 1 && buf[0] < 0) {
+        enum Menu line = buf[0]+128;
+        click = Init; mode[item[line].mode] = line;}
+    else {
+        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
+    delocChar(len+1);
+    DEQUE(menu,Menu)
 }
 
 /*
@@ -1669,6 +1253,11 @@ void writematch(char chr)
     writemenu();
 }
 
+int isEndLine(char *chr)
+{
+    return (*chr == '\n');
+}
+
 void *console(void *arg)
 {
     enqueLine(0); enqueMatch(0);
@@ -1695,12 +1284,12 @@ void *console(void *arg)
     int last[4];
     int esc = 0;
     while (1) {
-        int lenIn = entryInput(arrayScan(),'\n',sizeScan());
+        int lenIn = entryInput(arrayScan(),isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
         else if (lenIn > 0) delocScan(lenIn);
 
         int totOut = 0; int lenOut;
-        while ((lenOut = detryOutput(enlocEcho(10),'\n',10)) == 0) totOut += 10;
+        while ((lenOut = detryOutput(enlocEcho(10),isEndLine,10)) == 0) totOut += 10;
         if ((lenOut < 0 && totOut > 0) || sizeEcho() != totOut+10) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
         else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 0) {
@@ -1767,7 +1356,7 @@ void *console(void *arg)
         else if (esc == 2 && key == 67) {esc = 0; writestr("<right>\n");}
         else if (esc == 2 && key == 68) {esc = 0; writestr("<left>\n");}
         else if (esc == 2 && key == 70) {esc = 0; writestr("<end>\n");}
-        else if (esc == 2 && key == 72) {esc = 0; writestr("<home>\n");}
+        else if (esc == 2 && key == 72) {esc = 0; writestr("<room>\n");}
         else if (esc == 3 && key == 126 && last[2] == 51) {esc = 0; writestr("<del>\n");}
         else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; writestr("<pgup>\n");}
         else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; writestr("<pgdn>\n");}
@@ -1788,14 +1377,14 @@ void *console(void *arg)
 void waitForEvent()
 {
     while (1) {
-        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
+        int lenOut = entryOutput(arrayPrint(),isEndLine,sizePrint());
         if (lenOut == 0) delocPrint(sizePrint());
         else if (lenOut > 0) {
             delocPrint(lenOut);
             if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
         
         int totIn = 0; int lenIn;
-        while ((lenIn = detryInput(enlocChar(10),'\n',10)) == 0) totIn += 10;
+        while ((lenIn = detryInput(enlocChar(10),isEndLine,10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
         else if (lenIn < 0) unlocChar(10);
         else {unlocChar(10-lenIn); ENQUE(menu,Menu);}
@@ -1813,6 +1402,16 @@ void waitForEvent()
         else break;}
 }
 
+void displayClose(GLFWwindow* window);
+void displayFocus(GLFWwindow *window, int focused);
+void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods);
+void displayClick(GLFWwindow *window, int button, int action, int mods);
+void displayCursor(GLFWwindow *window, double xpos, double ypos);
+void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
+void displayLocation(GLFWwindow *window, int xloc, int yloc);
+void displaySize(GLFWwindow *window, int width, int height);
+void displayRefresh(GLFWwindow *window);
+
 void initialize(int argc, char **argv)
 {
 #ifdef __GLASGOW_HASKELL__
@@ -1829,14 +1428,14 @@ void initialize(int argc, char **argv)
     windowHandle = glfwCreateWindow(800, 600, "Sculpt", NULL, NULL);
     if (!windowHandle) {exitErrstr("could not create window\n");}
     glfwSetWindowCloseCallback(windowHandle, displayClose);
-    glfwSetWindowSizeCallback(windowHandle, displaySize);
-    glfwSetWindowPosCallback(windowHandle, displayLocation);
-    glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
+    glfwSetWindowFocusCallback(windowHandle, displayFocus);
     glfwSetKeyCallback(windowHandle, displayKey);
     glfwSetMouseButtonCallback(windowHandle, displayClick);
-    glfwSetWindowFocusCallback(windowHandle, displayFocus);
     glfwSetCursorPosCallback(windowHandle, displayCursor);
     glfwSetScrollCallback(windowHandle, displayScroll);
+    glfwSetWindowPosCallback(windowHandle, displayLocation);
+    glfwSetWindowSizeCallback(windowHandle, displaySize);
+    glfwSetWindowRefreshCallback(windowHandle, displayRefresh);
     glfwMakeContextCurrent(windowHandle);
 
     glfwGetWindowSize(windowHandle,&xSiz,&ySiz);
@@ -1853,6 +1452,7 @@ void initialize(int argc, char **argv)
     displayHandle = glfwGetX11Display();
 #endif
 
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
 #ifdef __APPLE__
     glViewport(0, 0, xSiz*2, ySiz*2);
@@ -1865,15 +1465,15 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    glGenBuffers(1, &planeBuf.base);
-    glGenBuffers(1, &versorBuf.base);
-    glGenBuffers(1, &pointBuf.base);
-    glGenBuffers(1, &cornerBuf.base);
-    glGenBuffers(1, &faceSub.base);
-    glGenBuffers(1, &polygonSub.base);
-    glGenBuffers(1, &vertexSub.base);
-    glGenBuffers(1, &cornerSub.base);
-    glGenBuffers(1, &constructSub.base);
+    glGenBuffers(1, &planeBuf.base); planeBuf.name = "plane";
+    glGenBuffers(1, &versorBuf.base); versorBuf.name = "versor";
+    glGenBuffers(1, &pointBuf.base); pointBuf.name = "point";
+    glGenBuffers(1, &cornerBuf.base); cornerBuf.name = "corner";
+    glGenBuffers(1, &faceSub.base); faceSub.name = "face";
+    glGenBuffers(1, &polygonSub.base); polygonSub.name = "polygon";
+    glGenBuffers(1, &vertexSub.base); vertexSub.name = "vertex";
+    glGenBuffers(1, &cornerSub.base); cornerSub.name = "corner";
+    glGenBuffers(1, &constructSub.base); constructSub.name = "construct";
 
     glGenQueries(1, &planeBuf.query);
     glGenQueries(1, &pointBuf.query);
@@ -1883,6 +1483,12 @@ void initialize(int argc, char **argv)
     versorBuf.loc = VERSOR_LOCATION;
     pointBuf.loc = POINT_LOCATION; pointBuf.primitive = GL_POINTS;
     cornerBuf.loc = CORNER_LOCATION; cornerBuf.primitive = GL_POINTS;
+
+    faceSub.primitive = GL_TRIANGLES_ADJACENCY;
+    polygonSub.primitive = GL_TRIANGLES;
+    vertexSub.primitive = GL_TRIANGLES;
+    cornerSub.primitive = GL_TRIANGLES;
+    constructSub.primitive = GL_TRIANGLES;
 
     planeBuf.type = GL_FLOAT; planeBuf.dimension = PLANE_DIMENSIONS;
     versorBuf.type = GL_UNSIGNED_INT; versorBuf.dimension = 1;
@@ -2523,7 +2129,7 @@ void finalize()
     // save transformation matrices
     enqueEscape(0);
     while (validPrint()) {
-        int lenOut = entryOutput(arrayPrint(),'\n',sizePrint());
+        int lenOut = entryOutput(arrayPrint(),isEndLine,sizePrint());
         if (lenOut <= 0) exitErrstr("entryOutput failed\n");
         delocPrint(lenOut);
         if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
@@ -2537,7 +2143,7 @@ void finalize()
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
-    if (wraps.base) {struct Wraps initial = {0}; free(wraps.base); wraps = initial;}
+    if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
     if (events.base) {struct Events initial = {0}; free(events.base); events = initial;}
@@ -2553,6 +2159,340 @@ void finalize()
     if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
     if (injects.base) {struct Chars initial = {0}; free(injects.base); injects = initial;}
     printf("finalize done\n");
+}
+
+/*
+ * helpers for display callbacks
+ */
+
+void enqueDisplay()
+{
+    SWITCH(shader,Diplane) if (!shaderCount[Diplane]) enqueDiplane();
+    CASE(Dipoint) if (!shaderCount[Dipoint]) enqueDipoint();
+    DEFAULT(exitErrstr("invalid display mode\n");)    
+}
+
+void leftAdditive()
+{
+    enqueMsgstr("leftAdditive %f %f\n",xPos,yPos);
+    enqueDisplay();
+}
+
+void leftSubtractive()
+{
+    enqueMsgstr("leftSubtractive %f %f\n",xPos,yPos);
+    enqueDisplay();
+}
+
+void leftRefine()
+{
+    enqueMsgstr("leftRefine %f %f\n",xPos,yPos);
+}
+
+void leftTransform()
+{
+    xPoint = xPos; yPoint = yPos; zPoint = zPos;
+    enqueMsgstr("leftTransform %f %f\n",xPoint,yPoint);
+    for (int i = 0; i < 16; i++) affineMat[i] = affineMatz[i];
+    for (int i = 0; i < 9; i++) linearMat[i] = linearMatz[i];
+    for (int i = 0; i < 9; i++) projectMat[i] = projectMatz[i];
+    click = Left;
+}
+
+void leftManipulate()
+{
+    xPoint = xPos; yPoint = yPos; zPoint = zPos;
+    enqueMsgstr("leftManipulate %f %f\n",xPoint,yPoint);
+    click = Left;
+}
+
+void rightRight()
+{
+    xPos = xWarp; yPos = yWarp; zPos = zWarp;
+    enqueMsgstr("rightRight %f %f\n",xPos,yPos);
+    double xwarp = (xWarp+1.0)*xSiz/2.0;
+    double ywarp = -(yWarp-1.0)*ySiz/2.0;
+#ifdef __linux__
+    double xpos, ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
+#endif
+#ifdef __APPLE__
+    int xloc, yloc;
+    glfwGetWindowPos(windowHandle,&xloc,&yloc);
+    struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
+    CGWarpMouseCursorPosition(point);
+#endif
+    click = Left;
+}
+
+void rightLeft()
+{
+    xWarp = xPos; yWarp = yPos; zWarp = zPos;
+    enqueMsgstr("rightLeft %f %f\n",xPos,yPos);
+    click = Right;
+}
+
+void transformRotate()
+{
+    float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
+    float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
+    float s = v[0]*v[0]+v[1]*v[1];
+    if (s > 1.0) {s = sqrt(s); v[0] /= s; v[1] /= s; v[2] = 0.0;}
+    else v[2] = -sqrt(1.0-s);
+    s = dotvec(u,v,3); crossvec(u,v);
+    copymat(v,crossmat(u),9,9,9);
+    scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
+    float w[16]; plusvec(u,plusvec(v,identmat(w,3),9),9);
+    jumpmat(copymat(linearMatz,linearMat,9,9,9),u,3);
+    copymat(identmat(w,4),u,3,4,9);
+    identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
+    identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
+    copymat(affineMatz,affineMat,16,16,16);
+    jumpmat(affineMatz,u,4); jumpmat(affineMatz,w,4); jumpmat(affineMatz,v,4);
+    glUseProgram(program[shader]);
+    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
+    glUniformMatrix3fv(uniform[shader][Linear],1,GL_FALSE,linearMatz);
+    glUseProgram(0);
+    enqueDisplay();
+}
+
+void transformTranslate()
+{
+    float v[16]; identmat(v,4);
+    v[12] = xPos-xPoint; v[13] = yPos-yPoint;
+    copymat(affineMatz,affineMat,16,16,16);
+    jumpmat(affineMatz,v,4);
+    glUseProgram(program[shader]);
+    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
+    glUseProgram(0);
+    enqueDisplay();
+}
+
+void transformLook()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void transformLever()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void transformClock()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void transformCylinder()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void transformScale()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void transformDrive()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateRotate()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateTranslate()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateLook()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateLever()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateClock()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateCylinder()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateScale()
+{
+    // TODO
+    enqueDisplay();
+}
+
+void manipulateDrive()
+{
+    // TODO
+    enqueDisplay();
+}
+
+/*
+ * callbacks triggered by user actions and inputs
+ */
+
+void displayClose(GLFWwindow* window)
+{
+    enqueEvent(Done); enqueCommand(0);
+}
+
+void displayFocus(GLFWwindow *window, int focused)
+{
+    if (focused) enqueMsgstr("displayFocus entry\n");
+    else enqueMsgstr("displayFocus leave\n");
+}
+
+void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (action != GLFW_PRESS) return;
+    SWITCH(key,GLFW_KEY_ESCAPE) {MAYBE(process,Process)}
+    CASE(GLFW_KEY_ENTER) enqueEscape(1);
+    CASE(GLFW_KEY_BACKSPACE) enqueEscape(2);
+    CASE(GLFW_KEY_SPACE) enqueEscape(' ');
+    DEFAULT({if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) enqueEscape(key-GLFW_KEY_A+'a');})
+}
+
+void displayClick(GLFWwindow *window, int button, int action, int mods)
+{
+    if (action != GLFW_PRESS) return;
+    if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) {button = GLFW_MOUSE_BUTTON_RIGHT;}
+    SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
+        SWITCH(mode[Sculpt],Additive) {
+            SWITCH(click,Init) leftAdditive();
+            DEFAULT(exitErrstr("invalid click mode\n");)}
+        CASE(Subtractive) {
+            SWITCH(click,Init) leftSubtractive();
+            DEFAULT(exitErrstr("invalid click mode\n");)}
+        CASE(Refine) {
+            SWITCH(click,Init) leftRefine();
+            DEFAULT(exitErrstr("invalid click mode\n");)}
+        CASE(Transform) {
+            SWITCH(click,Init) FALL(Right) leftTransform();
+            CASE(Left) click = Init;
+            DEFAULT(exitErrstr("invalid click mode\n");)}
+        CASE(Manipulate) {
+            SWITCH(click,Init) FALL(Right) leftManipulate();
+            CASE(Left) click = Init;
+            DEFAULT(exitErrstr("invalid click mode\n");)}
+        DEFAULT(exitErrstr("invalid sculpt mode");)}
+    CASE(GLFW_MOUSE_BUTTON_RIGHT) {
+        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+        CASE(Transform) FALL(Manipulate) {
+            SWITCH(click,Init) {/*ignore*/}
+            CASE(Right) rightRight();
+            CASE(Left) rightLeft();
+            DEFAULT(exitErrstr("invalid click mode\n");)}
+        DEFAULT(exitErrstr("invalid sculpt mode\n");)}
+    DEFAULT(enqueMsgstr("displayClick %d\n",button);)
+}
+
+void displayCursor(GLFWwindow *window, double xpos, double ypos)
+{
+    if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
+    xPos = 2.0*xpos/xSiz-1.0; yPos = -2.0*ypos/ySiz+1.0;
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+    CASE(Transform) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
+            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
+            SWITCH(mode[Mouse],Rotate) transformRotate();
+            CASE(Translate) transformTranslate();
+            CASE(Look) transformLook();
+            DEFAULT(exitErrstr("invalid mouse mode\n");)}
+        DEFAULT(exitErrstr("invalid click mode\n");)}
+    CASE(Manipulate) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
+            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
+            SWITCH(mode[Mouse],Rotate) manipulateRotate();
+            CASE(Translate) manipulateTranslate();
+            CASE(Look) manipulateLook();
+            DEFAULT(exitErrstr("invalid mouse mode\n");)}
+        DEFAULT(exitErrstr("invalid click mode\n");)}
+    DEFAULT(exitErrstr("invalid sculpt mode\n");)
+}
+
+void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
+{
+    zPos = zPos + yoffset;
+#ifdef BRINGUP
+    zPos = base;
+#endif
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+    CASE(Transform) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
+            enqueMsgstr("displayScroll %f\n", zPos);
+            SWITCH(mode[Roller],Lever) transformLever();
+            CASE(Clock) transformClock();
+            CASE(Cylinder) transformCylinder();
+            CASE(Scale) transformScale();
+            CASE(Drive) transformDrive();
+            DEFAULT(exitErrstr("invalid roller mode\n");)}
+        DEFAULT(exitErrstr("invalid click mode\n");)}            
+    CASE(Manipulate) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) {
+            enqueMsgstr("displayScroll %f\n", zPos);
+            SWITCH(mode[Roller],Lever) manipulateLever();
+            CASE(Clock) manipulateClock();
+            CASE(Cylinder) manipulateCylinder();
+            CASE(Scale) manipulateScale();
+            CASE(Drive) manipulateDrive();
+            DEFAULT(exitErrstr("invalid roller mode\n");)}
+        DEFAULT(exitErrstr("invalid click mode\n");)}
+    DEFAULT(exitErrstr("invalid sculpt mode");)
+}
+
+void displayLocation(GLFWwindow *window, int xloc, int yloc)
+{
+    xLoc = xloc; yLoc = yloc;
+    enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
+    enqueDisplay();
+}
+
+void displaySize(GLFWwindow *window, int width, int height)
+{
+    xSiz = width; ySiz = height;
+#ifdef __APPLE__
+    glViewport(0, 0, xSiz*2, ySiz*2);
+#endif
+#ifdef __linux__
+    glViewport(0, 0, xSiz, ySiz);
+#endif
+    enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
+    enqueDisplay();
+}
+
+void displayRefresh(GLFWwindow *window)
+{
+    enqueDisplay();
 }
 
 /*
