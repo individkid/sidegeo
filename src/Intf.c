@@ -35,7 +35,6 @@ extern void __stginit_Main(void);
 #include <termios.h>
 #include <signal.h>
 #include <unistd.h>
-#define link mylink
 
 #ifdef __linux__
 #include <GL/glew.h>
@@ -231,7 +230,6 @@ struct Render {
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
 int shaderCount[Shaders] = {0};
-int linkCheck = 0;
 int sequenceNumber = 0;
 struct Ints defers = {0};
  // sequence numbers of commands that are polling
@@ -248,8 +246,6 @@ struct Ints ints = {0};
 struct Floats {DECLARE_QUEUE(float)} floats = {0};
  // for scratchpad and arguments
 struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
- // for scratchpad and arguments
-struct Commands links = {0};
  // for scratchpad and arguments
 struct Chars inputs = {0}; // for reading from console
 struct Chars outputs = {0}; // for writing to console
@@ -376,8 +372,7 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 }
 
 #define CHECK(command,Command) \
-    if (command##State == Command##Idle) exitErrstr(#command" command not enqued\n"); \
-    if (linkCheck > 0) {linkCheck--; enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&command); return;}
+    if (command##State == Command##Idle) exitErrstr(#command" command not enqued\n");
 
 #define ENQUE(command,Command) \
     if (command##State != Command##Idle) exitErrstr(#command" command not idle\n"); \
@@ -395,9 +390,6 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 
 #define DEQUE(command,Command) \
     command##State = Command##Idle; return;
-
-#define LINK(command,Command,Count) \
-    ENQUE(command,Command) enqueLink(&command); enqueInt(Count); enqueCommand(&link);
 
 #define SWITCH(EXP,VAL) switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
@@ -453,8 +445,6 @@ ACCESS_QUEUE(Int,int,ints)
 ACCESS_QUEUE(Float,float,floats)
 
 ACCESS_QUEUE(Buffer,struct Buffer *,buffers)
-
-ACCESS_QUEUE(Link,Command,links)
 
 ACCESS_QUEUE(Input,char,inputs)
 
@@ -693,9 +683,9 @@ void bringup()
     cornerBuf.done = 0;
 
     GLuint face[NUM_FACES*FACE_PLANES] = {
-        0,1,2,3,3,2,
-        2,0,3,2,2,3,
-        1,2,3,0,0,3,
+        0,1,2,3,2,3,
+        1,2,3,0,3,0,
+        2,3,0,1,0,1,
     };
     glBindBuffer(GL_ARRAY_BUFFER, faceSub.base);
     glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), face, GL_STATIC_DRAW);
@@ -966,7 +956,6 @@ void render()
 #ifdef BRINGUP
     if (arg->feedback0) renderMsgstr(arg->feedback0);
     if (arg->feedback1) renderMsgstr(arg->feedback1);
-    enqueMsgstr("%s done\n",arg->name);
 #endif
     shaderCount[arg->shader]--; unqueRender(); DEQUE(render,Render)
 }
@@ -978,7 +967,7 @@ void enqueTest()
     arg->vertex0 = &planeBuf;
     arg->vertex1 = &versorBuf;
     arg->element = &faceSub;
-    arg->feedback0 = &testBuf;
+    arg->feedback0 = &testBuf; testBuf.done = 0;
     arg->feedback1 = 0;
     arg->shader = Test;
     arg->name = "test";
@@ -989,7 +978,7 @@ void enqueTest()
 void enqueDiplane()
 {
     struct Render *arg = enlocRender(1);
-    arg->blocker = 0;
+    arg->blocker = &constructSub;
     arg->vertex0 = &planeBuf;
     arg->vertex1 = &versorBuf;
     arg->element = &faceSub;
@@ -1004,7 +993,7 @@ void enqueDiplane()
 void enqueDipoint()
 {
     struct Render *arg = enlocRender(1);
-    arg->blocker = 0;
+    arg->blocker = &vertexSub;
     arg->vertex0 = &pointBuf;
     arg->vertex1 = 0;
     arg->element = &polygonSub;
@@ -1051,18 +1040,12 @@ void enqueCopoint()
     enqueCommand(render); shaderCount[Copoint]++;
 }
 
-void link() // only works on single-instance commands with global state
+void enqueDisplay()
 {
-    for (int i = 0; i < commands.tail - commands.head; i++) {
-        if (commands.head[i] == headLink()) {
-            linkCheck += headInt(); break;}}
-    if (linkCheck) {
-        enqueDefer(sequenceNumber + sizeCommand());
-        enqueCommand(&link);
-        enqueLink(headLink());
-        enqueInt(headInt());}
-    dequeLink();
-    dequeInt();
+    SWITCH(shader,Diplane) if (!shaderCount[Diplane]) enqueDiplane();
+    CASE(Dipoint) if (!shaderCount[Dipoint]) enqueDipoint();
+    CASE(Test) if (!shaderCount[Test]) enqueTest();
+    DEFAULT(exitErrstr("invalid display mode\n");)    
 }
 
 void process()
@@ -1083,32 +1066,20 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-        SWITCH(shader,Diplane) if (diplaneState != DiplaneIdle) {REQUE(process)}
-        CASE(Dipoint) if (dipointState != DipointIdle) {REQUE(process)}
-        DEFAULT(exitErrstr("invalid display mode\n");)
 #ifdef BRINGUP
-        SWITCH(shader,Diplane) if (diplaneState != DiplaneIdle) {REQUE(process)}
-        CASE(Dipoint) if (dipointState != DipointIdle) {REQUE(process)}
-        DEFAULT(exitErrstr("invalid display mode\n");)
-        LINK(configure,Configure,4)
+        ENQUE(configure,Configure)
         enqueCopoint(); // wont start until configure provides points
         enqueCoplane(); // wont start until copoint provides planes
         enqueTest(); // wont start until copoint provides planes
-        SWITCH(shader,Diplane) {enqueDiplane();}
-        CASE(Dipoint) {enqueDipoint();}
-        DEFAULT(exitErrstr("invalid display mode\n");)
 #else
         SWITCH(shader,Diplane) {
-            if (diplaneState != DiplaneIdle) {REQUE(process)}
-            LINK(configure,Configure,1)
-            enqueDiplane();}
+            ENQUE(configure,Configure)}
         CASE(Dipoint) {
-            if (dipointState != DipointIdle) {REQUE(process)}
-            LINK(configure,Configure,2)
-            enqueCoplane(); // wont start until configure provides planes
-            enqueDipoint();}
+            ENQUE(configure,Configure)
+            enqueCoplane();} // wont start until configure provides planes
         DEFAULT(exitErrstr("invalid display mode\n");)
 #endif
+        enqueDisplay();
         dequeOption(); DEQUE(process,Process)}
     else if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
@@ -1557,8 +1528,8 @@ void initialize(int argc, char **argv)
 
     uniformCode = "\
     #version 330 core\n\
-    uniform mat3 basis[3];\n\
     uniform float invalid;\n\
+    uniform mat3 basis[3];\n\
     uniform mat4 affine;\n\
     uniform mat3 linear;\n\
     uniform mat3 project;\n\
@@ -1820,6 +1791,7 @@ void initialize(int argc, char **argv)
         uint vformed;\n\
     } id[6];\n\
     out vec3 vector;\n\
+    out vec3 normal;\n\
     void main()\n\
     {\n\
         vec3 point;\n\
@@ -1891,13 +1863,13 @@ void initialize(int argc, char **argv)
         "INTERSECT(xformed,vformed,1,0,1,3)";\n\
         "INTERSECT(xformed,vformed,2,0,4,5)";\n\
         gl_Position = vec4(point0,1.0);\n\
-        normal = "CODE3(0)";\n\
+        normal = vec3(1.0,1.0,0.0);\n\
         EmitVertex();\n\
         gl_Position = vec4(point1,1.0);\n\
-        normal = "CODE3(1)";\n\
+        normal = vec3(0.0,1.0,1.0);\n\
         EmitVertex();\n\
         gl_Position = vec4(point2,1.0);\n\
-        normal = "CODE3(2)";\n\
+        normal = vec3(1.0,0.0,1.0);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
@@ -2144,8 +2116,10 @@ void initialize(int argc, char **argv)
     uniform[Test][Invalid] = glGetUniformLocation(program[Test], "invalid");
     uniform[Test][Basis] = glGetUniformLocation(program[Test], "basis");
     uniform[Test][Affine] = glGetUniformLocation(program[Test], "affine");
+    uniform[Test][Linear] = glGetUniformLocation(program[Test], "linear");
     glUniformMatrix3fv(uniform[Test][Basis],3,GL_FALSE,basisMatz);
     glUniformMatrix4fv(uniform[Test][Affine],1,GL_FALSE,affineMatz);
+    glUniformMatrix3fv(uniform[Test][Linear],1,GL_FALSE,linearMatz);
 
     glUseProgram(program[Diplane]);
     uniform[Diplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
@@ -2244,7 +2218,6 @@ void finalize()
     if (ints.base) {struct Ints initial = {0}; free(ints.base); ints = initial;}
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
     if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
-    if (links.base) {struct Commands initial = {0}; free(links.base); links = initial;}
     if (inputs.base) {struct Chars initial = {0}; free(inputs.base); inputs = initial;}
     if (outputs.base) {struct Chars initial = {0}; free(outputs.base); outputs = initial;}
     if (scans.base) {struct Chars initial = {0}; free(scans.base); scans = initial;}
@@ -2257,13 +2230,6 @@ void finalize()
 /*
  * helpers for display callbacks
  */
-
-void enqueDisplay()
-{
-    SWITCH(shader,Diplane) if (!shaderCount[Diplane]) enqueDiplane();
-    CASE(Dipoint) if (!shaderCount[Dipoint]) enqueDipoint();
-    DEFAULT(exitErrstr("invalid display mode\n");)    
-}
 
 void leftAdditive()
 {
