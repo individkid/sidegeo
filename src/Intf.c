@@ -56,13 +56,15 @@ extern void __stginit_Main(void);
 #define NUM_POINTS 4
 #define NUM_FACES 3
 #define NUM_POLYGONS 3
-#endif
-#define PLANE_DIMENSIONS 3
-#define POINT_DIMENSIONS 3
 #define FACE_PLANES 6
 #define POLYGON_POINTS 3
 #define PLANE_INCIDENCES 3
 #define POINT_INCIDENCES 3
+#endif
+#define TEST_DIMENSIONS 4
+#define TEST_REPETITION 4
+#define PLANE_DIMENSIONS 3
+#define POINT_DIMENSIONS 3
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
@@ -106,7 +108,7 @@ enum Shader { // one value per shader; state for bringup
     Adpoint, //  classify plane by points
     Perplane, // find points that minimize area
     Perpoint, // points are base of tetrahedron
-    Shaders} shader = Dipoint;
+    Shaders} shader = Diplane;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
     Reque, // yield to other commands
@@ -197,8 +199,8 @@ struct Buffer {
     int wrap; // desired buffer size
     int done; // stable initialized data
     int type; // type of data elements
-    int dimension; // elements per item
-    int primitive; // type of item chunks
+    int dimension; // elements per vector
+    int primitive; // type of vector chunks
 }; // for use by *Bind* and *Map*
 struct Buffer testBuf[4] = {0};
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
@@ -616,20 +618,15 @@ void bringup()
     base = q;
     zPos = base;
 
-    GLfloat test[NUM_FACES*PLANE_INCIDENCES*POINT_DIMENSIONS] = {
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
-        5.5,5.5,5.5,
+    GLfloat test[NUM_FACES*TEST_REPETITION*TEST_DIMENSIONS] = {
+        5.5,5.5,5.5,5.5,
+        5.5,5.5,5.5,5.5,
+        5.5,5.5,5.5,5.5,
+        5.5,5.5,5.5,5.5,
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < TEST_REPETITION; i++) {
         glBindBuffer(GL_ARRAY_BUFFER, testBuf[i].handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_FACES*PLANE_INCIDENCES*POINT_DIMENSIONS*sizeof(GLfloat), test, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, NUM_FACES*TEST_DIMENSIONS*sizeof(GLfloat), test, GL_STATIC_DRAW);
         testBuf[i].wrap = testBuf[i].room = NUM_FACES; testBuf[i].done = 0;}
 
     GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
@@ -824,7 +821,8 @@ enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer
         if (feedback[0]->primitive != feedback[1]->primitive) exitErrstr("%s too primitive\n",arg->name);
     if (!arg->vertex) exitErrstr("%s too vertex\n",arg->name);
     if (!arg->element) exitErrstr("%s too element\n",arg->name);
-    if (arg->blocker) exitErrbuf(arg->blocker,arg->name);
+    if (!arg->blocker) exitErrstr("%s too blocker\n",arg->name);
+    exitErrbuf(arg->blocker,arg->name);
     for (int i = 0; i < arg->vertex; i++)
         exitErrbuf(vertex[i],arg->name);
     exitErrbuf(arg->element,arg->name);
@@ -846,13 +844,13 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (arg->feedback) done = feedback[0]->done;
     todo = arg->element->done - done;
     if (todo == 0) return Advance;
-    if (arg->blocker) for (int i = 0; i < arg->vertex; i++)
+    for (int i = 0; i < arg->vertex; i++)
         if (vertex[i]->done < arg->blocker->done) return Defer;
     glUseProgram(program[arg->shader]);
-    for (int i = 0; i < arg->feedback; i++)
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle,
-            done*renderPrimitive(feedback[i]->primitive)*feedback[i]->dimension*renderType(feedback[i]->type),
-            todo*renderPrimitive(feedback[i]->primitive)*feedback[i]->dimension*renderType(feedback[i]->type));
+    for (int i = 0; i < arg->feedback; i++) {
+        int count = renderPrimitive(feedback[i]->primitive)*feedback[i]->dimension;
+        int size = count*renderType(feedback[i]->type);
+        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle, done*size, todo*size);}
     if (arg->feedback) {
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback[0]->query);
         glEnable(GL_RASTERIZER_DISCARD);
@@ -862,8 +860,9 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arg->element->handle);
     if (!arg->feedback)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glDrawElements(arg->element->primitive, todo*renderPrimitive(arg->element->primitive)*arg->element->dimension, arg->element->type,
-        (void *)(done*renderPrimitive(arg->element->primitive)*arg->element->dimension*renderType(arg->element->type)));
+    int count = renderPrimitive(arg->element->primitive)*arg->element->dimension;
+    glDrawElements(arg->element->primitive, todo*count, arg->element->type,
+        (void *)(done*count*renderType(arg->element->type)));
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     for (int i = 0; i < arg->vertex; i++)
         glDisableVertexAttribArray(vertex[i]->loc);
@@ -897,23 +896,32 @@ enum Action renderWait(struct Render *arg, struct Buffer **feedback)
 void renderMsgstr(struct Buffer *feedback)
 {
     glBindBuffer(GL_ARRAY_BUFFER, feedback->handle);
+    if (feedback->done) enqueMsgstr("%s %d %d %d\n",
+        feedback->name,feedback->done,renderPrimitive(feedback->primitive),feedback->dimension);
+    int count = renderPrimitive(feedback->primitive)*feedback->dimension;
     SWITCH(feedback->type,GL_FLOAT) {
-        enqueMsgstr("%s %d %d %d\n",feedback->name,feedback->done,renderPrimitive(feedback->primitive),feedback->dimension);
-        GLfloat result[feedback->done*renderPrimitive(feedback->primitive)*feedback->dimension];
-        glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*renderPrimitive(feedback->primitive)*feedback->dimension*renderType(feedback->type), result);
+        GLfloat result[feedback->done*count];
+        glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*renderType(feedback->type), result);
         for (int i = 0; i < feedback->done; i++) {
             for (int j = 0; j < renderPrimitive(feedback->primitive); j++) {
-                for (int k = 0; k < feedback->dimension; k++) enqueMsgstr(" %f", result[i*renderPrimitive(feedback->primitive)*feedback->dimension+j*feedback->dimension+k]);
-                enqueMsgstr("\n");}
+                for (int k = 0; k < feedback->dimension; k++) {
+                        int n = (i*renderPrimitive(feedback->primitive)+j)*feedback->dimension+k;
+                        SWITCH(feedback->type,GL_FLOAT) enqueMsgstr(" %f", result[n]);
+                        CASE(GL_UNSIGNED_INT) enqueMsgstr(" %f", result[n]);
+                        DEFAULT(exitErrstr("unknown buffer type\n");)}
+                if (feedback->dimension > 1) enqueMsgstr("\n");}
             if (renderPrimitive(feedback->primitive) > 1 && i < feedback->done-1) enqueMsgstr("\n");}}
     CASE(GL_UNSIGNED_INT) {
-        enqueMsgstr("%s %d %d %d\n",feedback->name,feedback->done,renderPrimitive(feedback->primitive),feedback->dimension);
-        GLuint result[feedback->done*renderPrimitive(feedback->primitive)*feedback->dimension];
-        glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*renderPrimitive(feedback->primitive)*feedback->dimension*renderType(feedback->type), result);
+        GLfloat result[feedback->done*count];
+        glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*renderType(feedback->type), result);
         for (int i = 0; i < feedback->done; i++) {
             for (int j = 0; j < renderPrimitive(feedback->primitive); j++) {
-                for (int k = 0; k < feedback->dimension; k++) enqueMsgstr(" %d", result[i*renderPrimitive(feedback->primitive)*feedback->dimension+j*feedback->dimension+k]);
-                enqueMsgstr("\n");}
+                for (int k = 0; k < feedback->dimension; k++) {
+                        int n = (i*renderPrimitive(feedback->primitive)+j)*feedback->dimension+k;
+                        SWITCH(feedback->type,GL_FLOAT) enqueMsgstr(" %f", result[n]);
+                        CASE(GL_UNSIGNED_INT) enqueMsgstr(" %f", result[n]);
+                        DEFAULT(exitErrstr("unknown buffer type\n");)}
+                if (feedback->dimension > 1) enqueMsgstr("\n");}
             if (renderPrimitive(feedback->primitive) > 1 && i < feedback->done-1) enqueMsgstr("\n");}}
     DEFAULT(exitErrstr("unknown buffer type\n");)
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -952,14 +960,14 @@ void render()
 void enqueTest()
 {
     struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(6);
+    struct Buffer **buf = enlocBuffer(2+TEST_REPETITION);
     arg->blocker = &constructSub;
     arg->vertex = 2;
     buf[0] = &planeBuf;
     buf[1] = &versorBuf;
     arg->element = &faceSub;
-    arg->feedback = 4;
-    for (int i = 0; i < 4; i++) {
+    arg->feedback = TEST_REPETITION;
+    for (int i = 0; i < TEST_REPETITION; i++) {
         buf[2+i] = testBuf+i; testBuf[i].done = 0;}
     arg->shader = Test;
     arg->name = "test";
@@ -1040,9 +1048,9 @@ void enqueCopoint()
 
 void enqueDisplay()
 {
+    if (!shaderCount[Test]) enqueTest();
     SWITCH(shader,Diplane) if (!shaderCount[Diplane]) enqueDiplane();
     CASE(Dipoint) if (!shaderCount[Dipoint]) enqueDipoint();
-    CASE(Test) if (!shaderCount[Test]) enqueTest();
     DEFAULT(exitErrstr("invalid display mode\n");)    
 }
 
@@ -1064,17 +1072,13 @@ void process()
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-#ifdef BRINGUP
         ENQUE(configure,Configure)
+#ifdef BRINGUP
         enqueCopoint(); // wont start until configure provides points
         enqueCoplane(); // wont start until copoint provides planes
-        enqueTest(); // wont start until copoint provides planes
 #else
-        SWITCH(shader,Diplane) {
-            ENQUE(configure,Configure)}
-        CASE(Dipoint) {
-            ENQUE(configure,Configure)
-            enqueCoplane();} // wont start until configure provides planes
+        SWITCH(shader,Diplane) {}
+        CASE(Dipoint) enqueCoplane(); // wont start until configure provides planes
         DEFAULT(exitErrstr("invalid display mode\n");)
 #endif
         enqueDisplay();
@@ -1154,7 +1158,7 @@ GLuint compileProgram(
             glGetShaderInfoLog(fragment, 512, NULL, infoLog);
             exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
         glAttachShader(program, fragment);}
-    glTransformFeedbackVaryings(program, size, feedback, GL_SEPARATE_ATTRIBS);
+    if (size) glTransformFeedbackVaryings(program, size, feedback, GL_SEPARATE_ATTRIBS);
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
@@ -1473,7 +1477,7 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < TEST_REPETITION; i++)
         glGenBuffers(1, &testBuf[i].handle);
     testBuf[0].name = "test0"; testBuf[1].name = "test1";
     testBuf[2].name = "test2"; testBuf[3].name = "test3";
@@ -1487,14 +1491,14 @@ void initialize(int argc, char **argv)
     glGenBuffers(1, &cornerSub.handle); cornerSub.name = "corner";
     glGenBuffers(1, &constructSub.handle); constructSub.name = "construct";
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < TEST_REPETITION; i++)
         glGenQueries(1, &testBuf[i].query);
     glGenQueries(1, &planeBuf.query);
     glGenQueries(1, &pointBuf.query);
     glGenQueries(1, &cornerBuf.query);
 
-    for (int i = 0; i < 4; i++)
-        testBuf[i].primitive = GL_TRIANGLES;
+    for (int i = 0; i < TEST_REPETITION; i++)
+        testBuf[i].primitive = GL_POINTS;
     planeBuf.loc = PLANE_LOCATION; planeBuf.primitive = GL_POINTS;
     versorBuf.loc = VERSOR_LOCATION;
     pointBuf.loc = POINT_LOCATION; pointBuf.primitive = GL_POINTS;
@@ -1506,17 +1510,17 @@ void initialize(int argc, char **argv)
     cornerSub.primitive = GL_TRIANGLES;
     constructSub.primitive = GL_TRIANGLES;
 
-    for (int i = 0; i < 4; i++) {
-        testBuf[i].type = GL_FLOAT; testBuf[i].dimension = POINT_DIMENSIONS;}
-    planeBuf.type = GL_FLOAT; planeBuf.dimension = PLANE_DIMENSIONS;
-    versorBuf.type = GL_UNSIGNED_INT; versorBuf.dimension = 1;
-    pointBuf.type = GL_FLOAT; pointBuf.dimension = POINT_DIMENSIONS;
-    cornerBuf.type = GL_FLOAT; cornerBuf.dimension = POINT_DIMENSIONS;
-    faceSub.type = GL_UNSIGNED_INT; faceSub.dimension = FACE_PLANES;
-    polygonSub.type = GL_UNSIGNED_INT; polygonSub.dimension = POLYGON_POINTS;
-    vertexSub.type = GL_UNSIGNED_INT; vertexSub.dimension = POINT_INCIDENCES;
-    cornerSub.type = GL_UNSIGNED_INT; cornerSub.dimension = POINT_INCIDENCES;
-    constructSub.type = GL_UNSIGNED_INT; constructSub.dimension = PLANE_INCIDENCES;
+    for (int i = 0; i < TEST_REPETITION; i++) {
+        testBuf[i].dimension = TEST_DIMENSIONS; testBuf[i].type = GL_FLOAT;}
+    planeBuf.dimension = PLANE_DIMENSIONS; planeBuf.type = GL_FLOAT;
+    versorBuf.dimension = 1; versorBuf.type = GL_UNSIGNED_INT;
+    pointBuf.dimension = POINT_DIMENSIONS; pointBuf.type = GL_FLOAT;
+    cornerBuf.dimension = POINT_DIMENSIONS; cornerBuf.type = GL_FLOAT;
+    faceSub.dimension = 1; faceSub.type = GL_UNSIGNED_INT;
+    polygonSub.dimension = 1; polygonSub.type = GL_UNSIGNED_INT;
+    vertexSub.dimension = 1; vertexSub.type = GL_UNSIGNED_INT;
+    cornerSub.dimension = 1; cornerSub.type = GL_UNSIGNED_INT;
+    constructSub.dimension = 1; constructSub.type = GL_UNSIGNED_INT;
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
     glVertexAttribPointer(planeBuf.loc, planeBuf.dimension, planeBuf.type, GL_FALSE, 0, 0);
@@ -1787,40 +1791,46 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *testGeometry = "\
     layout (triangles_adjacency) in;\n\
-    layout (triangle_strip, max_vertices = 3) out;\n\
+    layout (points, max_vertices = 1) out;\n\
     in data {\n\
         mat3 xformed;\n\
         uint vformed;\n\
     } id[6];\n\
-    out vec3 test0;\n\
-    out vec3 test1;\n\
-    out vec3 test2;\n\
-    out vec3 test3;\n\
+    out vec4 test0;\n\
+    out vec4 test1;\n\
+    out vec4 test2;\n\
+    out vec4 test3;\n\
     void main()\n\
     {\n\
-        vec3 point;\n\
-        vec3 point0;\n\
-        vec3 point1;\n\
-        vec3 point2;\n\
         mat3 points[3];\n\
         uint versor[3];\n\
-        "INTERSECT(xformed,vformed,0,0,1,2)";\n\
-        "INTERSECT(xformed,vformed,1,0,1,3)";\n\
-        "INTERSECT(xformed,vformed,2,0,4,5)";\n\
-        test0 = point0;\n\
-        test1 = id[0].xformed[0];\n\
-        test2 = id[0].xformed[1];\n\
-        test3 = id[0].xformed[2];\n\
-        EmitVertex();\n\
-        test0 = point1;\n\
-        test1 = id[1].xformed[0];\n\
-        test2 = id[1].xformed[1];\n\
-        test3 = id[1].xformed[2];\n\
-        EmitVertex();\n\
-        test0 = point2;\n\
-        test1 = id[2].xformed[0];\n\
-        test2 = id[2].xformed[1];\n\
-        test3 = id[2].xformed[2];\n\
+        points[0] = id[0].xformed;\n\
+        points[1] = id[1].xformed;\n\
+        points[2] = id[2].xformed;\n\
+        versor[0] = id[0].vformed;\n\
+        versor[1] = id[1].vformed;\n\
+        versor[2] = id[2].vformed;\n\
+        float proj0;\n\
+        float proj1;\n\
+        float proj2;\n\
+        project3(points[0],versor[0],points[1][0],proj0);\n\
+        project3(points[0],versor[0],points[1][1],proj1);\n\
+        project3(points[0],versor[0],points[1][2],proj2);\n\
+        float diff0;\n\
+        float diff1;\n\
+        float diff2;\n\
+        switch (versor[0]) {\n\
+            case (uint(0)): diff0 = proj0-points[1][0][0]; diff1 = proj1-points[1][1][0]; diff2 = proj2-points[1][2][0]; break;\n\
+            case (uint(1)): diff0 = proj0-points[1][0][1]; diff1 = proj1-points[1][1][1]; diff2 = proj2-points[1][2][1]; break;\n\
+            case (uint(2)): diff0 = proj0-points[1][0][2]; diff1 = proj1-points[1][1][2]; diff2 = proj2-points[1][2][2]; break;\n\
+            default: diff0 = diff1 = diff2 = 0.0; break;}\n\
+        float comp0 = abs(diff0-diff1);\n\
+        float comp1 = abs(diff1-diff2);\n\
+        float comp2 = abs(diff2-diff0);\n\
+        test0 = vec4(points[1][0],proj0);\n\
+        test1 = vec4(points[1][1],proj1);\n\
+        test2 = vec4(points[1][2],proj2);\n\
+        test3 = vec4(comp0,comp1,comp2,1.0);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
@@ -2127,6 +2137,12 @@ void initialize(int argc, char **argv)
     for (int i = 0; i < 9; i++) linearMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) lightMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    // unsigned cast[16];
+    // cast[0] = 1061094780u; cast[1] = 3172868796u; cast[2] = 3207210241u; cast[3] = 0u;
+    // cast[4] = 3174515134u; cast[5] = 1065238338u; cast[6] = 3185378573u; cast[7] = 0u;
+    // cast[8] = 1059720140u; cast[9] = 1038209380u; cast[10] = 1060980068u; cast[11] = 0u;
+    // cast[12] = 3187969138u; cast[13] = 3165698488u; cast[14] = 1032731990u; cast[15] = 1065353216u;
+    // for (int i = 0; i < 16; i++) affineMatz[i] = *(GLfloat*)(&(cast[i]));
 
     glUseProgram(program[Test]);
     uniform[Test][Invalid] = glGetUniformLocation(program[Test], "invalid");
@@ -2313,8 +2329,11 @@ void transformRotate()
     float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
     float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
     float s = v[0]*v[0]+v[1]*v[1];
-    if (s > 1.0) {s = sqrt(s); v[0] /= s; v[1] /= s; v[2] = 0.0;}
-    else v[2] = -sqrt(1.0-s);
+    float t = sqrt(s);
+    if (t > 0.9) {
+        v[0] *= 0.9/t; v[1] *= 0.9/t;
+        s = v[0]*v[0]+v[1]*v[1];}
+    v[2] = -sqrt(1.0-s);
     s = dotvec(u,v,3); crossvec(u,v);
     copymat(v,crossmat(u),9,9,9);
     scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
@@ -2328,6 +2347,9 @@ void transformRotate()
     glUseProgram(program[shader]);
     glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
     glUniformMatrix3fv(uniform[shader][Linear],1,GL_FALSE,linearMatz);
+    glUseProgram(program[Test]);
+    glUniformMatrix4fv(uniform[Test][Affine],1,GL_FALSE,affineMatz);
+    glUniformMatrix3fv(uniform[Test][Linear],1,GL_FALSE,linearMatz);
     glUseProgram(0);
     enqueDisplay();
 }
