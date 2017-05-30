@@ -110,6 +110,8 @@ enum Shader { // one value per shader; state for bringup
     Adpoint, //  classify plane by points
     Perplane, // find points that minimize area
     Perpoint, // points are base of tetrahedron
+    Replane, // reconstruct to versor 0
+    Repoint, // reconstruct from versor 0
     Shaders} shader = Diplane;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
@@ -1588,6 +1590,22 @@ void initialize(int argc, char **argv)
             default: system = mat2(invalid,invalid,invalid,invalid); augment = vec2(invalid,invalid); difference = augment; origin = invalid; break;}\n\
         vec2 solution = inverse(system)*augment;\n\
         outp = dot(solution,difference) + origin;\n\
+    }\n\
+    void project9(in mat3 points, in uint versor, out vec3 plane)\n\
+    {\n\
+        mat3 base;\n\
+        switch (versor) {\n\
+            case (uint(0)): base = basis[0]; break;\n\
+            case (uint(1)): base = basis[1]; break;\n\
+            case (uint(2)): base = basis[2]; break;\n\
+            default: for (int i = 0; i < 3; i++) base[i] = vec3(invalid,invalid,invalid);}\n\
+        float horizontal;\n\
+        float vertical;\n\
+        float tabular;\n\
+        project3(points,versor,base[0],horizontal);\n\
+        project3(points,versor,base[1],vertical);\n\
+        project3(points,versor,base[2],tabular);\n\
+        plane = vec3(horizontal,vertical,tabular);\n\
     }\n";
 
     pierceCode = "\
@@ -1738,19 +1756,7 @@ void initialize(int argc, char **argv)
     {\n\
         uint index;\n\
         minimum(points,index);\n\
-        mat3 base;\n\
-        switch (index) {\n\
-            case (uint(0)): base = basis[0]; break;\n\
-            case (uint(1)): base = basis[1]; break;\n\
-            case (uint(2)): base = basis[2]; break;\n\
-            default: for (int i = 0; i < 3; i++) base[i] = vec3(invalid,invalid,invalid);}\n\
-        float horizontal;\n\
-        float vertical;\n\
-        float tabular;\n\
-        project3(points,index,base[0],horizontal);\n\
-        project3(points,index,base[1],vertical);\n\
-        project3(points,index,base[2],tabular);\n\
-        plane = vec3(horizontal,vertical,tabular);\n\
+        project9(points,index,plane);\n\
         versor = index;\n\
     }\n";
 
@@ -2106,6 +2112,42 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *perpointFragment = 0;
 
+    const GLchar *replaneVertex = coplaneVertex;
+    const GLchar *replaneGeometry = "\
+    layout (points) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in data {\n\
+        mat3 points;\n\
+        uint versor;\n\
+    } id[1];\n\
+    out vec3 vector;\n\
+    void main()\n\
+    {\n\
+        project9(id[0].points,uint(0),vector);\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
+    const GLchar *replaneFragment = 0;
+
+    const GLchar *repointVertex = copointVertex;
+    const GLchar *repointGeometry = "\
+    layout (points) in;\n\
+    layout (points, max_vertices = 1) out;\n\
+    in data {\n\
+        vec3 point;\n\
+    } id[1];\n\
+    out vec3 vector;\n\
+    out uint index;\n\
+    void main()\n\
+    {\n\
+        mat3 points;\n\
+        expand(id[0].point,uint(0),points);\n\
+        construct(points,vector,index);\n\
+        EmitVertex();\n\
+        EndPrimitive();\n\
+    }\n";
+    const GLchar *repointFragment = 0;
+
     const GLchar *feedback[4];
 #ifdef BRINGUP
     feedback[0] = "test0"; feedback[1] = "test1"; feedback[2] = "test2"; feedback[3] = "test3";
@@ -2120,6 +2162,8 @@ void initialize(int argc, char **argv)
     program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, feedback+2, 1, "adpoint");
     program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, feedback, 1, "perplane");
     program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, feedback, 1, "perpoint");
+    program[Replane] = compileProgram(replaneVertex, replaneGeometry, replaneFragment, feedback, 1, "replane");
+    program[Repoint] = compileProgram(repointVertex, repointGeometry, repointFragment, feedback, 2, "repoint");
 
     for (int i = 0; i < 27; i++) {
         int versor = i / 9;
