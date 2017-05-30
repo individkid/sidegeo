@@ -620,7 +620,6 @@ void bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-    enqueMsgstr("z=%f,f=%f,g=%f,gs=%f,hs=%f,h=%f,hd=%f,a=%f,b=%f,as=%f,is=%f,i=%f,id=%f,p=%f,q=%f\n",z,f,g,gs,hs,h,hd,a,b,as,is,i,id,p,q);
     base = q;
     zPos = base;
 
@@ -660,9 +659,6 @@ void bringup()
          z, a, q,
          z, z,-p,
     };
-    for (int i = 0; i < NUM_POINTS; i++) {
-        for (int j = 0; j < POINT_DIMENSIONS; j++) enqueMsgstr(" %f", tetrahedron[i*POINT_DIMENSIONS+j]);
-        enqueMsgstr("\n");}
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
     glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
     pointBuf.wrap = pointBuf.room = pointBuf.done = NUM_POINTS;
@@ -777,7 +773,6 @@ void configure()
             if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));}
         if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
         configureState = ConfigureWait; REQUE(configure)}
-    enqueMsgstr("configure done\n");
     DEQUE(configure,Configure)
 }
 
@@ -899,36 +894,28 @@ enum Action renderWait(struct Render *arg, struct Buffer **feedback)
 }
 
 #ifdef BRINGUP
+#define BUFMSG(TYPE,FORMAT) \
+    GLfloat result[feedback->done*count];\
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*renderType(feedback->type), result);\
+    for (int i = 0; i < feedback->done; i++) {\
+        for (int j = 0; j < renderPrimitive(feedback->primitive); j++) {\
+            for (int k = 0; k < feedback->dimension; k++) {\
+                    int n = (i*renderPrimitive(feedback->primitive)+j)*feedback->dimension+k;\
+                    enqueMsgstr(" "#FORMAT, result[n]);}\
+            if (feedback->dimension > 1) enqueMsgstr("\n");}\
+        if (renderPrimitive(feedback->primitive) > 1 && i < feedback->done-1) enqueMsgstr("\n");}\
+    if (feedback->dimension == 1) enqueMsgstr("\n");
+
 void renderMsgstr(struct Buffer *feedback)
 {
     glBindBuffer(GL_ARRAY_BUFFER, feedback->handle);
     if (feedback->done) enqueMsgstr("%s %d %d %d\n",
-        feedback->name,feedback->done,renderPrimitive(feedback->primitive),feedback->dimension);
+        feedback->name,feedback->done,
+        renderPrimitive(feedback->primitive),
+        feedback->dimension);
     int count = renderPrimitive(feedback->primitive)*feedback->dimension;
-    SWITCH(feedback->type,GL_FLOAT) {
-        GLfloat result[feedback->done*count];
-        glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*renderType(feedback->type), result);
-        for (int i = 0; i < feedback->done; i++) {
-            for (int j = 0; j < renderPrimitive(feedback->primitive); j++) {
-                for (int k = 0; k < feedback->dimension; k++) {
-                        int n = (i*renderPrimitive(feedback->primitive)+j)*feedback->dimension+k;
-                        SWITCH(feedback->type,GL_FLOAT) enqueMsgstr(" %f", result[n]);
-                        CASE(GL_UNSIGNED_INT) enqueMsgstr(" %f", result[n]);
-                        DEFAULT(exitErrstr("unknown buffer type\n");)}
-                if (feedback->dimension > 1) enqueMsgstr("\n");}
-            if (renderPrimitive(feedback->primitive) > 1 && i < feedback->done-1) enqueMsgstr("\n");}}
-    CASE(GL_UNSIGNED_INT) {
-        GLfloat result[feedback->done*count];
-        glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*renderType(feedback->type), result);
-        for (int i = 0; i < feedback->done; i++) {
-            for (int j = 0; j < renderPrimitive(feedback->primitive); j++) {
-                for (int k = 0; k < feedback->dimension; k++) {
-                        int n = (i*renderPrimitive(feedback->primitive)+j)*feedback->dimension+k;
-                        SWITCH(feedback->type,GL_FLOAT) enqueMsgstr(" %f", result[n]);
-                        CASE(GL_UNSIGNED_INT) enqueMsgstr(" %f", result[n]);
-                        DEFAULT(exitErrstr("unknown buffer type\n");)}
-                if (feedback->dimension > 1) enqueMsgstr("\n");}
-            if (renderPrimitive(feedback->primitive) > 1 && i < feedback->done-1) enqueMsgstr("\n");}}
+    SWITCH(feedback->type,GL_FLOAT) {BUFMSG(GLfloat,%f)}
+    CASE(GL_UNSIGNED_INT) {BUFMSG(GLuint,%d)}
     DEFAULT(exitErrstr("unknown buffer type\n");)
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -1384,8 +1371,6 @@ void *console(void *arg)
     unwriteitem(tailLine());
 
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
-    printf("console done\n");
-
     return 0;
 }
 
@@ -2253,8 +2238,6 @@ void initialize(int argc, char **argv)
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
-
-    enqueMsgstr("initialize done\n");
 }
 
 void finalize()
@@ -2290,7 +2273,6 @@ void finalize()
     if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
     if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
     if (injects.base) {struct Chars initial = {0}; free(injects.base); injects = initial;}
-    printf("finalize done\n");
 }
 
 /*
