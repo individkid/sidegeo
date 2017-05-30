@@ -61,8 +61,8 @@ extern void __stginit_Main(void);
 #define PLANE_INCIDENCES 3
 #define POINT_INCIDENCES 3
 #endif
-#define TEST_DIMENSIONS 4
-#define TEST_REPETITION 4
+#define TEST_DIMENSIONS 3
+#define TEST_REPETITION 2
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
 #define PLANE_LOCATION 0
@@ -1048,7 +1048,6 @@ void enqueCopoint()
 
 void enqueDisplay()
 {
-    if (!shaderCount[Test]) enqueTest();
     SWITCH(shader,Diplane) if (!shaderCount[Diplane]) enqueDiplane();
     CASE(Dipoint) if (!shaderCount[Dipoint]) enqueDipoint();
     DEFAULT(exitErrstr("invalid display mode\n");)    
@@ -1599,45 +1598,44 @@ void initialize(int argc, char **argv)
     }\n\
     void pierce2(in mat3 points0, in uint versor0, in mat3 points1, out vec3 point0, out vec3 point1)\n\
     {\n\
+        float proj0;\n\
+        float proj1;\n\
+        float proj2;\n\
+        project3(points0,versor0,points1[0],proj0);\n\
+        project3(points0,versor0,points1[1],proj1);\n\
+        project3(points0,versor0,points1[2],proj2);\n\
         float diff0;\n\
         float diff1;\n\
         float diff2;\n\
         switch (versor0) {\n\
-            case (uint(0)): {\n\
-                diff0 = abs(points1[1][0]-points1[2][0]);\n\
-                diff1 = abs(points1[0][0]-points1[2][0]);\n\
-                diff2 = abs(points1[0][0]-points1[1][0]);\n\
-                break;}\n\
-            case (uint(1)): {\n\
-                diff0 = abs(points1[1][1]-points1[2][1]);\n\
-                diff1 = abs(points1[0][1]-points1[2][1]);\n\
-                diff2 = abs(points1[0][1]-points1[1][1]);\n\
-                break;}\n\
-            case (uint(2)): {\n\
-                diff0 = abs(points1[1][2]-points1[2][2]);\n\
-                diff1 = abs(points1[0][2]-points1[2][2]);\n\
-                diff2 = abs(points1[0][2]-points1[1][2]);\n\
-                break;}\n\
-            default: diff0 = invalid; diff1 = invalid; diff2 = invalid; break;}\n\
-        uint versor1;\n\
-        if (diff0<diff1 && diff0<diff2) versor1 = uint(0);\n\
-        else if (diff1<diff0 && diff1<diff2) versor1 = uint(1);\n\
-        else if (diff2<diff0 && diff2<diff1) versor1 = uint(2);\n\
-        else versor1 = uint(3);\n\
-        switch (versor1) {\n\
+            case (uint(0)): diff0 = proj0-points1[0][0]; diff1 = proj1-points1[1][0]; diff2 = proj2-points1[2][0]; break;\n\
+            case (uint(1)): diff0 = proj0-points1[0][1]; diff1 = proj1-points1[1][1]; diff2 = proj2-points1[2][1]; break;\n\
+            case (uint(2)): diff0 = proj0-points1[0][2]; diff1 = proj1-points1[1][2]; diff2 = proj2-points1[2][2]; break;\n\
+            default: diff0 = diff1 = diff2 = 0.0; break;}\n\
+        float comp0 = abs(diff1-diff2);\n\
+        float comp1 = abs(diff2-diff0);\n\
+        float comp2 = abs(diff0-diff1);\n\
+        uint comp;\n\
+        if (comp0<comp1 && comp0<comp2) comp = uint(0);\n\
+        else if (comp1<comp2 && comp1<comp0) comp = uint(1);\n\
+        else comp = uint(2);\n\
+        switch (comp) {\n\
             case (uint(0)):\n\
             pierce(points0,versor0,points1[1],points1[0],point0);\n\
             pierce(points0,versor0,points1[2],points1[0],point1);\n\
             break;\n\
             case (uint(1)):\n\
-            pierce(points0,versor0,points1[0],points1[1],point0);\n\
-            pierce(points0,versor0,points1[2],points1[1],point1);\n\
+            pierce(points0,versor0,points1[2],points1[1],point0);\n\
+            pierce(points0,versor0,points1[0],points1[1],point1);\n\
             break;\n\
             case (uint(2)):\n\
             pierce(points0,versor0,points1[0],points1[2],point0);\n\
             pierce(points0,versor0,points1[1],points1[2],point1);\n\
             break;\n\
-            default: point0 = vec3(invalid,invalid,invalid); point1 = point0; break;}\n\
+            default:\n\
+            point0 = vec3(invalid,invalid,invalid);\n\
+            point1 = vec3(invalid,invalid,invalid);\n\
+            break;}\n\
     }\n";
 
     sideCode = "\
@@ -1796,10 +1794,8 @@ void initialize(int argc, char **argv)
         mat3 xformed;\n\
         uint vformed;\n\
     } id[6];\n\
-    out vec4 test0;\n\
-    out vec4 test1;\n\
-    out vec4 test2;\n\
-    out vec4 test3;\n\
+    out vec3 test0;\n\
+    out vec3 test1;\n\
     void main()\n\
     {\n\
         mat3 points[3];\n\
@@ -1810,27 +1806,7 @@ void initialize(int argc, char **argv)
         versor[0] = id[0].vformed;\n\
         versor[1] = id[1].vformed;\n\
         versor[2] = id[2].vformed;\n\
-        float proj0;\n\
-        float proj1;\n\
-        float proj2;\n\
-        project3(points[0],versor[0],points[1][0],proj0);\n\
-        project3(points[0],versor[0],points[1][1],proj1);\n\
-        project3(points[0],versor[0],points[1][2],proj2);\n\
-        float diff0;\n\
-        float diff1;\n\
-        float diff2;\n\
-        switch (versor[0]) {\n\
-            case (uint(0)): diff0 = proj0-points[1][0][0]; diff1 = proj1-points[1][1][0]; diff2 = proj2-points[1][2][0]; break;\n\
-            case (uint(1)): diff0 = proj0-points[1][0][1]; diff1 = proj1-points[1][1][1]; diff2 = proj2-points[1][2][1]; break;\n\
-            case (uint(2)): diff0 = proj0-points[1][0][2]; diff1 = proj1-points[1][1][2]; diff2 = proj2-points[1][2][2]; break;\n\
-            default: diff0 = diff1 = diff2 = 0.0; break;}\n\
-        float comp0 = abs(diff0-diff1);\n\
-        float comp1 = abs(diff1-diff2);\n\
-        float comp2 = abs(diff2-diff0);\n\
-        test0 = vec4(points[1][0],proj0);\n\
-        test1 = vec4(points[1][1],proj1);\n\
-        test2 = vec4(points[1][2],proj2);\n\
-        test3 = vec4(comp0,comp1,comp2,1.0);\n\
+        pierce2(points[0],versor[0],points[1],test0,test1);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
@@ -2116,7 +2092,7 @@ void initialize(int argc, char **argv)
 
     const GLchar *feedback[4];
     feedback[0] = "test0"; feedback[1] = "test1"; feedback[2] = "test2"; feedback[3] = "test3";
-    program[Test] = compileProgram(testVertex, testGeometry, testFragment, feedback, 4, "test");
+    program[Test] = compileProgram(testVertex, testGeometry, testFragment, feedback, TEST_REPETITION, "test");
     feedback[0] = "vector"; feedback[1] = "index"; feedback[2] = "scalar";
     program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane");
     program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, 0, "dipoint");
@@ -2137,12 +2113,6 @@ void initialize(int argc, char **argv)
     for (int i = 0; i < 9; i++) linearMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) lightMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    // unsigned cast[16];
-    // cast[0] = 1061094780u; cast[1] = 3172868796u; cast[2] = 3207210241u; cast[3] = 0u;
-    // cast[4] = 3174515134u; cast[5] = 1065238338u; cast[6] = 3185378573u; cast[7] = 0u;
-    // cast[8] = 1059720140u; cast[9] = 1038209380u; cast[10] = 1060980068u; cast[11] = 0u;
-    // cast[12] = 3187969138u; cast[13] = 3165698488u; cast[14] = 1032731990u; cast[15] = 1065353216u;
-    // for (int i = 0; i < 16; i++) affineMatz[i] = *(GLfloat*)(&(cast[i]));
 
     glUseProgram(program[Test]);
     uniform[Test][Invalid] = glGetUniformLocation(program[Test], "invalid");
@@ -2324,14 +2294,15 @@ void rightLeft()
     click = Right;
 }
 
+#define MAX_ROTATE 0.999
 void transformRotate()
 {
     float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
     float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
     float s = v[0]*v[0]+v[1]*v[1];
     float t = sqrt(s);
-    if (t > 0.9) {
-        v[0] *= 0.9/t; v[1] *= 0.9/t;
+    if (t > MAX_ROTATE) {
+        v[0] *= MAX_ROTATE/t; v[1] *= MAX_ROTATE/t;
         s = v[0]*v[0]+v[1]*v[1];}
     v[2] = -sqrt(1.0-s);
     s = dotvec(u,v,3); crossvec(u,v);
