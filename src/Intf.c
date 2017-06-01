@@ -65,10 +65,10 @@ extern void __stginit_Main(void);
 #endif
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
+#define SCALAR_DIMENSIONS 1
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
-#define CORNER_LOCATION 3
 #define POLL_DELAY 0.1
 
 #define DECLARE_QUEUE(TYPE) \
@@ -131,7 +131,10 @@ enum Uniform { // one value per uniform; no associated state
     Arrow, // normal to plane to classify
     Uniforms};
 GLuint program[Shaders] = {0};
+int input[Shaders] = {0};
+int output[Shaders] = {0};
 GLint uniform[Shaders][Uniforms] = {0};
+GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
     Mouses,Rotate,Translate,Look,
@@ -823,6 +826,8 @@ enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (!arg->vertex) exitErrstr("%s too vertex\n",arg->name);
     if (!arg->element) exitErrstr("%s too element\n",arg->name);
     if (!arg->blocker) exitErrstr("%s too blocker\n",arg->name);
+    if (arg->element->primitive != input[arg->shader]) exitErrstr("%s wrong input\n",arg->name);
+    if (arg->feedback && feedback[0]->primitive != output[arg->shader]) exitErrstr("%s wrong output\n",arg->name);
     exitErrbuf(arg->blocker,arg->name);
     for (int i = 0; i < arg->vertex; i++)
         exitErrbuf(vertex[i],arg->name);
@@ -1103,6 +1108,23 @@ void menu()
  * helpers for initialization
  */
 
+const char *inputCode(enum Shader shader)
+{
+    SWITCH(input[shader],GL_POINTS) return "#define INPUT points\n";
+    CASE(GL_TRIANGLES) return "#define INPUT triangles\n";
+    CASE(GL_TRIANGLES_ADJACENCY) return "#define INPUT triangles_adjacency\n";
+    DEFAULT(exitErrstr("unknown input primitive");)
+    return "";
+}
+
+const char *outputCode(enum Shader shader)
+{
+    SWITCH(output[shader],GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
+    CASE(GL_TRIANGLES) return "#define OUTPUT triangle_strip, max_vertices = 3\n";
+    DEFAULT(exitErrstr("unknown output primitive");)
+    return "";
+}
+
 const GLchar *uniformCode = 0;
 const GLchar *projectCode = 0;
 const GLchar *pierceCode = 0;
@@ -1113,11 +1135,11 @@ const GLchar *intersectCode = 0;
 
 GLuint compileProgram(
     const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
-    const GLchar **feedback, int size, const char *name)
+    const GLchar **feedback, int size, const char *name, enum Shader shader)
 {
     GLint success = 0;
     GLchar infoLog[512];
-    const GLchar *code[7] = {0};
+    const GLchar *code[9] = {0};
     GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
     code[0] = uniformCode; code[1] = expandCode; code[2] = projectCode; code[3] = pierceCode;
@@ -1133,8 +1155,10 @@ GLuint compileProgram(
     GLuint geometry = 0;
     if (geometryCode) {
         geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        code[6] = geometryCode;
-        glShaderSource(geometry, 7, code, NULL);
+        code[6] = inputCode(shader);
+        code[7] = outputCode(shader);
+        code[8] = geometryCode;
+        glShaderSource(geometry, 9, code, NULL);
         glCompileShader(geometry);
         glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
         if(!success) {
@@ -1493,14 +1517,18 @@ void initialize(int argc, char **argv)
     glGenQueries(1, &pointBuf.query);
     glGenQueries(1, &cornerBuf.query);
 
+    planeBuf.loc = PLANE_LOCATION;
+    versorBuf.loc = VERSOR_LOCATION;
+    pointBuf.loc = POINT_LOCATION;
+
 #ifdef BRINGUP
     for (int i = 0; i < TEST_REPETITION; i++)
         testBuf[i].primitive = GL_POINTS;
 #endif
-    planeBuf.loc = PLANE_LOCATION; planeBuf.primitive = GL_POINTS;
-    versorBuf.loc = VERSOR_LOCATION;
-    pointBuf.loc = POINT_LOCATION; pointBuf.primitive = GL_POINTS;
-    cornerBuf.loc = CORNER_LOCATION; cornerBuf.primitive = GL_POINTS;
+    planeBuf.primitive = GL_POINTS;
+    versorBuf.primitive = GL_POINTS;
+    pointBuf.primitive = GL_POINTS;
+    cornerBuf.primitive = GL_POINTS;
 
     faceSub.primitive = GL_TRIANGLES_ADJACENCY;
     polygonSub.primitive = GL_TRIANGLES;
@@ -1513,14 +1541,14 @@ void initialize(int argc, char **argv)
         testBuf[i].dimension = TEST_DIMENSIONS; testBuf[i].type = GL_FLOAT;}
 #endif
     planeBuf.dimension = PLANE_DIMENSIONS; planeBuf.type = GL_FLOAT;
-    versorBuf.dimension = 1; versorBuf.type = GL_UNSIGNED_INT;
+    versorBuf.dimension = SCALAR_DIMENSIONS; versorBuf.type = GL_UNSIGNED_INT;
     pointBuf.dimension = POINT_DIMENSIONS; pointBuf.type = GL_FLOAT;
     cornerBuf.dimension = POINT_DIMENSIONS; cornerBuf.type = GL_FLOAT;
-    faceSub.dimension = 1; faceSub.type = GL_UNSIGNED_INT;
-    polygonSub.dimension = 1; polygonSub.type = GL_UNSIGNED_INT;
-    vertexSub.dimension = 1; vertexSub.type = GL_UNSIGNED_INT;
-    cornerSub.dimension = 1; cornerSub.type = GL_UNSIGNED_INT;
-    constructSub.dimension = 1; constructSub.type = GL_UNSIGNED_INT;
+    faceSub.dimension = SCALAR_DIMENSIONS; faceSub.type = GL_UNSIGNED_INT;
+    polygonSub.dimension = SCALAR_DIMENSIONS; polygonSub.type = GL_UNSIGNED_INT;
+    vertexSub.dimension = SCALAR_DIMENSIONS; vertexSub.type = GL_UNSIGNED_INT;
+    cornerSub.dimension = SCALAR_DIMENSIONS; cornerSub.type = GL_UNSIGNED_INT;
+    constructSub.dimension = SCALAR_DIMENSIONS; constructSub.type = GL_UNSIGNED_INT;
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
     glVertexAttribPointer(planeBuf.loc, planeBuf.dimension, planeBuf.type, GL_FALSE, 0, 0);
@@ -1528,13 +1556,11 @@ void initialize(int argc, char **argv)
     glVertexAttribIPointer(versorBuf.loc, versorBuf.dimension, versorBuf.type, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
     glVertexAttribPointer(pointBuf.loc, pointBuf.dimension, pointBuf.type, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, cornerBuf.handle);
-    glVertexAttribPointer(cornerBuf.loc, cornerBuf.dimension, cornerBuf.type, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     uniformCode = "\
     #version 330 core\n\
-    uniform float invalid;\n\
+    uniform float invalid[2];\n\
     uniform mat3 basis[3];\n\
     uniform mat4 affine;\n\
     uniform mat3 linear;\n\
@@ -1555,7 +1581,7 @@ void initialize(int argc, char **argv)
         switch (versor) {\n\
             case (uint(0)): system = diff1.y; augment = diff0.y; difference = diff1.x; origin = points[0].x; break;\n\
             case (uint(1)): system = diff1.x; augment = diff0.x; difference = diff1.y; origin = points[0].y; break;\n\
-            default: system = invalid; augment = invalid; difference = invalid; origin = invalid; break;}\n\
+            default: system = invalid[0]; augment = invalid[0]; difference = invalid[0]; origin = invalid[0]; break;}\n\
         float solution = (1.0/system)*augment;\n\
         outp = (solution*difference) + origin;\n\
     }\n\
@@ -1572,7 +1598,24 @@ void initialize(int argc, char **argv)
             case (uint(0)): system = mat2(diff1.yz,diff2.yz); augment = diff0.yz; difference = vec2(diff1.x,diff2.x); origin = points[0].x; break;\n\
             case (uint(1)): system = mat2(diff1.xz,diff2.xz); augment = diff0.xz; difference = vec2(diff1.y,diff2.y); origin = points[0].y; break;\n\
             case (uint(2)): system = mat2(diff1.xy,diff2.xy); augment = diff0.xy; difference = vec2(diff1.z,diff2.z); origin = points[0].z; break;\n\
-            default: system = mat2(invalid,invalid,invalid,invalid); augment = vec2(invalid,invalid); difference = augment; origin = invalid; break;}\n\
+            default: system = mat2(invalid[0],invalid[0],invalid[0],invalid[0]); augment = vec2(invalid[0],invalid[0]); difference = augment; origin = invalid[0]; break;}\n\
+        // 00x 10y 20\n\
+        // 01x 11y 21\n\
+        // 11/10*00-01 x 11/10*20-21\n\
+        // 11*00-10*01 x 11*20-10*21\n\
+        // 01/00*10-11 y 01/00*20-21\n\
+        // 01*10-00*11 y 01*20-00*21\n\
+        /*float numer0 = system[1][1]*augment[0]-system[1][0]*augment[1];\n\
+        float denom0 = system[0][0]*system[1][1]-system[1][0]*system[0][1];\n\
+        float numer1 = system[1][0]*augment[0]-system[0][0]*augment[1];\n\
+        float denom1 = system[0][1]*system[1][0]-system[0][0]*system[1][1];\n\
+        vec2 solution = vec2(numer0/denom0,numer1/denom1);\n\
+        float retval = dot(solution,difference) + origin;\n\
+        if (abs(numer0/invalid[1])>abs(denom0) || abs(numer1/invalid[1])>abs(denom1) ||\n\
+            abs(solution[0])>invalid[1] || abs(solution[1])>invalid[1] || abs(retval)>invalid[1])\n\
+            outp = invalid[0];\n\
+        else\n\
+            outp = retval;*/\n\
         vec2 solution = inverse(system)*augment;\n\
         outp = dot(solution,difference) + origin;\n\
     }\n\
@@ -1583,7 +1626,7 @@ void initialize(int argc, char **argv)
             case (uint(0)): base = basis[0]; break;\n\
             case (uint(1)): base = basis[1]; break;\n\
             case (uint(2)): base = basis[2]; break;\n\
-            default: for (int i = 0; i < 3; i++) base[i] = vec3(invalid,invalid,invalid);}\n\
+            default: for (int i = 0; i < 3; i++) base[i] = vec3(invalid[0],invalid[0],invalid[0]);}\n\
         float horizontal;\n\
         float vertical;\n\
         float tabular;\n\
@@ -1608,7 +1651,7 @@ void initialize(int argc, char **argv)
             case (uint(0)): diff0 = proj0-point0[0]; diff1 = proj1-point1[0]; break;\n\
             case (uint(1)): diff0 = proj0-point0[1]; diff1 = proj1-point1[1]; break;\n\
             case (uint(2)): diff0 = proj0-point0[2]; diff1 = proj1-point1[2]; break;\n\
-            default: diff0 = invalid; diff1 = invalid; break;}\n\
+            default: diff0 = invalid[0]; diff1 = invalid[0]; break;}\n\
         ratio = diff0/(diff0-diff1);\n\
         diff = point1-point0;\n\
         point = point0 + ratio*diff;\n\
@@ -1628,7 +1671,7 @@ void initialize(int argc, char **argv)
             case (uint(0)): diff0 = proj0-points1[0][0]; diff1 = proj1-points1[1][0]; diff2 = proj2-points1[2][0]; break;\n\
             case (uint(1)): diff0 = proj0-points1[0][1]; diff1 = proj1-points1[1][1]; diff2 = proj2-points1[2][1]; break;\n\
             case (uint(2)): diff0 = proj0-points1[0][2]; diff1 = proj1-points1[1][2]; diff2 = proj2-points1[2][2]; break;\n\
-            default: diff0 = diff1 = diff2 = 0.0; break;}\n\
+            default: diff0 = diff1 = diff2 = invalid[0]; break;}\n\
         float comp0 = abs(diff1-diff2);\n\
         float comp1 = abs(diff2-diff0);\n\
         float comp2 = abs(diff0-diff1);\n\
@@ -1650,8 +1693,8 @@ void initialize(int argc, char **argv)
             pierce(points0,versor0,points1[1],points1[2],point1);\n\
             break;\n\
             default:\n\
-            point0 = vec3(invalid,invalid,invalid);\n\
-            point1 = vec3(invalid,invalid,invalid);\n\
+            point0 = vec3(invalid[0],invalid[0],invalid[0]);\n\
+            point1 = vec3(invalid[0],invalid[0],invalid[0]);\n\
             break;}\n\
     }\n";
 
@@ -1669,7 +1712,7 @@ void initialize(int argc, char **argv)
         switch (versor) {\n\
             case (uint(0)): less0 = vertex.x; less1 = point.x; break;\n\
             case (uint(1)): less0 = vertex.y; less1 = point.y; break;\n\
-            default: less0 = invalid; less1 = invalid; break;}\n\
+            default: less0 = invalid[0]; less1 = invalid[0]; break;}\n\
         if ((more0>less0) == (more1>less1)) result = uint(1); else result = uint(0);\n\
     }\n\
     void inside(in vec2 points[3], in vec2 point, out uint result)\n\
@@ -1702,9 +1745,9 @@ void initialize(int argc, char **argv)
             case (uint(0)): for (int i = 0; i < 3; i++) points2[i] = points[i].yz; point2 = point.yz; break;\n\
             case (uint(1)): for (int i = 0; i < 3; i++) points2[i] = points[i].xz; point2 = point.xz; break;\n\
             case (uint(2)): for (int i = 0; i < 3; i++) points2[i] = points[i].xy; point2 = point.xy; break;\n\
-            default: point2 = vec2(invalid,invalid); for (int i = 0; i < 3; i++) points2[i] = point2; break;}\n\
+            default: point2 = vec2(invalid[0],invalid[0]); for (int i = 0; i < 3; i++) points2[i] = point2; break;}\n\
         inside(points2,point2,result);\n\
-        if (result == uint(0)) point = vec3(invalid,invalid,invalid);\n\
+        if (result == uint(0)) point = vec3(invalid[0],invalid[0],invalid[0]);\n\
     }\n";
 
     expandCode = "\
@@ -1714,7 +1757,7 @@ void initialize(int argc, char **argv)
             case (uint(0)): points = basis[0]; for (int i = 0; i < 3; i++) points[i][0] = plane[i]; break;\n\
             case (uint(1)): points = basis[1]; for (int i = 0; i < 3; i++) points[i][1] = plane[i]; break;\n\
             case (uint(2)): points = basis[2]; for (int i = 0; i < 3; i++) points[i][2] = plane[i]; break;\n\
-            default: for (int i = 0; i < 3; i++) points[i] = vec3(invalid,invalid,invalid); break;}\n\
+            default: for (int i = 0; i < 3; i++) points[i] = vec3(invalid[0],invalid[0],invalid[0]); break;}\n\
     }\n";
 
     constructCode = "\
@@ -1793,9 +1836,11 @@ void initialize(int argc, char **argv)
         minimum(points,od.vformed);\n\
         od.xformed = points;\n\
     }\n";
+    input[Test] = GL_TRIANGLES_ADJACENCY;
+    output[Test] = GL_POINTS;
     const GLchar *testGeometry = "\
-    layout (triangles_adjacency) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         mat3 xformed;\n\
         uint vformed;\n\
@@ -1843,9 +1888,11 @@ void initialize(int argc, char **argv)
         od.rotated = points;\n\
         od.vtated = versor;\n\
     }\n";
+    input[Diplane] = GL_TRIANGLES_ADJACENCY;
+    output[Diplane] = GL_TRIANGLES;
     const GLchar *diplaneGeometry = "\
-    layout (triangles_adjacency) in;\n\
-    layout (triangle_strip, max_vertices = 3) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         mat3 xformed;\n\
         uint vformed;\n\
@@ -1898,9 +1945,11 @@ void initialize(int argc, char **argv)
         od.xformed = (affine*vec4(point,1.0)).xyz;\n\
         od.rotated = "CODE0";\n\
     }\n";
+    input[Dipoint] = GL_TRIANGLES;
+    output[Dipoint] = GL_TRIANGLES;
     const GLchar *dipointGeometry = "\
-    layout (triangles) in;\n\
-    layout (triangle_strip, max_vertices = 3) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         vec3 xformed;\n\
         vec3 rotated;\n\
@@ -1941,9 +1990,11 @@ void initialize(int argc, char **argv)
         expand(plane,versor,od.points);\n\
         od.versor = versor;\n\
     }\n";
+    input[Coplane] = GL_TRIANGLES;
+    output[Coplane] = GL_POINTS;
     const GLchar *coplaneGeometry = "\
-    layout (triangles) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         mat3 points;\n\
         uint versor;\n\
@@ -1971,9 +2022,11 @@ void initialize(int argc, char **argv)
     {\n\
         od.point = point;\n\
     }\n";
+    input[Copoint] = GL_TRIANGLES;
+    output[Copoint] = GL_POINTS;
     const GLchar *copointGeometry = "\
-    layout (triangles) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         vec3 point;\n\
     } id[3];\n\
@@ -1989,9 +2042,11 @@ void initialize(int argc, char **argv)
     const GLchar *copointFragment = 0;
 
     const GLchar *adplaneVertex = coplaneVertex;
+    input[Adplane] = GL_POINTS;
+    output[Adplane] = GL_POINTS;
     const GLchar *adplaneGeometry = "\
-    layout (points) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         mat3 points;\n\
         uint versor;\n\
@@ -2010,21 +2065,23 @@ void initialize(int argc, char **argv)
             case (uint(0)): if (tail[0] > proj1) negate = 1.0; else negate = -1.0; break;\n\
             case (uint(1)): if (tail[1] > proj1) negate = 1.0; else negate = -1.0; break;\n\
             case (uint(2)): if (tail[2] > proj1) negate = 1.0; else negate = -1.0; break;\n\
-            default: negate = invalid; break;}\n\
+            default: negate = invalid[0]; break;}\n\
         switch (id[0].versor) {\n\
             case (uint(0)): scalar = negate*(head[0]-proj0); break;\n\
             case (uint(1)): scalar = negate*(head[1]-proj0); break;\n\
             case (uint(2)): scalar = negate*(head[2]-proj0); break;\n\
-            default: scalar = invalid; break;}\n\
+            default: scalar = invalid[0]; break;}\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
     const GLchar *adplaneFragment = 0;
 
     const GLchar *adpointVertex = copointVertex;
+    input[Adpoint] = GL_POINTS;
+    output[Adpoint] = GL_POINTS;
     const GLchar *adpointGeometry = "\
-    layout (points) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         vec3 point;\n\
     } id[1];\n\
@@ -2038,9 +2095,11 @@ void initialize(int argc, char **argv)
     const GLchar *adpointFragment = 0;
 
     const GLchar *perplaneVertex = coplaneVertex;
+    input[Perplane] = GL_TRIANGLES_ADJACENCY;
+    output[Perplane] = GL_POINTS;
     const GLchar *perplaneGeometry = "\
-    layout (triangles_adjacency) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         mat3 points;\n\
         uint versor;\n\
@@ -2072,9 +2131,11 @@ void initialize(int argc, char **argv)
     const GLchar *perplaneFragment = 0;
 
     const GLchar *perpointVertex = copointVertex;
+    input[Perpoint] = GL_TRIANGLES;
+    output[Perpoint] = GL_POINTS;
     const GLchar *perpointGeometry = "\
-    layout (triangles) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         vec3 point;\n\
     } id[3];\n\
@@ -2098,9 +2159,11 @@ void initialize(int argc, char **argv)
     const GLchar *perpointFragment = 0;
 
     const GLchar *replaneVertex = coplaneVertex;
+    input[Replane] = GL_POINTS;
+    output[Replane] = GL_POINTS;
     const GLchar *replaneGeometry = "\
-    layout (points) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         mat3 points;\n\
         uint versor;\n\
@@ -2115,9 +2178,11 @@ void initialize(int argc, char **argv)
     const GLchar *replaneFragment = 0;
 
     const GLchar *repointVertex = copointVertex;
+    input[Repoint] = GL_POINTS;
+    output[Repoint] = GL_POINTS;
     const GLchar *repointGeometry = "\
-    layout (points) in;\n\
-    layout (points, max_vertices = 1) out;\n\
+    layout (INPUT) in;\n\
+    layout (OUTPUT) out;\n\
     in data {\n\
         vec3 point;\n\
     } id[1];\n\
@@ -2136,19 +2201,19 @@ void initialize(int argc, char **argv)
     const GLchar *feedback[4];
 #ifdef BRINGUP
     feedback[0] = "test0"; feedback[1] = "test1"; feedback[2] = "test2"; feedback[3] = "test3";
-    program[Test] = compileProgram(testVertex, testGeometry, testFragment, feedback, TEST_REPETITION, "test");
+    program[Test] = compileProgram(testVertex, testGeometry, testFragment, feedback, TEST_REPETITION, "test", Test);
 #endif
     feedback[0] = "vector"; feedback[1] = "index"; feedback[2] = "scalar";
-    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane");
-    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, 0, "dipoint");
-    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, feedback, 1, "coplane");
-    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment, feedback, 2, "copoint");
-    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, feedback+2, 1, "adplane");
-    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, feedback+2, 1, "adpoint");
-    program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, feedback, 1, "perplane");
-    program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, feedback, 1, "perpoint");
-    program[Replane] = compileProgram(replaneVertex, replaneGeometry, replaneFragment, feedback, 1, "replane");
-    program[Repoint] = compileProgram(repointVertex, repointGeometry, repointFragment, feedback, 2, "repoint");
+    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane", Diplane);
+    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, 0, "dipoint", Dipoint);
+    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, feedback, 1, "coplane", Coplane);
+    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment, feedback, 2, "copoint", Copoint);
+    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, feedback+2, 1, "adplane", Adplane);
+    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, feedback+2, 1, "adpoint", Adpoint);
+    program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, feedback, 1, "perplane", Perplane);
+    program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, feedback, 1, "perpoint", Perpoint);
+    program[Replane] = compileProgram(replaneVertex, replaneGeometry, replaneFragment, feedback, 1, "replane", Replane);
+    program[Repoint] = compileProgram(repointVertex, repointGeometry, repointFragment, feedback, 2, "repoint", Repoint);
 
     for (int i = 0; i < 27; i++) {
         int versor = i / 9;
@@ -2161,72 +2226,24 @@ void initialize(int argc, char **argv)
     for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) lightMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 
-#ifdef BRINGUP
-    glUseProgram(program[Test]);
-    uniform[Test][Invalid] = glGetUniformLocation(program[Test], "invalid");
-    uniform[Test][Basis] = glGetUniformLocation(program[Test], "basis");
-    uniform[Test][Affine] = glGetUniformLocation(program[Test], "affine");
-    uniform[Test][Linear] = glGetUniformLocation(program[Test], "linear");
-    glUniformMatrix3fv(uniform[Test][Basis],3,GL_FALSE,basisMatz);
-    glUniformMatrix4fv(uniform[Test][Affine],1,GL_FALSE,affineMatz);
-    glUniformMatrix3fv(uniform[Test][Linear],1,GL_FALSE,linearMatz);
-#endif
-
-    glUseProgram(program[Diplane]);
-    uniform[Diplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
-    uniform[Diplane][Basis] = glGetUniformLocation(program[Diplane], "basis");
-    uniform[Diplane][Affine] = glGetUniformLocation(program[Diplane], "affine");
-    uniform[Diplane][Linear] = glGetUniformLocation(program[Diplane], "linear");
-    uniform[Diplane][Project] = glGetUniformLocation(program[Diplane], "project");
-    uniform[Diplane][Light] = glGetUniformLocation(program[Diplane], "light");
-    glUniformMatrix3fv(uniform[Diplane][Basis],3,GL_FALSE,basisMatz);
-    glUniformMatrix4fv(uniform[Diplane][Affine],1,GL_FALSE,affineMatz);
-    glUniformMatrix3fv(uniform[Diplane][Linear],1,GL_FALSE,linearMatz);
-    glUniformMatrix3fv(uniform[Diplane][Project],1,GL_FALSE,projectMatz);
-    glUniformMatrix4fv(uniform[Diplane][Light],1,GL_FALSE,lightMatz);
-
-    glUseProgram(program[Dipoint]);
-    uniform[Dipoint][Affine] = glGetUniformLocation(program[Dipoint], "affine");
-    uniform[Dipoint][Linear] = glGetUniformLocation(program[Dipoint], "linear");
-    uniform[Dipoint][Project] = glGetUniformLocation(program[Dipoint], "project");
-    uniform[Dipoint][Light] = glGetUniformLocation(program[Dipoint], "light");
-    glUniformMatrix4fv(uniform[Dipoint][Affine],1,GL_FALSE,affineMatz);
-    glUniformMatrix3fv(uniform[Dipoint][Linear],1,GL_FALSE,linearMatz);
-    glUniformMatrix3fv(uniform[Dipoint][Project],1,GL_FALSE,projectMatz);
-    glUniformMatrix4fv(uniform[Dipoint][Light],1,GL_FALSE,lightMatz);
-
-    glUseProgram(program[Coplane]);
-    uniform[Coplane][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
-    uniform[Coplane][Basis] = glGetUniformLocation(program[Coplane], "basis");
-    glUniformMatrix3fv(uniform[Coplane][Basis],3,GL_FALSE,basisMatz);
-
-    glUseProgram(program[Copoint]);
-    uniform[Copoint][Invalid] = glGetUniformLocation(program[Diplane], "invalid");
-    uniform[Copoint][Basis] = glGetUniformLocation(program[Copoint], "basis");
-    glUniformMatrix3fv(uniform[Copoint][Basis],3,GL_FALSE,basisMatz);
-
-    glUseProgram(program[Adplane]);
-    uniform[Adplane][Invalid] = glGetUniformLocation(program[Adplane], "invalid");
-    uniform[Adplane][Basis] = glGetUniformLocation(program[Adplane], "basis");
-    uniform[Adplane][Feather] = glGetUniformLocation(program[Adplane], "feather");
-    uniform[Adplane][Arrow] = glGetUniformLocation(program[Adplane], "arrow");
-    glUniformMatrix3fv(uniform[Adplane][Basis],3,GL_FALSE,basisMatz);
- 
-    glUseProgram(program[Adpoint]);
-    uniform[Adpoint][Feather] = glGetUniformLocation(program[Adpoint], "feather");
-    uniform[Adpoint][Arrow] = glGetUniformLocation(program[Adpoint], "arrow");
-
-    glUseProgram(program[Perplane]);
-    uniform[Perplane][Invalid] = glGetUniformLocation(program[Perplane], "invalid");
-    uniform[Perplane][Basis] = glGetUniformLocation(program[Perplane], "basis");
-    uniform[Perplane][Feather] = glGetUniformLocation(program[Perplane], "feather");
-    uniform[Perplane][Arrow] = glGetUniformLocation(program[Perplane], "arrow");
-    glUniformMatrix3fv(uniform[Perplane][Basis],3,GL_FALSE,basisMatz);
-
-    glUseProgram(program[Perpoint]);
-    uniform[Perpoint][Invalid] = glGetUniformLocation(program[Perpoint], "invalid");
-    uniform[Perpoint][Feather] = glGetUniformLocation(program[Perpoint], "feather");
-    uniform[Perpoint][Arrow] = glGetUniformLocation(program[Perpoint], "arrow");
+    for (enum Shader i = 0; i < Shaders; i++) {
+        glUseProgram(program[i]);
+        uniform[i][Invalid] = glGetUniformLocation(program[i], "invalid");
+        uniform[i][Basis] = glGetUniformLocation(program[i], "basis");
+        uniform[i][Affine] = glGetUniformLocation(program[i], "affine");
+        uniform[i][Linear] = glGetUniformLocation(program[i], "linear");
+        uniform[i][Project] = glGetUniformLocation(program[i], "project");
+        uniform[i][Light] = glGetUniformLocation(program[i], "light");
+        uniform[i][Feather] = glGetUniformLocation(program[i], "feather");
+        uniform[i][Arrow] = glGetUniformLocation(program[i], "arrow");
+        glUniform1fv(uniform[i][Invalid],2,invalid);
+        glUniformMatrix3fv(uniform[i][Basis],3,GL_FALSE,basisMatz);
+        glUniformMatrix4fv(uniform[i][Affine],1,GL_FALSE,affineMatz);
+        glUniformMatrix3fv(uniform[i][Linear],1,GL_FALSE,linearMatz);
+        glUniformMatrix3fv(uniform[i][Project],1,GL_FALSE,projectMatz);
+        glUniformMatrix4fv(uniform[i][Light],1,GL_FALSE,lightMatz);
+        glUniform3f(uniform[i][Feather],0.0,0.0,0.0);
+        glUniform3f(uniform[i][Arrow],0.0,0.0,0.0);}
     glUseProgram(0);
 
     ENQUE(process,Process)
