@@ -638,23 +638,32 @@ void bringup()
         testBuf[i].wrap = testBuf[i].room = NUM_FACES; testBuf[i].done = 0;}
 
     GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
+ 0.204124, 0.204124, 0.204124,
+ 0.250000, -0.327350, 0.658248,
+ -0.250000, 0.327350, -0.658248,
+ -0.216506, -0.216506, -0.570060,
+/*
         0.0,1.0,2.0,
         3.0,4.0,5.0,
         6.0,7.0,8.0,
         9.0,0.1,1.1,
+*/
     };
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), plane, GL_STATIC_DRAW);
     planeBuf.wrap = planeBuf.room = NUM_PLANES;
-    planeBuf.done = 0;
+    planeBuf.done = /*0*/NUM_PLANES;
 
     GLuint versor[NUM_PLANES] = {
+        2,0,0,1,
+/*
         0,0,0,0,
+*/
     };
     glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
     glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), versor, GL_STATIC_DRAW);
     versorBuf.wrap = versorBuf.room = NUM_PLANES;
-    versorBuf.done = 0;
+    versorBuf.done = /*0*/NUM_PLANES;
 
     GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
         -g,-b, q,
@@ -900,7 +909,7 @@ enum Action renderWait(struct Render *arg, struct Buffer **feedback)
 
 #ifdef BRINGUP
 #define BUFMSG(TYPE,FORMAT) \
-    GLfloat result[feedback->done*count];\
+    TYPE result[feedback->done*count];\
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*renderType(feedback->type), result);\
     for (int i = 0; i < feedback->done; i++) {\
         for (int j = 0; j < renderPrimitive(feedback->primitive); j++) {\
@@ -1078,8 +1087,6 @@ void process()
     else if (strcmp(headOption(), "-i") == 0) {
         ENQUE(configure,Configure)
 #ifdef BRINGUP
-        enqueCopoint(); // wont start until configure provides points
-        enqueCoplane(); // wont start until copoint provides planes
 #else
         SWITCH(shader,Diplane) {}
         CASE(Dipoint) enqueCoplane(); // wont start until configure provides planes
