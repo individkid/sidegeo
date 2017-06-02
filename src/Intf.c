@@ -1060,16 +1060,21 @@ void process()
         enqueEvent(Done); enqueCommand(0); DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print this message\n");
+        enqueMsgstr("-H print manual page\n");
         enqueMsgstr("-i start interactive mode\n");
-        enqueMsgstr("-e <metric> start animation that tweaks planes according to a metric\n");
-        enqueMsgstr("-c <file> change file for config and configuration\n");
-        enqueMsgstr("-o <file> save polytope in format indicated by file extension\n");
+        enqueMsgstr("-I <file> start animation that tweaks planes according to a metric\n");
         enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
-        enqueMsgstr("-t <ident> change current polytope to one from config\n");
-        enqueMsgstr("-n <shape> replace current polytope by builtin polytope\n");
-        enqueMsgstr("-r randomize direction and color of light sources\n");
+        enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
+        enqueMsgstr("-c <file> change file for configuration and history\n");
+        enqueMsgstr("-C randomize direction and color of light sources\n");
+        enqueMsgstr("-p <name> replace current polytope by builtin polytope\n");
+        enqueMsgstr("-P <name> change current polytope to one from history\n");
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
-        enqueMsgstr("-S resample current polytope to space and planes\n");}
+        enqueMsgstr("-S resample current polytope to space and planes\n");
+        enqueMsgstr("-o optimize away unused boundarie\n");
+        enqueMsgstr("-O split polytopes into disjoint covering subpolytope\n");
+        enqueMsgstr("-t run sanity check\n");
+        enqueMsgstr("-T run thorough tests\n");}
     else if (strcmp(headOption(), "-i") == 0) {
         ENQUE(configure,Configure)
 #ifdef BRINGUP
@@ -1105,91 +1110,7 @@ void menu()
 }
 
 /*
- * helpers for initialization
- */
-
-const char *inputCode(enum Shader shader)
-{
-    SWITCH(input[shader],GL_POINTS) return "#define INPUT points\n";
-    CASE(GL_TRIANGLES) return "#define INPUT triangles\n";
-    CASE(GL_TRIANGLES_ADJACENCY) return "#define INPUT triangles_adjacency\n";
-    DEFAULT(exitErrstr("unknown input primitive");)
-    return "";
-}
-
-const char *outputCode(enum Shader shader)
-{
-    SWITCH(output[shader],GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
-    CASE(GL_TRIANGLES) return "#define OUTPUT triangle_strip, max_vertices = 3\n";
-    DEFAULT(exitErrstr("unknown output primitive");)
-    return "";
-}
-
-const GLchar *uniformCode = 0;
-const GLchar *projectCode = 0;
-const GLchar *pierceCode = 0;
-const GLchar *sideCode = 0;
-const GLchar *expandCode = 0;
-const GLchar *constructCode = 0;
-const GLchar *intersectCode = 0;
-
-GLuint compileProgram(
-    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
-    const GLchar **feedback, int size, const char *name, enum Shader shader)
-{
-    GLint success = 0;
-    GLchar infoLog[512];
-    const GLchar *code[9] = {0};
-    GLuint program = glCreateProgram();
-    GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[0] = uniformCode; code[1] = expandCode; code[2] = projectCode; code[3] = pierceCode;
-    code[4] = constructCode; code[5] = intersectCode;
-    code[6] = vertexCode;
-    glShaderSource(vertex, 7, code, NULL);
-    glCompileShader(vertex);
-    glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
-    if(!success) {
-        glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-        exitErrstr("could not compile vertex shader for program %s: %s\n", name, infoLog);}
-    glAttachShader(program, vertex);
-    GLuint geometry = 0;
-    if (geometryCode) {
-        geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        code[6] = inputCode(shader);
-        code[7] = outputCode(shader);
-        code[8] = geometryCode;
-        glShaderSource(geometry, 9, code, NULL);
-        glCompileShader(geometry);
-        glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
-        if(!success) {
-            glGetShaderInfoLog(geometry, 512, NULL, infoLog);
-            exitErrstr("could not compile geometry shader for program %s: %s\n", name, infoLog);}
-        glAttachShader(program, geometry);}
-    GLuint fragment = 0;
-    if (fragmentCode) {
-        fragment = glCreateShader(GL_FRAGMENT_SHADER);
-        code[6] = fragmentCode;
-        glShaderSource(fragment, 7, code, NULL);
-        glCompileShader(fragment);
-        glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
-        if(!success) {
-            glGetShaderInfoLog(fragment, 512, NULL, infoLog);
-            exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
-        glAttachShader(program, fragment);}
-    if (size) glTransformFeedbackVaryings(program, size, feedback, GL_SEPARATE_ATTRIBS);
-    glLinkProgram(program);
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if(!success) {
-        glGetProgramInfoLog(program, 512, NULL, infoLog);
-        exitErrstr("could not link shaders for program %s: %s\n", name, infoLog);}
-    glDeleteShader(vertex);
-    if (geometryCode) glDeleteShader(geometry);
-    if (fragmentCode) glDeleteShader(fragment);
-    return program;
-}
-
-/*
- * helpers and thread for parsing input and preparing output
+ * threads for console and commands
  */
 
 void handler(int sig)
@@ -1398,10 +1319,6 @@ void *console(void *arg)
     return 0;
 }
 
-/*
- * functions called by top level Haskell
- */
-
 void waitForEvent()
 {
     while (1) {
@@ -1428,6 +1345,90 @@ void waitForEvent()
         sequenceNumber++;
         if (command) (*command)();
         else break;}
+}
+
+/*
+ * functions called by top level Haskell
+ */
+
+const char *inputCode(enum Shader shader)
+{
+    SWITCH(input[shader],GL_POINTS) return "#define INPUT points\n";
+    CASE(GL_TRIANGLES) return "#define INPUT triangles\n";
+    CASE(GL_TRIANGLES_ADJACENCY) return "#define INPUT triangles_adjacency\n";
+    DEFAULT(exitErrstr("unknown input primitive");)
+    return "";
+}
+
+const char *outputCode(enum Shader shader)
+{
+    SWITCH(output[shader],GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
+    CASE(GL_TRIANGLES) return "#define OUTPUT triangle_strip, max_vertices = 3\n";
+    DEFAULT(exitErrstr("unknown output primitive");)
+    return "";
+}
+
+const GLchar *uniformCode = 0;
+const GLchar *projectCode = 0;
+const GLchar *pierceCode = 0;
+const GLchar *sideCode = 0;
+const GLchar *expandCode = 0;
+const GLchar *constructCode = 0;
+const GLchar *intersectCode = 0;
+
+GLuint compileProgram(
+    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
+    const GLchar **feedback, int size, const char *name, enum Shader shader)
+{
+    GLint success = 0;
+    GLchar infoLog[512];
+    const GLchar *code[9] = {0};
+    GLuint program = glCreateProgram();
+    GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
+    code[0] = uniformCode; code[1] = expandCode; code[2] = projectCode; code[3] = pierceCode;
+    code[4] = constructCode; code[5] = intersectCode;
+    code[6] = vertexCode;
+    glShaderSource(vertex, 7, code, NULL);
+    glCompileShader(vertex);
+    glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
+    if(!success) {
+        glGetShaderInfoLog(vertex, 512, NULL, infoLog);
+        exitErrstr("could not compile vertex shader for program %s: %s\n", name, infoLog);}
+    glAttachShader(program, vertex);
+    GLuint geometry = 0;
+    if (geometryCode) {
+        geometry = glCreateShader(GL_GEOMETRY_SHADER);
+        code[6] = inputCode(shader);
+        code[7] = outputCode(shader);
+        code[8] = geometryCode;
+        glShaderSource(geometry, 9, code, NULL);
+        glCompileShader(geometry);
+        glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
+        if(!success) {
+            glGetShaderInfoLog(geometry, 512, NULL, infoLog);
+            exitErrstr("could not compile geometry shader for program %s: %s\n", name, infoLog);}
+        glAttachShader(program, geometry);}
+    GLuint fragment = 0;
+    if (fragmentCode) {
+        fragment = glCreateShader(GL_FRAGMENT_SHADER);
+        code[6] = fragmentCode;
+        glShaderSource(fragment, 7, code, NULL);
+        glCompileShader(fragment);
+        glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
+        if(!success) {
+            glGetShaderInfoLog(fragment, 512, NULL, infoLog);
+            exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
+        glAttachShader(program, fragment);}
+    if (size) glTransformFeedbackVaryings(program, size, feedback, GL_SEPARATE_ATTRIBS);
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if(!success) {
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        exitErrstr("could not link shaders for program %s: %s\n", name, infoLog);}
+    glDeleteShader(vertex);
+    if (geometryCode) glDeleteShader(geometry);
+    if (fragmentCode) glDeleteShader(fragment);
+    return program;
 }
 
 void displayClose(GLFWwindow* window);
@@ -1599,25 +1600,17 @@ void initialize(int argc, char **argv)
             case (uint(1)): system = mat2(diff1.xz,diff2.xz); augment = diff0.xz; difference = vec2(diff1.y,diff2.y); origin = points[0].y; break;\n\
             case (uint(2)): system = mat2(diff1.xy,diff2.xy); augment = diff0.xy; difference = vec2(diff1.z,diff2.z); origin = points[0].z; break;\n\
             default: system = mat2(invalid[0],invalid[0],invalid[0],invalid[0]); augment = vec2(invalid[0],invalid[0]); difference = augment; origin = invalid[0]; break;}\n\
-        // 00x 10y 20\n\
-        // 01x 11y 21\n\
-        // 11/10*00-01 x 11/10*20-21\n\
-        // 11*00-10*01 x 11*20-10*21\n\
-        // 01/00*10-11 y 01/00*20-21\n\
-        // 01*10-00*11 y 01*20-00*21\n\
-        /*float numer0 = system[1][1]*augment[0]-system[1][0]*augment[1];\n\
-        float denom0 = system[0][0]*system[1][1]-system[1][0]*system[0][1];\n\
-        float numer1 = system[1][0]*augment[0]-system[0][0]*augment[1];\n\
-        float denom1 = system[0][1]*system[1][0]-system[0][0]*system[1][1];\n\
-        vec2 solution = vec2(numer0/denom0,numer1/denom1);\n\
-        float retval = dot(solution,difference) + origin;\n\
-        if (abs(numer0/invalid[1])>abs(denom0) || abs(numer1/invalid[1])>abs(denom1) ||\n\
-            abs(solution[0])>invalid[1] || abs(solution[1])>invalid[1] || abs(retval)>invalid[1])\n\
-            outp = invalid[0];\n\
-        else\n\
-            outp = retval;*/\n\
         vec2 solution = inverse(system)*augment;\n\
         outp = dot(solution,difference) + origin;\n\
+        float det = determinant(system);\n\
+        float worst = -1.0;\n\
+        for (int i = 0; i < 2; i++) {\n\
+            for (int j = 0; j < 2; j++) {\n\
+                worst = max(worst,abs(system[i][j])-abs(invalid[1]*det));}}\n\
+        for (int i = 0; i < 2; i++) {\n\
+            worst = max(worst,abs(solution[i])-invalid[1]);}\n\
+        worst = max(worst,abs(outp)-invalid[1]);\n\
+        if (worst > 0.0) outp = invalid[0];\n\
     }\n\
     void project9(in mat3 points, in uint versor, out vec3 plane)\n\
     {\n\
@@ -2293,7 +2286,7 @@ void finalize()
 }
 
 /*
- * helpers for display callbacks
+ * callbacks triggered by user actions and inputs
  */
 
 void leftAdditive()
@@ -2485,10 +2478,6 @@ void manipulateDrive()
     // TODO
     enqueDisplay();
 }
-
-/*
- * callbacks triggered by user actions and inputs
- */
 
 void displayClose(GLFWwindow* window)
 {
