@@ -70,6 +70,7 @@ extern void __stginit_Main(void);
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
 #define POLL_DELAY 0.1
+#define MAX_ROTATE 0.999
 
 #define DECLARE_QUEUE(TYPE) \
     TYPE *base; \
@@ -112,7 +113,9 @@ enum Shader { // one value per shader; state for bringup
     Perpoint, // points are base of tetrahedron
     Replane, // reconstruct to versor 0
     Repoint, // reconstruct from versor 0
-    Shaders} shader = Diplane;
+    Shaders};
+enum Shader dishader = Diplane;
+enum Shader pershader = Perplane;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
     Reque, // yield to other commands
@@ -1942,6 +1945,63 @@ void configure()
         if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
         configureState = ConfigureWait; REQUE(configure)}
     DEQUE(configure,Configure)
+
+}
+
+void enqueShader();
+
+void process()
+{
+    CHECK(process,Process)
+    if (!validOption()) {
+        enqueEvent(Done); enqueCommand(0); DEQUE(process,Process)}
+    if (strcmp(headOption(), "-h") == 0) {
+        enqueMsgstr("-h print this message\n");
+        enqueMsgstr("-H print manual page\n");
+        enqueMsgstr("-i start interactive mode\n");
+        enqueMsgstr("-I <file> start animation that tweaks planes according to a metric\n");
+        enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
+        enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
+        enqueMsgstr("-c <file> change file for configuration and history\n");
+        enqueMsgstr("-C randomize direction and color of light sources\n");
+        enqueMsgstr("-p <name> replace current polytope by builtin polytope\n");
+        enqueMsgstr("-P <name> change current polytope to one from history\n");
+        enqueMsgstr("-s resample current space to planes with same sidedness\n");
+        enqueMsgstr("-S resample current polytope to space and planes\n");
+        enqueMsgstr("-o optimize away unused boundarie\n");
+        enqueMsgstr("-O split polytopes into disjoint covering subpolytope\n");
+        enqueMsgstr("-t run sanity check\n");
+        enqueMsgstr("-T run thorough tests\n");}
+    else if (strcmp(headOption(), "-i") == 0) {
+        ENQUE(configure,Configure)
+#ifdef BRINGUP
+#else
+        SWITCH(dishader,Diplane) {}
+        CASE(Dipoint) enqueCoplane(); // wont start until configure provides planes
+        DEFAULT(exitErrstr("invalid display mode\n");)
+#endif
+        enqueShader(dishader);
+        dequeOption(); DEQUE(process,Process)}
+    else if (strcmp(headOption(), "-c") == 0) {
+        dequeOption();
+        if (!validOption()) {
+            enqueErrstr("missing file argument\n"); return;}
+        enqueFilename(headOption());}
+    dequeOption(); REQUE(process)
+}
+
+void menu()
+{
+    CHECK(menu,Menu)
+    char *buf = arrayChar();
+    int len = strstr(buf,"\n")-buf;
+    if (len == 1 && buf[0] < 0) {
+        enum Menu line = buf[0]+128;
+        click = Init; mode[item[line].mode] = line;}
+    else {
+        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
+    delocChar(len+1);
+    DEQUE(menu,Menu)
 }
 
 void wrap()
@@ -2116,7 +2176,6 @@ void render()
     for (int i = 0; i < arg->feedback; i++)
         renderMsgstr(buf[arg->vertex+i]);
 #endif
-    enqueMsgstr("render done %d %s\n",shaderCount[arg->shader],arg->name);
     shaderCount[arg->shader]--; unqueRender(); unlocBuffer(size);
     DEQUE(render,Render)
 }
@@ -2150,13 +2209,6 @@ void enqueDipoint()
     arg->state = RenderEnqued;
     arg->name = "dipoint";
     enqueCommand(render); shaderCount[Dipoint]++;
-}
-
-void enqueDisplay()
-{
-    SWITCH(shader,Diplane) if (!shaderCount[Diplane]) enqueDiplane();
-    CASE(Dipoint) if (!shaderCount[Dipoint]) enqueDipoint();
-    DEFAULT(exitErrstr("invalid display mode\n");)    
 }
 
 void enqueCoplane()
@@ -2206,8 +2258,8 @@ void pierce()
         int sub = i+pierceBuf.dimension-1;
         if (result[sub]!=invalid[0] && (found==invalid[0] || result[sub]<found)) found = result[sub];}
     if (found!=invalid[0]) zPos = found;
-    enqueMsgstr("found %d %f\n",shaderCount[shader],zPos); zPos = 0.0;
-    SWITCH(shader,Diplane) shaderCount[Perplane]--;
+    enqueMsgstr("found %f\n",zPos);
+    SWITCH(dishader,Diplane) shaderCount[Perplane]--;
     CASE(Dipoint) shaderCount[Perpoint]--;
     DEFAULT(exitErrstr("invalid shader\n");)
 }
@@ -2244,70 +2296,19 @@ void enquePerpoint()
     arg->shader = Perpoint;
     arg->name = "perpoint";
     arg->state = RenderEnqued;
+    enqueMsgstr("enquePerpoint %d\n",shaderCount[Perpoint]);
     enqueCommand(render); shaderCount[Perpoint]++;
     enqueCommand(pierce); shaderCount[Perpoint]++;
 }
 
-void enquePierce()
+void enqueShader(enum Shader shader)
 {
-    enqueMsgstr("enquePierce %d\n",shaderCount[Perplane]);
-    SWITCH(shader,Diplane) if (!shaderCount[Perplane]) enquePerplane();
-    CASE(Dipoint) if (!shaderCount[Perpoint]) enquePerpoint();
-    DEFAULT(exitErrstr("invalid display mode\n");)
-}
-
-void process()
-{
-    CHECK(process,Process)
-    if (!validOption()) {
-        enqueEvent(Done); enqueCommand(0); DEQUE(process,Process)}
-    if (strcmp(headOption(), "-h") == 0) {
-        enqueMsgstr("-h print this message\n");
-        enqueMsgstr("-H print manual page\n");
-        enqueMsgstr("-i start interactive mode\n");
-        enqueMsgstr("-I <file> start animation that tweaks planes according to a metric\n");
-        enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
-        enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
-        enqueMsgstr("-c <file> change file for configuration and history\n");
-        enqueMsgstr("-C randomize direction and color of light sources\n");
-        enqueMsgstr("-p <name> replace current polytope by builtin polytope\n");
-        enqueMsgstr("-P <name> change current polytope to one from history\n");
-        enqueMsgstr("-s resample current space to planes with same sidedness\n");
-        enqueMsgstr("-S resample current polytope to space and planes\n");
-        enqueMsgstr("-o optimize away unused boundarie\n");
-        enqueMsgstr("-O split polytopes into disjoint covering subpolytope\n");
-        enqueMsgstr("-t run sanity check\n");
-        enqueMsgstr("-T run thorough tests\n");}
-    else if (strcmp(headOption(), "-i") == 0) {
-        ENQUE(configure,Configure)
-#ifdef BRINGUP
-#else
-        SWITCH(shader,Diplane) {}
-        CASE(Dipoint) enqueCoplane(); // wont start until configure provides planes
-        DEFAULT(exitErrstr("invalid display mode\n");)
-#endif
-        enqueDisplay();
-        dequeOption(); DEQUE(process,Process)}
-    else if (strcmp(headOption(), "-c") == 0) {
-        dequeOption();
-        if (!validOption()) {
-            enqueErrstr("missing file argument\n"); return;}
-        enqueFilename(headOption());}
-    dequeOption(); REQUE(process)
-}
-
-void menu()
-{
-    CHECK(menu,Menu)
-    char *buf = arrayChar();
-    int len = strstr(buf,"\n")-buf;
-    if (len == 1 && buf[0] < 0) {
-        enum Menu line = buf[0]+128;
-        click = Init; mode[item[line].mode] = line;}
-    else {
-        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
-    delocChar(len+1);
-    DEQUE(menu,Menu)
+    if (shaderCount[shader]) return;
+    SWITCH(shader,Diplane) enqueDiplane();
+    CASE(Dipoint) enqueDipoint();
+    CASE(Perplane) enquePerplane();
+    CASE(Perpoint) enquePerpoint();
+    DEFAULT(exitErrstr("invalid shader\n");)
 }
 
 /*
@@ -2317,13 +2318,11 @@ void menu()
 void leftAdditive()
 {
     enqueMsgstr("leftAdditive %f %f\n",xPos,yPos);
-    enqueDisplay();
 }
 
 void leftSubtractive()
 {
     enqueMsgstr("leftSubtractive %f %f\n",xPos,yPos);
-    enqueDisplay();
 }
 
 void leftRefine()
@@ -2346,6 +2345,14 @@ void leftManipulate()
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
     enqueMsgstr("leftManipulate %f %f\n",xPoint,yPoint);
     click = Left;
+}
+
+void leftLeft()
+{
+    glUseProgram(program[pershader]);
+    glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMatz);
+    glUseProgram(0);
+    click = Init;
 }
 
 void rightRight()
@@ -2372,10 +2379,21 @@ void rightLeft()
 {
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
     enqueMsgstr("rightLeft %f %f\n",xPos,yPos);
+    glUseProgram(program[pershader]);
+    glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMatz);
+    glUseProgram(0);
     click = Right;
 }
 
-#define MAX_ROTATE 0.999
+void transformRight()
+{
+    glUseProgram(program[pershader]);
+    glUniform3f(uniform[pershader][Feather],xPos,yPos,0.0);
+    glUniform3f(uniform[pershader][Arrow],0.0,0.0,1.0);
+    glUseProgram(0);
+    enqueShader(pershader);
+}
+
 void transformRotate()
 {
     float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
@@ -2396,11 +2414,11 @@ void transformRotate()
     identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
     copymat(affineMatz,affineMat,16,16,16);
     jumpmat(affineMatz,u,4); jumpmat(affineMatz,w,4); jumpmat(affineMatz,v,4);
-    glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
-    glUniformMatrix3fv(uniform[shader][Linear],1,GL_FALSE,linearMatz);
+    glUseProgram(program[dishader]);
+    glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatz);
+    glUniformMatrix3fv(uniform[dishader][Linear],1,GL_FALSE,linearMatz);
     glUseProgram(0);
-    enqueDisplay();
+    enqueShader(dishader);
 }
 
 void transformTranslate()
@@ -2409,94 +2427,80 @@ void transformTranslate()
     v[12] = xPos-xPoint; v[13] = yPos-yPoint;
     copymat(affineMatz,affineMat,16,16,16);
     jumpmat(affineMatz,v,4);
-    glUseProgram(program[shader]);
-    glUniformMatrix4fv(uniform[shader][Affine],1,GL_FALSE,affineMatz);
+    glUseProgram(program[dishader]);
+    glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatz);
     glUseProgram(0);
-    enqueDisplay();
+    enqueShader(dishader);
 }
 
 void transformLook()
 {
     // TODO
-    enqueDisplay();
 }
 
 void transformLever()
 {
     // TODO
-    enqueDisplay();
 }
 
 void transformClock()
 {
     // TODO
-    enqueDisplay();
 }
 
 void transformCylinder()
 {
     // TODO
-    enqueDisplay();
 }
 
 void transformScale()
 {
     // TODO
-    enqueDisplay();
 }
 
 void transformDrive()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateRotate()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateTranslate()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateLook()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateLever()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateClock()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateCylinder()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateScale()
 {
     // TODO
-    enqueDisplay();
 }
 
 void manipulateDrive()
 {
     // TODO
-    enqueDisplay();
 }
 
 void displayClose(GLFWwindow* window)
@@ -2536,11 +2540,11 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Transform) {
             SWITCH(click,Init) FALL(Right) leftTransform();
-            CASE(Left) click = Init;
+            CASE(Left) leftLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Manipulate) {
             SWITCH(click,Init) FALL(Right) leftManipulate();
-            CASE(Left) click = Init;
+            CASE(Left) leftLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
@@ -2558,17 +2562,10 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = 2.0*xpos/xSiz-1.0; yPos = -2.0*ypos/ySiz+1.0;
-    glUseProgram(program[Perplane]);
-    glUniform3f(uniform[Perplane][Feather],xPos,yPos,0.0);
-    glUniform3f(uniform[Perplane][Arrow],0.0,0.0,1.0);
-    glUseProgram(program[Perpoint]);
-    glUniform3f(uniform[Perpoint][Feather],xPos,yPos,0.0);
-    glUniform3f(uniform[Perpoint][Arrow],0.0,0.0,1.0);
-    glUseProgram(0);
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
-        SWITCH(click,Init) FALL(Right)
-            enquePierce();
+        SWITCH(click,Init) FALL(Right) 
+            transformRight();
         CASE(Left) {
             enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
             SWITCH(mode[Mouse],Rotate) transformRotate();
@@ -2578,7 +2575,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         DEFAULT(exitErrstr("invalid click mode\n");)}
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right)
-            enquePierce();
+            transformRight();
         CASE(Left) {
             enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
             SWITCH(mode[Mouse],Rotate) manipulateRotate();
@@ -2622,7 +2619,6 @@ void displayLocation(GLFWwindow *window, int xloc, int yloc)
 {
     xLoc = xloc; yLoc = yloc;
     enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
-    enqueDisplay();
 }
 
 void displaySize(GLFWwindow *window, int width, int height)
@@ -2635,12 +2631,11 @@ void displaySize(GLFWwindow *window, int width, int height)
     glViewport(0, 0, xSiz, ySiz);
 #endif
     enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
-    enqueDisplay();
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    enqueDisplay();
+    enqueShader(dishader);
 }
 
 /*
