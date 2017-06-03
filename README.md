@@ -5,16 +5,19 @@ Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regi
 Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The default file for human readable history and configuration is ./.sculpt . The following command line arguments are processed in order.
 
   * -i start interactive mode  
-  * -e \<metric> start animation that tweaks planes according to a metric  
-  * -c \<file> change file for configuration and history  
-  * -o \<file> save polytope in format indicated by file extension  
+  * -I \<file> start animation that tweaks planes according to a metric  
   * -f \<file> load polytope in format indicated by file extension  
-  * -t \<ident> change current polytope to one from history  
-  * -n \<shape> replace current polytope by builtin polytope  
-  * -r randomize direction and color of light sources  
+  * -F \<file> save polytope in format indicated by file extension  
+  * -c \<file> change file for configuration and history  
+  * -C randomize direction and color of light sources  
+  * -p \<name> replace current polytope by builtin polytope  
+  * -P \<name> change current polytope to one from history  
   * -s resample current space to planes with same sidedness  
   * -S resample current polytope to space and planes  
-  * -q run QhickCheck tests  
+  * -o optimize away unused boundaries
+  * -O split polytopes into disjoint covering subpolytopes
+  * -t run sanity check 
+  * -T run thorough tests 
 
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console.
 
