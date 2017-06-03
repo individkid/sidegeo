@@ -137,6 +137,8 @@ GLuint program[Shaders] = {0};
 int input[Shaders] = {0};
 int output[Shaders] = {0};
 GLint uniform[Shaders][Uniforms] = {0};
+int started[Shaders] = {0};
+int restart[Shaders] = {0};
 GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
@@ -232,11 +234,13 @@ struct Render {
     int feedback; // number of output buffers on que
     enum Shader shader;
     enum RenderState state;
+    int restart;
     const char *name;
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
-int shaderCount[Shaders] = {0};
-enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureWait} configureState = ConfigureIdle;
+enum ConfigureState {ConfigureIdle,ConfigureEnqued,
+    ConfigureOpen,ConfigureLoad,ConfigureInit,ConfigureClose,
+    ConfigureReopen,ConfigureWaitLoad,ConfigureWaitInit} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 enum WrapState {WrapIdle,WrapEnqued,WrapWait};
 enum MenuState {MenuIdle,MenuEnqued} menuState = MenuIdle;
@@ -401,11 +405,11 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 #define DEQUE(command,Command) \
     command##State = Command##Idle; return;
 
-#define SWITCH(EXP,VAL) switch (EXP) {case (VAL):
+#define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
 #define FALL(VAL) case (VAL):
-#define DEFAULT(SMT) break; default: SMT break;}
-#define DEFALL(SMT) default: SMT break;}
+#define BRANCH(VAL) continue; case(VAL):
+#define DEFAULT(SMT) break; default: SMT break;} break;}
 
 /*
  * fifo stack mutex message
@@ -1788,8 +1792,10 @@ void finalize()
  * functions put on command queue
  */
 
+void enqueShader(enum Shader);
+
 #ifdef BRINGUP
-void bringup()
+int bringup()
 {
     // f = 1
     // h^2 = f^2 - 0.5^2
@@ -1829,7 +1835,7 @@ void bringup()
         5.5,5.5,5.5,5.5,
         5.5,5.5,5.5,5.5,
     };
-    for (int i = 0; i < TEST_REPETITION; i++) {
+    for (int i = 0; i < TEST_REPETITION; i++) if (testBuf[i].wrap == 0) {
         glBindBuffer(GL_ARRAY_BUFFER, testBuf[i].handle);
         glBufferData(GL_ARRAY_BUFFER, NUM_FACES*TEST_DIMENSIONS*sizeof(GLfloat), test, GL_STATIC_DRAW);
         testBuf[i].wrap = testBuf[i].room = NUM_FACES; testBuf[i].done = 0;}
@@ -1846,10 +1852,11 @@ void bringup()
         9.0,0.1,1.1,
 */
     };
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), plane, GL_STATIC_DRAW);
-    planeBuf.wrap = planeBuf.room = NUM_PLANES;
-    planeBuf.done = /*0*/NUM_PLANES;
+    if (planeBuf.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), plane, GL_STATIC_DRAW);
+        planeBuf.wrap = planeBuf.room = NUM_PLANES; planeBuf.done = 0;}
+    else if (planeBuf.done < NUM_PLANES) planeBuf.done++;
 
     GLuint versor[NUM_PLANES] = {
         2,0,0,1,
@@ -1857,10 +1864,11 @@ void bringup()
         0,0,0,0,
 */
     };
-    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), versor, GL_STATIC_DRAW);
-    versorBuf.wrap = versorBuf.room = NUM_PLANES;
-    versorBuf.done = /*0*/NUM_PLANES;
+    if (versorBuf.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*sizeof(GLuint), versor, GL_STATIC_DRAW);
+        versorBuf.wrap = versorBuf.room = NUM_PLANES; versorBuf.done = 0;}
+    else if (versorBuf.done < NUM_PLANES) versorBuf.done++;
 
     GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
         -g,-b, q,
@@ -1868,34 +1876,38 @@ void bringup()
          z, a, q,
          z, z,-p,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
-    pointBuf.wrap = pointBuf.room = pointBuf.done = NUM_POINTS;
+    if (pointBuf.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
+        pointBuf.wrap = pointBuf.room = NUM_POINTS; pointBuf.done = 0;}
 
     GLfloat pierce[NUM_PLANES*SCALAR_DIMENSIONS] = {
         0.2,1.2,2.2,3.2,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), pierce, GL_STATIC_DRAW);
-    pierceBuf.wrap = pierceBuf.room = pierceBuf.done = NUM_FACES;
+    if (pierceBuf.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), pierce, GL_STATIC_DRAW);
+        pierceBuf.wrap = pierceBuf.room = NUM_FACES; pierceBuf.done = 0;}
 
     GLuint face[NUM_FACES*FACE_PLANES] = {
         0,1,2,3,2,3,
         1,2,3,0,3,0,
         2,3,0,1,0,1,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, faceSub.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), face, GL_STATIC_DRAW);
-    faceSub.wrap = faceSub.room = faceSub.done = NUM_FACES;
+    if (faceSub.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, faceSub.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), face, GL_STATIC_DRAW);
+        faceSub.wrap = faceSub.room = NUM_FACES; faceSub.done = /*0*/NUM_FACES;}
 
     GLuint polygon[NUM_POLYGONS*POLYGON_POINTS] = {
         0,1,2,
         2,0,3,
         1,2,3,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, polygonSub.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POLYGONS*POLYGON_POINTS*sizeof(GLuint), polygon, GL_STATIC_DRAW);
-    polygonSub.wrap = polygonSub.room = polygonSub.done = NUM_POLYGONS;
+    if (polygonSub.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, polygonSub.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_POLYGONS*POLYGON_POINTS*sizeof(GLuint), polygon, GL_STATIC_DRAW);
+        polygonSub.wrap = polygonSub.room = NUM_POLYGONS; polygonSub.done = 0;}
 
     GLuint vertex[NUM_POINTS*POINT_INCIDENCES] = {
         0,1,2,
@@ -1903,9 +1915,10 @@ void bringup()
         2,3,0,
         3,0,1,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, vertexSub.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), vertex, GL_STATIC_DRAW);
-    vertexSub.wrap = vertexSub.room = vertexSub.done = NUM_POINTS;
+    if (vertexSub.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, vertexSub.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), vertex, GL_STATIC_DRAW);
+        vertexSub.wrap = vertexSub.room = NUM_POINTS; vertexSub.done = 0;}
 
     GLuint construct[NUM_PLANES*PLANE_INCIDENCES] = {
         0,1,2,
@@ -1913,15 +1926,18 @@ void bringup()
         2,3,0,
         3,0,1,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, constructSub.handle);
-    glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), construct, GL_STATIC_DRAW);
-    constructSub.wrap = constructSub.room = constructSub.done = NUM_PLANES;
+    if (constructSub.handle) {
+        glBindBuffer(GL_ARRAY_BUFFER, constructSub.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), construct, GL_STATIC_DRAW);
+        constructSub.wrap = constructSub.room = NUM_PLANES; constructSub.done = /*0*/NUM_PLANES;}
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    return (planeBuf.done < NUM_PLANES);
 }
 #endif
 
-void loadFile()
+enum Action loadFile()
 {
     // TODO
     // load lighting directions and colors
@@ -1934,11 +1950,11 @@ void loadFile()
     // load transformation matrices
     // ftruncate to before transformation matrices
 #ifdef BRINGUP
-    bringup();
+    return (bringup()?Reque:Advance);
 #endif
 }
 
-void initFile()
+enum Action initFile()
 {
     // TODO
     // randomize();
@@ -1946,33 +1962,46 @@ void initFile()
     // randomizeH();
     // save generic data
 #ifdef BRINGUP
-    bringup();
+    return (bringup()?Reque:Advance);
 #endif
 }
 
 void configure()
 {
     CHECK(configure,Configure)
-    char *filename = 0;
-    if (configureState == ConfigureEnqued) {
-        if (configFile && fclose(configFile) != 0) {
-            enqueErrstr("invalid path for close: %s\n", strerror(errno));}
-        if (!validFilename()) {
-            enqueFilename("./sculpt.cfg");}
-        while (validFilename()) {
-            filename = headFilename();
-            dequeFilename();
-            if ((configFile = fopen(filename, "r"))) loadFile();
-            else if (errno == ENOENT && (configFile = fopen(filename, "w"))) initFile();
-            else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));
-            if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));}
+    SWITCH(configureState,ConfigureEnqued) {
+        if (configFile && fclose(configFile) != 0)
+            enqueErrstr("invalid path for close: %s\n", strerror(errno));
+        if (!validFilename())
+            enqueFilename("./sculpt.cfg");
+        configureState = ConfigureOpen;}
+    BRANCH(ConfigureOpen) {
+        char *filename = headFilename();
+        if ((configFile = fopen(filename, "r"))) configureState = ConfigureLoad;
+        else if (errno == ENOENT && (configFile = fopen(filename, "w"))) configureState = ConfigureInit;
+        else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));}
+    BRANCH(ConfigureLoad) {
+        SWITCH(loadFile(),Reque) configureState = ConfigureWaitLoad;
+        CASE(Advance) configureState = ConfigureClose;
+        DEFAULT(exitErrstr("invalid load status\n");)}
+    BRANCH(ConfigureInit) {
+        SWITCH(initFile(),Reque) configureState = ConfigureWaitInit;
+        CASE(Advance) configureState = ConfigureClose;
+        DEFAULT(exitErrstr("invalid init status\n");)}
+    BRANCH(ConfigureClose) {
+        char *filename = headFilename();
+        if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));
+        if (sizeFilename() > 1) {dequeFilename(); configureState = ConfigureOpen;}
+        else configureState = ConfigureReopen;}
+    BRANCH(ConfigureReopen) {
+        char *filename = headFilename(); dequeFilename();
         if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
-        configureState = ConfigureWait; REQUE(configure)}
-    DEQUE(configure,Configure)
-
+        DEQUE(configure,Configure)}
+    CASE(ConfigureWaitLoad) configureState = ConfigureLoad;
+    CASE(ConfigureWaitInit) configureState = ConfigureInit;
+    DEFAULT(exitErrstr("invalid configure state\n");)
+    REQUE(configure)
 }
-
-void enqueShader(enum Shader);
 
 void process()
 {
@@ -2193,7 +2222,8 @@ void render()
         CASE(Advance) arg->state = renderState = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
-    shaderCount[arg->shader]--; unqueRender(); unlocBuffer(size);
+    started[arg->shader]--; unqueRender(); unlocBuffer(size);
+    if (arg->restart && restart[arg->shader]) {restart[arg->shader] = 0; enqueShader(arg->shader);}
     DEQUE(render,Render)
 }
 
@@ -2209,57 +2239,9 @@ void enqueDiplane()
     arg->feedback = 0;
     arg->shader = Diplane;
     arg->state = RenderEnqued;
+    arg->restart = 1;
     arg->name = "diplane";
-    enqueCommand(render); shaderCount[Diplane]++;
-}
-
-void enqueDipoint()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(1);
-    arg->blocker = &vertexSub;
-    arg->vertex = 1;
-    buf[0] = &pointBuf;
-    arg->element = &polygonSub;
-    arg->feedback = 0;
-    arg->shader = Dipoint;
-    arg->state = RenderEnqued;
-    arg->name = "dipoint";
-    enqueCommand(render); shaderCount[Dipoint]++;
-}
-
-void enqueCoplane()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(3);
-    arg->blocker = &constructSub;
-    arg->vertex = 2;
-    buf[0] = &planeBuf;
-    buf[1] = &versorBuf;
-    arg->element = &vertexSub;
-    arg->feedback = 1;
-    buf[2] = &pointBuf;
-    arg->shader = Coplane;
-    arg->name = "coplane";
-    arg->state = RenderEnqued;
-    enqueCommand(render); shaderCount[Coplane]++;
-}
-
-void enqueCopoint()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(3);
-    arg->blocker = &vertexSub;
-    arg->vertex = 1;
-    buf[0] = &pointBuf;
-    arg->element = &constructSub;
-    arg->feedback = 2;
-    buf[1] = &planeBuf;
-    buf[2] = &versorBuf;
-    arg->shader = Copoint;
-    arg->name = "copoint";
-    arg->state = RenderEnqued;
-    enqueCommand(render); shaderCount[Copoint]++;
+    enqueCommand(render); started[Diplane]++;
 }
 
 void pierce()
@@ -2275,7 +2257,59 @@ void pierce()
         int sub = i+pierceBuf.dimension-1;
         if (result[sub]<invalid[1] && (found>invalid[1] || result[sub]<found)) found = result[sub];}
     if (found!=invalid[0]) zPos = found;
-    shaderCount[pershader]--;
+    started[pershader]--;
+}
+
+void enqueDipoint()
+{
+    struct Render *arg = enlocRender(1);
+    struct Buffer **buf = enlocBuffer(1);
+    arg->blocker = &vertexSub;
+    arg->vertex = 1;
+    buf[0] = &pointBuf;
+    arg->element = &polygonSub;
+    arg->feedback = 0;
+    arg->shader = Dipoint;
+    arg->state = RenderEnqued;
+    arg->restart = 1;
+    arg->name = "dipoint";
+    enqueCommand(render); started[Dipoint]++;
+}
+
+void enqueCoplane()
+{
+    struct Render *arg = enlocRender(1);
+    struct Buffer **buf = enlocBuffer(3);
+    arg->blocker = &constructSub;
+    arg->vertex = 2;
+    buf[0] = &planeBuf;
+    buf[1] = &versorBuf;
+    arg->element = &vertexSub;
+    arg->feedback = 1;
+    buf[2] = &pointBuf;
+    arg->shader = Coplane;
+    arg->state = RenderEnqued;
+    arg->restart = 0;
+    arg->name = "coplane";
+    enqueCommand(render); started[Coplane]++;
+}
+
+void enqueCopoint()
+{
+    struct Render *arg = enlocRender(1);
+    struct Buffer **buf = enlocBuffer(3);
+    arg->blocker = &vertexSub;
+    arg->vertex = 1;
+    buf[0] = &pointBuf;
+    arg->element = &constructSub;
+    arg->feedback = 2;
+    buf[1] = &planeBuf;
+    buf[2] = &versorBuf;
+    arg->shader = Copoint;
+    arg->state = RenderEnqued;
+    arg->restart = 0;
+    arg->name = "copoint";
+    enqueCommand(render); started[Copoint]++;
 }
 
 void enquePerplane()
@@ -2290,10 +2324,11 @@ void enquePerplane()
     arg->feedback = 1;
     buf[2] = &pierceBuf; pierceBuf.done = 0;
     arg->shader = Perplane;
-    arg->name = "perplane";
     arg->state = RenderEnqued;
-    enqueCommand(render); shaderCount[Perplane]++;
-    enqueCommand(pierce); shaderCount[Perplane]++;
+    arg->restart = 0;
+    arg->name = "perplane";
+    enqueCommand(render); started[Perplane]++;
+    enqueCommand(pierce); started[Perplane]++;
 }
 
 void enquePerpoint()
@@ -2307,15 +2342,16 @@ void enquePerpoint()
     arg->feedback = 1;
     buf[2] = &pierceBuf; pierceBuf.done = 0;
     arg->shader = Perpoint;
-    arg->name = "perpoint";
     arg->state = RenderEnqued;
-    enqueCommand(render); shaderCount[Perpoint]++;
-    enqueCommand(pierce); shaderCount[Perpoint]++;
+    arg->restart = 0;
+    arg->name = "perpoint";
+    enqueCommand(render); started[Perpoint]++;
+    enqueCommand(pierce); started[Perpoint]++;
 }
 
 void enqueShader(enum Shader shader)
 {
-    if (shaderCount[shader]) return;
+    if (started[shader]) {restart[shader] = 1; return;}
     SWITCH(shader,Diplane) enqueDiplane();
     CASE(Dipoint) enqueDipoint();
     CASE(Coplane) enqueCoplane();
