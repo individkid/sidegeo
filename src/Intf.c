@@ -587,7 +587,7 @@ float *crossvec(float *u, float *v)
 }
 
 /*
- * threads for console and commands
+ * thread for console
  */
 
 void handler(int sig)
@@ -712,12 +712,12 @@ void *console(void *arg)
     int last[4];
     int esc = 0;
     while (1) {
-        int lenIn = entryInput(arrayScan(),isEndLine,sizeScan());
+        int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
         else if (lenIn > 0) delocScan(lenIn);
 
         int totOut = 0; int lenOut;
-        while ((lenOut = detryOutput(enlocEcho(10),isEndLine,10)) == 0) totOut += 10;
+        while ((lenOut = detryOutput(enlocEcho(10),&isEndLine,10)) == 0) totOut += 10;
         if ((lenOut < 0 && totOut > 0) || sizeEcho() != totOut+10) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
         else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 0) {
@@ -796,19 +796,23 @@ void *console(void *arg)
     return 0;
 }
 
+/*
+ * functions called by top level Haskell
+ */
+
 void menu();
 
 void waitForEvent()
 {
     while (1) {
-        int lenOut = entryOutput(arrayPrint(),isEndLine,sizePrint());
+        int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
         if (lenOut == 0) delocPrint(sizePrint());
         else if (lenOut > 0) {
             delocPrint(lenOut);
             if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
         
         int totIn = 0; int lenIn;
-        while ((lenIn = detryInput(enlocChar(10),isEndLine,10)) == 0) totIn += 10;
+        while ((lenIn = detryInput(enlocChar(10),&isEndLine,10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
         else if (lenIn < 0) unlocChar(10);
         else {unlocChar(10-lenIn); ENQUE(menu,Menu);}
@@ -825,10 +829,6 @@ void waitForEvent()
         if (command) (*command)();
         else break;}
 }
-
-/*
- * functions called by top level Haskell
- */
 
 const char *inputCode(enum Shader shader)
 {
@@ -1562,15 +1562,31 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *adpointFragment = 0;
 
-    const GLchar *perplaneVertex = coplaneVertex;
+    const GLchar *perplaneVertex = "\
+    layout (location = 0) in vec3 plane;\n\
+    layout (location = 1) in uint versor;\n\
+    out data {\n\
+        mat3 xformed;\n\
+        uint vformed;\n\
+    } od;\n\
+    void main()\n\
+    {\n\
+        mat3 xpanded;\n\
+        mat3 points;\n\
+        expand(plane,versor,xpanded);\n\
+        for (int i = 0; i < 3; i++)\n\
+            points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
+        minimum(points,od.vformed);\n\
+        od.xformed = points;\n\
+    }\n";
     input[Perplane] = GL_TRIANGLES_ADJACENCY;
     output[Perplane] = GL_POINTS;
     const GLchar *perplaneGeometry = "\
     layout (INPUT) in;\n\
     layout (OUTPUT) out;\n\
     in data {\n\
-        mat3 points;\n\
-        uint versor;\n\
+        mat3 xformed;\n\
+        uint vformed;\n\
     } id[6];\n\
     out vec3 vector;\n\
     void main()\n\
@@ -1585,9 +1601,9 @@ void initialize(int argc, char **argv)
         vec3 point2;\n\
         mat3 points[3];\n\
         uint versor[3];\n\
-        "INTERSECT(points,versor,0,0,1,2)";\n\
-        "INTERSECT(points,versor,1,0,1,3)";\n\
-        "INTERSECT(points,versor,2,0,4,5)";\n\
+        "INTERSECT(xformed,vformed,0,0,1,2)";\n\
+        "INTERSECT(xformed,vformed,1,0,1,3)";\n\
+        "INTERSECT(xformed,vformed,2,0,4,5)";\n\
         corners[0] = point0;\n\
         corners[1] = point1;\n\
         corners[2] = point2;\n\
@@ -1598,14 +1614,22 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *perplaneFragment = 0;
 
-    const GLchar *perpointVertex = copointVertex;
+    const GLchar *perpointVertex = "\
+    layout (location = 2) in vec3 point;\n\
+    out data {\n\
+        vec3 xformed;\n\
+    } od;\n\
+    void main()\n\
+    {\n\
+        od.xformed = (affine*vec4(point,1.0)).xyz;\n\
+    }\n";
     input[Perpoint] = GL_TRIANGLES;
     output[Perpoint] = GL_POINTS;
     const GLchar *perpointGeometry = "\
     layout (INPUT) in;\n\
     layout (OUTPUT) out;\n\
     in data {\n\
-        vec3 point;\n\
+        vec3 xformed;\n\
     } id[3];\n\
     out vec3 vector;\n\
     void main()\n\
@@ -1614,9 +1638,9 @@ void initialize(int argc, char **argv)
         vec3 tail;\n\
         mat3 corners;\n\
         uint index;\n\
-        corners[0] = id[0].point;\n\
-        corners[1] = id[1].point;\n\
-        corners[2] = id[2].point;\n\
+        corners[0] = id[0].xformed;\n\
+        corners[1] = id[1].xformed;\n\
+        corners[2] = id[2].xformed;\n\
         minimum(corners,index);\n\
         head = feather + arrow;\n\
         tail = feather;\n\
@@ -1730,7 +1754,7 @@ void finalize()
     // save transformation matrices
     enqueEscape(0);
     while (validPrint()) {
-        int lenOut = entryOutput(arrayPrint(),isEndLine,sizePrint());
+        int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
         if (lenOut <= 0) exitErrstr("entryOutput failed\n");
         delocPrint(lenOut);
         if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
@@ -1761,7 +1785,7 @@ void finalize()
 }
 
 /*
- * functions put on command queue, and their helpers
+ * functions put on command queue
  */
 
 #ifdef BRINGUP
@@ -1948,7 +1972,7 @@ void configure()
 
 }
 
-void enqueShader();
+void enqueShader(enum Shader);
 
 void process()
 {
@@ -1974,12 +1998,9 @@ void process()
         enqueMsgstr("-T run thorough tests\n");}
     else if (strcmp(headOption(), "-i") == 0) {
         ENQUE(configure,Configure)
-#ifdef BRINGUP
-#else
         SWITCH(dishader,Diplane) {}
-        CASE(Dipoint) enqueCoplane(); // wont start until configure provides planes
+        CASE(Dipoint) enqueShader(Coplane); // wont start until configure provides planes
         DEFAULT(exitErrstr("invalid display mode\n");)
-#endif
         enqueShader(dishader);
         dequeOption(); DEQUE(process,Process)}
     else if (strcmp(headOption(), "-c") == 0) {
@@ -2259,9 +2280,7 @@ void pierce()
         if (result[sub]!=invalid[0] && (found==invalid[0] || result[sub]<found)) found = result[sub];}
     if (found!=invalid[0]) zPos = found;
     enqueMsgstr("found %f\n",zPos);
-    SWITCH(dishader,Diplane) shaderCount[Perplane]--;
-    CASE(Dipoint) shaderCount[Perpoint]--;
-    DEFAULT(exitErrstr("invalid shader\n");)
+    shaderCount[pershader]--;
 }
 
 void enquePerplane()
@@ -2306,13 +2325,15 @@ void enqueShader(enum Shader shader)
     if (shaderCount[shader]) return;
     SWITCH(shader,Diplane) enqueDiplane();
     CASE(Dipoint) enqueDipoint();
+    CASE(Coplane) enqueCoplane();
+    CASE(Copoint) enqueCopoint();
     CASE(Perplane) enquePerplane();
     CASE(Perpoint) enquePerpoint();
     DEFAULT(exitErrstr("invalid shader\n");)
 }
 
 /*
- * callbacks triggered by user actions and inputs
+ * callbacks triggered by user actions
  */
 
 void leftAdditive()
@@ -2333,7 +2354,7 @@ void leftRefine()
 void leftTransform()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    enqueMsgstr("leftTransform %f %f\n",xPoint,yPoint);
+    enqueMsgstr("leftTransform %f %f %f\n",xPoint,yPoint,zPoint);
     for (int i = 0; i < 16; i++) affineMat[i] = affineMatz[i];
     for (int i = 0; i < 9; i++) linearMat[i] = linearMatz[i];
     for (int i = 0; i < 9; i++) projectMat[i] = projectMatz[i];
@@ -2343,7 +2364,7 @@ void leftTransform()
 void leftManipulate()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    enqueMsgstr("leftManipulate %f %f\n",xPoint,yPoint);
+    enqueMsgstr("leftManipulate %f %f %f\n",xPoint,yPoint,zPoint);
     click = Left;
 }
 
@@ -2358,7 +2379,7 @@ void leftLeft()
 void rightRight()
 {
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
-    enqueMsgstr("rightRight %f %f\n",xPos,yPos);
+    enqueMsgstr("rightRight %f %f %f\n",xPos,yPos,zPos);
     double xwarp = (xWarp+1.0)*xSiz/2.0;
     double ywarp = -(yWarp-1.0)*ySiz/2.0;
 #ifdef __linux__
@@ -2378,7 +2399,7 @@ void rightRight()
 void rightLeft()
 {
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
-    enqueMsgstr("rightLeft %f %f\n",xPos,yPos);
+    enqueMsgstr("rightLeft %f %f %f\n",xPos,yPos,zPos);
     glUseProgram(program[pershader]);
     glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMatz);
     glUseProgram(0);
@@ -2396,6 +2417,7 @@ void transformRight()
 
 void transformRotate()
 {
+    enqueMsgstr("transformRotate %f-%f=%f %f-%f=%f %f\n",xPos,xPoint,xPos-xPoint,yPos,yPoint,yPos-yPoint,zPoint);
     float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
     float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
     float s = v[0]*v[0]+v[1]*v[1];
@@ -2567,7 +2589,6 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         SWITCH(click,Init) FALL(Right) 
             transformRight();
         CASE(Left) {
-            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
             SWITCH(mode[Mouse],Rotate) transformRotate();
             CASE(Translate) transformTranslate();
             CASE(Look) transformLook();
@@ -2577,7 +2598,6 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
         SWITCH(click,Init) FALL(Right)
             transformRight();
         CASE(Left) {
-            enqueMsgstr("displayCursor %f %f\n",xPos,yPos);
             SWITCH(mode[Mouse],Rotate) manipulateRotate();
             CASE(Translate) manipulateTranslate();
             CASE(Look) manipulateLook();
@@ -2593,7 +2613,6 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
-            enqueMsgstr("displayScroll %f\n", zPos);
             SWITCH(mode[Roller],Lever) transformLever();
             CASE(Clock) transformClock();
             CASE(Cylinder) transformCylinder();
@@ -2604,7 +2623,6 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
         CASE(Left) {
-            enqueMsgstr("displayScroll %f\n", zPos);
             SWITCH(mode[Roller],Lever) manipulateLever();
             CASE(Clock) manipulateClock();
             CASE(Cylinder) manipulateCylinder();
