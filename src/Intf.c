@@ -861,13 +861,13 @@ GLuint compileProgram(
 {
     GLint success = 0;
     GLchar infoLog[512];
-    const GLchar *code[9] = {0};
+    const GLchar *code[10] = {0};
     GLuint program = glCreateProgram();
     GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[0] = uniformCode; code[1] = expandCode; code[2] = projectCode; code[3] = pierceCode;
-    code[4] = constructCode; code[5] = intersectCode;
-    code[6] = vertexCode;
-    glShaderSource(vertex, 7, code, NULL);
+    code[0] = uniformCode; code[1] = projectCode; code[2] = pierceCode; code[3] = sideCode;
+    code[4] = expandCode; code[5] = constructCode; code[6] = intersectCode;
+    code[7] = vertexCode;
+    glShaderSource(vertex, 8, code, NULL);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
@@ -877,10 +877,10 @@ GLuint compileProgram(
     GLuint geometry = 0;
     if (geometryCode) {
         geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        code[6] = inputCode(shader);
-        code[7] = outputCode(shader);
-        code[8] = geometryCode;
-        glShaderSource(geometry, 9, code, NULL);
+        code[7] = inputCode(shader);
+        code[8] = outputCode(shader);
+        code[9] = geometryCode;
+        glShaderSource(geometry, 10, code, NULL);
         glCompileShader(geometry);
         glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
         if(!success) {
@@ -890,8 +890,8 @@ GLuint compileProgram(
     GLuint fragment = 0;
     if (fragmentCode) {
         fragment = glCreateShader(GL_FRAGMENT_SHADER);
-        code[6] = fragmentCode;
-        glShaderSource(fragment, 7, code, NULL);
+        code[7] = fragmentCode;
+        glShaderSource(fragment, 8, code, NULL);
         glCompileShader(fragment);
         glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
         if(!success) {
@@ -911,7 +911,6 @@ GLuint compileProgram(
 }
 
 void displayClose(GLFWwindow* window);
-void displayFocus(GLFWwindow *window, int focused);
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods);
 void displayClick(GLFWwindow *window, int button, int action, int mods);
 void displayCursor(GLFWwindow *window, double xpos, double ypos);
@@ -937,7 +936,6 @@ void initialize(int argc, char **argv)
     windowHandle = glfwCreateWindow(800, 600, "Sculpt", NULL, NULL);
     if (!windowHandle) {exitErrstr("could not create window\n");}
     glfwSetWindowCloseCallback(windowHandle, displayClose);
-    glfwSetWindowFocusCallback(windowHandle, displayFocus);
     glfwSetKeyCallback(windowHandle, displayKey);
     glfwSetMouseButtonCallback(windowHandle, displayClick);
     glfwSetCursorPosCallback(windowHandle, displayCursor);
@@ -1200,9 +1198,9 @@ void initialize(int argc, char **argv)
         base[1] = points[2];\n\
         vertex = points[1];\n\
         onside(base,vertex,point,result1);\n\
-        base[0] = points[1];\n\
-        base[1] = points[2];\n\
-        vertex = points[0];\n\
+        base[0] = points[0];\n\
+        base[1] = points[1];\n\
+        vertex = points[2];\n\
         onside(base,vertex,point,result2);\n\
         if ((result0 == uint(1)) && (result1 == uint(1)) && (result2 == uint(1))) result = uint(1); else result = uint(0);\n\
     }\n\
@@ -1609,6 +1607,7 @@ void initialize(int argc, char **argv)
         corners[2] = point2;\n\
         minimum(corners,index);\n\
         pierce(corners, index, head, tail, vector);\n\
+        contain(corners,index,vector);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
@@ -1645,6 +1644,7 @@ void initialize(int argc, char **argv)
         head = feather + arrow;\n\
         tail = feather;\n\
         pierce(corners, index, head, tail, vector);\n\
+        contain(corners,index,vector);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
@@ -2193,10 +2193,6 @@ void render()
         CASE(Advance) arg->state = renderState = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
-#ifdef BRINGUP
-    for (int i = 0; i < arg->feedback; i++)
-        renderMsgstr(buf[arg->vertex+i]);
-#endif
     shaderCount[arg->shader]--; unqueRender(); unlocBuffer(size);
     DEQUE(render,Render)
 }
@@ -2277,9 +2273,8 @@ void pierce()
     float found = invalid[0];
     for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimension) {
         int sub = i+pierceBuf.dimension-1;
-        if (result[sub]!=invalid[0] && (found==invalid[0] || result[sub]<found)) found = result[sub];}
+        if (result[sub]<invalid[1] && (found>invalid[1] || result[sub]<found)) found = result[sub];}
     if (found!=invalid[0]) zPos = found;
-    enqueMsgstr("found %f\n",zPos);
     shaderCount[pershader]--;
 }
 
@@ -2297,7 +2292,6 @@ void enquePerplane()
     arg->shader = Perplane;
     arg->name = "perplane";
     arg->state = RenderEnqued;
-    enqueMsgstr("enquePerplane %d\n",shaderCount[Perplane]);
     enqueCommand(render); shaderCount[Perplane]++;
     enqueCommand(pierce); shaderCount[Perplane]++;
 }
@@ -2315,7 +2309,6 @@ void enquePerpoint()
     arg->shader = Perpoint;
     arg->name = "perpoint";
     arg->state = RenderEnqued;
-    enqueMsgstr("enquePerpoint %d\n",shaderCount[Perpoint]);
     enqueCommand(render); shaderCount[Perpoint]++;
     enqueCommand(pierce); shaderCount[Perpoint]++;
 }
@@ -2338,23 +2331,22 @@ void enqueShader(enum Shader shader)
 
 void leftAdditive()
 {
-    enqueMsgstr("leftAdditive %f %f\n",xPos,yPos);
+    // TODO
 }
 
 void leftSubtractive()
 {
-    enqueMsgstr("leftSubtractive %f %f\n",xPos,yPos);
+    // TODO
 }
 
 void leftRefine()
 {
-    enqueMsgstr("leftRefine %f %f\n",xPos,yPos);
+    // TODO
 }
 
 void leftTransform()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    enqueMsgstr("leftTransform %f %f %f\n",xPoint,yPoint,zPoint);
     for (int i = 0; i < 16; i++) affineMat[i] = affineMatz[i];
     for (int i = 0; i < 9; i++) linearMat[i] = linearMatz[i];
     for (int i = 0; i < 9; i++) projectMat[i] = projectMatz[i];
@@ -2364,7 +2356,6 @@ void leftTransform()
 void leftManipulate()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    enqueMsgstr("leftManipulate %f %f %f\n",xPoint,yPoint,zPoint);
     click = Left;
 }
 
@@ -2379,7 +2370,6 @@ void leftLeft()
 void rightRight()
 {
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
-    enqueMsgstr("rightRight %f %f %f\n",xPos,yPos,zPos);
     double xwarp = (xWarp+1.0)*xSiz/2.0;
     double ywarp = -(yWarp-1.0)*ySiz/2.0;
 #ifdef __linux__
@@ -2399,7 +2389,6 @@ void rightRight()
 void rightLeft()
 {
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
-    enqueMsgstr("rightLeft %f %f %f\n",xPos,yPos,zPos);
     glUseProgram(program[pershader]);
     glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMatz);
     glUseProgram(0);
@@ -2417,7 +2406,6 @@ void transformRight()
 
 void transformRotate()
 {
-    enqueMsgstr("transformRotate %f-%f=%f %f-%f=%f %f\n",xPos,xPoint,xPos-xPoint,yPos,yPoint,yPos-yPoint,zPoint);
     float u[16]; u[0] = 0.0; u[1] = 0.0; u[2] = -1.0;
     float v[16]; v[0] = xPos-xPoint; v[1] = yPos-yPoint;
     float s = v[0]*v[0]+v[1]*v[1];
@@ -2530,12 +2518,6 @@ void displayClose(GLFWwindow* window)
     enqueEvent(Done); enqueCommand(0);
 }
 
-void displayFocus(GLFWwindow *window, int focused)
-{
-    if (focused) enqueMsgstr("displayFocus entry\n");
-    else enqueMsgstr("displayFocus leave\n");
-}
-
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action != GLFW_PRESS) return;
@@ -2636,7 +2618,6 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 void displayLocation(GLFWwindow *window, int xloc, int yloc)
 {
     xLoc = xloc; yLoc = yloc;
-    enqueMsgstr("displayLocation %d %d\n", xLoc, yLoc);
 }
 
 void displaySize(GLFWwindow *window, int width, int height)
@@ -2648,7 +2629,6 @@ void displaySize(GLFWwindow *window, int width, int height)
 #ifdef __linux__
     glViewport(0, 0, xSiz, ySiz);
 #endif
-    enqueMsgstr("displaySize %d %d\n", xSiz, ySiz);
 }
 
 void displayRefresh(GLFWwindow *window)
