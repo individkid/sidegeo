@@ -115,6 +115,7 @@ enum Shader { // one value per shader; state for bringup
     Repoint, // reconstruct from versor 0
     Shaders};
 enum Shader dishader = Diplane;
+enum Shader coshader = Coplane;
 enum Shader pershader = Perplane;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
@@ -227,6 +228,8 @@ struct Buffer faceSub = {0}; // subscripts into planes
 struct Buffer polygonSub = {0}; // subscripts into points
 struct Buffer vertexSub = {0}; // every triple of planes
 struct Buffer constructSub = {0}; // per plane triple of points
+struct Buffer sideBuf = {0};
+struct Buffer sideSub = {0};
 struct Render {
     struct Buffer *blocker; // primitives per input buffer
     int vertex; // number of input buffers que
@@ -238,6 +241,7 @@ struct Render {
     const char *name;
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
+enum ClassifyState {ClassifyIdle,ClassifyEnqued,ClassifyWhile} classifyState = ClassifyIdle;
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,
     ConfigureOpen,ConfigureLoad,ConfigureInit,ConfigureClose,
     ConfigureReopen,ConfigureWaitLoad,ConfigureWaitInit} configureState = ConfigureIdle;
@@ -250,7 +254,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Error,Done};
+enum Event {Classify,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 struct Chars chars = {0};
@@ -1966,6 +1970,36 @@ enum Action initFile()
 #endif
 }
 
+void classify()
+{
+    CHECK(classify,Classify)
+    DEQUE(classify,Classify) // disable for now
+    SWITCH(classifyState,ClassifyEnqued) {
+        int count = 0; // find number of vertices done for next boundary
+        for (int i = 2; i < planeBuf.done && count <= vertexSub.done; i++) count += i*(i-1)/2;
+        if (count <= vertexSub.done) exitErrstr("vertex too done\n");
+        vertexSub.done = count;
+        enqueShader(Coplane);
+        classifyState = ClassifyWhile;}
+    BRANCH(ClassifyWhile) {
+        if (sideSub.done > sideBuf.done) {DEFER(classify)}
+        int count = 0; // find number of sidednesses done for next vertex wrt boundaries
+        for (int i = 2; i < planeBuf.done && count <= sideSub.done; i++) count += /*i*i*(i-1)/2*/0;
+        if (count <= sideSub.done) exitErrstr("side too done\n");
+        sideSub.done = count;
+        enqueShader(Adplane);
+        count = 0; // find number of sidednesses done for last vertex wrt boundaries
+        for (int i = 2; i < planeBuf.done && count <= sideSub.done; i++) count += /*i*i*(i-1)/2*/0;
+        if (count < sideSub.done) exitErrstr("side too done\n");
+        if (count == sideSub.done) {enqueCommand(0); enqueEvent(Classify);}
+        count = 0; // find number of vertices done for last boundary
+        for (int i = 2; i < planeBuf.done && count <= vertexSub.done; i++) count += i*(i-1)/2;
+        if (count < vertexSub.done) exitErrstr("vertex too done\n");
+        if (count == vertexSub.done) {DEQUE(classify,Classify)}}
+    DEFAULT(exitErrstr("invalid classify state\n");)
+    REQUE(classify)
+}
+
 void configure()
 {
     CHECK(configure,Configure)
@@ -1981,11 +2015,11 @@ void configure()
         else if (errno == ENOENT && (configFile = fopen(filename, "w"))) configureState = ConfigureInit;
         else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));}
     BRANCH(ConfigureLoad) {
-        SWITCH(loadFile(),Reque) configureState = ConfigureWaitLoad;
+        SWITCH(loadFile(),Reque) {configureState = ConfigureWaitLoad; MAYBE(classify,Classify)}
         CASE(Advance) configureState = ConfigureClose;
         DEFAULT(exitErrstr("invalid load status\n");)}
     BRANCH(ConfigureInit) {
-        SWITCH(initFile(),Reque) configureState = ConfigureWaitInit;
+        SWITCH(initFile(),Reque) {configureState = ConfigureWaitInit; MAYBE(classify,Classify)}
         CASE(Advance) configureState = ConfigureClose;
         DEFAULT(exitErrstr("invalid init status\n");)}
     BRANCH(ConfigureClose) {
