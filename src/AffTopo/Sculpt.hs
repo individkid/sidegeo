@@ -19,11 +19,15 @@
 module AffTopo.Sculpt where
 
 -- import Foreign.Ptr
+import Foreign.Ptr
 import Foreign.C.Types
+import Foreign.Marshal.Array
+import Foreign.C.String
 import AffTopo.Naive
 
--- foreign import ccall "generic" genericC :: Ptr CInt -> Ptr CInt -> IO (Ptr CChar)
+-- foreign import ccall "generic" genericC :: Ptr CInt -> CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO CInt
+foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign export ccall "randomizeH" randomize :: IO ()
 
 removeMe :: [Side]
@@ -33,6 +37,13 @@ handleEvent :: IO Bool
 handleEvent = do
  event <- eventC
  case event of
+  2 -> let
+   str = "classify\n"
+   len = length str
+   in do
+    ptr <- printC (fromIntegral len)
+    pokeArray ptr (map castCharToCChar str)
+    return False
   3 -> return True
   4 -> return True
   _ -> return False

@@ -56,6 +56,7 @@ extern void __stginit_Main(void);
 #define NUM_POINTS 4
 #define NUM_FACES 3
 #define NUM_POLYGONS 3
+#define NUM_SIDEDNESSES 3
 #define FACE_PLANES 6
 #define POLYGON_POINTS 3
 #define PLANE_INCIDENCES 3
@@ -228,8 +229,8 @@ struct Buffer faceSub = {0}; // subscripts into planes
 struct Buffer polygonSub = {0}; // subscripts into points
 struct Buffer vertexSub = {0}; // every triple of planes
 struct Buffer constructSub = {0}; // per plane triple of points
-struct Buffer sideBuf = {0};
-struct Buffer sideSub = {0};
+struct Buffer sideBuf = {0}; // vertices wrt prior planes
+struct Buffer sideSub = {0}; // per vertex prior planes
 struct Render {
     struct Buffer *blocker; // primitives per input buffer
     int vertex; // number of input buffers que
@@ -427,11 +428,6 @@ void exitErrstr(const char *fmt, ...)
     printf("fatal: ");
     va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
-}
-
-void exitErrbuf(struct Buffer *buf, const char *str)
-{
-    if (buf->done > buf->wrap || buf->done > buf->room) exitErrstr("%s %s too done\n",str,buf->name);
 }
 
 ACCESS_QUEUE(Option,char *,options)
@@ -994,6 +990,8 @@ void initialize(int argc, char **argv)
     glGenBuffers(1, &polygonSub.handle); polygonSub.name = "polygon";
     glGenBuffers(1, &vertexSub.handle); vertexSub.name = "vertex";
     glGenBuffers(1, &constructSub.handle); constructSub.name = "construct";
+    glGenBuffers(1, &sideSub.handle); sideSub.name = "construct";
+    glGenBuffers(1, &sideBuf.handle); sideBuf.name = "construct";
 
 #ifdef BRINGUP
     for (int i = 0; i < TEST_REPETITION; i++)
@@ -1002,6 +1000,7 @@ void initialize(int argc, char **argv)
     glGenQueries(1, &planeBuf.query);
     glGenQueries(1, &pointBuf.query);
     glGenQueries(1, &pierceBuf.query);
+    glGenQueries(1, &sideBuf.query);
 
     planeBuf.loc = PLANE_LOCATION;
     versorBuf.loc = VERSOR_LOCATION;
@@ -1020,6 +1019,7 @@ void initialize(int argc, char **argv)
     polygonSub.primitive = GL_TRIANGLES;
     vertexSub.primitive = GL_TRIANGLES;
     constructSub.primitive = GL_TRIANGLES;
+    sideSub.primitive = GL_POINTS;
 
 #ifdef BRINGUP
     for (int i = 0; i < TEST_REPETITION; i++) {
@@ -1033,6 +1033,8 @@ void initialize(int argc, char **argv)
     polygonSub.dimension = SCALAR_DIMENSIONS; polygonSub.type = GL_UNSIGNED_INT;
     vertexSub.dimension = SCALAR_DIMENSIONS; vertexSub.type = GL_UNSIGNED_INT;
     constructSub.dimension = SCALAR_DIMENSIONS; constructSub.type = GL_UNSIGNED_INT;
+    sideBuf.dimension = PLANE_DIMENSIONS; sideBuf.type = GL_FLOAT;
+    sideSub.dimension = SCALAR_DIMENSIONS; sideSub.type = GL_UNSIGNED_INT;
 
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
     glVertexAttribPointer(planeBuf.loc, planeBuf.dimension, planeBuf.type, GL_FALSE, 0, 0);
@@ -1796,8 +1798,6 @@ void finalize()
  * functions put on command queue
  */
 
-void enqueShader(enum Shader);
-
 #ifdef BRINGUP
 int bringup()
 {
@@ -1930,10 +1930,27 @@ int bringup()
         2,3,0,
         3,0,1,
     };
-    if (constructSub.handle) {
+    if (constructSub.wrap == 0) {
         glBindBuffer(GL_ARRAY_BUFFER, constructSub.handle);
         glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), construct, GL_STATIC_DRAW);
-        constructSub.wrap = constructSub.room = NUM_PLANES; constructSub.done = /*0*/NUM_PLANES;}
+        constructSub.wrap = constructSub.room = NUM_PLANES; constructSub.done = 0;}
+    else if (constructSub.done < NUM_PLANES) constructSub.done++;
+
+    GLuint wrt[NUM_SIDEDNESSES] = {
+        0,1,2,
+    };
+    if (sideSub.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, sideSub.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_SIDEDNESSES*sizeof(GLuint), wrt, GL_STATIC_DRAW);
+        sideSub.wrap = sideSub.room = NUM_PLANES; sideSub.done = 0;}
+
+    GLfloat sidedness[NUM_SIDEDNESSES] = {
+        0.0,0.0,0.0,
+    };
+    if (sideBuf.wrap == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, sideBuf.handle);
+        glBufferData(GL_ARRAY_BUFFER, NUM_SIDEDNESSES*sizeof(GLfloat), sidedness, GL_STATIC_DRAW);
+        sideBuf.wrap = sideBuf.room = NUM_PLANES; sideBuf.done = 0;}
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -1970,35 +1987,7 @@ enum Action initFile()
 #endif
 }
 
-void classify()
-{
-    CHECK(classify,Classify)
-    DEQUE(classify,Classify) // disable for now
-    SWITCH(classifyState,ClassifyEnqued) {
-        int count = 0; // find number of vertices done for next boundary
-        for (int i = 2; i < planeBuf.done && count <= vertexSub.done; i++) count += i*(i-1)/2;
-        if (count <= vertexSub.done) exitErrstr("vertex too done\n");
-        vertexSub.done = count;
-        enqueShader(Coplane);
-        classifyState = ClassifyWhile;}
-    BRANCH(ClassifyWhile) {
-        if (sideSub.done > sideBuf.done) {DEFER(classify)}
-        int count = 0; // find number of sidednesses done for next vertex wrt boundaries
-        for (int i = 2; i < planeBuf.done && count <= sideSub.done; i++) count += /*i*i*(i-1)/2*/0;
-        if (count <= sideSub.done) exitErrstr("side too done\n");
-        sideSub.done = count;
-        enqueShader(Adplane);
-        count = 0; // find number of sidednesses done for last vertex wrt boundaries
-        for (int i = 2; i < planeBuf.done && count <= sideSub.done; i++) count += /*i*i*(i-1)/2*/0;
-        if (count < sideSub.done) exitErrstr("side too done\n");
-        if (count == sideSub.done) {enqueCommand(0); enqueEvent(Classify);}
-        count = 0; // find number of vertices done for last boundary
-        for (int i = 2; i < planeBuf.done && count <= vertexSub.done; i++) count += i*(i-1)/2;
-        if (count < vertexSub.done) exitErrstr("vertex too done\n");
-        if (count == vertexSub.done) {DEQUE(classify,Classify)}}
-    DEFAULT(exitErrstr("invalid classify state\n");)
-    REQUE(classify)
-}
+void classify();
 
 void configure()
 {
@@ -2036,6 +2025,8 @@ void configure()
     DEFAULT(exitErrstr("invalid configure state\n");)
     REQUE(configure)
 }
+
+void enqueShader(enum Shader);
 
 void process()
 {
@@ -2107,7 +2098,7 @@ enum Action enqueWrap(struct Buffer *buffer)
     return Advance;
 }
 
-size_t renderType(int size)
+size_t bufferType(int size)
 {
     size_t retval = 0;
     SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
@@ -2116,7 +2107,7 @@ size_t renderType(int size)
     return retval;
 }
 
-int renderPrimitive(int size)
+int bufferPrimitive(int size)
 {
     int retval = 0;
     SWITCH(size,GL_POINTS) retval = 1;
@@ -2124,6 +2115,11 @@ int renderPrimitive(int size)
     CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
     DEFAULT(exitErrstr("unknown render primitive\n");)
     return retval;
+}
+
+void exitErrbuf(struct Buffer *buf, const char *str)
+{
+    if (buf->done > buf->wrap || buf->done > buf->room) exitErrstr("%s %s too done\n",str,buf->name);
 }
 
 enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **feedback)
@@ -2163,8 +2159,8 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
         if (vertex[i]->done < arg->blocker->done) return Defer;
     glUseProgram(program[arg->shader]);
     for (int i = 0; i < arg->feedback; i++) {
-        int count = renderPrimitive(feedback[i]->primitive)*feedback[i]->dimension;
-        int size = count*renderType(feedback[i]->type);
+        int count = bufferPrimitive(feedback[i]->primitive)*feedback[i]->dimension;
+        int size = count*bufferType(feedback[i]->type);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle, done*size, todo*size);}
     if (arg->feedback) {
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback[0]->query);
@@ -2175,9 +2171,9 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arg->element->handle);
     if (!arg->feedback)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    int count = renderPrimitive(arg->element->primitive)*arg->element->dimension;
+    int count = bufferPrimitive(arg->element->primitive)*arg->element->dimension;
     glDrawElements(arg->element->primitive, todo*count, arg->element->type,
-        (void *)(done*count*renderType(arg->element->type)));
+        (void *)(done*count*bufferType(arg->element->type)));
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     for (int i = 0; i < arg->vertex; i++)
         glDisableVertexAttribArray(vertex[i]->loc);
@@ -2210,14 +2206,14 @@ enum Action renderWait(struct Render *arg, struct Buffer **feedback)
 #ifdef BRINGUP
 #define BUFMSG(TYPE,FORMAT) \
     TYPE result[feedback->done*count];\
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*renderType(feedback->type), result);\
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, feedback->done*count*bufferType(feedback->type), result);\
     for (int i = 0; i < feedback->done; i++) {\
-        for (int j = 0; j < renderPrimitive(feedback->primitive); j++) {\
+        for (int j = 0; j < bufferPrimitive(feedback->primitive); j++) {\
             for (int k = 0; k < feedback->dimension; k++) {\
-                    int n = (i*renderPrimitive(feedback->primitive)+j)*feedback->dimension+k;\
+                    int n = (i*bufferPrimitive(feedback->primitive)+j)*feedback->dimension+k;\
                     enqueMsgstr(" "#FORMAT, result[n]);}\
             if (feedback->dimension > 1) enqueMsgstr("\n");}\
-        if (renderPrimitive(feedback->primitive) > 1 && i < feedback->done-1) enqueMsgstr("\n");}\
+        if (bufferPrimitive(feedback->primitive) > 1 && i < feedback->done-1) enqueMsgstr("\n");}\
     if (feedback->dimension == 1) enqueMsgstr("\n");
 
 void renderMsgstr(struct Buffer *feedback)
@@ -2225,9 +2221,9 @@ void renderMsgstr(struct Buffer *feedback)
     glBindBuffer(GL_ARRAY_BUFFER, feedback->handle);
     if (feedback->done) enqueMsgstr("%s %d %d %d\n",
         feedback->name,feedback->done,
-        renderPrimitive(feedback->primitive),
+        bufferPrimitive(feedback->primitive),
         feedback->dimension);
-    int count = renderPrimitive(feedback->primitive)*feedback->dimension;
+    int count = bufferPrimitive(feedback->primitive)*feedback->dimension;
     SWITCH(feedback->type,GL_FLOAT) {BUFMSG(GLfloat,%f)}
     CASE(GL_UNSIGNED_INT) {BUFMSG(GLuint,%d)}
     DEFAULT(exitErrstr("unknown buffer type\n");)
@@ -2261,6 +2257,71 @@ void render()
     DEQUE(render,Render)
 }
 
+int verticesOnBoundary(int boundary)
+{
+    // number of prior boundaries is the given boundary index
+    int numPrior = boundary;
+    // number of boundaries each prior boundary can be paired with
+    int numPair = boundary-1;
+    // number of ways two boundaries can be represented by a pair
+    int numRep = 2;
+    // number of intersections between given boundary and prior boundary pairs
+    return numPrior*numPair/numRep;
+}
+
+int vertexSidednesses(int boundary)
+{
+    // number of prior boundaries
+    int numPrior = boundary;
+    // number of prior boundaries vertex on current boundary is on
+    int numOn = 2;
+    // number of sidednesses
+    return numPrior-numOn;
+}
+
+void classify()
+{
+    CHECK(classify,Classify)
+    //DEQUE(classify,Classify) // disable for now
+    SWITCH(classifyState,ClassifyEnqued) {
+        int count = 0; // vertices done for next boundary
+        for (int i = 2; i < planeBuf.done && count <= vertexSub.done; i++) count += verticesOnBoundary(i);
+        if (count < vertexSub.done) exitErrstr("vertex too done\n");
+        if (count == 0 && vertexSub.done == 0) {DEFER(classify)}
+        if (count == vertexSub.done) exitErrstr("vertex too done\n");
+        vertexSub.done = count;
+        enqueShader(Coplane);
+        classifyState = ClassifyWhile;}
+    BRANCH(ClassifyWhile) {
+        if (sideSub.done > sideBuf.done) {DEFER(classify)}
+        int vertex = 0;
+        int count = 0; // sidednesses done for next vertex wrt prior boundaries
+        for (int i = 2; i < planeBuf.done && count <= sideSub.done; i++)
+            for (int j = 0; j < verticesOnBoundary(i) && count <= sideSub.done; j++, vertex++) count += i;
+        if (count <= sideSub.done) exitErrstr("side too done\n");
+        sideSub.done = count;
+        GLfloat coords[pointBuf.dimension];
+        int size = pointBuf.dimension*bufferType(pointBuf.type);
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
+        glGetBufferSubData(GL_ARRAY_BUFFER,vertex*size, size, coords);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glUseProgram(program[Adplane]);
+        glUniform3f(uniform[Adplane][Feather],coords[0],coords[1],coords[2]);
+        glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
+        glUseProgram(0);
+        enqueShader(Adplane);
+        count = 0; // sidednesses done for last vertex on current boundary
+        for (int i = 2; i < planeBuf.done && count <= sideSub.done; i++) count += i*verticesOnBoundary(i);
+        if (count < sideSub.done) exitErrstr("side too done\n");
+        if (count == sideSub.done) {enqueCommand(0); enqueEvent(Classify); classifyState = ClassifyEnqued;}
+        count = 0; // vertices done for last boundary
+        for (int i = 2; i < planeBuf.done && count <= vertexSub.done; i++) count += verticesOnBoundary(i);
+        if (count < vertexSub.done) exitErrstr("vertex too done\n");
+        if (count == vertexSub.done) {DEQUE(classify,Classify)}}
+    DEFAULT(exitErrstr("invalid classify state\n");)
+    REQUE(classify)
+}
+
 void enqueDiplane()
 {
     struct Render *arg = enlocRender(1);
@@ -2281,10 +2342,10 @@ void enqueDiplane()
 void pierce()
 {
     if (pierceBuf.done<faceSub.done) {enqueCommand(pierce); return;}
-    int count = renderPrimitive(pierceBuf.primitive)*pierceBuf.dimension;
+    int count = bufferPrimitive(pierceBuf.primitive)*pierceBuf.dimension;
     GLfloat result[pierceBuf.done*count];
     glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*renderType(pierceBuf.type), result);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     float found = invalid[0];
     for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimension) {
@@ -2346,6 +2407,41 @@ void enqueCopoint()
     enqueCommand(render); started[Copoint]++;
 }
 
+void enqueAdplane()
+{
+    struct Render *arg = enlocRender(1);
+    struct Buffer **buf = enlocBuffer(3);
+    arg->blocker = &constructSub;
+    arg->vertex = 2;
+    buf[0] = &planeBuf;
+    buf[1] = &versorBuf;
+    arg->element = &sideSub;
+    arg->feedback = 1;
+    buf[2] = &sideBuf;
+    arg->shader = Adplane;
+    arg->state = RenderEnqued;
+    arg->restart = 0;
+    arg->name = "adplane";
+    enqueCommand(render); started[Adplane]++;
+}
+
+void enqueAdpoint()
+{
+    struct Render *arg = enlocRender(1);
+    struct Buffer **buf = enlocBuffer(2);
+    arg->blocker = &vertexSub;
+    arg->vertex = 1;
+    buf[0] = &pointBuf;
+    arg->element = &sideSub;
+    arg->feedback = 1;
+    buf[1] = &sideBuf;
+    arg->shader = Adpoint;
+    arg->state = RenderEnqued;
+    arg->restart = 0;
+    arg->name = "adpoint";
+    enqueCommand(render); started[Adpoint]++;
+}
+
 void enquePerplane()
 {
     struct Render *arg = enlocRender(1);
@@ -2390,9 +2486,11 @@ void enqueShader(enum Shader shader)
     CASE(Dipoint) enqueDipoint();
     CASE(Coplane) enqueCoplane();
     CASE(Copoint) enqueCopoint();
+    CASE(Adplane) enqueAdplane();
+    CASE(Adpoint) enqueAdpoint();
     CASE(Perplane) enquePerplane();
     CASE(Perpoint) enquePerpoint();
-    DEFAULT(exitErrstr("invalid shader\n");)
+    DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
 /*
@@ -2724,11 +2822,17 @@ char *message()
     return buf;
 }
 
+char *print(int size)
+{
+    return enlocPrint(size);
+}
+
 int event()
 {
     if (!validEvent()) return -1;
     enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Error) return 3;
+    SWITCH(event,Classify) return 2;
+    CASE(Error) return 3;
     CASE(Done) return 4;
     DEFAULT({exitErrstr("invalid event\n");})
     return -1;
