@@ -243,7 +243,6 @@ struct Render {
     const char *name;
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
-enum ClassifyState {ClassifyIdle,ClassifyEnqued} classifyState = ClassifyIdle;
 enum ConfigureState {ConfigureIdle,ConfigureEnqued,
     ConfigureOpen,ConfigureLoad,ConfigureInit,ConfigureClose,
     ConfigureReopen,ConfigureWaitLoad,ConfigureWaitInit} configureState = ConfigureIdle;
@@ -2013,12 +2012,13 @@ void configure()
         SWITCH(loadFile(),Reque) configureState = ConfigureWaitLoad;
         CASE(Advance) configureState = ConfigureClose;
         DEFAULT(exitErrstr("invalid load status\n");)
-        MAYBE(classify,Classify)}
+        if (classifyDone < planeBuf.done) enqueCommand(classify);}
     BRANCH(ConfigureInit) {
         SWITCH(initFile(),Reque) configureState = ConfigureWaitInit;
         CASE(Advance) configureState = ConfigureClose;
         DEFAULT(exitErrstr("invalid init status\n");)
-        MAYBE(classify,Classify)}
+enqueMsgstr("classifyDone %d planeBuf.done %d\n",classifyDone,planeBuf.done);
+        if (classifyDone < planeBuf.done) enqueCommand(classify);}
     BRANCH(ConfigureClose) {
         char *filename = headFilename();
         if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));
@@ -2168,7 +2168,7 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     glUseProgram(program[arg->shader]);
     for (int i = 0; i < arg->feedback; i++) {
         int count = bufferPrimitive(feedback[i]->primitive)*feedback[i]->dimension;
-        int size = count*bufferType(feedback[i]->type);
+        size_t size = count*bufferType(feedback[i]->type);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle, done*size, todo*size);}
     if (arg->feedback) {
         glEnable(GL_RASTERIZER_DISCARD);
@@ -2180,9 +2180,9 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (!arg->feedback)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     int count = bufferPrimitive(arg->element->primitive)*arg->element->dimension;
+    size_t size = count*bufferType(arg->element->type);
+    glDrawElements(arg->element->primitive, todo*count, arg->element->type, (void *)(done*size));
     arg->element->draw = done+todo;
-    glDrawElements(arg->element->primitive, todo*count, arg->element->type,
-        (void *)(done*count*bufferType(arg->element->type)));
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     for (int i = 0; i < arg->vertex; i++)
         glDisableVertexAttribArray(vertex[i]->loc);
@@ -2285,29 +2285,25 @@ void pierce()
 
 void classify()
 {
-    CHECK(classify,Classify)
-    int goon = 1;;
-    while (goon) {
-        if (classifyDone == planeBuf.done) {unqueInt(); DEQUE(classify,Classify)}
-        pointSub.done = pointsOfPlanes(planeBuf.done);
-        if (pointSub.done > pointBuf.done) {goon = 0; enqueShader(Coplane);}
-        if (sideSub.done == sideBuf.done && sidesOfPoints(pointBuf.done) > sideSub.done) {
-            int points = 0; int sides = sideSub.done; sideSub.done = 0;
-            while (sideSub.done <= sides) {points++; sideSub.done = sidesOfPoints(points);}}
-        if (sideSub.done > sideBuf.done) {
-            GLfloat coords[pointBuf.dimension];
-            int size = pointBuf.dimension*bufferType(pointBuf.type);
-            glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-            glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, coords);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-            glUseProgram(program[Adplane]);
-            glUniform3f(uniform[Adplane][Feather],coords[0],coords[1],coords[2]);
-            glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
-            glUseProgram(0);
-            goon = 0; enqueShader(Adplane);}
-        if (sideBuf.done >= sidesOfPoints(pointsOfPlanes(classifyDone+1))) {
-            classifyDone++; enqueCommand(0); enqueEvent(Classify);}}
-    DEFER(classify)
+    pointSub.done = pointsOfPlanes(planeBuf.done);
+    if (pointSub.done > pointBuf.done) enqueShader(Coplane);
+    int points = pointsOfPlanes(classifyDone+1);
+    int sides = sidesOfPoints(points);
+    if (pointBuf.done >= points && sideSub.done == sideBuf.done) sideSub.done = sides;
+    if (sideSub.done > sideBuf.done) {
+        GLfloat coords[pointBuf.dimension];
+        int size = pointBuf.dimension*bufferType(pointBuf.type);
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
+        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, coords);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glUseProgram(program[Adplane]);
+        glUniform3f(uniform[Adplane][Feather],coords[0],coords[1],coords[2]);
+        glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
+        glUseProgram(0);
+        enqueShader(Adplane);}
+    if (sideBuf.done > sideSub.done) exitErrstr("classify too done\n");
+    if (sideBuf.done == sides) {classifyDone++; enqueCommand(0); enqueEvent(Classify);}
+    if (planeBuf.done > classifyDone) {enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&classify);}
 }
 
 void enqueDiplane()
