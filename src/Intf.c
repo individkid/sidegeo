@@ -146,7 +146,7 @@ enum Menu { // lines in the menu; select with enter key
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
     Sculpt,Mouse,Roller,Modes};
-#define INIT {Transform,Rotate,Lever}
+#define INIT {Transform,Rotate,Cylinder}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -180,9 +180,15 @@ float affineMat[16]; // transformation state at click time
 float linearMat[9];
 float projectMat[9];
 float basisMatz[27]; // per versor base points
-float affineMatz[16]; // current transformation state
+float affineMatz[16]; // middle transformation state
 float linearMatz[9];
 float projectMatz[9];
+float affineMatp[16]; // right transformation state
+float linearMatp[9];
+float projectMatp[9];
+float affineMatq[16]; // left transformation state
+float linearMatq[9];
+float projectMatq[9];
 float lightMatz[16];
 float xPoint = 0;  // position of pierce point at click time
 float yPoint = 0;
@@ -1759,6 +1765,12 @@ void initialize(int argc, char **argv)
     for (int i = 0; i < 16; i++) affineMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) linearMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectMatz[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) affineMatp[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) linearMatp[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) projectMatp[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) affineMatq[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) linearMatq[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) projectMatq[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) lightMatz[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 
     for (enum Shader i = 0; i < Shaders; i++) {
@@ -1988,6 +2000,10 @@ int bringup()
 }
 #endif
 
+void enqueWrap(struct Buffer *buffer, int todo);
+void enqueShader(enum Shader);
+void classify();
+
 enum Action loadFile()
 {
     // TODO
@@ -2016,8 +2032,6 @@ enum Action initFile()
     return (bringup()?Reque:Advance);
 #endif
 }
-
-void classify();
 
 void configure()
 {
@@ -2057,8 +2071,6 @@ void configure()
     DEFAULT(exitErrstr("invalid configure state\n");)
     REQUE(configure)
 }
-
-void enqueShader(enum Shader);
 
 void process()
 {
@@ -2474,6 +2486,12 @@ void leftTransform()
     for (int i = 0; i < 16; i++) affineMat[i] = affineMatz[i];
     for (int i = 0; i < 9; i++) linearMat[i] = linearMatz[i];
     for (int i = 0; i < 9; i++) projectMat[i] = projectMatz[i];
+    for (int i = 0; i < 16; i++) affineMatp[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) linearMatp[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) projectMatp[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) affineMatq[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) linearMatq[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+    for (int i = 0; i < 9; i++) projectMatq[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     click = Left;
 }
 
@@ -2542,12 +2560,17 @@ void transformRotate()
     copymat(v,crossmat(u),9,9,9);
     scalevec(timesmat(u,v,3),1.0/(1.0+s),9);
     float w[16]; plusvec(u,plusvec(v,identmat(w,3),9),9);
-    jumpmat(copymat(linearMatz,linearMat,9,9,9),u,3);
+    copymat(linearMatz,linearMat,9,9,9);
+    jumpmat(linearMatz,linearMatp,3);
+    jumpmat(linearMatz,u,3);
+    jumpmat(linearMatz,linearMatq,3);
     copymat(identmat(w,4),u,3,4,9);
     identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
     identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
     copymat(affineMatz,affineMat,16,16,16);
+    jumpmat(affineMatz,affineMatp,4);
     jumpmat(affineMatz,u,4); jumpmat(affineMatz,w,4); jumpmat(affineMatz,v,4);
+    jumpmat(affineMatz,affineMatq,4);
     glUseProgram(program[dishader]);
     glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatz);
     glUniformMatrix3fv(uniform[dishader][Linear],1,GL_FALSE,linearMatz);
@@ -2557,10 +2580,15 @@ void transformRotate()
 
 void transformTranslate()
 {
+    copymat(linearMatz,linearMat,9,9,9);
+    jumpmat(linearMatz,linearMatp,3);
+    jumpmat(linearMatz,linearMatq,3);
     float v[16]; identmat(v,4);
     v[12] = xPos-xPoint; v[13] = yPos-yPoint;
     copymat(affineMatz,affineMat,16,16,16);
+    jumpmat(affineMatz,affineMatp,4);
     jumpmat(affineMatz,v,4);
+    jumpmat(affineMatz,affineMatq,4);
     glUseProgram(program[dishader]);
     glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatz);
     glUseProgram(0);
@@ -2584,7 +2612,16 @@ void transformClock()
 
 void transformCylinder()
 {
-    // TODO
+    float v[16]; identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
+    float u[16]; identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
+    float angle = wPos/10.0;
+    float w[16]; identmat(w,4); w[0] = cos(angle); w[1] = sin(angle); w[4] = -w[1]; w[5] = w[0];
+    identmat(affineMatp,4); jumpmat(affineMatp,u,4); jumpmat(affineMatp,w,4); jumpmat(affineMatp,v,4);
+    identmat(linearMatp,3); linearMatp[0] = w[0]; linearMatp[1] = w[1]; linearMatp[3] = w[4]; linearMatp[4] = w[5];
+    SWITCH(mode[Mouse],Rotate) transformRotate();
+    CASE(Translate) transformTranslate();
+    CASE(Look) transformLook();
+    DEFAULT(exitErrstr("invalid mouse mode\n");)
 }
 
 void transformScale()
