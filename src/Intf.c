@@ -217,9 +217,6 @@ struct Buffer {
     int primitive; // type of vector chunks
     int (*count)(int); // targets per primitive
 }; // for use by *Bind* and *Map*
-#ifdef BRINGUP
-struct Buffer testBuf[4] = {0};
-#endif
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
 struct Buffer versorBuf = {0}; // per boundary base selector
 struct Buffer pointBuf = {0}; // shared point per boundary triple
@@ -947,7 +944,7 @@ int sidesOfPoints(int points) // number of sides wrt planes prior to last contai
     return count;
 }
 
-int sidesOfPlanes(int planes)
+int sidesOfPlanes(int planes) // number of sides wrt planes prior to last containing boundary
 {
     int count = 0;
     for (int i = 3; i < planes; i++) count += i*(i-1)*(i-2)/2;
@@ -1016,80 +1013,85 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-#ifdef BRINGUP
-    for (int i = 0; i < TEST_REPETITION; i++)
-        glGenBuffers(1, &testBuf[i].handle);
-    testBuf[0].name = "test0"; testBuf[1].name = "test1";
-    testBuf[2].name = "test2"; testBuf[3].name = "test3";
-#endif
-    glGenBuffers(1, &planeBuf.handle); planeBuf.name = "plane";
-    glGenBuffers(1, &versorBuf.handle); versorBuf.name = "versor";
-    glGenBuffers(1, &pointBuf.handle); pointBuf.name = "point";
-    glGenBuffers(1, &pierceBuf.handle); pierceBuf.name = "pierce";
-    glGenBuffers(1, &faceSub.handle); faceSub.name = "face";
-    glGenBuffers(1, &frameSub.handle); frameSub.name = "frame";
-    glGenBuffers(1, &pointSub.handle); pointSub.name = "point";
-    glGenBuffers(1, &planeSub.handle); planeSub.name = "plane";
-    glGenBuffers(1, &sideSub.handle); sideSub.name = "side";
-    glGenBuffers(1, &sideBuf.handle); sideBuf.name = "side";
-
-#ifdef BRINGUP
-    for (int i = 0; i < TEST_REPETITION; i++)
-        glGenQueries(1, &testBuf[i].query);
-#endif
+    planeBuf.name = "plane";
+    glGenBuffers(1, &planeBuf.handle);
     glGenQueries(1, &planeBuf.query);
-    glGenQueries(1, &pointBuf.query);
-    glGenQueries(1, &pierceBuf.query);
-    glGenQueries(1, &sideBuf.query);
-
     planeBuf.loc = PLANE_LOCATION;
-    versorBuf.loc = VERSOR_LOCATION;
-    pointBuf.loc = POINT_LOCATION;
-
-#ifdef BRINGUP
-    for (int i = 0; i < TEST_REPETITION; i++)
-        testBuf[i].primitive = GL_POINTS;
-#endif
+    planeBuf.type = GL_FLOAT;
+    planeBuf.dimension = PLANE_DIMENSIONS;
     planeBuf.primitive = GL_POINTS;
-    versorBuf.primitive = GL_POINTS;
-    pointBuf.primitive = GL_POINTS;
-    pierceBuf.primitive = GL_POINTS;
-
-    faceSub.primitive = GL_TRIANGLES_ADJACENCY;
-    frameSub.primitive = GL_TRIANGLES;
-    pointSub.primitive = GL_TRIANGLES;
-    planeSub.primitive = GL_TRIANGLES;
-    sideSub.primitive = GL_POINTS;
-
-#ifdef BRINGUP
-    for (int i = 0; i < TEST_REPETITION; i++) {
-        testBuf[i].dimension = TEST_DIMENSIONS; testBuf[i].type = GL_FLOAT;}
-#endif
-    planeBuf.dimension = PLANE_DIMENSIONS; planeBuf.type = GL_FLOAT;
-    versorBuf.dimension = SCALAR_DIMENSIONS; versorBuf.type = GL_UNSIGNED_INT;
-    pointBuf.dimension = POINT_DIMENSIONS; pointBuf.type = GL_FLOAT;
-    pierceBuf.dimension = POINT_DIMENSIONS; pierceBuf.type = GL_FLOAT;
-    sideBuf.dimension = SCALAR_DIMENSIONS; sideBuf.type = GL_FLOAT;
-
-    faceSub.dimension = SCALAR_DIMENSIONS; faceSub.type = GL_UNSIGNED_INT;
-    frameSub.dimension = SCALAR_DIMENSIONS; frameSub.type = GL_UNSIGNED_INT;
-    pointSub.dimension = SCALAR_DIMENSIONS; pointSub.type = GL_UNSIGNED_INT;
-    planeSub.dimension = SCALAR_DIMENSIONS; planeSub.type = GL_UNSIGNED_INT;
-    sideSub.dimension = SCALAR_DIMENSIONS; sideSub.type = GL_UNSIGNED_INT;
-
     glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
     glVertexAttribPointer(planeBuf.loc, planeBuf.dimension, planeBuf.type, GL_FALSE, 0, 0);
+
+    versorBuf.name = "versor";
+    glGenBuffers(1, &versorBuf.handle);
+    versorBuf.loc = VERSOR_LOCATION;
+    versorBuf.type = GL_UNSIGNED_INT;
+    versorBuf.dimension = SCALAR_DIMENSIONS;
+    versorBuf.primitive = GL_POINTS;
     glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
     glVertexAttribIPointer(versorBuf.loc, versorBuf.dimension, versorBuf.type, 0, 0);
+
+    pointBuf.name = "point";
+    glGenBuffers(1, &pointBuf.handle);
+    glGenQueries(1, &pointBuf.query);
+    pointBuf.loc = POINT_LOCATION;
+    pointBuf.type = GL_FLOAT;
+    pointBuf.dimension = POINT_DIMENSIONS;
+    pointBuf.primitive = GL_POINTS;
     glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
     glVertexAttribPointer(pointBuf.loc, pointBuf.dimension, pointBuf.type, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    pierceBuf.name = "pierce";
+    glGenBuffers(1, &pierceBuf.handle);
+    glGenQueries(1, &pierceBuf.query);
+    pierceBuf.type = GL_FLOAT;
+    pierceBuf.dimension = POINT_DIMENSIONS;
+    pierceBuf.primitive = GL_POINTS;
+
+    sideBuf.name = "side";
+    glGenBuffers(1, &sideBuf.handle);
+    glGenQueries(1, &sideBuf.query);
+    sideBuf.type = GL_FLOAT;
+    sideBuf.dimension = SCALAR_DIMENSIONS;
+    sideBuf.primitive = GL_POINTS;
+
+    faceSub.name = "face";
+    glGenBuffers(1, &faceSub.handle);
+    faceSub.type = GL_UNSIGNED_INT;
+    faceSub.dimension = SCALAR_DIMENSIONS;
+    faceSub.primitive = GL_TRIANGLES_ADJACENCY;
     faceSub.count = facesOfPlanes;
+
+    frameSub.name = "frame";
+    glGenBuffers(1, &frameSub.handle);
+    frameSub.type = GL_UNSIGNED_INT;
+    frameSub.dimension = SCALAR_DIMENSIONS;
+    frameSub.primitive = GL_TRIANGLES;
     frameSub.count = framesOfPoints;
+
+    pointSub.name = "point";
+    glGenBuffers(1, &pointSub.handle);
+    pointSub.type = GL_UNSIGNED_INT;
+    pointSub.dimension = SCALAR_DIMENSIONS;
+    pointSub.primitive = GL_TRIANGLES;
     pointSub.count = pointsOfPlanes;
+
+    planeSub.name = "plane";
+    glGenBuffers(1, &planeSub.handle);
+    planeSub.type = GL_UNSIGNED_INT;
+    planeSub.dimension = SCALAR_DIMENSIONS;
+    planeSub.primitive = GL_TRIANGLES;
     planeSub.count = planesOfPoints;
+
+    sideSub.name = "side";
+    glGenBuffers(1, &sideSub.handle);
+    sideSub.type = GL_UNSIGNED_INT;
+    sideSub.dimension = SCALAR_DIMENSIONS;
+    sideSub.primitive = GL_POINTS;
     sideSub.count = sidesOfPlanes;
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     uniformCode = "\
     #version 330 core\n\
@@ -1829,17 +1831,6 @@ int bringup()
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
     zPos = q;
-
-    GLfloat test[NUM_FACES*TEST_REPETITION*TEST_DIMENSIONS] = {
-        5.5,5.5,5.5,5.5,
-        5.5,5.5,5.5,5.5,
-        5.5,5.5,5.5,5.5,
-        5.5,5.5,5.5,5.5,
-    };
-    for (int i = 0; i < TEST_REPETITION; i++) if (testBuf[i].wrap == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, testBuf[i].handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_FACES*TEST_DIMENSIONS*sizeof(GLfloat), test, GL_STATIC_DRAW);
-        testBuf[i].wrap = testBuf[i].room = NUM_FACES; testBuf[i].draw = testBuf[i].done = 0;}
 
     GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
  0.204124, 0.204124, 0.204124,
