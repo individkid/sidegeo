@@ -227,6 +227,7 @@ struct Buffer frameSub = {0}; // subscripts into points
 struct Buffer pointSub = {0}; // every triple of planes
 struct Buffer planeSub = {0}; // per plane triple of points
 struct Buffer sideSub = {0}; // per vertex prior planes
+struct Buffer halfSub = {0}; // per plane prior vertices
 int classifyDone = 0; // number of classify events
 int *faceMap = 0;
 int *frameMap = 0;
@@ -937,17 +938,17 @@ int planesOfPoints(int points) // number of planes produced by given number of p
     return count;
 }
 
-int sidesOfPoints(int points) // number of sides wrt planes prior to last containing boundary
-{
-    int count = 0;
-    for (int i = 2; points > 0; i++) for (int j = 0; points > 0 && j < i*(i-1)/2; j++, points--) count += i-2;
-    return count;
-}
-
 int sidesOfPlanes(int planes) // number of sides wrt planes prior to last containing boundary
 {
     int count = 0;
     for (int i = 3; i < planes; i++) count += i*(i-1)*(i-2)/2;
+    return count;
+}
+
+int sidesOfPoints(int points) // number of sides wrt planes prior to last containing boundary
+{
+    int count = 0;
+    for (int i = 2; points > 0; i++) for (int j = 0; points > 0 && j < i*(i-1)/2; j++, points--) count += i-2;
     return count;
 }
 
@@ -1090,6 +1091,13 @@ void initialize(int argc, char **argv)
     sideSub.dimension = SCALAR_DIMENSIONS;
     sideSub.primitive = GL_POINTS;
     sideSub.count = sidesOfPlanes;
+
+    halfSub.name = "half";
+    glGenBuffers(1, &halfSub.handle);
+    halfSub.type = GL_UNSIGNED_INT;
+    halfSub.dimension = SCALAR_DIMENSIONS;
+    halfSub.primitive = GL_POINTS;
+    halfSub.count = sidesOfPoints;
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -2279,7 +2287,7 @@ void classify()
     pointSub.done = pointsOfPlanes(planeBuf.done);
     if (pointSub.done > pointBuf.done) enqueShader(Coplane);
     int points = pointsOfPlanes(classifyDone+1);
-    int sides = sidesOfPoints(points);
+    int sides = sidesOfPlanes(classifyDone+1);
     if (pointBuf.done >= points && sideSub.done == sideBuf.done) sideSub.done = sides;
     if (sideSub.done > sideBuf.done) {
         GLfloat coords[pointBuf.dimension];
@@ -2385,7 +2393,7 @@ void enqueAdpoint()
     struct Buffer **buf = enlocBuffer(2);
     arg->vertex = 1;
     buf[0] = &pointBuf;
-    arg->element = &sideSub;
+    arg->element = &halfSub;
     arg->feedback = 1;
     buf[1] = &sideBuf;
     arg->shader = Adpoint;
