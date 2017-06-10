@@ -143,11 +143,11 @@ GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
     Mouses,Rotate,Translate,Look,
-    Rollers,Clock,Cylinder,Scale,Drive,
+    Rollers,Cylinder,Clock,Scale,Drive,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
     Sculpt,Mouse,Roller,Modes};
-#define INIT {Transform,Rotate,Clock}
+#define INIT {Transform,Rotate,Cylinder}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -168,9 +168,9 @@ struct Item { // per-menu-line info
     {Mouses,Mouse,2,"Translate","slide polytope/plane from pierce point"},
     {Mouses,Mouse,2,"Look","tilt camera around focal point"},
     {Sculpts,Roller,1,"Roller","action of roller button in Transform/Manipulate modes"},
-    {Rollers,Roller,2,"Clock","rotate picture plane around perpendicular to cursor"},
-    {Rollers,Roller,2,"Cylinder","rotate polytope around tilt line"},
-    {Rollers,Roller,2,"Scale","grow or shrink polytope with pierce point fixed"},
+    {Rollers,Roller,2,"Cylinder","rotate around tilt line"},
+    {Rollers,Roller,2,"Clock","rotate around perpendicular to pierce point"},
+    {Rollers,Roller,2,"Scale","grow or shrink with pierce point fixed"},
     {Rollers,Roller,2,"Drive","move picture plane forward or back"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
@@ -2638,7 +2638,6 @@ void transformRotate()
 
 void transformTranslate()
 {
-    matrixMode = 0;
     copymat(linearMatc,linearMat,3);
     jumpmat(linearMatc,linearMatb,3);
     jumpmat(linearMatc,linearMata,3);
