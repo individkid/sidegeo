@@ -99,6 +99,7 @@ struct Chars metrics = {0}; // animation if valid
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
+    Matrix, // before matrix in play
     Right, // pierce point calculated; position saved
     Clicks} click = Init;
 enum Shader { // one value per shader; state for bringup
@@ -185,9 +186,6 @@ float projectMatc[9];
 float affineMatb[16]; // right transformation state
 float linearMatb[9];
 float projectMatb[9];
-float affineMata[16]; // left transformation state
-float linearMata[9];
-float projectMata[9];
 float basisMatc[27]; // per versor base points
 float lightMatc[16];
 float xPoint = 0;  // position of pierce point at click time
@@ -1814,9 +1812,6 @@ void initialize(int argc, char **argv)
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) linearMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) linearMata[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) projectMata[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
 
     for (enum Shader i = 0; i < Shaders; i++) {
         glUseProgram(program[i]);
@@ -2533,9 +2528,6 @@ void leftTransform()
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) linearMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     for (int i = 0; i < 9; i++) projectMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) linearMata[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) projectMata[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     click = Left;
 }
 
@@ -2553,8 +2545,9 @@ void leftLeft()
     click = Init;
 }
 
-void warpPos()
+void rightRight()
 {
+    wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
     double xwarp = (xPos+1.0)*xSiz/2.0;
     double ywarp = -(yPos-1.0)*ySiz/2.0;
 #ifdef __linux__
@@ -2568,12 +2561,6 @@ void warpPos()
     struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
     CGWarpMouseCursorPosition(point);
 #endif
-}
-
-void rightRight()
-{
-    wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
-    warpPos();
     click = Left;
 }
 
@@ -2595,7 +2582,15 @@ void transformRight()
     enqueShader(pershader);
 }
 
-void transformPos(float *u)
+void matrixMatrix()
+{
+    jumpmat(affineMat,affineMatb,4);
+    identmat(affineMatb,4);
+    wPos = 0.0;
+    click = Left;
+}
+
+void matrixRotate(float *u)
 {
     float v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
     float w[9]; w[0] = xPos-xPoint; w[1] = yPos-yPoint;
@@ -2612,23 +2607,18 @@ void transformPos(float *u)
     copymat(u,v,3);
 }
 
-int matrixMode = 0;
-
 void transformRotate()
 {
-    matrixMode = 0;
-    float u[16]; float v[16]; float w[16]; transformPos(u);
+    float u[16]; float v[16]; float w[16]; matrixRotate(v);
     copymat(linearMatc,linearMat,3);
     jumpmat(linearMatc,linearMatb,3);
-    jumpmat(linearMatc,u,3);
-    jumpmat(linearMatc,linearMata,3);
-    copyary(identmat(v,4),u,3,4,9);
+    jumpmat(linearMatc,v,3);
+    copyary(identmat(u,4),v,3,4,9);
+    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
     identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
-    identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
     copymat(affineMatc,affineMat,4);
     jumpmat(affineMatc,affineMatb,4);
-    jumpmat(affineMatc,u,4); jumpmat(affineMatc,v,4); jumpmat(affineMatc,w,4);
-    jumpmat(affineMatc,affineMata,4);
+    jumpmat(affineMatc,v,4); jumpmat(affineMatc,u,4); jumpmat(affineMatc,w,4);
     glUseProgram(program[dishader]);
     glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatc);
     glUniformMatrix3fv(uniform[dishader][Linear],1,GL_FALSE,linearMatc);
@@ -2640,13 +2630,11 @@ void transformTranslate()
 {
     copymat(linearMatc,linearMat,3);
     jumpmat(linearMatc,linearMatb,3);
-    jumpmat(linearMatc,linearMata,3);
-    float v[16]; identmat(v,4);
-    v[12] = xPos-xPoint; v[13] = yPos-yPoint;
+    float u[16]; identmat(u,4);
+    u[12] = xPos-xPoint; u[13] = yPos-yPoint;
     copymat(affineMatc,affineMat,4);
     jumpmat(affineMatc,affineMatb,4);
-    jumpmat(affineMatc,v,4);
-    jumpmat(affineMatc,affineMata,4);
+    jumpmat(affineMatc,u,4);
     glUseProgram(program[dishader]);
     glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatc);
     glUseProgram(0);
@@ -2668,35 +2656,30 @@ void transformMouse()
 
 void transformClock()
 {
-    if (matrixMode == 0) {
-        jumpmat(affineMat,affineMatb,4);
-        identmat(affineMatb,4);
-        wPos = 0.0;}
     float u[16]; float v[16]; float w[16];
-    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = 0.0;
-    identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = 0.0;
     float angle = wPos/ROLLER_GRANULARITY;
-    identmat(v,4); v[0] = cos(angle); v[1] = sin(angle); v[4] = -v[1]; v[5] = v[0];
-    identmat(affineMatb,4); jumpmat(affineMatb,u,4); jumpmat(affineMatb,v,4); jumpmat(affineMatb,w,4);
-    SWITCH(mode[Mouse],Rotate) transformPos(u);
+    SWITCH(mode[Mouse],Rotate) matrixRotate(u);
     CASE(Translate) {identmat(u,3);}
     CASE(Look) {identmat(u,3);}
     DEFAULT(exitErrstr("invalid mouse mode\n");)
     copyary(identmat(v,4),invmat(copymat(w,u,3),3),3,4,9);
     copyary(identmat(w,4),u,3,4,9);
-    jumpmat(affineMatb,v,4); timesmat(affineMatb,w,4);
+    identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
+    jumpmat(u,v,4); timesmat(u,w,4);
+    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
+    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
+    identmat(affineMatb,4); jumpmat(affineMatb,v,4); jumpmat(affineMatb,u,4); jumpmat(affineMatb,w,4);
     transformMouse();
-    matrixMode = 1;
 }
 
 void transformCylinder()
 {
     float u[16]; float v[16]; float w[16];
-    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
-    identmat(u,4); u[12] = -xPoint; u[13] = -yPoint; u[14] = -zPoint;
     float angle = wPos/ROLLER_GRANULARITY;
-    identmat(v,4); v[0] = cos(angle); v[1] = sin(angle); v[4] = -v[1]; v[5] = v[0];
-    identmat(affineMatb,4); jumpmat(affineMatb,u,4); jumpmat(affineMatb,v,4); jumpmat(affineMatb,w,4);
+    identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
+    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
+    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
+    identmat(affineMatb,4); jumpmat(affineMatb,v,4); jumpmat(affineMatb,u,4); jumpmat(affineMatb,w,4);
     transformMouse();
 }
 
@@ -2780,11 +2763,13 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Transform) {
             SWITCH(click,Init) FALL(Right) leftTransform();
-            CASE(Left) leftLeft();
+            CASE(Matrix) matrixMatrix();
+            FALL(Left) leftLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Manipulate) {
             SWITCH(click,Init) FALL(Right) leftManipulate();
-            CASE(Left) leftLeft();
+            CASE(Matrix) matrixMatrix();
+            FALL(Left) leftLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
@@ -2792,7 +2777,8 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         CASE(Transform) FALL(Manipulate) {
             SWITCH(click,Init) {/*ignore*/}
             CASE(Right) rightRight();
-            CASE(Left) rightLeft();
+            CASE(Matrix) matrixMatrix();
+            FALL(Left) rightLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode\n");)}
     DEFAULT(enqueMsgstr("displayClick %d\n",button);)
@@ -2806,7 +2792,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) 
             transformRight();
-        CASE(Left) {
+        CASE(Matrix) matrixMatrix();
+        FALL(Left) {
             SWITCH(mode[Mouse],Rotate) transformRotate();
             CASE(Translate) transformTranslate();
             CASE(Look) transformLook();
@@ -2815,7 +2802,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right)
             transformRight();
-        CASE(Left) {
+        CASE(Matrix) matrixMatrix();
+        FALL(Left) {
             SWITCH(mode[Mouse],Rotate) manipulateRotate();
             CASE(Translate) manipulateTranslate();
             CASE(Look) manipulateLook();
@@ -2830,7 +2818,8 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
-        CASE(Left) {
+        CASE(Left) click = Matrix;
+        FALL(Matrix) {
             SWITCH(mode[Roller],Clock) transformClock();
             CASE(Cylinder) transformCylinder();
             CASE(Scale) transformScale();
@@ -2839,7 +2828,8 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
         DEFAULT(exitErrstr("invalid click mode\n");)}            
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
-        CASE(Left) {
+        CASE(Left) click = Matrix;
+        FALL(Matrix) {
             SWITCH(mode[Roller],Clock) manipulateClock();
             CASE(Cylinder) manipulateCylinder();
             CASE(Scale) manipulateScale();
