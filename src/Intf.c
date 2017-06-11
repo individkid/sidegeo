@@ -129,9 +129,6 @@ enum Uniform { // one value per uniform; no associated state
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin
     Affine, // rotation and translation of polytope
-    Linear, // rotation only to find normals
-    Project, // specification of a frustrum
-    Light, // transformation of normal into color
     Feather, // point on plane to classify
     Arrow, // normal to plane to classify
     Uniforms};
@@ -179,16 +176,9 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
 struct Ints {DECLARE_QUEUE(int)} matchs = {0};
  // index into item[line].name for console undo
 float affineMat[16]; // transformation state at click time
-float linearMat[9];
-float projectMat[9];
-float affineMatc[16]; // current transformation state
-float linearMatc[9];
-float projectMatc[9];
+float affineMata[16]; // left transformation state
 float affineMatb[16]; // right transformation state
-float linearMatb[9];
-float projectMatb[9];
-float basisMatc[27]; // per versor base points
-float lightMatc[16];
+float basisMat[27]; // per versor base points
 float xPoint = 0;  // position of pierce point at click time
 float yPoint = 0;
 float zPoint = 0;
@@ -1182,9 +1172,6 @@ void initialize(int argc, char **argv)
     uniform float invalid[2];\n\
     uniform mat3 basis[3];\n\
     uniform mat4 affine;\n\
-    uniform mat3 linear;\n\
-    uniform mat3 project;\n\
-    uniform mat4 light;\n\
     uniform vec3 feather;\n\
     uniform vec3 arrow;\n";
 
@@ -1417,24 +1404,12 @@ void initialize(int argc, char **argv)
         versor[2] = id["#POINT2"]."#VERSOR";\n\
         intersect(points,versor,point"#POINT")"
 
-#ifdef BRINGUP
-#define CODE0 "point"
-#define CODE1(I) "id["#I"].rotated"
-#define CODE2 "xpanded[i]"
-#else
-#define CODE0 "linear*point"
-#define CODE1(I) "point"
-#define CODE2 "linear*xpanded[i]"
-#endif
-
     const GLchar *diplaneVertex = "\
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
     out data {\n\
-        mat3 xformed;\n\
-        uint vformed;\n\
-        mat3 rotated;\n\
-        uint vtated;\n\
+        mat3 points;\n\
+        uint versor;\n\
     } od;\n\
     void main()\n\
     {\n\
@@ -1443,13 +1418,8 @@ void initialize(int argc, char **argv)
         expand(plane,versor,xpanded);\n\
         for (int i = 0; i < 3; i++)\n\
             points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
-        minimum(points,od.vformed);\n\
-        od.xformed = points;\n\
-        for (int i = 0; i < 3; i++)\n\
-            points[i] = "CODE2";\n\
-        minimum(points,od.vtated);\n\
-        od.rotated = points;\n\
-        od.vtated = versor;\n\
+        minimum(points,od.versor);\n\
+        od.points = points;\n\
     }\n";
     input[Diplane] = GL_TRIANGLES_ADJACENCY;
     output[Diplane] = GL_TRIANGLES;
@@ -1457,27 +1427,20 @@ void initialize(int argc, char **argv)
     layout (INPUT) in;\n\
     layout (OUTPUT) out;\n\
     in data {\n\
-        mat3 xformed;\n\
-        uint vformed;\n\
-        mat3 rotated;\n\
-        uint vtated;\n\
+        mat3 points;\n\
+        uint versor;\n\
     } id[6];\n\
     out vec3 normal;\n\
     void main()\n\
     {\n\
-        vec3 point;\n\
         vec3 point0;\n\
         vec3 point1;\n\
         vec3 point2;\n\
         mat3 points[3];\n\
         uint versor[3];\n\
-        "INTERSECT(rotated,vtated,0,0,1,2)";\n\
-        "INTERSECT(rotated,vtated,1,0,1,3)";\n\
-        "INTERSECT(rotated,vtated,2,0,4,5)";\n\
-        point = normalize(cross((point1-point0),(point2-point0)));\n\
-        "INTERSECT(xformed,vformed,0,0,1,2)";\n\
-        "INTERSECT(xformed,vformed,1,0,1,3)";\n\
-        "INTERSECT(xformed,vformed,2,0,4,5)";\n\
+        "INTERSECT(points,versor,0,0,1,2)";\n\
+        "INTERSECT(points,versor,1,0,1,3)";\n\
+        "INTERSECT(points,versor,2,0,4,5)";\n\
         gl_Position = vec4(point0,1.0);\n\
         normal = vec3(1.0,1.0,0.0);\n\
         EmitVertex();\n\
@@ -1494,19 +1457,17 @@ void initialize(int argc, char **argv)
     out vec4 result;\n\
     void main()\n\
     {\n\
-        result = light*vec4(normal, 1.0f);\n\
+        result = vec4(normal, 1.0f);\n\
     }\n";
 
     const GLchar *dipointVertex = "\
     layout (location = 2) in vec3 point;\n\
     out data {\n\
-        vec3 xformed;\n\
-        vec3 rotated;\n\
+        vec3 point;\n\
     } od;\n\
     void main()\n\
     {\n\
-        od.xformed = (affine*vec4(point,1.0)).xyz;\n\
-        od.rotated = "CODE0";\n\
+        od.point = (affine*vec4(point,1.0)).xyz;\n\
     }\n";
     input[Dipoint] = GL_TRIANGLES;
     output[Dipoint] = GL_TRIANGLES;
@@ -1514,22 +1475,19 @@ void initialize(int argc, char **argv)
     layout (INPUT) in;\n\
     layout (OUTPUT) out;\n\
     in data {\n\
-        vec3 xformed;\n\
-        vec3 rotated;\n\
+        vec3 point;\n\
     } id[3];\n\
     out vec3 normal;\n\
     void main()\n\
     {\n\
-        vec3 point;\n\
-        point = normalize(cross((id[1].rotated-id[0].rotated),(id[2].rotated-id[0].rotated)));\n\
-        gl_Position = vec4(id[0].xformed,1.0);\n\
-        normal = "CODE1(0)";\n\
+        gl_Position = vec4(id[0].point,1.0);\n\
+        normal = vec3(1.0,1.0,0.0);\n\
         EmitVertex();\n\
-        gl_Position = vec4(id[1].xformed,1.0);\n\
-        normal = "CODE1(1)";\n\
+        gl_Position = vec4(id[1].point,1.0);\n\
+        normal = vec3(0.0,1.0,1.0);\n\
         EmitVertex();\n\
-        gl_Position = vec4(id[2].xformed,1.0);\n\
-        normal = "CODE1(2)";\n\
+        gl_Position = vec4(id[2].point,1.0);\n\
+        normal = vec3(1.0,0.0,1.0);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
@@ -1538,7 +1496,7 @@ void initialize(int argc, char **argv)
     out vec4 result;\n\
     void main()\n\
     {\n\
-        result = light*vec4(normal, 1.0f);\n\
+        result = vec4(normal, 1.0f);\n\
     }\n";
 
     const GLchar *coplaneVertex = "\
@@ -1661,8 +1619,8 @@ void initialize(int argc, char **argv)
     layout (location = 0) in vec3 plane;\n\
     layout (location = 1) in uint versor;\n\
     out data {\n\
-        mat3 xformed;\n\
-        uint vformed;\n\
+        mat3 points;\n\
+        uint versor;\n\
     } od;\n\
     void main()\n\
     {\n\
@@ -1671,8 +1629,8 @@ void initialize(int argc, char **argv)
         expand(plane,versor,xpanded);\n\
         for (int i = 0; i < 3; i++)\n\
             points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
-        minimum(points,od.vformed);\n\
-        od.xformed = points;\n\
+        minimum(points,od.versor);\n\
+        od.points = points;\n\
     }\n";
     input[Perplane] = GL_TRIANGLES_ADJACENCY;
     output[Perplane] = GL_POINTS;
@@ -1680,8 +1638,8 @@ void initialize(int argc, char **argv)
     layout (INPUT) in;\n\
     layout (OUTPUT) out;\n\
     in data {\n\
-        mat3 xformed;\n\
-        uint vformed;\n\
+        mat3 points;\n\
+        uint versor;\n\
     } id[6];\n\
     out vec3 vector;\n\
     void main()\n\
@@ -1696,14 +1654,14 @@ void initialize(int argc, char **argv)
         vec3 point2;\n\
         mat3 points[3];\n\
         uint versor[3];\n\
-        "INTERSECT(xformed,vformed,0,0,1,2)";\n\
-        "INTERSECT(xformed,vformed,1,0,1,3)";\n\
-        "INTERSECT(xformed,vformed,2,0,4,5)";\n\
+        "INTERSECT(points,versor,0,0,1,2)";\n\
+        "INTERSECT(points,versor,1,0,1,3)";\n\
+        "INTERSECT(points,versor,2,0,4,5)";\n\
         corners[0] = point0;\n\
         corners[1] = point1;\n\
         corners[2] = point2;\n\
         minimum(corners,index);\n\
-        pierce(corners, index, head, tail, vector);\n\
+        pierce(corners,index,head,tail,vector);\n\
         contain(corners,index,vector);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
@@ -1713,11 +1671,11 @@ void initialize(int argc, char **argv)
     const GLchar *perpointVertex = "\
     layout (location = 2) in vec3 point;\n\
     out data {\n\
-        vec3 xformed;\n\
+        vec3 point;\n\
     } od;\n\
     void main()\n\
     {\n\
-        od.xformed = (affine*vec4(point,1.0)).xyz;\n\
+        od.point = (affine*vec4(point,1.0)).xyz;\n\
     }\n";
     input[Perpoint] = GL_TRIANGLES;
     output[Perpoint] = GL_POINTS;
@@ -1725,7 +1683,7 @@ void initialize(int argc, char **argv)
     layout (INPUT) in;\n\
     layout (OUTPUT) out;\n\
     in data {\n\
-        vec3 xformed;\n\
+        vec3 point;\n\
     } id[3];\n\
     out vec3 vector;\n\
     void main()\n\
@@ -1734,13 +1692,13 @@ void initialize(int argc, char **argv)
         vec3 tail;\n\
         mat3 corners;\n\
         uint index;\n\
-        corners[0] = id[0].xformed;\n\
-        corners[1] = id[1].xformed;\n\
-        corners[2] = id[2].xformed;\n\
+        corners[0] = id[0].point;\n\
+        corners[1] = id[1].point;\n\
+        corners[2] = id[2].point;\n\
         minimum(corners,index);\n\
         head = feather + arrow;\n\
         tail = feather;\n\
-        pierce(corners, index, head, tail, vector);\n\
+        pierce(corners,index,head,tail,vector);\n\
         contain(corners,index,vector);\n\
         EmitVertex();\n\
         EndPrimitive();\n\
@@ -1805,31 +1763,20 @@ void initialize(int argc, char **argv)
         int column = (i % 9) / 3;
         int row = i % 3;
         int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
-        basisMatc[i] = (one ? 1.0 : 0.0);}
-    for (int i = 0; i < 16; i++) lightMatc[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) affineMatc[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) linearMatc[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) projectMatc[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
+        basisMat[i] = (one ? 1.0 : 0.0);}
+    for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) linearMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) projectMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
 
     for (enum Shader i = 0; i < Shaders; i++) {
         glUseProgram(program[i]);
         uniform[i][Invalid] = glGetUniformLocation(program[i], "invalid");
         uniform[i][Basis] = glGetUniformLocation(program[i], "basis");
         uniform[i][Affine] = glGetUniformLocation(program[i], "affine");
-        uniform[i][Linear] = glGetUniformLocation(program[i], "linear");
-        uniform[i][Project] = glGetUniformLocation(program[i], "project");
-        uniform[i][Light] = glGetUniformLocation(program[i], "light");
         uniform[i][Feather] = glGetUniformLocation(program[i], "feather");
         uniform[i][Arrow] = glGetUniformLocation(program[i], "arrow");
         glUniform1fv(uniform[i][Invalid],2,invalid);
-        glUniformMatrix3fv(uniform[i][Basis],3,GL_FALSE,basisMatc);
-        glUniformMatrix4fv(uniform[i][Affine],1,GL_FALSE,affineMatc);
-        glUniformMatrix3fv(uniform[i][Linear],1,GL_FALSE,linearMatc);
-        glUniformMatrix3fv(uniform[i][Project],1,GL_FALSE,projectMatc);
-        glUniformMatrix4fv(uniform[i][Light],1,GL_FALSE,lightMatc);
+        glUniformMatrix3fv(uniform[i][Basis],3,GL_FALSE,basisMat);
+        glUniformMatrix4fv(uniform[i][Affine],1,GL_FALSE,affineMata);
         glUniform3f(uniform[i][Feather],0.0,0.0,0.0);
         glUniform3f(uniform[i][Arrow],0.0,0.0,0.0);}
     glUseProgram(0);
@@ -2523,12 +2470,8 @@ void leftRefine()
 void leftTransform()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    for (int i = 0; i < 16; i++) affineMat[i] = affineMatc[i];
-    for (int i = 0; i < 9; i++) linearMat[i] = linearMatc[i];
-    for (int i = 0; i < 9; i++) projectMat[i] = projectMatc[i];
+    for (int i = 0; i < 16; i++) affineMat[i] = affineMata[i];
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) linearMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
-    for (int i = 0; i < 9; i++) projectMatb[i] = (i / 3 == i % 3 ? 1.0 : 0.0);
     click = Left;
 }
 
@@ -2541,7 +2484,7 @@ void leftManipulate()
 void leftLeft()
 {
     glUseProgram(program[pershader]);
-    glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMatc);
+    glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
     click = Init;
 }
@@ -2569,7 +2512,7 @@ void rightLeft()
 {
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
     glUseProgram(program[pershader]);
-    glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMatc);
+    glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
     click = Right;
 }
@@ -2611,39 +2554,33 @@ void matrixRotate(float *u)
 void matrixFixed(float *u)
 {
     float v[16]; float w[16];
-    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
-    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
-    jumpmat(u,w,4); timesmat(u,v,4);
+    identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
+    identmat(w,4); w[12] = -xPoint; w[13] = -yPoint; w[14] = -zPoint;
+    jumpmat(u,v,4); timesmat(u,w,4);
 }
 
 void transformRotate()
 {
-    float u[16]; float v[16]; matrixRotate(v);
-    copymat(linearMatc,linearMat,3);
-    jumpmat(linearMatc,linearMatb,3);
-    jumpmat(linearMatc,v,3);
-    copyary(identmat(u,4),v,3,4,9);
-    copymat(affineMatc,affineMat,4);
-    jumpmat(affineMatc,affineMatb,4);
-    matrixFixed(u); jumpmat(affineMatc,u,4);
+    float u[16]; matrixRotate(u);
+    float v[16]; copyary(identmat(v,4),u,3,4,9);
+    copymat(affineMata,affineMat,4);
+    jumpmat(affineMata,affineMatb,4);
+    matrixFixed(v); jumpmat(affineMata,v,4);
     glUseProgram(program[dishader]);
-    glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatc);
-    glUniformMatrix3fv(uniform[dishader][Linear],1,GL_FALSE,linearMatc);
+    glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
     enqueShader(dishader);
 }
 
 void transformTranslate()
 {
-    copymat(linearMatc,linearMat,3);
-    jumpmat(linearMatc,linearMatb,3);
     float u[16]; identmat(u,4);
     u[12] = xPos-xPoint; u[13] = yPos-yPoint;
-    copymat(affineMatc,affineMat,4);
-    jumpmat(affineMatc,affineMatb,4);
-    jumpmat(affineMatc,u,4);
+    copymat(affineMata,affineMat,4);
+    jumpmat(affineMata,affineMatb,4);
+    jumpmat(affineMata,u,4);
     glUseProgram(program[dishader]);
-    glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatc);
+    glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
     enqueShader(dishader);
 }
@@ -2688,15 +2625,18 @@ void transformCylinder()
 
 void transformScale()
 {
-    float scale = wPos/ROLLER_GRANULARITY;
-    identmat(affineMatb,4); for (int i = 0; i < 4; i++) affineMatb[i*4+i] *= scale;
+    float scale = 1.0+wPos/ROLLER_GRANULARITY;
+    if (fabs(scale) < 1.0 && fabs(scale)*ROLLER_GRANULARITY < 1.0) {
+        if (scale < 0.0) scale = 1.0/ROLLER_GRANULARITY;
+        else scale = -1.0/ROLLER_GRANULARITY;}
+    identmat(affineMatb,4); scalevec(affineMatb,scale,16);
     transformMouse();
 }
 
 void transformDrive()
 {
     float scale = wPos/ROLLER_GRANULARITY;
-    identmat(affineMatb,4); affineMatb[14] *= scale;
+    identmat(affineMatb,4); affineMatb[14] += scale;
     transformMouse();
 }
 
