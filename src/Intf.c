@@ -2608,18 +2608,24 @@ void matrixRotate(float *u)
     copymat(u,v,3);
 }
 
+void matrixFixed(float *u)
+{
+    float v[16]; float w[16];
+    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
+    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
+    jumpmat(u,w,4); timesmat(u,v,4);
+}
+
 void transformRotate()
 {
-    float u[16]; float v[16]; float w[16]; matrixRotate(v);
+    float u[16]; float v[16]; matrixRotate(v);
     copymat(linearMatc,linearMat,3);
     jumpmat(linearMatc,linearMatb,3);
     jumpmat(linearMatc,v,3);
     copyary(identmat(u,4),v,3,4,9);
-    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
-    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
     copymat(affineMatc,affineMat,4);
     jumpmat(affineMatc,affineMatb,4);
-    jumpmat(affineMatc,v,4); jumpmat(affineMatc,u,4); jumpmat(affineMatc,w,4);
+    matrixFixed(u); jumpmat(affineMatc,u,4);
     glUseProgram(program[dishader]);
     glUniformMatrix4fv(uniform[dishader][Affine],1,GL_FALSE,affineMatc);
     glUniformMatrix3fv(uniform[dishader][Linear],1,GL_FALSE,linearMatc);
@@ -2667,20 +2673,16 @@ void transformClock()
     copyary(identmat(w,4),u,3,4,9);
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     jumpmat(u,v,4); timesmat(u,w,4);
-    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
-    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
-    identmat(affineMatb,4); jumpmat(affineMatb,v,4); jumpmat(affineMatb,u,4); jumpmat(affineMatb,w,4);
+    matrixFixed(u); identmat(affineMatb,4); jumpmat(affineMatb,u,4);
     transformMouse();
 }
 
 void transformCylinder()
 {
-    float u[16]; float v[16]; float w[16];
+    float u[16];
     float angle = wPos/ROLLER_GRANULARITY;
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
-    identmat(v,4); v[12] = -xPoint; v[13] = -yPoint; v[14] = -zPoint;
-    identmat(w,4); w[12] = xPoint; w[13] = yPoint; w[14] = zPoint;
-    identmat(affineMatb,4); jumpmat(affineMatb,v,4); jumpmat(affineMatb,u,4); jumpmat(affineMatb,w,4);
+    matrixFixed(u); identmat(affineMatb,4); jumpmat(affineMatb,u,4);
     transformMouse();
 }
 
