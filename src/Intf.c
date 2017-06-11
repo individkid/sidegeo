@@ -70,6 +70,7 @@ extern void __stginit_Main(void);
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
+#define INVALID_LOCATION 3
 #define POLL_DELAY 0.1
 #define MAX_ROTATE 0.999
 #define ROLLER_GRANULARITY 30.0
@@ -1107,7 +1108,7 @@ void initialize(int argc, char **argv)
     pierceBuf.name = "pierce";
     glGenBuffers(1, &pierceBuf.handle);
     glGenQueries(1, &pierceBuf.query);
-    pierceBuf.loc = -1;
+    pierceBuf.loc = INVALID_LOCATION;
     pierceBuf.type = GL_FLOAT;
     pierceBuf.dimension = POINT_DIMENSIONS;
     pierceBuf.primitive = GL_POINTS;
@@ -1115,7 +1116,7 @@ void initialize(int argc, char **argv)
     sideBuf.name = "side";
     glGenBuffers(1, &sideBuf.handle);
     glGenQueries(1, &sideBuf.query);
-    sideBuf.loc = -1;
+    sideBuf.loc = INVALID_LOCATION;
     sideBuf.type = GL_FLOAT;
     sideBuf.dimension = SCALAR_DIMENSIONS;
     sideBuf.primitive = GL_POINTS;
@@ -1123,7 +1124,7 @@ void initialize(int argc, char **argv)
     faceSub.name = "face";
     glGenBuffers(1, &faceSub.handle);
     faceSub.type = GL_UNSIGNED_INT;
-    faceSub.loc = -1;
+    faceSub.loc = INVALID_LOCATION;
     faceSub.dimension = SCALAR_DIMENSIONS;
     faceSub.primitive = GL_TRIANGLES_ADJACENCY;
     faceSub.count = facesOfPlanes;
@@ -1131,7 +1132,7 @@ void initialize(int argc, char **argv)
     frameSub.name = "frame";
     glGenBuffers(1, &frameSub.handle);
     frameSub.type = GL_UNSIGNED_INT;
-    frameSub.loc = -1;
+    frameSub.loc = INVALID_LOCATION;
     frameSub.dimension = SCALAR_DIMENSIONS;
     frameSub.primitive = GL_TRIANGLES;
     frameSub.count = framesOfPoints;
@@ -1139,7 +1140,7 @@ void initialize(int argc, char **argv)
     pointSub.name = "point";
     glGenBuffers(1, &pointSub.handle);
     pointSub.type = GL_UNSIGNED_INT;
-    pointSub.loc = -1;
+    pointSub.loc = INVALID_LOCATION;
     pointSub.dimension = SCALAR_DIMENSIONS;
     pointSub.primitive = GL_TRIANGLES;
     pointSub.count = pointsOfPlanes;
@@ -1147,7 +1148,7 @@ void initialize(int argc, char **argv)
     planeSub.name = "plane";
     glGenBuffers(1, &planeSub.handle);
     planeSub.type = GL_UNSIGNED_INT;
-    planeSub.loc = -1;
+    planeSub.loc = INVALID_LOCATION;
     planeSub.dimension = SCALAR_DIMENSIONS;
     planeSub.primitive = GL_TRIANGLES;
     planeSub.count = planesOfPoints;
@@ -1155,7 +1156,7 @@ void initialize(int argc, char **argv)
     sideSub.name = "side";
     glGenBuffers(1, &sideSub.handle);
     sideSub.type = GL_UNSIGNED_INT;
-    sideSub.loc = -1;
+    sideSub.loc = INVALID_LOCATION;
     sideSub.dimension = SCALAR_DIMENSIONS;
     sideSub.primitive = GL_POINTS;
     sideSub.count = sidesOfPlanes;
@@ -1163,7 +1164,7 @@ void initialize(int argc, char **argv)
     halfSub.name = "half";
     glGenBuffers(1, &halfSub.handle);
     halfSub.type = GL_UNSIGNED_INT;
-    halfSub.loc = -1;
+    halfSub.loc = INVALID_LOCATION;
     halfSub.dimension = SCALAR_DIMENSIONS;
     halfSub.primitive = GL_POINTS;
     halfSub.count = sidesOfPoints;
@@ -2186,7 +2187,7 @@ void wrap()
     glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
     glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
     glBindBuffer(GL_COPY_READ_BUFFER, 0);
-    if (buffer->loc >= 0) {
+    if (buffer->loc != INVALID_LOCATION) {
         glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
         glVertexAttribPointer(buffer->loc, buffer->dimension, buffer->type, GL_FALSE, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
