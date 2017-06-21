@@ -17,6 +17,7 @@
 */
 
 #define BRINGUP
+#define DEBUG
 
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
@@ -58,15 +59,18 @@ extern void __stginit_Main(void);
 #define NUM_FRAMES 3
 #define NUM_SIDES 3
 #define FACE_PLANES 6
-#define POLYGON_POINTS 3
+#define FRAME_POINTS 3
 #define PLANE_INCIDENCES 3
 #define POINT_INCIDENCES 3
-#define TEST_DIMENSIONS 3
-#define TEST_REPETITION 2
 #endif
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
 #define SCALAR_DIMENSIONS 1
+#define FACE_DIMENSIONS 6
+#define FRAME_DIMENSIONS 3
+#define INCIDENCE_DIMENSIONS 3
+#define CONSTRUCT_DIMENSIONS 3
+#define ELEMENT_DIMENSIONS 1
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
@@ -74,6 +78,17 @@ extern void __stginit_Main(void);
 #define POLL_DELAY 0.1
 #define MAX_ROTATE 0.999
 #define ROLLER_GRANULARITY 30.0
+#define NUM_FEEDBACK 3
+
+#ifdef DEBUG
+#define DEBUGS Perplane
+#define DEBUGT GLfloat
+#define DEBUGF "%f"
+#define DEBUGO "debug"
+#define DEBUG_LOCATION 0
+#define DEBUG_TYPE GL_FLOAT
+#define DEBUG_DIMENSIONS 3
+#endif
 
 #define DECLARE_QUEUE(TYPE) \
     TYPE *base; \
@@ -131,8 +146,13 @@ enum Uniform { // one value per uniform; no associated state
     Affine, // rotation and translation of polytope
     Feather, // point on plane to classify
     Arrow, // normal to plane to classify
+    Cutoff, // cutoff plane z coordinate
+    Slope, // x over z frustrum slope
+    Aspect, // y over x ratio of frustrum intercepts
     Uniforms};
 GLuint program[Shaders] = {0};
+const char *feedback[Shaders][NUM_FEEDBACK] = {0};
+int feedbacks[Shaders] = {0};
 int input[Shaders] = {0};
 int output[Shaders] = {0};
 GLint uniform[Shaders][Uniforms] = {0};
@@ -194,6 +214,9 @@ int xSiz = 0; // size of window
 int ySiz = 0;
 int xLoc = 0; // window location
 int yLoc = 0;
+float cutoff = 0; // frustrum depth
+float slope = 0;
+float aspect = 0;
 struct Chars generics = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
@@ -203,15 +226,17 @@ struct Buffer {
     GLuint copy; // target memory handle
     GLuint query; // feedback completion test
     GLuint loc; // vertex shader input
-    int room; // current buffer size
-    int wrap; // desired buffer size
+    int room; // current vector count
+    int wrap; // desired vector count
     int draw; // waiting for shader
-    int done; // stable initialized data
+    int done; // initialized vectors
     int type; // type of data elements
-    int dimension; // elements per vector
-    int primitive; // type of vector chunks
-    int (*count)(int); // targets per primitive
+    int dimn; // elements per vector
+    int (*count)(int); // targets per vector
 }; // for use by *Bind* and *Map*
+#ifdef DEBUG
+struct Buffer debugBuf = {0};
+#endif
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
 struct Buffer versorBuf = {0}; // per boundary base selector
 struct Buffer pointBuf = {0}; // shared point per boundary triple
@@ -916,8 +941,7 @@ const GLchar *constructCode = 0;
 const GLchar *intersectCode = 0;
 
 GLuint compileProgram(
-    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
-    const GLchar **feedback, int size, const char *name, enum Shader shader)
+    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const char *name, enum Shader shader)
 {
     GLint success = 0;
     GLchar infoLog[512];
@@ -958,7 +982,7 @@ GLuint compileProgram(
             glGetShaderInfoLog(fragment, 512, NULL, infoLog);
             exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
         glAttachShader(program, fragment);}
-    if (size) glTransformFeedbackVaryings(program, size, feedback, GL_SEPARATE_ATTRIBS);
+    if (feedbacks[shader]) glTransformFeedbackVaryings(program, feedbacks[shader], feedback[shader], GL_SEPARATE_ATTRIBS);
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
@@ -1072,100 +1096,97 @@ void initialize(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
+#ifdef DEBUG
+    debugBuf.name = "debug";
+    glGenBuffers(1, &debugBuf.handle);
+    glGenQueries(1, &debugBuf.query);
+    debugBuf.loc = DEBUG_LOCATION;
+    debugBuf.type = DEBUG_TYPE;
+    debugBuf.dimn = DEBUG_DIMENSIONS;
+#endif
+
     planeBuf.name = "plane";
     glGenBuffers(1, &planeBuf.handle);
     glGenQueries(1, &planeBuf.query);
     planeBuf.loc = PLANE_LOCATION;
     planeBuf.type = GL_FLOAT;
-    planeBuf.dimension = PLANE_DIMENSIONS;
-    planeBuf.primitive = GL_POINTS;
+    planeBuf.dimn = PLANE_DIMENSIONS;
+    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
+    glVertexAttribPointer(planeBuf.loc, planeBuf.dimn, planeBuf.type, GL_FALSE, 0, 0);
 
     versorBuf.name = "versor";
     glGenBuffers(1, &versorBuf.handle);
     versorBuf.loc = VERSOR_LOCATION;
     versorBuf.type = GL_UNSIGNED_INT;
-    versorBuf.dimension = SCALAR_DIMENSIONS;
-    versorBuf.primitive = GL_POINTS;
+    versorBuf.dimn = SCALAR_DIMENSIONS;
+    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
+    glVertexAttribIPointer(versorBuf.loc, versorBuf.dimn, versorBuf.type, 0, 0);
 
     pointBuf.name = "point";
     glGenBuffers(1, &pointBuf.handle);
     glGenQueries(1, &pointBuf.query);
     pointBuf.loc = POINT_LOCATION;
     pointBuf.type = GL_FLOAT;
-    pointBuf.dimension = POINT_DIMENSIONS;
-    pointBuf.primitive = GL_POINTS;
+    pointBuf.dimn = POINT_DIMENSIONS;
+    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
+    glVertexAttribPointer(pointBuf.loc, pointBuf.dimn, pointBuf.type, GL_FALSE, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     pierceBuf.name = "pierce";
     glGenBuffers(1, &pierceBuf.handle);
     glGenQueries(1, &pierceBuf.query);
     pierceBuf.loc = INVALID_LOCATION;
     pierceBuf.type = GL_FLOAT;
-    pierceBuf.dimension = POINT_DIMENSIONS;
-    pierceBuf.primitive = GL_POINTS;
+    pierceBuf.dimn = POINT_DIMENSIONS;
 
     sideBuf.name = "side";
     glGenBuffers(1, &sideBuf.handle);
     glGenQueries(1, &sideBuf.query);
     sideBuf.loc = INVALID_LOCATION;
     sideBuf.type = GL_FLOAT;
-    sideBuf.dimension = SCALAR_DIMENSIONS;
-    sideBuf.primitive = GL_POINTS;
+    sideBuf.dimn = SCALAR_DIMENSIONS;
 
     faceSub.name = "face";
     glGenBuffers(1, &faceSub.handle);
     faceSub.type = GL_UNSIGNED_INT;
     faceSub.loc = INVALID_LOCATION;
-    faceSub.dimension = SCALAR_DIMENSIONS;
-    faceSub.primitive = GL_TRIANGLES_ADJACENCY;
+    faceSub.dimn = FACE_DIMENSIONS;
     faceSub.count = facesOfPlanes;
 
     frameSub.name = "frame";
     glGenBuffers(1, &frameSub.handle);
     frameSub.type = GL_UNSIGNED_INT;
     frameSub.loc = INVALID_LOCATION;
-    frameSub.dimension = SCALAR_DIMENSIONS;
-    frameSub.primitive = GL_TRIANGLES;
+    frameSub.dimn = FRAME_DIMENSIONS;
     frameSub.count = framesOfPoints;
 
     pointSub.name = "point";
     glGenBuffers(1, &pointSub.handle);
     pointSub.type = GL_UNSIGNED_INT;
     pointSub.loc = INVALID_LOCATION;
-    pointSub.dimension = SCALAR_DIMENSIONS;
-    pointSub.primitive = GL_TRIANGLES;
+    pointSub.dimn = INCIDENCE_DIMENSIONS;
     pointSub.count = pointsOfPlanes;
 
     planeSub.name = "plane";
     glGenBuffers(1, &planeSub.handle);
     planeSub.type = GL_UNSIGNED_INT;
     planeSub.loc = INVALID_LOCATION;
-    planeSub.dimension = SCALAR_DIMENSIONS;
-    planeSub.primitive = GL_TRIANGLES;
+    planeSub.dimn = CONSTRUCT_DIMENSIONS;
     planeSub.count = planesOfPoints;
 
     sideSub.name = "side";
     glGenBuffers(1, &sideSub.handle);
     sideSub.type = GL_UNSIGNED_INT;
     sideSub.loc = INVALID_LOCATION;
-    sideSub.dimension = SCALAR_DIMENSIONS;
-    sideSub.primitive = GL_POINTS;
+    sideSub.dimn = ELEMENT_DIMENSIONS;
     sideSub.count = sidesOfPlanes;
 
     halfSub.name = "half";
     glGenBuffers(1, &halfSub.handle);
     halfSub.type = GL_UNSIGNED_INT;
     halfSub.loc = INVALID_LOCATION;
-    halfSub.dimension = SCALAR_DIMENSIONS;
-    halfSub.primitive = GL_POINTS;
+    halfSub.dimn = ELEMENT_DIMENSIONS;
     halfSub.count = sidesOfPoints;
-
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
-    glVertexAttribPointer(planeBuf.loc, planeBuf.dimension, planeBuf.type, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
-    glVertexAttribIPointer(versorBuf.loc, versorBuf.dimension, versorBuf.type, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-    glVertexAttribPointer(pointBuf.loc, pointBuf.dimension, pointBuf.type, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     uniformCode = "\
     #version 330 core\n\
@@ -1173,7 +1194,10 @@ void initialize(int argc, char **argv)
     uniform mat3 basis[3];\n\
     uniform mat4 affine;\n\
     uniform vec3 feather;\n\
-    uniform vec3 arrow;\n";
+    uniform vec3 arrow;\n\
+    uniform float cutoff;\n\
+    uniform float slope;\n\
+    uniform float aspect;\n";
 
     projectCode = "\
     void project2(in mat2 points, in uint versor, in vec2 inp, out float outp)\n\
@@ -1395,13 +1419,13 @@ void initialize(int argc, char **argv)
         pierce(points[2],versor[2],point0,point1,point);\n\
     }\n";
 
-#define INTERSECT(POINTS,VERSOR,POINT,POINT0,POINT1,POINT2) "\
-        points[0] = id["#POINT0"]."#POINTS";\n\
-        points[1] = id["#POINT1"]."#POINTS";\n\
-        points[2] = id["#POINT2"]."#POINTS";\n\
-        versor[0] = id["#POINT0"]."#VERSOR";\n\
-        versor[1] = id["#POINT1"]."#VERSOR";\n\
-        versor[2] = id["#POINT2"]."#VERSOR";\n\
+#define INTERSECT(POINT,POINT0,POINT1,POINT2) "\
+        points[0] = id["#POINT0"].points;\n\
+        points[1] = id["#POINT1"].points;\n\
+        points[2] = id["#POINT2"].points;\n\
+        versor[0] = id["#POINT0"].versor;\n\
+        versor[1] = id["#POINT1"].versor;\n\
+        versor[2] = id["#POINT2"].versor;\n\
         intersect(points,versor,point"#POINT")"
 
     const GLchar *diplaneVertex = "\
@@ -1416,8 +1440,11 @@ void initialize(int argc, char **argv)
         mat3 xpanded;\n\
         mat3 points;\n\
         expand(plane,versor,xpanded);\n\
-        for (int i = 0; i < 3; i++)\n\
-            points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
+        for (int i = 0; i < 3; i++) {\n\
+            points[i] = (affine*vec4(xpanded[i],1.0)).xyz;/*\n\
+            points[i].x = points[i].x/(points[i].z*slope+1.0);\n\
+            points[i].y = points[i].y/(points[i].z*slope*aspect+aspect);\n\
+            points[i].z = points[i].z/cutoff;*/}\n\
         minimum(points,od.versor);\n\
         od.points = points;\n\
     }\n";
@@ -1438,9 +1465,9 @@ void initialize(int argc, char **argv)
         vec3 point2;\n\
         mat3 points[3];\n\
         uint versor[3];\n\
-        "INTERSECT(points,versor,0,0,1,2)";\n\
-        "INTERSECT(points,versor,1,0,1,3)";\n\
-        "INTERSECT(points,versor,2,0,4,5)";\n\
+        "INTERSECT(0,0,1,2)";\n\
+        "INTERSECT(1,0,1,3)";\n\
+        "INTERSECT(2,0,4,5)";\n\
         gl_Position = vec4(point0,1.0);\n\
         normal = vec3(1.0,1.0,0.0);\n\
         EmitVertex();\n\
@@ -1452,7 +1479,7 @@ void initialize(int argc, char **argv)
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
-    const GLchar *diplaneFragment = "\
+    const GLchar *diplaneFragment = /*0*/ "\
     in vec3 normal;\n\
     out vec4 result;\n\
     void main()\n\
@@ -1467,7 +1494,12 @@ void initialize(int argc, char **argv)
     } od;\n\
     void main()\n\
     {\n\
-        od.point = (affine*vec4(point,1.0)).xyz;\n\
+        vec3 vector;\n\
+        vector = (affine*vec4(point,1.0)).xyz;/*\n\
+        vector.x = (vector.x-1.0)/(vector.z*slope)+1.0;\n\
+        vector.y = (vector.y-1.0*aspect)/(vector.z*slope*aspect)+(1.0*aspect);\n\
+        vector.z = vector.z/cutoff;*/\n\
+        od.point = vector;\n\
     }\n";
     input[Dipoint] = GL_TRIANGLES;
     output[Dipoint] = GL_TRIANGLES;
@@ -1654,9 +1686,9 @@ void initialize(int argc, char **argv)
         vec3 point2;\n\
         mat3 points[3];\n\
         uint versor[3];\n\
-        "INTERSECT(points,versor,0,0,1,2)";\n\
-        "INTERSECT(points,versor,1,0,1,3)";\n\
-        "INTERSECT(points,versor,2,0,4,5)";\n\
+        "INTERSECT(0,0,1,2)";\n\
+        "INTERSECT(1,0,1,3)";\n\
+        "INTERSECT(2,0,4,5)";\n\
         corners[0] = point0;\n\
         corners[1] = point1;\n\
         corners[2] = point2;\n\
@@ -1745,18 +1777,31 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *repointFragment = 0;
 
-    const GLchar *feedback[3];
-    feedback[0] = "vector"; feedback[1] = "index"; feedback[2] = "scalar";
-    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, 0, 0, "diplane", Diplane);
-    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, 0, 0, "dipoint", Dipoint);
-    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, feedback, 1, "coplane", Coplane);
-    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment, feedback, 2, "copoint", Copoint);
-    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, feedback+2, 1, "adplane", Adplane);
-    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, feedback+2, 1, "adpoint", Adpoint);
-    program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, feedback, 1, "perplane", Perplane);
-    program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, feedback, 1, "perpoint", Perpoint);
-    program[Replane] = compileProgram(replaneVertex, replaneGeometry, replaneFragment, feedback, 1, "replane", Replane);
-    program[Repoint] = compileProgram(repointVertex, repointGeometry, repointFragment, feedback, 2, "repoint", Repoint);
+    feedbacks[Diplane] = 0;
+    feedbacks[Dipoint] = 0;
+    feedback[Coplane][0] = "vector"; feedbacks[Coplane] = 1;
+    feedback[Copoint][0] = "vector"; feedback[Copoint][1] = "index"; feedbacks[Copoint] = 2;
+    feedback[Adplane][0] = "scalar"; feedbacks[Adplane] = 1;
+    feedback[Adpoint][0] = "scalar"; feedbacks[Adpoint] = 1;
+    feedback[Perplane][0] = "vector"; feedbacks[Perplane] = 1;
+    feedback[Perpoint][0] = "vector"; feedbacks[Perpoint] = 1;
+    feedback[Replane][0] = "vector"; feedbacks[Replane] = 1;
+    feedback[Repoint][0] = "vector"; feedback[Repoint][1] = "index"; feedbacks[Repoint] = 2;
+
+#ifdef DEBUG
+    // feedback[DEBUGS][feedbacks[DEBUGS]] = DEBUGO; debugBuf.loc = feedbacks[DEBUGS]; feedbacks[DEBUGS]++;
+#endif
+
+    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, "diplane", Diplane);
+    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, "dipoint", Dipoint);
+    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "coplane", Coplane);
+    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment, "copoint", Copoint);
+    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, "adplane", Adplane);
+    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "adpoint", Adpoint);
+    program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, "perplane", Perplane);
+    program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, "perpoint", Perpoint);
+    program[Replane] = compileProgram(replaneVertex, replaneGeometry, replaneFragment, "replane", Replane);
+    program[Repoint] = compileProgram(repointVertex, repointGeometry, repointFragment, "repoint", Repoint);
 
     for (int i = 0; i < 27; i++) {
         int versor = i / 9;
@@ -1766,6 +1811,9 @@ void initialize(int argc, char **argv)
         basisMat[i] = (one ? 1.0 : 0.0);}
     for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    cutoff = 10.0;
+    slope = 0.05;
+    aspect = ySiz/xSiz;
 
     for (enum Shader i = 0; i < Shaders; i++) {
         glUseProgram(program[i]);
@@ -1774,11 +1822,17 @@ void initialize(int argc, char **argv)
         uniform[i][Affine] = glGetUniformLocation(program[i], "affine");
         uniform[i][Feather] = glGetUniformLocation(program[i], "feather");
         uniform[i][Arrow] = glGetUniformLocation(program[i], "arrow");
+        uniform[i][Cutoff] = glGetUniformLocation(program[i], "cutoff");
+        uniform[i][Slope] = glGetUniformLocation(program[i], "slope");
+        uniform[i][Aspect] = glGetUniformLocation(program[i], "aspect");
         glUniform1fv(uniform[i][Invalid],2,invalid);
         glUniformMatrix3fv(uniform[i][Basis],3,GL_FALSE,basisMat);
         glUniformMatrix4fv(uniform[i][Affine],1,GL_FALSE,affineMata);
         glUniform3f(uniform[i][Feather],0.0,0.0,0.0);
-        glUniform3f(uniform[i][Arrow],0.0,0.0,0.0);}
+        glUniform3f(uniform[i][Arrow],0.0,0.0,0.0);
+        glUniform1f(uniform[i][Cutoff],cutoff);
+        glUniform1f(uniform[i][Slope],slope);
+        glUniform1f(uniform[i][Aspect],aspect);}
     glUseProgram(0);
 
     ENQUE(process,Process)
@@ -1924,14 +1978,14 @@ int bringup()
         glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), face, GL_STATIC_DRAW);
         faceSub.room = NUM_FACES; faceSub.done = /*0*/NUM_FACES;}
 
-    GLuint polygon[NUM_FRAMES*POLYGON_POINTS] = {
+    GLuint polygon[NUM_FRAMES*FRAME_POINTS] = {
         0,1,2,
         2,0,3,
         1,2,3,
     };
     if (frameSub.room == 0) {
         glBindBuffer(GL_ARRAY_BUFFER, frameSub.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_FRAMES*POLYGON_POINTS*sizeof(GLuint), polygon, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, NUM_FRAMES*FRAME_POINTS*sizeof(GLuint), polygon, GL_STATIC_DRAW);
         frameSub.room = NUM_FRAMES; frameSub.done = 0;}
 
     GLuint vertex[NUM_POINTS*POINT_INCIDENCES] = {
@@ -2123,8 +2177,7 @@ int bufferPrimitive(int size)
 void wrap()
 {
     struct Buffer *buffer = headBuffer();
-    int count = bufferPrimitive(buffer->primitive)*buffer->dimension;
-    size_t size = count*bufferType(buffer->type);
+    size_t size = buffer->dimn*bufferType(buffer->type);
     glGenBuffers(1,&buffer->copy);
     glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
     glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
@@ -2136,7 +2189,7 @@ void wrap()
     glBindBuffer(GL_COPY_READ_BUFFER, 0);
     if (buffer->loc != INVALID_LOCATION) {
         glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
-        glVertexAttribPointer(buffer->loc, buffer->dimension, buffer->type, GL_FALSE, 0, 0);
+        glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     glDeleteBuffers(1,&buffer->handle);
     buffer->handle = buffer->copy; buffer->copy = 0;
@@ -2155,16 +2208,11 @@ void enqueWrap(struct Buffer *buffer, int todo)
 
 enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **feedback)
 {
-    for (int i = 1; i < arg->vertex; i++)
-        if (vertex[0]->primitive != vertex[i]->primitive) exitErrstr("%s too primitive\n",arg->name);
-    for (int i = 1; i < arg->feedback; i++)
-        if (feedback[0]->primitive != feedback[1]->primitive) exitErrstr("%s too primitive\n",arg->name);
     if (!arg->vertex) exitErrstr("%s too vertex\n",arg->name);
     if (!arg->element) exitErrstr("%s too element\n",arg->name);
-    if (arg->element->primitive != input[arg->shader]) exitErrstr("%s wrong input\n",arg->name);
-    if (arg->feedback && feedback[0]->primitive != output[arg->shader]) exitErrstr("%s wrong output\n",arg->name);
     for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
     exitErrbuf(arg->element,arg->name);
+    if (arg->element->dimn != bufferPrimitive(input[arg->shader])) exitErrstr("%s too dimension\n",arg->name);
     int defer = 0;
     for (int i = 0; i < arg->feedback; i++) {
         exitErrbuf(feedback[i],arg->name);
@@ -2187,21 +2235,21 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (todo <= 0) return Defer;
     glUseProgram(program[arg->shader]);
     for (int i = 0; i < arg->feedback; i++) {
-        int count = bufferPrimitive(feedback[i]->primitive)*feedback[i]->dimension;
+        int count = bufferPrimitive(output[arg->shader])*feedback[i]->dimn;
         size_t size = count*bufferType(feedback[i]->type);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle, done*size, todo*size);}
     if (arg->feedback) {
         glEnable(GL_RASTERIZER_DISCARD);
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback[0]->query);
-        glBeginTransformFeedback(feedback[0]->primitive);}
+        glBeginTransformFeedback(output[arg->shader]);}
     for (int i = 0; i < arg->vertex; i++)
         glEnableVertexAttribArray(vertex[i]->loc);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arg->element->handle);
     if (!arg->feedback)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    int count = bufferPrimitive(arg->element->primitive)*arg->element->dimension;
+    int count = bufferPrimitive(input[arg->shader])*arg->element->dimn;
     size_t size = count*bufferType(arg->element->type);
-    glDrawElements(arg->element->primitive, todo*count, arg->element->type, (void *)(done*size));
+    glDrawElements(input[arg->shader], todo*count, arg->element->type, (void *)(done*size));
     arg->element->draw = done+todo;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     for (int i = 0; i < arg->vertex; i++)
@@ -2262,17 +2310,36 @@ void render()
     started[arg->shader]--; dequeRender(); delocBuffer(size);
 }
 
+void debug()
+{
+    if (pierceBuf.done<faceSub.done) {enqueCommand(debug); return;}
+    int prim = bufferPrimitive(output[DEBUGS]);
+    int count = prim*pierceBuf.dimn;
+    DEBUGT result[pierceBuf.done*count];
+    glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    for (int i = 0; i < pierceBuf.done; i++) {
+        for (int j = 0; j < prim; j++) {
+            for (int k = 0; k < pierceBuf.dimn; k++) {
+                    int n = (i*prim+j)*pierceBuf.dimn+k;
+                    enqueMsgstr(" "DEBUGF, result[n]);}
+            if (pierceBuf.dimn > 1) enqueMsgstr("\n");}
+        if (prim > 1 && i < pierceBuf.dimn-1) enqueMsgstr("\n");}\
+    if (pierceBuf.dimn == 1) enqueMsgstr("\n");
+}
+
 void pierce()
 {
     if (pierceBuf.done<faceSub.done) {enqueCommand(pierce); return;}
-    int count = bufferPrimitive(pierceBuf.primitive)*pierceBuf.dimension;
+    int count = bufferPrimitive(output[pershader])*pierceBuf.dimn;
     GLfloat result[pierceBuf.done*count];
     glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     float found = invalid[0];
-    for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimension) {
-        int sub = i+pierceBuf.dimension-1;
+    for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimn) {
+        int sub = i+pierceBuf.dimn-1;
         if (result[sub]<invalid[1] && (found>invalid[1] || result[sub]<found)) found = result[sub];}
     if (found!=invalid[0]) zPos = found;
     started[pershader]--;
@@ -2286,8 +2353,8 @@ void classify()
     int sides = sidesOfPlanes(classifyDone+1);
     if (pointBuf.done >= points && sideSub.done == sideBuf.done) sideSub.done = sides;
     if (sideSub.done > sideBuf.done) {
-        GLfloat coords[pointBuf.dimension];
-        int size = pointBuf.dimension*bufferType(pointBuf.type);
+        GLfloat coords[pointBuf.dimn];
+        int size = pointBuf.dimn*bufferType(pointBuf.type);
         glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
         glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, coords);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
