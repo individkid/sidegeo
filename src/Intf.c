@@ -81,11 +81,9 @@ extern void __stginit_Main(void);
 #define NUM_FEEDBACK 3
 
 #ifdef DEBUG
-#define DEBUGS Perplane
+#define DEBUGS Diplane
 #define DEBUGT GLfloat
 #define DEBUGF "%f"
-#define DEBUGO "debug"
-#define DEBUG_LOCATION 0
 #define DEBUG_TYPE GL_FLOAT
 #define DEBUG_DIMENSIONS 3
 #endif
@@ -1100,7 +1098,7 @@ void initialize(int argc, char **argv)
     debugBuf.name = "debug";
     glGenBuffers(1, &debugBuf.handle);
     glGenQueries(1, &debugBuf.query);
-    debugBuf.loc = DEBUG_LOCATION;
+    debugBuf.loc = INVALID_LOCATION;
     debugBuf.type = DEBUG_TYPE;
     debugBuf.dimn = DEBUG_DIMENSIONS;
 #endif
@@ -1789,7 +1787,7 @@ void initialize(int argc, char **argv)
     feedback[Repoint][0] = "vector"; feedback[Repoint][1] = "index"; feedbacks[Repoint] = 2;
 
 #ifdef DEBUG
-    // feedback[DEBUGS][feedbacks[DEBUGS]] = DEBUGO; debugBuf.loc = feedbacks[DEBUGS]; feedbacks[DEBUGS]++;
+    //feedback[DEBUGS][feedbacks[DEBUGS]] = "debug"; debugBuf.loc = feedbacks[DEBUGS]; feedbacks[DEBUGS]++;
 #endif
 
     program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, "diplane", Diplane);
@@ -1918,6 +1916,12 @@ int bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
+
+    if (debugBuf.room == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER,debugBuf.handle);
+        glBufferData(GL_ARRAY_BUFFER,27*sizeof(GLfloat),NULL,GL_STATIC_DRAW);
+        debugBuf.room = 9;
+    }
 
     GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
  0.204124, 0.204124, 0.204124,
@@ -2187,12 +2191,12 @@ void wrap()
     glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
     glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
     glBindBuffer(GL_COPY_READ_BUFFER, 0);
+    glDeleteBuffers(1,&buffer->handle);
+    buffer->handle = buffer->copy; buffer->copy = 0;
     if (buffer->loc != INVALID_LOCATION) {
         glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
         glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    glDeleteBuffers(1,&buffer->handle);
-    buffer->handle = buffer->copy; buffer->copy = 0;
     buffer->room = buffer->wrap; buffer->wrap = 0;
     dequeBuffer();
 }
@@ -2310,24 +2314,27 @@ void render()
     started[arg->shader]--; dequeRender(); delocBuffer(size);
 }
 
+#ifdef DEBUG
 void debug()
 {
-    if (pierceBuf.done<faceSub.done) {enqueCommand(debug); return;}
+    if (debugBuf.done<faceSub.done) {enqueCommand(debug); return;}
     int prim = bufferPrimitive(output[DEBUGS]);
-    int count = prim*pierceBuf.dimn;
-    DEBUGT result[pierceBuf.done*count];
-    glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
+    int count = prim*debugBuf.dimn;
+    DEBUGT result[debugBuf.done*count];
+    glBindBuffer(GL_ARRAY_BUFFER, debugBuf.handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, debugBuf.done*count*bufferType(debugBuf.type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    for (int i = 0; i < pierceBuf.done; i++) {
+    for (int i = 0; i < debugBuf.done; i++) {
         for (int j = 0; j < prim; j++) {
-            for (int k = 0; k < pierceBuf.dimn; k++) {
-                    int n = (i*prim+j)*pierceBuf.dimn+k;
+            for (int k = 0; k < debugBuf.dimn; k++) {
+                    int n = (i*prim+j)*debugBuf.dimn+k;
                     enqueMsgstr(" "DEBUGF, result[n]);}
-            if (pierceBuf.dimn > 1) enqueMsgstr("\n");}
-        if (prim > 1 && i < pierceBuf.dimn-1) enqueMsgstr("\n");}\
-    if (pierceBuf.dimn == 1) enqueMsgstr("\n");
+            if (debugBuf.dimn > 1) enqueMsgstr("\n");}
+        if (prim > 1 && i < debugBuf.dimn-1) enqueMsgstr("\n");}\
+    enqueMsgstr("---\n");
+    started[DEBUGS]--;
 }
+#endif
 
 void pierce()
 {
@@ -2376,12 +2383,14 @@ void enqueDiplane()
     buf[0] = &planeBuf;
     buf[1] = &versorBuf;
     arg->element = &faceSub;
-    arg->feedback = 0;
+    arg->feedback = feedbacks[Diplane];
+    //buf[2] = &debugBuf;
     arg->shader = Diplane;
     arg->state = RenderEnqued;
     arg->restart = 1;
     arg->name = "diplane";
     enqueCommand(render); started[Diplane]++;
+    //enqueCommand(debug); started[Diplane]++;
 }
 
 void enqueDipoint()
@@ -2391,7 +2400,7 @@ void enqueDipoint()
     arg->vertex = 1;
     buf[0] = &pointBuf;
     arg->element = &frameSub;
-    arg->feedback = 0;
+    arg->feedback = feedbacks[Dipoint];
     arg->shader = Dipoint;
     arg->state = RenderEnqued;
     arg->restart = 1;
@@ -2407,7 +2416,7 @@ void enqueCoplane()
     buf[0] = &planeBuf;
     buf[1] = &versorBuf;
     arg->element = &pointSub;
-    arg->feedback = 1;
+    arg->feedback = feedbacks[Coplane];
     buf[2] = &pointBuf;
     arg->shader = Coplane;
     arg->state = RenderEnqued;
@@ -2423,7 +2432,7 @@ void enqueCopoint()
     arg->vertex = 1;
     buf[0] = &pointBuf;
     arg->element = &planeSub;
-    arg->feedback = 2;
+    arg->feedback = feedbacks[Copoint];
     buf[1] = &planeBuf;
     buf[2] = &versorBuf;
     arg->shader = Copoint;
@@ -2441,7 +2450,7 @@ void enqueAdplane()
     buf[0] = &planeBuf;
     buf[1] = &versorBuf;
     arg->element = &sideSub;
-    arg->feedback = 1;
+    arg->feedback = feedbacks[Adplane];
     buf[2] = &sideBuf;
     arg->shader = Adplane;
     arg->state = RenderEnqued;
@@ -2457,7 +2466,7 @@ void enqueAdpoint()
     arg->vertex = 1;
     buf[0] = &pointBuf;
     arg->element = &halfSub;
-    arg->feedback = 1;
+    arg->feedback = feedbacks[Adpoint];
     buf[1] = &sideBuf;
     arg->shader = Adpoint;
     arg->state = RenderEnqued;
@@ -2474,7 +2483,7 @@ void enquePerplane()
     buf[0] = &planeBuf;
     buf[1] = &versorBuf;
     arg->element = &faceSub;
-    arg->feedback = 1;
+    arg->feedback = feedbacks[Perplane];
     buf[2] = &pierceBuf; pierceBuf.done = 0;
     arg->shader = Perplane;
     arg->state = RenderEnqued;
@@ -2491,7 +2500,7 @@ void enquePerpoint()
     arg->vertex = 1;
     buf[0] = &pointBuf;
     arg->element = &frameSub;
-    arg->feedback = 1;
+    arg->feedback = feedbacks[Perpoint];
     buf[2] = &pierceBuf; pierceBuf.done = 0;
     arg->shader = Perpoint;
     arg->state = RenderEnqued;
