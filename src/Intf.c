@@ -1070,9 +1070,6 @@ void initialize(int argc, char **argv)
 
     glfwGetWindowSize(windowHandle,&xSiz,&ySiz);
     glfwGetWindowPos(windowHandle,&xLoc,&yLoc);
-    double xpos,ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    wPos = 0.0; xPos = xpos; yPos = ypos; zPos = 0.0;
 
 #ifdef __linux__
     glewExperimental = GL_TRUE;
@@ -1661,7 +1658,6 @@ void initialize(int argc, char **argv)
         expand(plane,versor,xpanded);\n\
         for (int i = 0; i < 3; i++) {\n\
             points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
-            points[i].y = points[i].y/aspect;\n\
         }\n\
         minimum(points,od.versor);\n\
         od.points = points;\n\
@@ -1711,7 +1707,6 @@ void initialize(int argc, char **argv)
     {\n\
         vec3 vector;\n\
         vector = (affine*vec4(point,1.0)).xyz;\n\
-        vector.y = vector.y/aspect;\n\
         od.point = vector;\n\
     }\n";
     input[Perpoint] = GL_TRIANGLES;
@@ -2629,7 +2624,7 @@ void matrixRotate(float *u)
 {
     float v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
     float w[9]; w[0] = xPos-xPoint;
-    w[1] = yPos*aspect-yPoint*aspect;
+    w[1] = yPos-yPoint;
     float s = w[0]*w[0]+w[1]*w[1];
     float t = sqrt(s);
     if (t > MAX_ROTATE) {
@@ -2646,8 +2641,8 @@ void matrixRotate(float *u)
 void matrixFixed(float *u)
 {
     float v[16]; float w[16];
-    identmat(v,4); v[12] = xPoint; v[13] = yPoint*aspect; v[14] = zPoint;
-    identmat(w,4); w[12] = -xPoint; w[13] = -yPoint*aspect; w[14] = -zPoint;
+    identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
+    identmat(w,4); w[12] = -xPoint; w[13] = -yPoint; w[14] = -zPoint;
     jumpmat(u,v,4); timesmat(u,w,4);
 }
 
@@ -2668,7 +2663,7 @@ void transformTranslate()
 {
     float u[16]; identmat(u,4);
     u[12] = xPos-xPoint;
-    u[13] = yPos*aspect-yPoint*aspect;
+    u[13] = yPos-yPoint;
     copymat(affineMata,affineMat,4);
     jumpmat(affineMata,affineMatb,4);
     jumpmat(affineMata,u,4);
@@ -2823,7 +2818,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
-    xPos = 2.0*xpos/xSiz-1.0; yPos = -2.0*ypos/ySiz+1.0;
+    xPos = (2.0*xpos/xSiz-1.0); yPos = (-2.0*ypos/ySiz+1.0)*aspect;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) 
