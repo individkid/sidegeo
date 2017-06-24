@@ -17,7 +17,7 @@
 */
 
 #define BRINGUP
-#define DEBUG
+//#define DEBUG
 
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
@@ -226,6 +226,7 @@ struct Buffer {
     GLuint loc; // vertex shader input
     int room; // current vector count
     int wrap; // desired vector count
+    int prim; // desired primitive count
     int draw; // waiting for shader
     int done; // initialized vectors
     int type; // type of data elements
@@ -1439,10 +1440,11 @@ void initialize(int argc, char **argv)
         mat3 points;\n\
         expand(plane,versor,xpanded);\n\
         for (int i = 0; i < 3; i++) {\n\
-            points[i] = (affine*vec4(xpanded[i],1.0)).xyz;/*\n\
+            points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
             points[i].x = points[i].x/(points[i].z*slope+1.0);\n\
             points[i].y = points[i].y/(points[i].z*slope*aspect+aspect);\n\
-            points[i].z = points[i].z/cutoff;*/}\n\
+            points[i].z = points[i].z/cutoff;\n\
+        }\n\
         minimum(points,od.versor);\n\
         od.points = points;\n\
     }\n";
@@ -1477,7 +1479,7 @@ void initialize(int argc, char **argv)
         EmitVertex();\n\
         EndPrimitive();\n\
     }\n";
-    const GLchar *diplaneFragment = /*0*/ "\
+    const GLchar *diplaneFragment = "\
     in vec3 normal;\n\
     out vec4 result;\n\
     void main()\n\
@@ -1493,10 +1495,10 @@ void initialize(int argc, char **argv)
     void main()\n\
     {\n\
         vec3 vector;\n\
-        vector = (affine*vec4(point,1.0)).xyz;/*\n\
-        vector.x = (vector.x-1.0)/(vector.z*slope)+1.0;\n\
-        vector.y = (vector.y-1.0*aspect)/(vector.z*slope*aspect)+(1.0*aspect);\n\
-        vector.z = vector.z/cutoff;*/\n\
+        vector = (affine*vec4(point,1.0)).xyz;\n\
+        vector.x = vector.x/(vector.z*slope+1.0);\n\
+        vector.y = vector.y/(vector.z*slope*aspect+aspect);\n\
+        vector.z = vector.z/cutoff;\n\
         od.point = vector;\n\
     }\n";
     input[Dipoint] = GL_TRIANGLES;
@@ -1657,8 +1659,10 @@ void initialize(int argc, char **argv)
         mat3 xpanded;\n\
         mat3 points;\n\
         expand(plane,versor,xpanded);\n\
-        for (int i = 0; i < 3; i++)\n\
+        for (int i = 0; i < 3; i++) {\n\
             points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
+            points[i].y = points[i].y/aspect;\n\
+        }\n\
         minimum(points,od.versor);\n\
         od.points = points;\n\
     }\n";
@@ -1705,7 +1709,10 @@ void initialize(int argc, char **argv)
     } od;\n\
     void main()\n\
     {\n\
-        od.point = (affine*vec4(point,1.0)).xyz;\n\
+        vec3 vector;\n\
+        vector = (affine*vec4(point,1.0)).xyz;\n\
+        vector.y = vector.y/aspect;\n\
+        od.point = vector;\n\
     }\n";
     input[Perpoint] = GL_TRIANGLES;
     output[Perpoint] = GL_POINTS;
@@ -1787,7 +1794,7 @@ void initialize(int argc, char **argv)
     feedback[Repoint][0] = "vector"; feedback[Repoint][1] = "index"; feedbacks[Repoint] = 2;
 
 #ifdef DEBUG
-    //feedback[DEBUGS][feedbacks[DEBUGS]] = "debug"; debugBuf.loc = feedbacks[DEBUGS]; feedbacks[DEBUGS]++;
+    feedback[DEBUGS][feedbacks[DEBUGS]] = "debug"; debugBuf.loc = feedbacks[DEBUGS]; feedbacks[DEBUGS]++;
 #endif
 
     program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, "diplane", Diplane);
@@ -1810,8 +1817,8 @@ void initialize(int argc, char **argv)
     for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     cutoff = 10.0;
-    slope = 0.05;
-    aspect = ySiz/xSiz;
+    slope = 0.0;
+    aspect = (float)ySiz/(1.0*(float)xSiz);
 
     for (enum Shader i = 0; i < Shaders; i++) {
         glUseProgram(program[i]);
@@ -1917,11 +1924,13 @@ int bringup()
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
 
+#ifdef DEBUG
     if (debugBuf.room == 0) {
         glBindBuffer(GL_ARRAY_BUFFER,debugBuf.handle);
         glBufferData(GL_ARRAY_BUFFER,27*sizeof(GLfloat),NULL,GL_STATIC_DRAW);
         debugBuf.room = 9;
     }
+#endif
 
     GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
  0.204124, 0.204124, 0.204124,
@@ -2045,7 +2054,7 @@ int bringup()
 }
 #endif
 
-void enqueWrap(struct Buffer *buffer, int todo);
+void enqueWrap(struct Buffer *buffer, int todo, int prim);
 void enqueShader(enum Shader);
 void classify();
 
@@ -2181,18 +2190,25 @@ int bufferPrimitive(int size)
 void wrap()
 {
     struct Buffer *buffer = headBuffer();
-    size_t size = buffer->dimn*bufferType(buffer->type);
-    glGenBuffers(1,&buffer->copy);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
-    glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
-    glBindBuffer(GL_COPY_WRITE_BUFFER, buffer->copy);
-    glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
-    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-    glBindBuffer(GL_COPY_READ_BUFFER, 0);
-    glDeleteBuffers(1,&buffer->handle);
-    buffer->handle = buffer->copy; buffer->copy = 0;
+    size_t size = buffer->prim*buffer->dimn*bufferType(buffer->type);
+    if (buffer->handle) {
+        glGenBuffers(1,&buffer->copy);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
+        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, buffer->copy);
+        glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        glBindBuffer(GL_COPY_READ_BUFFER, 0);
+        glDeleteBuffers(1,&buffer->handle);
+        buffer->handle = buffer->copy; buffer->copy = 0;}
+    else {
+        glGenBuffers(1,&buffer->handle);
+        glGenQueries(1, &buffer->query);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);}
     if (buffer->loc != INVALID_LOCATION) {
         glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
         glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
@@ -2201,12 +2217,13 @@ void wrap()
     dequeBuffer();
 }
 
-void enqueWrap(struct Buffer *buffer, int todo)
+void enqueWrap(struct Buffer *buffer, int todo, int prim)
 {
     if (buffer->wrap > 0) return;
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (todo > buffer->wrap) buffer->wrap *= 2;
+    buffer->prim = prim;
     enqueBuffer(buffer); enqueCommand(wrap);
 }
 
@@ -2222,7 +2239,7 @@ enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer
         exitErrbuf(feedback[i],arg->name);
         if (feedback[i]->done > arg->element->done) exitErrstr("%s too done\n",arg->name);
         if (feedback[i]->room < arg->element->done) {
-            enqueWrap(feedback[i],arg->element->done); defer = 1;}}
+            enqueWrap(feedback[i],arg->element->done,bufferPrimitive(output[arg->shader])); defer = 1;}}
     return (defer?Defer:Advance);
 }
 
@@ -2384,13 +2401,11 @@ void enqueDiplane()
     buf[1] = &versorBuf;
     arg->element = &faceSub;
     arg->feedback = feedbacks[Diplane];
-    //buf[2] = &debugBuf;
     arg->shader = Diplane;
     arg->state = RenderEnqued;
     arg->restart = 1;
     arg->name = "diplane";
     enqueCommand(render); started[Diplane]++;
-    //enqueCommand(debug); started[Diplane]++;
 }
 
 void enqueDipoint()
@@ -2613,7 +2628,8 @@ void matrixMatrix()
 void matrixRotate(float *u)
 {
     float v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
-    float w[9]; w[0] = xPos-xPoint; w[1] = yPos-yPoint;
+    float w[9]; w[0] = xPos-xPoint;
+    w[1] = yPos*aspect-yPoint*aspect;
     float s = w[0]*w[0]+w[1]*w[1];
     float t = sqrt(s);
     if (t > MAX_ROTATE) {
@@ -2630,8 +2646,8 @@ void matrixRotate(float *u)
 void matrixFixed(float *u)
 {
     float v[16]; float w[16];
-    identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
-    identmat(w,4); w[12] = -xPoint; w[13] = -yPoint; w[14] = -zPoint;
+    identmat(v,4); v[12] = xPoint; v[13] = yPoint*aspect; v[14] = zPoint;
+    identmat(w,4); w[12] = -xPoint; w[13] = -yPoint*aspect; w[14] = -zPoint;
     jumpmat(u,v,4); timesmat(u,w,4);
 }
 
@@ -2651,7 +2667,8 @@ void transformRotate()
 void transformTranslate()
 {
     float u[16]; identmat(u,4);
-    u[12] = xPos-xPoint; u[13] = yPos-yPoint;
+    u[12] = xPos-xPoint;
+    u[13] = yPos*aspect-yPoint*aspect;
     copymat(affineMata,affineMat,4);
     jumpmat(affineMata,affineMatb,4);
     jumpmat(affineMata,u,4);
@@ -2872,6 +2889,12 @@ void displaySize(GLFWwindow *window, int width, int height)
 #ifdef __linux__
     glViewport(0, 0, xSiz, ySiz);
 #endif
+    aspect = (float)ySiz/(float)xSiz;
+    for (enum Shader i = 0; i < Shaders; i++) {
+        glUseProgram(program[i]);
+        glUniform1f(uniform[i][Aspect],aspect);}
+    glUseProgram(0);
+    enqueShader(dishader);
 }
 
 void displayRefresh(GLFWwindow *window)
