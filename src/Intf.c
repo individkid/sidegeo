@@ -2356,11 +2356,15 @@ void pierce()
     glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    float found = invalid[0];
+    float xFound = 0;
+    float yFound = 0;
+    float zFound = invalid[0];
     for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimn) {
         int sub = i+pierceBuf.dimn-1;
-        if (result[sub]<invalid[1] && (found>invalid[1] || result[sub]<found)) found = result[sub];}
-    if (found!=invalid[0]) zPos = found;
+        if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
+            xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
+    if (zFound<invalid[1]) {
+        xPos = xFound; yPos = yFound; zPos = zFound;}
     started[pershader]--;
 }
 
@@ -2607,7 +2611,7 @@ void transformRight()
 {
     glUseProgram(program[pershader]);
     glUniform3f(uniform[pershader][Feather],xPos,yPos,0.0);
-    glUniform3f(uniform[pershader][Arrow],0.0,0.0,1.0);
+    glUniform3f(uniform[pershader][Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
     enqueShader(pershader);
 }
@@ -2818,7 +2822,8 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
 {
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
-    xPos = (2.0*xpos/xSiz-1.0); yPos = (-2.0*ypos/ySiz+1.0)*aspect;
+    xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
+    yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) 
