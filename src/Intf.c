@@ -1422,7 +1422,7 @@ void initialize(int argc, char **argv)
         versor[0] = id["#POINT0"].versor;\n\
         versor[1] = id["#POINT1"].versor;\n\
         versor[2] = id["#POINT2"].versor;\n\
-        intersect(points,versor,point"#POINT")"
+        intersect(points,versor,corners["#POINT"])"
 
     const GLchar *diplaneVertex = "\
     layout (location = 0) in vec3 plane;\n\
@@ -1438,9 +1438,6 @@ void initialize(int argc, char **argv)
         expand(plane,versor,xpanded);\n\
         for (int i = 0; i < 3; i++) {\n\
             points[i] = (affine*vec4(xpanded[i],1.0)).xyz;\n\
-            points[i].x = points[i].x/(points[i].z*slope+1.0);\n\
-            points[i].y = points[i].y/(points[i].z*slope*aspect+aspect);\n\
-            points[i].z = points[i].z/cutoff;\n\
         }\n\
         minimum(points,od.versor);\n\
         od.points = points;\n\
@@ -1457,23 +1454,20 @@ void initialize(int argc, char **argv)
     out vec3 normal;\n\
     void main()\n\
     {\n\
-        vec3 point0;\n\
-        vec3 point1;\n\
-        vec3 point2;\n\
+        mat3 corners;\n\
         mat3 points[3];\n\
         uint versor[3];\n\
         "INTERSECT(0,0,1,2)";\n\
         "INTERSECT(1,0,1,3)";\n\
         "INTERSECT(2,0,4,5)";\n\
-        gl_Position = vec4(point0,1.0);\n\
-        normal = vec3(1.0,1.0,0.0);\n\
-        EmitVertex();\n\
-        gl_Position = vec4(point1,1.0);\n\
-        normal = vec3(0.0,1.0,1.0);\n\
-        EmitVertex();\n\
-        gl_Position = vec4(point2,1.0);\n\
-        normal = vec3(1.0,0.0,1.0);\n\
-        EmitVertex();\n\
+        for (int i = 0; i < 3; i++) {\n\
+            corners[i].x = corners[i].x/(corners[i].z*slope+1.0);\n\
+            corners[i].y = corners[i].y/(corners[i].z*slope*aspect+aspect);\n\
+            corners[i].z = corners[i].z/cutoff;\n\
+            gl_Position = vec4(corners[i],1.0);\n\
+            normal = vec3(1.0,1.0,1.0);\n\
+            normal[i] = 0.0;\n\
+            EmitVertex();}\n\
         EndPrimitive();\n\
     }\n";
     const GLchar *diplaneFragment = "\
@@ -1491,12 +1485,7 @@ void initialize(int argc, char **argv)
     } od;\n\
     void main()\n\
     {\n\
-        vec3 vector;\n\
-        vector = (affine*vec4(point,1.0)).xyz;\n\
-        vector.x = vector.x/(vector.z*slope+1.0);\n\
-        vector.y = vector.y/(vector.z*slope*aspect+aspect);\n\
-        vector.z = vector.z/cutoff;\n\
-        od.point = vector;\n\
+        od.point = (affine*vec4(point,1.0)).xyz;\n\
     }\n";
     input[Dipoint] = GL_TRIANGLES;
     output[Dipoint] = GL_TRIANGLES;
@@ -1509,15 +1498,15 @@ void initialize(int argc, char **argv)
     out vec3 normal;\n\
     void main()\n\
     {\n\
-        gl_Position = vec4(id[0].point,1.0);\n\
-        normal = vec3(1.0,1.0,0.0);\n\
-        EmitVertex();\n\
-        gl_Position = vec4(id[1].point,1.0);\n\
-        normal = vec3(0.0,1.0,1.0);\n\
-        EmitVertex();\n\
-        gl_Position = vec4(id[2].point,1.0);\n\
-        normal = vec3(1.0,0.0,1.0);\n\
-        EmitVertex();\n\
+        for (int i = 0; i < 3; i++) {\n\
+            vec3 vector = id[i].point;\n\
+            vector.x = vector.x/(vector.z*slope+1.0);\n\
+            vector.y = vector.y/(vector.z*slope*aspect+aspect);\n\
+            vector.z = vector.z/cutoff;\n\
+            gl_Position = vec4(vector,1.0);\n\
+            normal = vec3(1.0,1.0,1.0);\n\
+            normal[i] = 0.0;\n\
+            EmitVertex();}\n\
         EndPrimitive();\n\
     }\n";
     const GLchar *dipointFragment = "\
@@ -1687,9 +1676,6 @@ void initialize(int argc, char **argv)
         "INTERSECT(0,0,1,2)";\n\
         "INTERSECT(1,0,1,3)";\n\
         "INTERSECT(2,0,4,5)";\n\
-        corners[0] = point0;\n\
-        corners[1] = point1;\n\
-        corners[2] = point2;\n\
         minimum(corners,index);\n\
         pierce(corners,index,head,tail,vector);\n\
         contain(corners,index,vector);\n\
@@ -1789,7 +1775,7 @@ void initialize(int argc, char **argv)
     feedback[Repoint][0] = "vector"; feedback[Repoint][1] = "index"; feedbacks[Repoint] = 2;
 
 #ifdef DEBUG
-    feedback[DEBUGS][feedbacks[DEBUGS]] = "debug"; debugBuf.loc = feedbacks[DEBUGS]; feedbacks[DEBUGS]++;
+    feedback[DEBUGS][feedbacks[DEBUGS]] = "debug"; feedbacks[DEBUGS]++;
 #endif
 
     program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, "diplane", Diplane);
@@ -2557,6 +2543,7 @@ void leftRefine()
     // TODO
 }
 
+void rightRight();
 void leftTransform()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
@@ -2582,8 +2569,8 @@ void leftLeft()
 void rightRight()
 {
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
-    double xwarp = (xPos+1.0)*xSiz/2.0;
-    double ywarp = -(yPos-1.0)*ySiz/2.0;
+    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
+    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
 #ifdef __linux__
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
@@ -2610,7 +2597,7 @@ void rightLeft()
 void transformRight()
 {
     glUseProgram(program[pershader]);
-    glUniform3f(uniform[pershader][Feather],xPos,yPos,0.0);
+    glUniform3f(uniform[pershader][Feather],xPos,yPos,zPos);
     glUniform3f(uniform[pershader][Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
     enqueShader(pershader);
@@ -2627,8 +2614,7 @@ void matrixMatrix()
 void matrixRotate(float *u)
 {
     float v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
-    float w[9]; w[0] = xPos-xPoint;
-    w[1] = yPos-yPoint;
+    float w[9]; w[0] = xPos-xPoint; w[1] = yPos-yPoint;
     float s = w[0]*w[0]+w[1]*w[1];
     float t = sqrt(s);
     if (t > MAX_ROTATE) {
