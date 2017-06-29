@@ -1930,12 +1930,12 @@ enum Action bringup()
         glBufferSubData(GL_ARRAY_BUFFER,0,NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat),plane);
         glBindBuffer(GL_ARRAY_BUFFER,0);
         planeBuf.done = NUM_PLANES;}
-    // if (versorBuf.room < NUM_PLANES) enqueWrap(&versorBuf,versorBuf.room+1,1);
-    if (versorBuf.room == /*NUM_PLANES && versorBuf.done == */0) {
+    if (versorBuf.room < NUM_PLANES) enqueWrap(&versorBuf,versorBuf.room+1,1);
+    if (versorBuf.room == NUM_PLANES && versorBuf.done == 0) {
         glBindBuffer(GL_ARRAY_BUFFER,versorBuf.handle);
-        glBufferData(GL_ARRAY_BUFFER,NUM_PLANES*SCALAR_DIMENSIONS*sizeof(GLuint),versor,GL_STATIC_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER,0,NUM_PLANES*SCALAR_DIMENSIONS*sizeof(GLuint),versor);
         glBindBuffer(GL_ARRAY_BUFFER,0);
-        versorBuf.done = versorBuf.room = NUM_PLANES;}
+        versorBuf.done = NUM_PLANES;}
 
     GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
         -g,-b, q,
@@ -2178,7 +2178,9 @@ void wrap()
         glBindBuffer(GL_ARRAY_BUFFER,0);}
     if (buffer->loc != INVALID_LOCATION) {
         glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
+        SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
+        CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
+        DEFAULT(enqueMsgstr("unknown type\n");)
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
     dequeBuffer();
