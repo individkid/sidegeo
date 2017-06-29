@@ -1872,7 +1872,9 @@ void finalize()
  */
 
 #ifdef BRINGUP
-int bringup()
+void enqueWrap(struct Buffer *buffer, int todo, int prim);
+void classify();
+enum Action bringup()
 {
     // f = 1
     // h^2 = f^2 - 0.5^2
@@ -1918,30 +1920,22 @@ int bringup()
  0.250000, -0.327350, 0.658248,
  -0.250000, 0.327350, -0.658248,
  -0.216506, -0.216506, -0.570060,
-/*
-        0.0,1.0,2.0,
-        3.0,4.0,5.0,
-        6.0,7.0,8.0,
-        9.0,0.1,1.1,
-*/
     };
-    if (planeBuf.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat), plane, GL_STATIC_DRAW);
-        planeBuf.room = NUM_PLANES; planeBuf.done = 0;}
-    else if (planeBuf.done < NUM_PLANES) planeBuf.done++;
-
     GLuint versor[NUM_PLANES*SCALAR_DIMENSIONS] = {
         2,0,0,1,
-/*
-        0,0,0,0,
-*/
     };
-    if (versorBuf.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*SCALAR_DIMENSIONS*sizeof(GLuint), versor, GL_STATIC_DRAW);
-        versorBuf.room = NUM_PLANES; versorBuf.done = 0;}
-    else if (versorBuf.done < NUM_PLANES) versorBuf.done++;
+    if (planeBuf.room < NUM_PLANES) enqueWrap(&planeBuf,planeBuf.room+1,1);
+    if (planeBuf.room == NUM_PLANES && versorBuf.done == NUM_PLANES && planeBuf.done == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER,planeBuf.handle);
+        glBufferSubData(GL_ARRAY_BUFFER,0,NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat),plane);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        planeBuf.done = NUM_PLANES;}
+    // if (versorBuf.room < NUM_PLANES) enqueWrap(&versorBuf,versorBuf.room+1,1);
+    if (versorBuf.room == /*NUM_PLANES && versorBuf.done == */0) {
+        glBindBuffer(GL_ARRAY_BUFFER,versorBuf.handle);
+        glBufferData(GL_ARRAY_BUFFER,NUM_PLANES*SCALAR_DIMENSIONS*sizeof(GLuint),versor,GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        versorBuf.done = versorBuf.room = NUM_PLANES;}
 
     GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
         -g,-b, q,
@@ -2031,13 +2025,9 @@ int bringup()
     for (int i = 0; i < NUM_POINTS; i++) frameMap[i] = 0;
     frameMap[NUM_POINTS-1] = NUM_FRAMES;
 
-    return (planeBuf.done < NUM_PLANES);
+    return (planeBuf.done < NUM_PLANES ? Reque : Advance);
 }
 #endif
-
-void enqueWrap(struct Buffer *buffer, int todo, int prim);
-void enqueShader(enum Shader);
-void classify();
 
 enum Action loadFile()
 {
@@ -2052,7 +2042,7 @@ enum Action loadFile()
     // load transformation matrices
     // ftruncate to before transformation matrices
 #ifdef BRINGUP
-    return (bringup()?Reque:Advance);
+    return bringup();
 #endif
 }
 
@@ -2064,7 +2054,7 @@ enum Action initFile()
     // randomizeH();
     // save generic data
 #ifdef BRINGUP
-    return (bringup()?Reque:Advance);
+    return bringup();
 #endif
 }
 
@@ -2083,30 +2073,28 @@ void configure()
         else if (errno == ENOENT && (configFile = fopen(filename, "w"))) configureState = ConfigureInit;
         else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));}
     BRANCH(ConfigureLoad) {
-        SWITCH(loadFile(),Reque) configureState = ConfigureWaitLoad;
+        SWITCH(loadFile(),Reque) {REQUE(configure)}
+        CASE(Defer) {DEFER(configure)}
         CASE(Advance) configureState = ConfigureClose;
-        DEFAULT(exitErrstr("invalid load status\n");)
-        if (classifyDone < planeBuf.done) enqueCommand(classify);}
+        DEFAULT(exitErrstr("invalid load status\n");)}
     BRANCH(ConfigureInit) {
-        SWITCH(initFile(),Reque) configureState = ConfigureWaitInit;
+        SWITCH(initFile(),Reque) {REQUE(configure)}
+        CASE(Defer) {DEFER(configure)}
         CASE(Advance) configureState = ConfigureClose;
-        DEFAULT(exitErrstr("invalid init status\n");)
-        if (classifyDone < planeBuf.done) enqueCommand(classify);}
+        DEFAULT(exitErrstr("invalid init status\n");)}
     BRANCH(ConfigureClose) {
         char *filename = headFilename();
         if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));
         if (sizeFilename() > 1) {dequeFilename(); configureState = ConfigureOpen;}
         else configureState = ConfigureReopen;}
-    BRANCH(ConfigureReopen) {
+    CASE(ConfigureReopen) {
         char *filename = headFilename(); dequeFilename();
-        if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
-        DEQUE(configure,Configure)}
-    CASE(ConfigureWaitLoad) configureState = ConfigureLoad;
-    CASE(ConfigureWaitInit) configureState = ConfigureInit;
+        if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));}
     DEFAULT(exitErrstr("invalid configure state\n");)
-    REQUE(configure)
+    DEQUE(configure,Configure)
 }
 
+void enqueShader(enum Shader);
 void process()
 {
     CHECK(process,Process)
@@ -2172,7 +2160,7 @@ void wrap()
 {
     struct Buffer *buffer = headBuffer();
     size_t size = buffer->prim*buffer->dimn*bufferType(buffer->type);
-    if (buffer->handle) {
+    if (buffer->room) {
         glGenBuffers(1,&buffer->copy);
         glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
         glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
@@ -2185,13 +2173,11 @@ void wrap()
         glDeleteBuffers(1,&buffer->handle);
         buffer->handle = buffer->copy; buffer->copy = 0;}
     else {
-        glGenBuffers(1,&buffer->handle);
-        glGenQueries(1, &buffer->query);
         glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
         glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
         glBindBuffer(GL_ARRAY_BUFFER,0);}
     if (buffer->loc != INVALID_LOCATION) {
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
         glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
@@ -2356,14 +2342,13 @@ void pierce()
 
 void classify()
 {
-    pointSub.done = pointsOfPlanes(planeBuf.done);
-    if (pointSub.done > pointBuf.done) enqueShader(Coplane);
     int points = pointsOfPlanes(classifyDone+1);
     int sides = sidesOfPlanes(classifyDone+1);
-    if (pointBuf.done >= points && sideSub.done == sideBuf.done) sideSub.done = sides;
-    if (sideSub.done > sideBuf.done) {
+    if (points > pointSub.done) {pointSub.done = points; enqueShader(Coplane);}
+    if (pointBuf.done >= points && sides > sideSub.done) {
         GLfloat coords[pointBuf.dimn];
         int size = pointBuf.dimn*bufferType(pointBuf.type);
+        sideSub.done = sides;
         glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
         glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, coords);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -2372,9 +2357,9 @@ void classify()
         glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
         glUseProgram(0);
         enqueShader(Adplane);}
-    if (sideBuf.done > sideSub.done) exitErrstr("classify too done\n");
-    if (sideBuf.done == sides) {classifyDone++; enqueCommand(0); enqueEvent(Classify);}
-    if (planeBuf.done > classifyDone) {enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&classify);}
+    if (sideBuf.done >= sides) {
+        classifyDone++; enqueCommand(0); enqueEvent(Classify);}
+    else {DEFER(classify)}
 }
 
 void enqueDiplane()
