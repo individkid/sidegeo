@@ -58,10 +58,6 @@ extern void __stginit_Main(void);
 #define NUM_FACES 3
 #define NUM_FRAMES 3
 #define NUM_SIDES 3
-#define FACE_PLANES 6
-#define FRAME_POINTS 3
-#define PLANE_INCIDENCES 3
-#define POINT_INCIDENCES 3
 #endif
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
@@ -156,6 +152,7 @@ int output[Shaders] = {0};
 GLint uniform[Shaders][Uniforms] = {0};
 int started[Shaders] = {0};
 int restart[Shaders] = {0};
+int ready[Shaders] = {0};
 GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
@@ -1874,6 +1871,16 @@ void finalize()
 #ifdef BRINGUP
 void enqueWrap(struct Buffer *buffer, int todo, int prim);
 void classify();
+size_t bufferType(int size);
+void bringupBuffer(struct Buffer *buffer, int done, void *data)
+{
+    if (buffer->room < done) enqueWrap(buffer,buffer->room+1,1);
+    if (buffer->room >= done && buffer->done == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+        glBufferSubData(GL_ARRAY_BUFFER,0,done*buffer->dimn*bufferType(buffer->type),data);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        buffer->done = done;}
+}
 enum Action bringup()
 {
     // f = 1
@@ -1906,15 +1913,12 @@ enum Action bringup()
     GLfloat id = i + i;
     GLfloat p = fs / id; // distance from vertex to center of tetrahedron
     GLfloat q = i - p; // distance from base to center of tetrahedron
-
-#ifdef DEBUG
-    if (debugBuf.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER,debugBuf.handle);
-        glBufferData(GL_ARRAY_BUFFER,27*sizeof(GLfloat),NULL,GL_STATIC_DRAW);
-        debugBuf.room = 9;
-    }
-#endif
-
+    GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
+        -g,-b, q,
+         g,-b, q,
+         z, a, q,
+         z, z,-p,
+    };
     GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
  0.204124, 0.204124, 0.204124,
  0.250000, -0.327350, 0.658248,
@@ -1924,98 +1928,38 @@ enum Action bringup()
     GLuint versor[NUM_PLANES*SCALAR_DIMENSIONS] = {
         2,0,0,1,
     };
-    if (planeBuf.room < NUM_PLANES) enqueWrap(&planeBuf,planeBuf.room+1,1);
-    if (planeBuf.room == NUM_PLANES && versorBuf.done == NUM_PLANES && planeBuf.done == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER,planeBuf.handle);
-        glBufferSubData(GL_ARRAY_BUFFER,0,NUM_PLANES*PLANE_DIMENSIONS*sizeof(GLfloat),plane);
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        planeBuf.done = NUM_PLANES;}
-    if (versorBuf.room < NUM_PLANES) enqueWrap(&versorBuf,versorBuf.room+1,1);
-    if (versorBuf.room == NUM_PLANES && versorBuf.done == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER,versorBuf.handle);
-        glBufferSubData(GL_ARRAY_BUFFER,0,NUM_PLANES*SCALAR_DIMENSIONS*sizeof(GLuint),versor);
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        versorBuf.done = NUM_PLANES;}
-
-    GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
-        -g,-b, q,
-         g,-b, q,
-         z, a, q,
-         z, z,-p,
-    };
-    if (0 && pointBuf.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), tetrahedron, GL_STATIC_DRAW);
-        pointBuf.room = NUM_POINTS; pointBuf.done = 0;}
-
-    GLfloat pierce[NUM_PLANES*SCALAR_DIMENSIONS] = {
-        0.2,1.2,2.2,3.2,
-    };
-    if (pierceBuf.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_DIMENSIONS*sizeof(GLfloat), pierce, GL_STATIC_DRAW);
-        pierceBuf.room = NUM_FACES; pierceBuf.done = 0;}
-
-    GLuint face[NUM_FACES*FACE_PLANES] = {
+    GLuint face[NUM_FACES*FACE_DIMENSIONS] = {
         0,1,2,3,2,3,
         1,2,3,0,3,0,
         2,3,0,1,0,1,
     };
-    if (faceSub.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, faceSub.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_FACES*FACE_PLANES*sizeof(GLuint), face, GL_STATIC_DRAW);
-        faceSub.room = NUM_FACES; faceSub.done = /*0*/NUM_FACES;}
-
-    GLuint polygon[NUM_FRAMES*FRAME_POINTS] = {
+    GLuint polygon[NUM_FRAMES*FRAME_DIMENSIONS] = {
         0,1,2,
         2,0,3,
         1,2,3,
     };
-    if (frameSub.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, frameSub.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_FRAMES*FRAME_POINTS*sizeof(GLuint), polygon, GL_STATIC_DRAW);
-        frameSub.room = NUM_FRAMES; frameSub.done = 0;}
-
-    GLuint vertex[NUM_POINTS*POINT_INCIDENCES] = {
+    GLuint vertex[NUM_POINTS*CONSTRUCT_DIMENSIONS] = {
         0,1,2,
         1,2,3,
         2,3,0,
         3,0,1,
     };
-    if (pointSub.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, pointSub.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_POINTS*POINT_INCIDENCES*sizeof(GLuint), vertex, GL_STATIC_DRAW);
-        pointSub.room = NUM_POINTS; pointSub.done = 0;}
-
-    GLuint construct[NUM_PLANES*PLANE_INCIDENCES] = {
+    GLuint construct[NUM_PLANES*INCIDENCE_DIMENSIONS] = {
         0,1,2,
         1,2,3,
         2,3,0,
         3,0,1,
     };
-    if (planeSub.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, planeSub.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_PLANES*PLANE_INCIDENCES*sizeof(GLuint), construct, GL_STATIC_DRAW);
-        planeSub.room = NUM_PLANES; planeSub.done = 0;}
-    else if (planeSub.done < NUM_PLANES) planeSub.done++;
-
-    GLuint wrt[NUM_SIDES] = {
+    GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
-    if (sideSub.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, sideSub.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_SIDES*sizeof(GLuint), wrt, GL_STATIC_DRAW);
-        sideSub.room = NUM_SIDES; sideSub.done = 0;}
-
-    GLfloat sidedness[NUM_SIDES] = {
-        0.0,0.0,0.0,
-    };
-    if (sideBuf.room == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, sideBuf.handle);
-        glBufferData(GL_ARRAY_BUFFER, NUM_SIDES*sizeof(GLfloat), sidedness, GL_STATIC_DRAW);
-        sideBuf.room = NUM_SIDES; sideBuf.done = 0;}
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    bringupBuffer(&planeBuf,NUM_PLANES,plane);
+    bringupBuffer(&versorBuf,NUM_PLANES,versor);
+    bringupBuffer(&faceSub,NUM_FACES,face);
+    bringupBuffer(&frameSub,NUM_FRAMES,polygon);
+    bringupBuffer(&pointSub,NUM_POINTS,vertex);
+    bringupBuffer(&planeSub,NUM_PLANES,construct);
+    bringupBuffer(&sideSub,NUM_SIDES,wrt);
 
     faceMap = malloc(NUM_PLANES*sizeof*faceMap);
     for (int i = 0; i < NUM_PLANES; i++) faceMap[i] = 0;
@@ -2025,7 +1969,14 @@ enum Action bringup()
     for (int i = 0; i < NUM_POINTS; i++) frameMap[i] = 0;
     frameMap[NUM_POINTS-1] = NUM_FRAMES;
 
-    return (planeBuf.done < NUM_PLANES ? Reque : Advance);
+    if (planeBuf.done < NUM_PLANES) return Reque;
+    if (versorBuf.done < NUM_PLANES) return Reque;
+    if (faceSub.done < NUM_FACES) return Reque;
+    if (frameSub.done < NUM_FRAMES) return Reque;
+    if (pointSub.done < NUM_POINTS) return Reque;
+    if (planeSub.done < NUM_PLANES) return Reque;
+    if (sideSub.done < NUM_SIDES) return Reque;
+    return Advance;
 }
 #endif
 
@@ -2058,6 +2009,8 @@ enum Action initFile()
 #endif
 }
 
+void enqueShader(enum Shader);
+void transformRight();
 void configure()
 {
     CHECK(configure,Configure)
@@ -2087,14 +2040,15 @@ void configure()
         if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));
         if (sizeFilename() > 1) {dequeFilename(); configureState = ConfigureOpen;}
         else configureState = ConfigureReopen;}
-    CASE(ConfigureReopen) {
+    BRANCH(ConfigureReopen) {
         char *filename = headFilename(); dequeFilename();
-        if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));}
+        if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
+        enqueShader(dishader);
+        transformRight();}
     DEFAULT(exitErrstr("invalid configure state\n");)
     DEQUE(configure,Configure)
 }
 
-void enqueShader(enum Shader);
 void process()
 {
     CHECK(process,Process)
@@ -2119,10 +2073,6 @@ void process()
         enqueMsgstr("-T run thorough tests\n");}
     else if (strcmp(headOption(), "-i") == 0) {
         ENQUE(configure,Configure)
-        SWITCH(dishader,Diplane) {}
-        CASE(Dipoint) enqueShader(Coplane); // wont start until configure provides planes
-        DEFAULT(exitErrstr("invalid display mode\n");)
-        enqueShader(dishader);
         dequeOption(); DEQUE(process,Process)}
     else if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
@@ -2173,6 +2123,7 @@ void wrap()
         glDeleteBuffers(1,&buffer->handle);
         buffer->handle = buffer->copy; buffer->copy = 0;}
     else {
+        if (!buffer->handle) glGenBuffers(1,&buffer->handle);
         glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
         glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
         glBindBuffer(GL_ARRAY_BUFFER,0);}
@@ -2295,6 +2246,7 @@ void render()
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
+    if (!arg->feedback && !ready[arg->shader]) {glFlush(); ready[arg->shader] = 1;}
     if (arg->restart && restart[arg->shader]) {
         restart[arg->shader] = 0; enqueShader(arg->shader);}
     started[arg->shader]--; dequeRender(); delocBuffer(size);
@@ -2318,6 +2270,7 @@ void debug()
             if (debugBuf.dimn > 1) enqueMsgstr("\n");}
         if (prim > 1 && i < debugBuf.dimn-1) enqueMsgstr("\n");}\
     enqueMsgstr("---\n");
+    if (!ready[DEBUGS]) {glFlush(); ready[DEBUGS] = 1;}
     started[DEBUGS]--;
 }
 #endif
@@ -2339,10 +2292,11 @@ void pierce()
             xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
     if (zFound<invalid[1]) {
         xPos = xFound; yPos = yFound; zPos = zFound;}
+    if (!ready[pershader]) {glFlush(); ready[pershader] = 1;}
     started[pershader]--;
 }
 
-void classify()
+void classify() // TODO: immitate pierce by adding (not transform or manipulate)File function to set uniforms and call enqueShader(Coplane) enqueShader(Adplane) enqueCommand(classify)
 {
     int points = pointsOfPlanes(classifyDone+1);
     int sides = sidesOfPlanes(classifyDone+1);
@@ -2360,7 +2314,8 @@ void classify()
         glUseProgram(0);
         enqueShader(Adplane);}
     if (sideBuf.done >= sides) {
-        classifyDone++; enqueCommand(0); enqueEvent(Classify);}
+        classifyDone++; enqueCommand(0); enqueEvent(Classify);
+        if (!ready[Adplane]) {glFlush(); ready[Adplane] = 1;}}
     else {DEFER(classify)}
 }
 
@@ -2477,7 +2432,7 @@ void enquePerplane()
     arg->restart = 0;
     arg->name = "perplane";
     enqueCommand(render); started[Perplane]++;
-    enqueCommand(pierce); started[Perplane]++;
+    enqueCommand(pierce); started[Perplane]++; // move to after call to enqueShader(pershader)
 }
 
 void enquePerpoint()
@@ -2494,7 +2449,7 @@ void enquePerpoint()
     arg->restart = 0;
     arg->name = "perpoint";
     enqueCommand(render); started[Perpoint]++;
-    enqueCommand(pierce); started[Perpoint]++;
+    enqueCommand(pierce); started[Perpoint]++; // move to after call to enqueShader(pershader)
 }
 
 void enqueShader(enum Shader shader)
@@ -2530,7 +2485,6 @@ void leftRefine()
     // TODO
 }
 
-void rightRight();
 void leftTransform()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
@@ -2757,6 +2711,8 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
+    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
+    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
