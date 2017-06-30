@@ -1872,14 +1872,16 @@ void finalize()
 void enqueWrap(struct Buffer *buffer, int todo, int prim);
 void classify();
 size_t bufferType(int size);
-void bringupBuffer(struct Buffer *buffer, int done, void *data)
+void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
 {
-    if (buffer->room < done) enqueWrap(buffer,buffer->room+1,1);
-    if (buffer->room >= done && buffer->done == 0) {
+    if (buffer->done+todo > room) todo = room-buffer->done;
+    if (buffer->room < buffer->done+todo) enqueWrap(buffer,buffer->done+todo,1);
+    if (buffer->done+todo <= buffer->room) {
+        int size = buffer->dimn*bufferType(buffer->type);
         glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-        glBufferSubData(GL_ARRAY_BUFFER,0,done*buffer->dimn*bufferType(buffer->type),data);
+        glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
         glBindBuffer(GL_ARRAY_BUFFER,0);
-        buffer->done = done;}
+        buffer->done += todo;}
 }
 enum Action bringup()
 {
@@ -1953,13 +1955,13 @@ enum Action bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
-    bringupBuffer(&planeBuf,NUM_PLANES,plane);
-    bringupBuffer(&versorBuf,NUM_PLANES,versor);
-    bringupBuffer(&faceSub,NUM_FACES,face);
-    bringupBuffer(&frameSub,NUM_FRAMES,polygon);
-    bringupBuffer(&pointSub,NUM_POINTS,vertex);
-    bringupBuffer(&planeSub,NUM_PLANES,construct);
-    bringupBuffer(&sideSub,NUM_SIDES,wrt);
+    bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
+    bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
+    bringupBuffer(&faceSub,1,NUM_FACES,face);
+    bringupBuffer(&frameSub,1,NUM_FRAMES,polygon);
+    bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
+    bringupBuffer(&planeSub,1,NUM_PLANES,construct);
+    bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
 
     faceMap = malloc(NUM_PLANES*sizeof*faceMap);
     for (int i = 0; i < NUM_PLANES; i++) faceMap[i] = 0;
@@ -2137,12 +2139,12 @@ void wrap()
     dequeBuffer();
 }
 
-void enqueWrap(struct Buffer *buffer, int todo, int prim)
+void enqueWrap(struct Buffer *buffer, int room, int prim)
 {
     if (buffer->wrap > 0) return;
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
-    while (todo > buffer->wrap) buffer->wrap *= 2;
+    while (room > buffer->wrap) buffer->wrap *= 2;
     buffer->prim = prim;
     enqueBuffer(buffer); enqueCommand(wrap);
 }
@@ -2753,6 +2755,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
+    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
+    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) 
@@ -2780,6 +2784,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     wPos = wPos + yoffset;
+    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
+    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
@@ -2819,6 +2825,8 @@ void displaySize(GLFWwindow *window, int width, int height)
     glViewport(0, 0, xSiz, ySiz);
 #endif
     aspect = (float)ySiz/(float)xSiz;
+    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
+    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
     for (enum Shader i = 0; i < Shaders; i++) {
         glUseProgram(program[i]);
         glUniform1f(uniform[i][Aspect],aspect);}
@@ -2828,6 +2836,8 @@ void displaySize(GLFWwindow *window, int width, int height)
 
 void displayRefresh(GLFWwindow *window)
 {
+    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
+    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
     enqueShader(dishader);
 }
 
