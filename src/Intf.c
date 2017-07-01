@@ -338,9 +338,14 @@ inline TYPE head##NAME() \
     return *array##NAME(); \
 } \
 \
+inline TYPE *stack##NAME() \
+{ \
+    return array##NAME()+size##NAME(); \
+} \
+\
 inline TYPE tail##NAME() \
 { \
-    return *(array##NAME()+size##NAME()-1); \
+    return *(stack##NAME()-1); \
 } \
 \
 inline void deloc##NAME(int size) \
@@ -871,16 +876,14 @@ void *console(void *arg)
  * functions called by top level Haskell
  */
 
-void menu()
+void menu(char *buf)
 {
-    char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
     if (len == 1 && buf[0] < 0) {
         enum Menu line = buf[0]+128;
         click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
-    delocChar(len+1);
 }
 
 void waitForEvent()
@@ -896,7 +899,7 @@ void waitForEvent()
         while ((lenIn = detryInput(enlocChar(10),&isEndLine,10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
         else if (lenIn < 0) unlocChar(10);
-        else {unlocChar(10-lenIn); menu();}
+        else {menu(stackChar()-totIn); unlocChar(totIn);}
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
         else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -1963,13 +1966,15 @@ enum Action bringup()
     bringupBuffer(&planeSub,1,NUM_PLANES,construct);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
 
-    faceMap = malloc(NUM_PLANES*sizeof*faceMap);
-    for (int i = 0; i < NUM_PLANES; i++) faceMap[i] = 0;
-    faceMap[NUM_PLANES-1] = NUM_FACES;
+    if (!faceMap) {
+        faceMap = malloc(NUM_PLANES*sizeof*faceMap);
+        for (int i = 0; i < NUM_PLANES; i++) faceMap[i] = 0;
+        faceMap[NUM_PLANES-1] = NUM_FACES;}
 
-    frameMap = malloc(NUM_POINTS*sizeof*frameMap);
-    for (int i = 0; i < NUM_POINTS; i++) frameMap[i] = 0;
-    frameMap[NUM_POINTS-1] = NUM_FRAMES;
+    if (!frameMap) {
+        frameMap = malloc(NUM_POINTS*sizeof*frameMap);
+        for (int i = 0; i < NUM_POINTS; i++) frameMap[i] = 0;
+        frameMap[NUM_POINTS-1] = NUM_FRAMES;}
 
     if (planeBuf.done < NUM_PLANES) return Reque;
     if (versorBuf.done < NUM_PLANES) return Reque;
@@ -2017,10 +2022,9 @@ void configure()
 {
     CHECK(configure,Configure)
     SWITCH(configureState,ConfigureEnqued) {
-        if (configFile && fclose(configFile) != 0)
-            enqueErrstr("invalid path for close: %s\n", strerror(errno));
-        if (!validFilename())
-            enqueFilename("./sculpt.cfg");
+        if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close: %s\n", strerror(errno));
+        if (!validFilename()) exitErrstr("no filename\n");
+        planeBuf.done = 0; versorBuf.done = 0; faceSub.done = 0; ready[dishader] = 0; ready[pershader] = 0;
         configureState = ConfigureOpen;}
     BRANCH(ConfigureOpen) {
         char *filename = headFilename();
@@ -2029,18 +2033,15 @@ void configure()
         else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));}
     BRANCH(ConfigureLoad) {
         SWITCH(loadFile(),Reque) {REQUE(configure)}
-        CASE(Defer) {DEFER(configure)}
         CASE(Advance) configureState = ConfigureClose;
         DEFAULT(exitErrstr("invalid load status\n");)}
     BRANCH(ConfigureInit) {
         SWITCH(initFile(),Reque) {REQUE(configure)}
-        CASE(Defer) {DEFER(configure)}
         CASE(Advance) configureState = ConfigureClose;
         DEFAULT(exitErrstr("invalid init status\n");)}
     BRANCH(ConfigureClose) {
         char *filename = headFilename();
-        if (fclose(configFile) != 0) enqueErrstr("invalid path for close: %s: %s\n", filename, strerror(errno));
-        if (sizeFilename() > 1) {dequeFilename(); configureState = ConfigureOpen;}
+        if (sizeFilename() > 1) {dequeFilename(); configureState = ConfigureEnqued;}
         else configureState = ConfigureReopen;}
     BRANCH(ConfigureReopen) {
         char *filename = headFilename(); dequeFilename();
@@ -2054,17 +2055,14 @@ void configure()
 void process()
 {
     CHECK(process,Process)
-    if (!validOption()) {
-        enqueEvent(Done); enqueCommand(0); DEQUE(process,Process)}
+    if (!validOption()) {DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print this message\n");
         enqueMsgstr("-H print manual page\n");
-        enqueMsgstr("-i start interactive mode\n");
-        enqueMsgstr("-I <file> start animation that tweaks planes according to a metric\n");
+        enqueMsgstr("-i <file> load and append to configuration file\n");
+        enqueMsgstr("-I <file> follow current file load and append new file\n");
         enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
         enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
-        enqueMsgstr("-c <file> change file for configuration and history\n");
-        enqueMsgstr("-C randomize direction and color of light sources\n");
         enqueMsgstr("-p <name> replace current polytope by builtin polytope\n");
         enqueMsgstr("-P <name> change current polytope to one from history\n");
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
@@ -2074,13 +2072,9 @@ void process()
         enqueMsgstr("-t run sanity check\n");
         enqueMsgstr("-T run thorough tests\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-        ENQUE(configure,Configure)
-        dequeOption(); DEQUE(process,Process)}
-    else if (strcmp(headOption(), "-c") == 0) {
         dequeOption();
-        if (!validOption()) {
-            enqueErrstr("missing file argument\n"); return;}
-        enqueFilename(headOption());}
+        if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
+        enqueFilename(headOption()); MAYBE(configure,Configure)}
     dequeOption(); REQUE(process)
 }
 
@@ -2704,7 +2698,7 @@ void displayClose(GLFWwindow* window)
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action != GLFW_PRESS) return;
-    SWITCH(key,GLFW_KEY_ESCAPE) {MAYBE(process,Process)}
+    SWITCH(key,GLFW_KEY_ESCAPE) {enqueEvent(Done); enqueCommand(0);}
     CASE(GLFW_KEY_ENTER) enqueEscape(1);
     CASE(GLFW_KEY_BACKSPACE) enqueEscape(2);
     CASE(GLFW_KEY_SPACE) enqueEscape(' ');
