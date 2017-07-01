@@ -153,6 +153,7 @@ GLint uniform[Shaders][Uniforms] = {0};
 int started[Shaders] = {0};
 int restart[Shaders] = {0};
 int ready[Shaders] = {0};
+int reset[Shaders] = {0};
 GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
@@ -257,7 +258,7 @@ struct Render {
     const char *name;
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
-enum ConfigureState {ConfigureIdle,ConfigureEnqued,
+enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureReset,
     ConfigureOpen,ConfigureLoad,ConfigureInit,ConfigureClose,
     ConfigureReopen,ConfigureWaitLoad,ConfigureWaitInit} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
@@ -876,14 +877,16 @@ void *console(void *arg)
  * functions called by top level Haskell
  */
 
-void menu(char *buf)
+void menu()
 {
+    char *buf = arrayChar();
     int len = strstr(buf,"\n")-buf;
     if (len == 1 && buf[0] < 0) {
         enum Menu line = buf[0]+128;
         click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
+    delocChar(len+1);
 }
 
 void waitForEvent()
@@ -899,7 +902,7 @@ void waitForEvent()
         while ((lenIn = detryInput(enlocChar(10),&isEndLine,10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
         else if (lenIn < 0) unlocChar(10);
-        else {menu(stackChar()-totIn); unlocChar(totIn);}
+        else {unlocChar(10-lenIn); menu();}
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
         else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -2016,23 +2019,22 @@ enum Action initFile()
 #endif
 }
 
-void reset()
-{
-    planeBuf.done = 0; versorBuf.done = 0; faceSub.done = 0; planeSub.done = 0;
-    pointBuf.done = 0; frameSub.done = 0; pointSub.done = 0;
-    sideBuf.done = 0; sideSub.done = 0; halfSub.done = 0;
-    ready[dishader] = 0; ready[pershader] = 0;
-}
-
 void enqueShader(enum Shader);
 void transformRight();
 void configure()
 {
     CHECK(configure,Configure)
     SWITCH(configureState,ConfigureEnqued) {
+        if (ready[dishader] || ready[pershader]) {reset[dishader] = 1; reset[pershader] = 1;}
+        configureState = ConfigureReset;}
+    BRANCH(ConfigureReset) {
+        if (ready[dishader] || ready[pershader]) {REQUE(configure)}
         if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close: %s\n", strerror(errno));
         if (!validFilename()) exitErrstr("no filename\n");
-        reset();
+        planeBuf.done = 0; versorBuf.done = 0; faceSub.done = 0; planeSub.done = 0;
+        pointBuf.done = 0; frameSub.done = 0; pointSub.done = 0;
+        sideBuf.done = 0; sideSub.done = 0; halfSub.done = 0;
+        reset[dishader] = 0; reset[pershader] = 0;
         configureState = ConfigureOpen;}
     BRANCH(ConfigureOpen) {
         char *filename = headFilename();
@@ -2250,7 +2252,8 @@ void render()
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
-    if (!arg->feedback && !ready[arg->shader]) {glFlush(); ready[arg->shader] = 1;}
+    if (!arg->feedback && !ready[arg->shader] && !reset[arg->shader]) {glFlush(); ready[arg->shader] = 1;}
+    if (!arg->feedback && ready[arg->shader] && reset[arg->shader]) {glFlush(); ready[arg->shader] = 0;}
     if (arg->restart && restart[arg->shader]) {
         restart[arg->shader] = 0; enqueShader(arg->shader);}
     started[arg->shader]--; dequeRender(); delocBuffer(size);
@@ -2274,7 +2277,8 @@ void debug()
             if (debugBuf.dimn > 1) enqueMsgstr("\n");}
         if (prim > 1 && i < debugBuf.dimn-1) enqueMsgstr("\n");}\
     enqueMsgstr("---\n");
-    if (!ready[DEBUGS]) {glFlush(); ready[DEBUGS] = 1;}
+    if (!ready[DEBUGS] && !reset[DEBUGS]) {glFlush(); ready[DEBUGS] = 1;}
+    if (ready[DEBUGS] && reset[DEBUGS]) {glFlush(); ready[DEBUGS] = 0;}
     started[DEBUGS]--;
 }
 #endif
@@ -2300,7 +2304,7 @@ void pierce()
     started[pershader]--;
 }
 
-void classify() // TODO: immitate pierce by adding (not transform or manipulate)File function to set uniforms and call enqueShader(Coplane) enqueShader(Adplane) enqueCommand(classify)
+void classify()
 {
     int points = pointsOfPlanes(classifyDone+1);
     int sides = sidesOfPlanes(classifyDone+1);
@@ -2757,8 +2761,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
-    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
-    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
+    if (!ready[pershader]) return;
+    if (!ready[dishader]) return;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) 
@@ -2786,8 +2790,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     wPos = wPos + yoffset;
-    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
-    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
+    if (!ready[pershader]) return;
+    if (!ready[dishader]) return;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
@@ -2827,8 +2831,8 @@ void displaySize(GLFWwindow *window, int width, int height)
     glViewport(0, 0, xSiz, ySiz);
 #endif
     aspect = (float)ySiz/(float)xSiz;
-    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
-    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
+    if (!ready[pershader]) return;
+    if (!ready[dishader]) return;
     for (enum Shader i = 0; i < Shaders; i++) {
         glUseProgram(program[i]);
         glUniform1f(uniform[i][Aspect],aspect);}
@@ -2838,8 +2842,8 @@ void displaySize(GLFWwindow *window, int width, int height)
 
 void displayRefresh(GLFWwindow *window)
 {
-    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
-    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
+    if (!ready[pershader]) return;
+    if (!ready[dishader]) return;
     enqueShader(dishader);
 }
 
