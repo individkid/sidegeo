@@ -2016,6 +2016,14 @@ enum Action initFile()
 #endif
 }
 
+void reset()
+{
+    planeBuf.done = 0; versorBuf.done = 0; faceSub.done = 0; planeSub.done = 0;
+    pointBuf.done = 0; frameSub.done = 0; pointSub.done = 0;
+    sideBuf.done = 0; sideSub.done = 0; halfSub.done = 0;
+    ready[dishader] = 0; ready[pershader] = 0;
+}
+
 void enqueShader(enum Shader);
 void transformRight();
 void configure()
@@ -2024,7 +2032,7 @@ void configure()
     SWITCH(configureState,ConfigureEnqued) {
         if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close: %s\n", strerror(errno));
         if (!validFilename()) exitErrstr("no filename\n");
-        planeBuf.done = 0; versorBuf.done = 0; faceSub.done = 0; ready[dishader] = 0; ready[pershader] = 0;
+        reset();
         configureState = ConfigureOpen;}
     BRANCH(ConfigureOpen) {
         char *filename = headFilename();
@@ -2060,7 +2068,7 @@ void process()
         enqueMsgstr("-h print this message\n");
         enqueMsgstr("-H print manual page\n");
         enqueMsgstr("-i <file> load and append to configuration file\n");
-        enqueMsgstr("-I <file> follow current file load and append new file\n");
+        enqueMsgstr("-I <file> follow file for readonly polytope\n");
         enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
         enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
         enqueMsgstr("-p <name> replace current polytope by builtin polytope\n");
