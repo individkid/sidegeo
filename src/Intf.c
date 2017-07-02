@@ -1949,11 +1949,11 @@ void enqueShader(enum Shader);
 void classify()
 {
     CHECK(classify,Classify)
-    if (classifyDone+1 > planeBuf.done) {DEQUE(classify,Classify)}
+    if (classifyDone >= planeBuf.done) {flush(Adplane); DEQUE(classify,Classify)}
     int points = pointsOfPlanes(classifyDone+1);
     int sides = sidesOfPlanes(classifyDone+1);
-    if (points > pointSub.done) {pointSub.done = points; enqueShader(Coplane);}
-    if (pointBuf.done >= points && sides > sideSub.done) {
+    if (pointBuf.done < points) enqueShader(Coplane);
+    if (pointBuf.done >= points && sideBuf.done < sides) {
         GLfloat coords[pointBuf.dimn];
         int size = pointBuf.dimn*bufferType(pointBuf.type);
         sideSub.done = sides;
@@ -1965,8 +1965,8 @@ void classify()
         glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
         glUseProgram(0);
         enqueShader(Adplane);}
-    if (sideBuf.done >= sides) {classifyDone++; enqueCommand(0); enqueEvent(Classify); flush(Adplane);}
-    else {DEFER(classify)}
+    if (sideBuf.done < sides) {DEFER(classify)}
+    classifyDone++; enqueCommand(0); enqueEvent(Classify);
     REQUE(classify)
 }
 
@@ -2039,13 +2039,13 @@ enum Action bringup()
         2,0,3,
         1,2,3,
     };
-    GLuint vertex[NUM_POINTS*CONSTRUCT_DIMENSIONS] = {
+    GLuint vertex[NUM_POINTS*INCIDENCE_DIMENSIONS] = {
         0,1,2,
         1,2,3,
         2,3,0,
         3,0,1,
     };
-    GLuint construct[NUM_PLANES*INCIDENCE_DIMENSIONS] = {
+    GLuint construct[NUM_PLANES*CONSTRUCT_DIMENSIONS] = {
         0,1,2,
         1,2,3,
         2,3,0,

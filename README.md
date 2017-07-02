@@ -33,36 +33,35 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Translate -- slide polytope/plane from pierce point  
     * Look -- tilt camera around focal point  
   * Roller -- action of roller button in Transform/Manipulate modes  
-    * Lever -- push or pull other end of tilt segment from pierce point
-    * Clock -- rotate picture plane around perpendicular to pierce point  
     * Cylinder -- rotate polytope around tilt line  
+    * Clock -- rotate picture plane around perpendicular to pierce point  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
 
 Configuration/history files consist of commands.
 
---plane takes three scalars
---face takes six plane subscripts
---frame takes three triples of plane subscripts
---remove takes buffer type and subscript to invalidate
---sample takes sidednesses to sample
---region takes polyant for region to inflate
---polyant takes polyant to add to polytope
---volume takes polyant, amplitude, fundamental, harmonics, envelope, rhythm
---filter takes plane subscript, projected area parameterized equalization of tempo, dynamic, tone
---color takes plane subscript and decoration
---matrix takes transformation of display
---configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay, automerge
---delay takes duration for playback
---branch takes file and location for starting state
---jump optionally causes playback to go to location in file
+ * --plane takes three scalars  
+ * --face takes six plane subscripts  
+ * --frame takes three triples of plane subscripts  
+ * --remove takes buffer type and subscript to invalidate  
+ * --sample takes sidednesses to sample  
+ * --region takes polyant for region to inflate  
+ * --polyant takes polyant to add to polytope  
+ * --volume takes polyant, amplitude, fundamental, harmonics, envelope, rhythm  
+ * --filter takes plane subscript, projected area parameterized equalization of tempo, dynamic, tone  
+ * --color takes plane subscript and decoration  
+ * --matrix takes transformation of display  
+ * --project takes slope and cutoff
+ * --configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay, automerge  
+ * --branch takes file and location for starting state  
+ * --jump optionally causes playback to go to location in file  
+ * --delay takes duration for playback  
 
 The following configuration/history file commands are disabled during playback.
 
---inject specifies user action to inject
---pattern takes entire file and apended command as pattern, and produces zero or more command(s) to replace appended
---comment allows pattern action to record data for future use
---schedule appends a comment at a wallclock time
---call issues a Haskell event with given arg and appends the result as comment
---toggle changes jump option at given location
---replace changes comment at location with same size string
+ * --inject specifies user action to inject  
+ * --call takes argument for Haskell command, that can access entire file including command being appended to file, and that returns zero or more replacement(s) for command being appended
+ * --comment allows call action to record data for future use  
+ * --schedule appends a comment at a wallclock time  
+ * --toggle changes jump option at given location  
+ * --replace changes comment at location with same size string  
