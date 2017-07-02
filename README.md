@@ -5,7 +5,9 @@ Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regi
 Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The default file for human readable history and configuration is ./.sculpt . The following command line arguments are processed in order.
 
   * -i \<file> load and append to configuration file  
-  * -I \<file> follow current file load and append new file  
+  * -I \<file> follow file for readonly polytope  
+  * -b \<file> start new file with reference to disabled jump  
+  * -B \<file> append changes to make current same as given file  
   * -f \<file> load polytope in format indicated by file extension  
   * -F \<file> save polytope in format indicated by file extension  
   * -p \<name> replace current polytope by builtin polytope  
@@ -14,6 +16,8 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -S resample current polytope to space and planes  
   * -o optimize away unused boundaries
   * -O split polytopes into disjoint covering subpolytopes
+  * -d display space and regions  
+  * -D display polyants  
   * -t run sanity check 
   * -T run thorough tests 
 
@@ -34,3 +38,31 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Cylinder -- rotate polytope around tilt line  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
+
+Configuration/history files consist of commands.
+
+--plane takes three scalars
+--face takes six plane subscripts
+--frame takes three triples of plane subscripts
+--remove takes buffer type and subscript to invalidate
+--sample takes sidednesses to sample
+--region takes polyant for region to inflate
+--polyant takes polyant to add to polytope
+--volume takes polyant, amplitude, fundamental, harmonics, envelope, rhythm
+--filter takes plane subscript, projected area parameterized equalization of tempo, dynamic, tone
+--color takes plane subscript and decoration
+--matrix takes transformation of display
+--configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay, automerge
+--delay takes duration for playback
+--branch takes file and location for starting state
+--jump optionally causes playback to go to location in file
+
+The following configuration/history file commands are disabled during playback.
+
+--inject specifies user action to inject
+--pattern takes entire file and apended command as pattern, and produces zero or more command(s) to replace appended
+--comment allows pattern action to record data for future use
+--schedule appends a comment at a wallclock time
+--call issues a Haskell event with given arg and appends the result as comment
+--toggle changes jump option at given location
+--replace changes comment at location with same size string

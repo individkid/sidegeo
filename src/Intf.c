@@ -144,12 +144,10 @@ enum Uniform { // one value per uniform; no associated state
     Slope, // x over z frustrum slope
     Aspect, // y over x ratio of frustrum intercepts
     Uniforms};
+GLint uniform[Shaders][Uniforms] = {0};
 GLuint program[Shaders] = {0};
-const char *feedback[Shaders][NUM_FEEDBACK] = {0};
-int feedbacks[Shaders] = {0};
 int input[Shaders] = {0};
 int output[Shaders] = {0};
-GLint uniform[Shaders][Uniforms] = {0};
 int started[Shaders] = {0};
 int restart[Shaders] = {0};
 int ready[Shaders] = {0};
@@ -262,6 +260,7 @@ enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureReset,
     ConfigureOpen,ConfigureLoad,ConfigureInit,ConfigureClose,
     ConfigureReopen,ConfigureWaitLoad,ConfigureWaitInit} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
+enum ClassifyState {ClassifyIdle,ClassifyEnqued} classifyState = ClassifyIdle;
 int sequenceNumber = 0;
 struct Ints defers = {0};
  // sequence numbers of commands that are polling
@@ -941,6 +940,8 @@ const GLchar *sideCode = 0;
 const GLchar *expandCode = 0;
 const GLchar *constructCode = 0;
 const GLchar *intersectCode = 0;
+const char *feedback[Shaders][NUM_FEEDBACK] = {0};
+int feedbacks[Shaders] = {0};
 
 GLuint compileProgram(
     const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const char *name, enum Shader shader)
@@ -1776,7 +1777,6 @@ void initialize(int argc, char **argv)
     feedback[Perpoint][0] = "vector"; feedbacks[Perpoint] = 1;
     feedback[Replane][0] = "vector"; feedbacks[Replane] = 1;
     feedback[Repoint][0] = "vector"; feedback[Repoint][1] = "index"; feedbacks[Repoint] = 2;
-
 #ifdef DEBUG
     feedback[DEBUGS][feedbacks[DEBUGS]] = "debug"; feedbacks[DEBUGS]++;
 #endif
@@ -1824,8 +1824,6 @@ void initialize(int argc, char **argv)
         glUniform1f(uniform[i][Aspect],aspect);}
     glUseProgram(0);
 
-    ENQUE(process,Process)
-
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
@@ -1833,6 +1831,8 @@ void initialize(int argc, char **argv)
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
+
+    ENQUE(process,Process)
 }
 
 void finalize()
@@ -1874,10 +1874,103 @@ void finalize()
  * functions put on command queue
  */
 
+void exitErrbuf(struct Buffer *buf, const char *str)
+{
+    if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
+}
+
+size_t bufferType(int size)
+{
+    size_t retval = 0;
+    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
+    CASE(GL_FLOAT) retval = sizeof(GLfloat);
+    DEFAULT(exitErrstr("unknown render type\n");)
+    return retval;
+}
+
+int bufferPrimitive(int size)
+{
+    int retval = 0;
+    SWITCH(size,GL_POINTS) retval = 1;
+    CASE(GL_TRIANGLES) retval = 3;
+    CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
+    DEFAULT(exitErrstr("unknown render primitive\n");)
+    return retval;
+}
+
+void wrap()
+{
+    struct Buffer *buffer = headBuffer();
+    size_t size = buffer->prim*buffer->dimn*bufferType(buffer->type);
+    if (buffer->room) {
+        glGenBuffers(1,&buffer->copy);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
+        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, buffer->copy);
+        glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        glBindBuffer(GL_COPY_READ_BUFFER, 0);
+        glDeleteBuffers(1,&buffer->handle);
+        buffer->handle = buffer->copy; buffer->copy = 0;}
+    else {
+        if (!buffer->handle) glGenBuffers(1,&buffer->handle);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);}
+    if (buffer->loc != INVALID_LOCATION) {
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+        SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
+        CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
+        DEFAULT(enqueMsgstr("unknown type\n");)
+        glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    buffer->room = buffer->wrap; buffer->wrap = 0;
+    dequeBuffer();
+}
+
+void enqueWrap(struct Buffer *buffer, int room, int prim)
+{
+    if (buffer->wrap > 0) return;
+    buffer->wrap = buffer->room;
+    if (buffer->wrap == 0) buffer->wrap = 1;
+    while (room > buffer->wrap) buffer->wrap *= 2;
+    buffer->prim = prim;
+    enqueBuffer(buffer); enqueCommand(wrap);
+}
+
+void flush(enum Shader shader)
+{
+    if (!ready[shader] && !reset[shader]) {glFlush(); ready[shader] = 1;}
+    if (ready[shader] && reset[shader]) {glFlush(); ready[shader] = 0;}
+}
+
+void enqueShader(enum Shader);
+void classify()
+{
+    CHECK(classify,Classify)
+    if (classifyDone+1 > planeBuf.done) {DEQUE(classify,Classify)}
+    int points = pointsOfPlanes(classifyDone+1);
+    int sides = sidesOfPlanes(classifyDone+1);
+    if (points > pointSub.done) {pointSub.done = points; enqueShader(Coplane);}
+    if (pointBuf.done >= points && sides > sideSub.done) {
+        GLfloat coords[pointBuf.dimn];
+        int size = pointBuf.dimn*bufferType(pointBuf.type);
+        sideSub.done = sides;
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
+        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, coords);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glUseProgram(program[Adplane]);
+        glUniform3f(uniform[Adplane][Feather],coords[0],coords[1],coords[2]);
+        glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
+        glUseProgram(0);
+        enqueShader(Adplane);}
+    if (sideBuf.done >= sides) {classifyDone++; enqueCommand(0); enqueEvent(Classify); flush(Adplane);}
+    else {DEFER(classify)}
+    REQUE(classify)
+}
+
 #ifdef BRINGUP
-void enqueWrap(struct Buffer *buffer, int todo, int prim);
-void classify();
-size_t bufferType(int size);
 void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
 {
     if (buffer->done+todo > room) todo = room-buffer->done;
@@ -1969,6 +2062,8 @@ enum Action bringup()
     bringupBuffer(&planeSub,1,NUM_PLANES,construct);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
 
+    MAYBE(classify,Classify)
+
     if (!faceMap) {
         faceMap = malloc(NUM_PLANES*sizeof*faceMap);
         for (int i = 0; i < NUM_PLANES; i++) faceMap[i] = 0;
@@ -2019,7 +2114,6 @@ enum Action initFile()
 #endif
 }
 
-void enqueShader(enum Shader);
 void transformRight();
 void configure()
 {
@@ -2086,71 +2180,6 @@ void process()
         if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
         enqueFilename(headOption()); MAYBE(configure,Configure)}
     dequeOption(); REQUE(process)
-}
-
-void exitErrbuf(struct Buffer *buf, const char *str)
-{
-    if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
-}
-
-size_t bufferType(int size)
-{
-    size_t retval = 0;
-    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
-    CASE(GL_FLOAT) retval = sizeof(GLfloat);
-    DEFAULT(exitErrstr("unknown render type\n");)
-    return retval;
-}
-
-int bufferPrimitive(int size)
-{
-    int retval = 0;
-    SWITCH(size,GL_POINTS) retval = 1;
-    CASE(GL_TRIANGLES) retval = 3;
-    CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
-    DEFAULT(exitErrstr("unknown render primitive\n");)
-    return retval;
-}
-
-void wrap()
-{
-    struct Buffer *buffer = headBuffer();
-    size_t size = buffer->prim*buffer->dimn*bufferType(buffer->type);
-    if (buffer->room) {
-        glGenBuffers(1,&buffer->copy);
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
-        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, buffer->copy);
-        glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-        glBindBuffer(GL_COPY_READ_BUFFER, 0);
-        glDeleteBuffers(1,&buffer->handle);
-        buffer->handle = buffer->copy; buffer->copy = 0;}
-    else {
-        if (!buffer->handle) glGenBuffers(1,&buffer->handle);
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER,0);}
-    if (buffer->loc != INVALID_LOCATION) {
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
-        CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
-        DEFAULT(enqueMsgstr("unknown type\n");)
-        glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    buffer->room = buffer->wrap; buffer->wrap = 0;
-    dequeBuffer();
-}
-
-void enqueWrap(struct Buffer *buffer, int room, int prim)
-{
-    if (buffer->wrap > 0) return;
-    buffer->wrap = buffer->room;
-    if (buffer->wrap == 0) buffer->wrap = 1;
-    while (room > buffer->wrap) buffer->wrap *= 2;
-    buffer->prim = prim;
-    enqueBuffer(buffer); enqueCommand(wrap);
 }
 
 enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **feedback)
@@ -2252,11 +2281,28 @@ void render()
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
-    if (!arg->feedback && !ready[arg->shader] && !reset[arg->shader]) {glFlush(); ready[arg->shader] = 1;}
-    if (!arg->feedback && ready[arg->shader] && reset[arg->shader]) {glFlush(); ready[arg->shader] = 0;}
-    if (arg->restart && restart[arg->shader]) {
-        restart[arg->shader] = 0; enqueShader(arg->shader);}
+    if (!arg->feedback) flush(arg->shader);
+    if (arg->restart && restart[arg->shader]) {restart[arg->shader] = 0; enqueShader(arg->shader);}
     started[arg->shader]--; dequeRender(); delocBuffer(size);
+}
+
+void pierce()
+{
+    if (pierceBuf.done<faceSub.done) {enqueCommand(pierce); return;}
+    int count = bufferPrimitive(output[pershader])*pierceBuf.dimn;
+    GLfloat result[pierceBuf.done*count];
+    glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    float xFound = 0;
+    float yFound = 0;
+    float zFound = invalid[0];
+    for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimn) {
+        int sub = i+pierceBuf.dimn-1;
+        if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
+            xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
+    if (zFound<invalid[1]) {xPos = xFound; yPos = yFound; zPos = zFound;}
+    flush(pershader); started[pershader]--;
 }
 
 #ifdef DEBUG
@@ -2277,55 +2323,9 @@ void debug()
             if (debugBuf.dimn > 1) enqueMsgstr("\n");}
         if (prim > 1 && i < debugBuf.dimn-1) enqueMsgstr("\n");}\
     enqueMsgstr("---\n");
-    if (!ready[DEBUGS] && !reset[DEBUGS]) {glFlush(); ready[DEBUGS] = 1;}
-    if (ready[DEBUGS] && reset[DEBUGS]) {glFlush(); ready[DEBUGS] = 0;}
-    started[DEBUGS]--;
+    flush(DEBUGS); started[DEBUGS]--;
 }
 #endif
-
-void pierce()
-{
-    if (pierceBuf.done<faceSub.done) {enqueCommand(pierce); return;}
-    int count = bufferPrimitive(output[pershader])*pierceBuf.dimn;
-    GLfloat result[pierceBuf.done*count];
-    glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    float xFound = 0;
-    float yFound = 0;
-    float zFound = invalid[0];
-    for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimn) {
-        int sub = i+pierceBuf.dimn-1;
-        if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
-            xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
-    if (zFound<invalid[1]) {
-        xPos = xFound; yPos = yFound; zPos = zFound;}
-    if (!ready[pershader]) {glFlush(); ready[pershader] = 1;}
-    started[pershader]--;
-}
-
-void classify()
-{
-    int points = pointsOfPlanes(classifyDone+1);
-    int sides = sidesOfPlanes(classifyDone+1);
-    if (points > pointSub.done) {pointSub.done = points; enqueShader(Coplane);}
-    if (pointBuf.done >= points && sides > sideSub.done) {
-        GLfloat coords[pointBuf.dimn];
-        int size = pointBuf.dimn*bufferType(pointBuf.type);
-        sideSub.done = sides;
-        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, coords);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glUseProgram(program[Adplane]);
-        glUniform3f(uniform[Adplane][Feather],coords[0],coords[1],coords[2]);
-        glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
-        glUseProgram(0);
-        enqueShader(Adplane);}
-    if (sideBuf.done >= sides) {
-        classifyDone++; enqueCommand(0); enqueEvent(Classify);
-        if (!ready[Adplane]) {glFlush(); ready[Adplane] = 1;}}
-    else {DEFER(classify)}
-}
 
 void enqueDiplane()
 {
@@ -2440,7 +2440,6 @@ void enquePerplane()
     arg->restart = 0;
     arg->name = "perplane";
     enqueCommand(render); started[Perplane]++;
-    enqueCommand(pierce); started[Perplane]++; // move to after call to enqueShader(pershader)
 }
 
 void enquePerpoint()
@@ -2457,7 +2456,6 @@ void enquePerpoint()
     arg->restart = 0;
     arg->name = "perpoint";
     enqueCommand(render); started[Perpoint]++;
-    enqueCommand(pierce); started[Perpoint]++; // move to after call to enqueShader(pershader)
 }
 
 void enqueShader(enum Shader shader)
@@ -2550,6 +2548,7 @@ void transformRight()
     glUniform3f(uniform[pershader][Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
     enqueShader(pershader);
+    enqueCommand(pierce); started[pershader]++;
 }
 
 void matrixMatrix()
