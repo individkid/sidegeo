@@ -2,7 +2,7 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The default file for human readable history and configuration is ./.sculpt . The following command line arguments are processed in order.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The following command line arguments are processed in order.
 
   * -i \<file> load and append to configuration file  
   * -I \<file> follow file for readonly polytope  
@@ -55,13 +55,10 @@ Configuration/history files consist of commands.
  * --configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay, automerge  
  * --branch takes file and location for starting state  
  * --jump optionally causes playback to go to location in file  
- * --delay takes duration for playback  
-
-The following configuration/history file commands are disabled during playback.
-
- * --inject specifies user action to inject  
+ * --delay takes duration for playback, ignored until playback  
  * --call takes argument for Haskell command, that can access entire file including command being appended to file, and that returns zero or more replacement(s) for command being appended
  * --comment allows call action to record data for future use  
- * --schedule appends a comment at a wallclock time  
- * --toggle changes jump option at given location  
- * --replace changes comment at location with same size string  
+ * --inject specifies user action to inject, ignored during playback  
+ * --schedule appends a comment at a wallclock time, ignored during playback  
+ * --toggle changes jump option at given location, ignored during playback  
+ * --replace changes comment at location with same size string, ignored during playback  

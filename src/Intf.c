@@ -235,7 +235,7 @@ struct Buffer debugBuf = {0};
 struct Buffer planeBuf = {0}; // per boundary distances above base plane
 struct Buffer versorBuf = {0}; // per boundary base selector
 struct Buffer pointBuf = {0}; // shared point per boundary triple
-struct Buffer pierceBuf = {0}; // distances from focal point
+struct Buffer pierceBuf = {0}; // on line from focal point
 struct Buffer sideBuf = {0}; // vertices wrt prior planes
 struct Buffer faceSub = {0}; // subscripts into planes
 struct Buffer frameSub = {0}; // subscripts into points
@@ -2034,18 +2034,7 @@ enum Action bringup()
         1,2,3,0,3,0,
         2,3,0,1,0,1,
     };
-    GLuint polygon[NUM_FRAMES*FRAME_DIMENSIONS] = {
-        0,1,2,
-        2,0,3,
-        1,2,3,
-    };
     GLuint vertex[NUM_POINTS*INCIDENCE_DIMENSIONS] = {
-        0,1,2,
-        1,2,3,
-        2,3,0,
-        3,0,1,
-    };
-    GLuint construct[NUM_PLANES*CONSTRUCT_DIMENSIONS] = {
         0,1,2,
         1,2,3,
         2,3,0,
@@ -2057,9 +2046,7 @@ enum Action bringup()
     bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
     bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
     bringupBuffer(&faceSub,1,NUM_FACES,face);
-    bringupBuffer(&frameSub,1,NUM_FRAMES,polygon);
     bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
-    bringupBuffer(&planeSub,1,NUM_PLANES,construct);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
 
     MAYBE(classify,Classify)
@@ -2077,9 +2064,7 @@ enum Action bringup()
     if (planeBuf.done < NUM_PLANES) return Reque;
     if (versorBuf.done < NUM_PLANES) return Reque;
     if (faceSub.done < NUM_FACES) return Reque;
-    if (frameSub.done < NUM_FRAMES) return Reque;
     if (pointSub.done < NUM_POINTS) return Reque;
-    if (planeSub.done < NUM_PLANES) return Reque;
     if (sideSub.done < NUM_SIDES) return Reque;
     return Advance;
 }
@@ -2160,6 +2145,7 @@ void process()
 {
     CHECK(process,Process)
     if (!validOption()) {DEQUE(process,Process)}
+    if (configureState != ConfigureIdle) {DEFER(process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print this message\n");
         enqueMsgstr("-H print manual page\n");
