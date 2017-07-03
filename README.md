@@ -38,27 +38,25 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
 
-Configuration/history files consist of commands.
+Configuration/history files consist of commands. Append commands, schedule commands, and user on -i file that is at eof, append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled by playback location.
 
  * --plane takes three scalars  
- * --face takes six plane subscripts  
- * --frame takes three triples of plane subscripts  
+ * --region takes polyant for region to inflate  
  * --remove takes buffer type and subscript to invalidate  
  * --sample takes sidednesses to sample  
- * --region takes polyant for region to inflate  
- * --polyant takes polyant to add to polytope  
  * --volume takes polyant, amplitude, fundamental, harmonics, envelope, rhythm  
  * --filter takes plane subscript, projected area parameterized equalization of tempo, dynamic, tone  
  * --color takes plane subscript and decoration  
  * --matrix takes transformation of display  
  * --project takes slope and cutoff
  * --configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay, automerge  
+ * --inject specifies user action to inject, ignored unless playback is at eof  
  * --branch takes file and location for starting state  
  * --jump optionally causes playback to go to location in file  
- * --delay takes duration for playback, ignored until playback  
- * --call takes argument for Haskell command, that can access entire file including command being appended to file, and that returns zero or more replacement(s) for command being appended
+ * --delay takes duration for playback, ignored until played back  
+ * --schedule appends at a wallclock time, ignored unless playback is at eof  
+ * --append takes command for end of file, ignored until played back
+ * --call takes Haskell function, that is called when comment command is executed, and that returns zero or more command(s) to execute instead
  * --comment allows call action to record data for future use  
- * --inject specifies user action to inject, ignored during playback  
- * --schedule appends a comment at a wallclock time, ignored during playback  
- * --toggle changes jump option at given location, ignored during playback  
- * --replace changes comment at location with same size string, ignored during playback  
+ * --toggle changes jump option at given location  
+ * --replace changes comment at location with same size string  
