@@ -38,25 +38,27 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
 
-Configuration/history files consist of commands. Append commands, schedule commands, and user on -i file that is at eof, append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled by playback location.
+Configuration/history files consist of commands. Append commands, schedule commands, and user input to -i file that is at eof, append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
- * --plane takes three scalars  
- * --region takes polyant for region to inflate  
- * --remove takes buffer type and subscript to invalidate  
- * --sample takes sidednesses to sample  
- * --volume takes polyant, amplitude, fundamental, harmonics, envelope, rhythm  
- * --filter takes plane subscript, projected area parameterized equalization of tempo, dynamic, tone  
- * --color takes plane subscript and decoration  
- * --matrix takes transformation of display  
- * --project takes slope and cutoff
- * --configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay, automerge  
- * --inject specifies user action to inject, ignored unless playback is at eof  
- * --branch takes file and location for starting state  
- * --jump optionally causes playback to go to location in file  
- * --delay takes duration for playback, ignored until played back  
- * --schedule appends at a wallclock time, ignored unless playback is at eof  
- * --append takes command for end of file, ignored until played back
- * --call takes Haskell function, that is called when comment command is executed, and that returns zero or more command(s) to execute instead
- * --comment allows call action to record data for future use  
- * --toggle changes jump option at given location  
- * --replace changes comment at location with same size string  
+  * --plane takes three scalars  
+  * --inflate initializes to facets between inside and outside regions  
+  * --fill takes face subscript, removes it and adds those of its outside region
+  * --hollow takes face subscript, removes it and adds those of its inside region    
+  * --remove takes buffer type and subscript to invalidate  
+  * --sample takes sidednesses to sample  
+  * --volume takes polyant, amplitude, fundamental, harmonics, envelope, rhythm  
+  * --filter takes plane subscript, per area equalization of tempo, dynamic, tone  
+  * --color takes plane subscript and decoration  
+  * --matrix takes transformation of display  
+  * --project takes slope and cutoff  
+  * --configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay  
+  * --inject specifies user action to inject, ignored unless playback is at eof  
+  * --branch takes file and location for starting state  
+  * --jump optionally causes playback to go to location in file  
+  * --delay takes duration for playback, ignored until played back  
+  * --schedule appends at a wallclock time, ignored unless playback is at eof  
+  * --append takes command for end of file, ignored until played back  
+  * --call takes Haskell functionof comment for commands to execute  
+  * --comment allows call action to record data for future use  
+  * --toggle changes jump option at given location  
+  * --replace changes comment at location with same size string  

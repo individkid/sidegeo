@@ -211,7 +211,7 @@ int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
-struct Chars generics = {0};
+struct Ints generics = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -221,6 +221,7 @@ struct Buffer {
     GLuint query; // feedback completion test
     GLuint loc; // vertex shader input
     int room; // current vector count
+    int pack; // number to be packed out
     int wrap; // desired vector count
     int prim; // desired primitive count
     int draw; // waiting for shader
@@ -267,7 +268,12 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Classify,Error,Done};
+enum Event {
+    Inflate,
+    Fill,
+    Hollow,
+    Error,
+    Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 struct Chars chars = {0};
@@ -284,6 +290,7 @@ struct Chars scans = {0}; // for staging input in console
 struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
+struct Chars menus = {0}; // for staging output from console
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
 /*return pointer valid only until next call to enloc##NAME array##NAME enque##NAME entry##NAME */  \
@@ -469,7 +476,7 @@ ACCESS_QUEUE(Line,enum Menu,lines)
 
 ACCESS_QUEUE(Match,int,matchs)
 
-ACCESS_QUEUE(Generic,char,generics)
+ACCESS_QUEUE(Generic,int,generics)
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -498,6 +505,8 @@ ACCESS_QUEUE(Print,char,prints)
 ACCESS_QUEUE(Echo,char,echos)
 
 ACCESS_QUEUE(Inject,char,injects)
+
+ACCESS_QUEUE(Menu,char,menus)
 
 void enqueMsgstr(const char *fmt, ...)
 {
@@ -878,14 +887,14 @@ void *console(void *arg)
 
 void menu()
 {
-    char *buf = arrayChar();
+    char *buf = arrayMenu();
     int len = strstr(buf,"\n")-buf;
     if (len == 1 && buf[0] < 0) {
         enum Menu line = buf[0]+128;
         click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
-    delocChar(len+1);
+    delocMenu(len+1);
 }
 
 void waitForEvent()
@@ -898,10 +907,10 @@ void waitForEvent()
             if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
         
         int totIn = 0; int lenIn;
-        while ((lenIn = detryInput(enlocChar(10),&isEndLine,10)) == 0) totIn += 10;
+        while ((lenIn = detryInput(enlocMenu(10),&isEndLine,10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
-        else if (lenIn < 0) unlocChar(10);
-        else {unlocChar(10-lenIn); menu();}
+        else if (lenIn < 0) unlocMenu(10);
+        else {unlocMenu(10-lenIn); menu();}
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
         else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -1047,6 +1056,21 @@ void displaySize(GLFWwindow *window, int width, int height);
 void displayRefresh(GLFWwindow *window);
 void process();
 
+void buffer(struct Buffer *buffer, char *name, GLuint loc, int type, int dimn, int (*count)(int))
+{
+    buffer->name = name;
+    glGenBuffers(1, &buffer->handle);
+    glGenQueries(1, &buffer->query);
+    buffer->loc = loc;
+    buffer->type = type;
+    buffer->dimn = dimn;
+    if (loc != INVALID_LOCATION) {
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+        glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    buffer->count = count;
+}
+
 void initialize(int argc, char **argv)
 {
 #ifdef __GLASGOW_HASKELL__
@@ -1097,96 +1121,19 @@ void initialize(int argc, char **argv)
     glBindVertexArray(VAO);
 
 #ifdef DEBUG
-    debugBuf.name = "debug";
-    glGenBuffers(1, &debugBuf.handle);
-    glGenQueries(1, &debugBuf.query);
-    debugBuf.loc = INVALID_LOCATION;
-    debugBuf.type = DEBUG_TYPE;
-    debugBuf.dimn = DEBUG_DIMENSIONS;
+    buffer(&debugBuf,"debug",INVALID_LOCATION,DEBUG_TYPE,DEBUG_DIMENSION,0);
 #endif
-
-    planeBuf.name = "plane";
-    glGenBuffers(1, &planeBuf.handle);
-    glGenQueries(1, &planeBuf.query);
-    planeBuf.loc = PLANE_LOCATION;
-    planeBuf.type = GL_FLOAT;
-    planeBuf.dimn = PLANE_DIMENSIONS;
-    glBindBuffer(GL_ARRAY_BUFFER, planeBuf.handle);
-    glVertexAttribPointer(planeBuf.loc, planeBuf.dimn, planeBuf.type, GL_FALSE, 0, 0);
-
-    versorBuf.name = "versor";
-    glGenBuffers(1, &versorBuf.handle);
-    versorBuf.loc = VERSOR_LOCATION;
-    versorBuf.type = GL_UNSIGNED_INT;
-    versorBuf.dimn = SCALAR_DIMENSIONS;
-    glBindBuffer(GL_ARRAY_BUFFER, versorBuf.handle);
-    glVertexAttribIPointer(versorBuf.loc, versorBuf.dimn, versorBuf.type, 0, 0);
-
-    pointBuf.name = "point";
-    glGenBuffers(1, &pointBuf.handle);
-    glGenQueries(1, &pointBuf.query);
-    pointBuf.loc = POINT_LOCATION;
-    pointBuf.type = GL_FLOAT;
-    pointBuf.dimn = POINT_DIMENSIONS;
-    glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-    glVertexAttribPointer(pointBuf.loc, pointBuf.dimn, pointBuf.type, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    pierceBuf.name = "pierce";
-    glGenBuffers(1, &pierceBuf.handle);
-    glGenQueries(1, &pierceBuf.query);
-    pierceBuf.loc = INVALID_LOCATION;
-    pierceBuf.type = GL_FLOAT;
-    pierceBuf.dimn = POINT_DIMENSIONS;
-
-    sideBuf.name = "side";
-    glGenBuffers(1, &sideBuf.handle);
-    glGenQueries(1, &sideBuf.query);
-    sideBuf.loc = INVALID_LOCATION;
-    sideBuf.type = GL_FLOAT;
-    sideBuf.dimn = SCALAR_DIMENSIONS;
-
-    faceSub.name = "face";
-    glGenBuffers(1, &faceSub.handle);
-    faceSub.type = GL_UNSIGNED_INT;
-    faceSub.loc = INVALID_LOCATION;
-    faceSub.dimn = FACE_DIMENSIONS;
-    faceSub.count = facesOfPlanes;
-
-    frameSub.name = "frame";
-    glGenBuffers(1, &frameSub.handle);
-    frameSub.type = GL_UNSIGNED_INT;
-    frameSub.loc = INVALID_LOCATION;
-    frameSub.dimn = FRAME_DIMENSIONS;
-    frameSub.count = framesOfPoints;
-
-    pointSub.name = "point";
-    glGenBuffers(1, &pointSub.handle);
-    pointSub.type = GL_UNSIGNED_INT;
-    pointSub.loc = INVALID_LOCATION;
-    pointSub.dimn = INCIDENCE_DIMENSIONS;
-    pointSub.count = pointsOfPlanes;
-
-    planeSub.name = "plane";
-    glGenBuffers(1, &planeSub.handle);
-    planeSub.type = GL_UNSIGNED_INT;
-    planeSub.loc = INVALID_LOCATION;
-    planeSub.dimn = CONSTRUCT_DIMENSIONS;
-    planeSub.count = planesOfPoints;
-
-    sideSub.name = "side";
-    glGenBuffers(1, &sideSub.handle);
-    sideSub.type = GL_UNSIGNED_INT;
-    sideSub.loc = INVALID_LOCATION;
-    sideSub.dimn = ELEMENT_DIMENSIONS;
-    sideSub.count = sidesOfPlanes;
-
-    halfSub.name = "half";
-    glGenBuffers(1, &halfSub.handle);
-    halfSub.type = GL_UNSIGNED_INT;
-    halfSub.loc = INVALID_LOCATION;
-    halfSub.dimn = ELEMENT_DIMENSIONS;
-    halfSub.count = sidesOfPoints;
+    buffer(&planeBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS,0);
+    buffer(&versorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS,0);
+    buffer(&pointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS,0);
+    buffer(&pierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS,0);
+    buffer(&sideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS,0);
+    buffer(&faceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS,facesOfPlanes);
+    buffer(&frameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS,framesOfPoints);
+    buffer(&pointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,pointsOfPlanes);
+    buffer(&planeSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,planesOfPoints);
+    buffer(&sideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,sidesOfPlanes);
+    buffer(&halfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,sidesOfPoints);
 
     uniformCode = "\
     #version 330 core\n\
@@ -1853,7 +1800,7 @@ void finalize()
     if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
-    if (generics.base) {struct Chars initial = {0}; free(generics.base); generics = initial;}
+    if (generics.base) {struct Ints initial = {0}; free(generics.base); generics = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -1868,6 +1815,7 @@ void finalize()
     if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
     if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
     if (injects.base) {struct Chars initial = {0}; free(injects.base); injects = initial;}
+    if (menus.base) {struct Chars initial = {0}; free(menus.base); menus = initial;}
 }
 
 /*
@@ -1966,8 +1914,7 @@ void classify()
         glUseProgram(0);
         enqueShader(Adplane);}
     if (sideBuf.done < sides) {DEFER(classify)}
-    classifyDone++; enqueCommand(0); enqueEvent(Classify);
-    REQUE(classify)
+    classifyDone++; REQUE(classify)
 }
 
 #ifdef BRINGUP
@@ -2048,7 +1995,7 @@ enum Action bringup()
     bringupBuffer(&faceSub,1,NUM_FACES,face);
     bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
-
+ 
     MAYBE(classify,Classify)
 
     if (!faceMap) {
@@ -2082,6 +2029,8 @@ enum Action loadFile()
         // replace range by bytes read from config
     // load transformation matrices
     // ftruncate to before transformation matrices
+    char *command = "";
+    if (strcmp(command,"--inflate") == 0) {enqueCommand(0); enqueEvent(Inflate);}
 #ifdef BRINGUP
     return bringup();
 #endif
@@ -2456,6 +2405,19 @@ void enqueShader(enum Shader shader)
     CASE(Perplane) enquePerplane();
     CASE(Perpoint) enquePerpoint();
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
+}
+
+void surface()
+{
+    int size = headInt();
+    int *buf = arrayInt()+1;
+    if (size > faceSub.room) {enqueWrap(&faceSub,size,1); relocInt(size+1); DEFER(surface)}
+    GLuint temp[size];
+    for (int i = 0; i < size; i++) temp[i] = buf[i];
+    glBindBuffer(GL_ARRAY_BUFFER,faceSub.handle);
+    glBufferSubData(GL_ARRAY_BUFFER,0,size,temp);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    delocInt(size+1);
 }
 
 /*
@@ -2836,18 +2798,61 @@ void displayRefresh(GLFWwindow *window)
  * accessors for Haskell to read and modify state
  */
 
-char *generic(int *indices, int size)
+int *generic(int size)
 {
-    // if size is not zero, resize indicated portion of generic data
-    // return pointer to indicated portion of generic data
-    return 0;
+    // if size is not zero, resize generic data
+    if (size) {delocGeneric(sizeGeneric()); enlocGeneric(size);}
+    return arrayGeneric();
 }
 
-char *message()
+int *face(int size)
 {
-    if (!validChar()) return 0;
-    char *buf = arrayChar(); delocChar(strlen(buf));
+    if (size) {enqueCommand(surface); enqueInt(size); return enlocInt(size);}
+    GLuint temp[faceSub.done];
+    glBindBuffer(GL_ARRAY_BUFFER,faceSub.handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER,0,faceSub.done*sizeof(GL_UNSIGNED_INT),temp);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    int *buf = enlocInt(faceSub.done); unlocInt(faceSub.done);
+    for (int i = 0; i < faceSub.done; i++) buf[i] = temp[i];
     return buf;
+}
+
+int *sidedness()
+{
+    // of intersections of planes with prior planes, sidednesses wrt prior planes
+    int count = sidesOfPlanes(classifyDone);
+    GLuint temp[count];
+    glBindBuffer(GL_ARRAY_BUFFER,sideBuf.handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GL_UNSIGNED_INT),temp);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    int *buf = enlocInt(count); unlocInt(count);
+    for (int i = 0; i < count; i++) buf[i] = temp[i];
+    return buf;
+}
+
+int *boundaryWrt()
+{
+    // boundary that correspoinding sidedness is wrt
+    int count = sidesOfPlanes(classifyDone);
+    GLuint temp[count];
+    glBindBuffer(GL_ARRAY_BUFFER,sideSub.handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GL_UNSIGNED_INT),temp);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    int *buf = enlocInt(count); unlocInt(count);
+    for (int i = 0; i < count; i++) buf[i] = temp[i];
+    return buf;
+}
+
+int boundaryCount()
+{
+    // return number of planes in planeBuf
+    return classifyDone;
+}
+
+int faceCount()
+{
+    // return number of faces being displayed
+    return faceSub.done;
 }
 
 char *print(int size)
@@ -2859,7 +2864,9 @@ int event()
 {
     if (!validEvent()) return -1;
     enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Classify) return 2;
+    SWITCH(event,Inflate) return 0;
+    CASE(Fill) return 1;
+    CASE(Hollow) return 2;
     CASE(Error) return 3;
     CASE(Done) return 4;
     DEFAULT({exitErrstr("invalid event\n");})

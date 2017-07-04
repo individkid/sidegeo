@@ -25,28 +25,29 @@ import Foreign.Marshal.Array
 import Foreign.C.String
 import AffTopo.Naive
 
--- foreign import ccall "generic" genericC :: Ptr CInt -> CInt -> IO (Ptr CChar)
+foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
+foreign import ccall "face" faceC :: CInt -> IO (Ptr CInt)
+foreign import ccall "sidedness" sidednessC :: IO (Ptr CInt)
+foreign import ccall "boundaryWrt" boundaryWrtC :: IO (Ptr CInt)
+foreign import ccall "boundaryCount" boundaryCountC :: IO CInt
 foreign import ccall "event" eventC :: IO CInt
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
-foreign export ccall "randomizeH" randomize :: IO ()
 
 removeMe :: [Side]
 removeMe = allSides
+
+printStr :: [Char] -> IO ()
+printStr str = do
+  ptr <- printC (fromIntegral (length str))
+  pokeArray ptr (map castCharToCChar str)
 
 handleEvent :: IO Bool
 handleEvent = do
  event <- eventC
  case event of
-  2 -> let
-   str = "classify\n"
-   len = length str
-   in do
-    ptr <- printC (fromIntegral len)
-    pokeArray ptr (map castCharToCChar str)
+  0 -> do
+    printStr "inflate\n"
     return False
   3 -> return True
   4 -> return True
   _ -> return False
-
-randomize :: IO ()
-randomize = undefined
