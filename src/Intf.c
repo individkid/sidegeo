@@ -2841,7 +2841,7 @@ int *boundaryOk()
     return temporary(planeOk.handle,classifyDone);
 }
 
-int *faceOk()
+int *faceValid()
 {
     // whether face is valid
     return temporary(faceOk.handle,facesOfPlanes(classifyDone));
@@ -2856,7 +2856,7 @@ int boundaryCount()
 int faceCount()
 {
     // return number of faces being displayed
-    return faceSub.done;
+    return facesOfPlanes(classifyDone);
 }
 
 char *print(int size)
