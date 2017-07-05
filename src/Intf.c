@@ -70,7 +70,9 @@ extern void __stginit_Main(void);
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
-#define INVALID_LOCATION 3
+#define OK_LOCATION 3
+#define VALID_LOCATION 4
+#define INVALID_LOCATION 5
 #define POLL_DELAY 0.1
 #define MAX_ROTATE 0.999
 #define ROLLER_GRANULARITY 30.0
@@ -244,6 +246,8 @@ struct Buffer pointSub = {0}; // every triple of planes
 struct Buffer planeSub = {0}; // per plane triple of points
 struct Buffer sideSub = {0}; // per vertex prior planes
 struct Buffer halfSub = {0}; // per plane prior vertices
+struct Buffer planeOk = {0}; // per-plane valid flag
+struct Buffer faceOk = {0}; // per-face valid flag
 int classifyDone = 0; // number of classify events
 int *faceMap = 0;
 int *frameMap = 0;
@@ -1134,6 +1138,8 @@ void initialize(int argc, char **argv)
     buffer(&planeSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,planesOfPoints);
     buffer(&sideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,sidesOfPlanes);
     buffer(&halfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,sidesOfPoints);
+    buffer(&planeOk,"ok",OK_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,0);
+    buffer(&faceOk,"valid",VALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,0);
 
     uniformCode = "\
     #version 330 core\n\
@@ -1990,11 +1996,19 @@ enum Action bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
+    GLuint ok[NUM_PLANES*ELEMENT_DIMENSIONS] = {
+        1,1,1,1,
+    };
+    GLuint valid[NUM_FACES*ELEMENT_DIMENSIONS] = {
+        1,1,1,
+    };
     bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
     bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
     bringupBuffer(&faceSub,1,NUM_FACES,face);
     bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
+    bringupBuffer(&planeOk,1,NUM_PLANES,ok);
+    bringupBuffer(&faceOk,1,NUM_FACES,valid);
  
     MAYBE(classify,Classify)
 
@@ -2013,22 +2027,14 @@ enum Action bringup()
     if (faceSub.done < NUM_FACES) return Reque;
     if (pointSub.done < NUM_POINTS) return Reque;
     if (sideSub.done < NUM_SIDES) return Reque;
+    if (planeOk.done < NUM_PLANES) return Reque;
+    if (faceOk.done < NUM_FACES) return Reque;
     return Advance;
 }
 #endif
 
 enum Action loadFile()
 {
-    // TODO
-    // load lighting directions and colors
-    // ensure indices are empty on first config line
-    // read format and bytes from first config line
-    // for each subsequent config line,
-        // read indices, find subformat, read bytes
-        // find replaced range and replacement size
-        // replace range by bytes read from config
-    // load transformation matrices
-    // ftruncate to before transformation matrices
     char *command = "";
     if (strcmp(command,"--inflate") == 0) {enqueCommand(0); enqueEvent(Inflate);}
 #ifdef BRINGUP
@@ -2038,11 +2044,6 @@ enum Action loadFile()
 
 enum Action initFile()
 {
-    // TODO
-    // randomize();
-    // save lighting directions and colors
-    // randomizeH();
-    // save generic data
 #ifdef BRINGUP
     return bringup();
 #endif
@@ -2805,42 +2806,45 @@ int *generic(int size)
     return arrayGeneric();
 }
 
+int *temporary(GLuint handle, int count)
+{
+    GLuint temp[count];
+    glBindBuffer(GL_ARRAY_BUFFER,handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GL_UNSIGNED_INT),temp);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    int *buf = enlocInt(count); unlocInt(count);
+    for (int i = 0; i < count; i++) buf[i] = temp[i];
+    return buf;
+}
+
 int *face(int size)
 {
     if (size) {enqueCommand(surface); enqueInt(size); return enlocInt(size);}
-    GLuint temp[faceSub.done];
-    glBindBuffer(GL_ARRAY_BUFFER,faceSub.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER,0,faceSub.done*sizeof(GL_UNSIGNED_INT),temp);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    int *buf = enlocInt(faceSub.done); unlocInt(faceSub.done);
-    for (int i = 0; i < faceSub.done; i++) buf[i] = temp[i];
-    return buf;
+    return temporary(faceSub.handle,facesOfPlanes(classifyDone));
 }
 
 int *sidedness()
 {
     // of intersections of planes with prior planes, sidednesses wrt prior planes
-    int count = sidesOfPlanes(classifyDone);
-    GLuint temp[count];
-    glBindBuffer(GL_ARRAY_BUFFER,sideBuf.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GL_UNSIGNED_INT),temp);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    int *buf = enlocInt(count); unlocInt(count);
-    for (int i = 0; i < count; i++) buf[i] = temp[i];
-    return buf;
+    return temporary(sideBuf.handle,sidesOfPlanes(classifyDone));
 }
 
 int *boundaryWrt()
 {
     // boundary that correspoinding sidedness is wrt
-    int count = sidesOfPlanes(classifyDone);
-    GLuint temp[count];
-    glBindBuffer(GL_ARRAY_BUFFER,sideSub.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GL_UNSIGNED_INT),temp);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    int *buf = enlocInt(count); unlocInt(count);
-    for (int i = 0; i < count; i++) buf[i] = temp[i];
-    return buf;
+    return temporary(sideSub.handle,sidesOfPlanes(classifyDone));
+}
+
+int *boundaryOk()
+{
+    // whether boundary is valid
+    return temporary(planeOk.handle,classifyDone);
+}
+
+int *faceOk()
+{
+    // whether face is valid
+    return temporary(faceOk.handle,facesOfPlanes(classifyDone));
 }
 
 int boundaryCount()

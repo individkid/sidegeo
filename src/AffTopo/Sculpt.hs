@@ -29,6 +29,8 @@ foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "face" faceC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sidedness" sidednessC :: IO (Ptr CInt)
 foreign import ccall "boundaryWrt" boundaryWrtC :: IO (Ptr CInt)
+foreign import ccall "boundaryOk" boundaryOkC :: IO (Ptr CInt)
+foreign import ccall "faceOk" faceOkC :: IO (Ptr CInt)
 foreign import ccall "boundaryCount" boundaryCountC :: IO CInt
 foreign import ccall "event" eventC :: IO CInt
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
