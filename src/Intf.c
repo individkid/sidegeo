@@ -2036,7 +2036,10 @@ enum Action bringup()
 enum Action loadFile()
 {
     char *command = "";
+    char *argument = "";
     if (strcmp(command,"--inflate") == 0) {enqueCommand(0); enqueEvent(Inflate);}
+    if (strcmp(command,"--fill") == 0) {enqueCommand(0); enqueEvent(Fill); enqueInt(atoi(argument));}
+    if (strcmp(command,"--hollow") == 0) {enqueCommand(0); enqueEvent(Hollow); enqueInt(atoi(argument));}
 #ifdef BRINGUP
     return bringup();
 #endif
@@ -2818,34 +2821,39 @@ void putBuffer()
     dequeBuffer(); delocInt(size+1);
 }
 
+int *accessBuffer(int size, int count, struct Buffer *buffer)
+{
+    if (size) {enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(size); return enlocInt(size);}
+    return getBuffer(buffer->handle,count);
+}
+
 int *face(int size)
 {
-    if (size) {enqueCommand(putBuffer); enqueBuffer(&faceSub); enqueInt(size); return enlocInt(size);}
-    return getBuffer(faceSub.handle,facesOfPlanes(classifyDone));
+    return accessBuffer(size,facesOfPlanes(classifyDone),&faceSub);
 }
 
-int *sidedness()
+int *sidedness(int size)
 {
     // of intersections of planes with prior planes, sidednesses wrt prior planes
-    return getBuffer(sideBuf.handle,sidesOfPlanes(classifyDone));
+    return accessBuffer(size,sidesOfPlanes(classifyDone),&sideBuf);
 }
 
-int *boundaryWrt()
+int *boundaryWrt(int size)
 {
     // boundary that correspoinding sidedness is wrt
-    return getBuffer(sideSub.handle,sidesOfPlanes(classifyDone));
+    return accessBuffer(size,sidesOfPlanes(classifyDone),&sideSub);
 }
 
-int *boundaryOk()
+int *boundaryOk(int size)
 {
     // whether boundary is valid
-    return getBuffer(planeOk.handle,classifyDone);
+    return accessBuffer(size,classifyDone,&planeOk);
 }
 
-int *faceValid()
+int *faceValid(int size)
 {
     // whether face is valid
-    return getBuffer(faceOk.handle,facesOfPlanes(classifyDone));
+    return accessBuffer(size,facesOfPlanes(classifyDone),&faceOk);
 }
 
 int boundaryCount()
@@ -2876,4 +2884,11 @@ int event()
     CASE(Done) return 4;
     DEFAULT({exitErrstr("invalid event\n");})
     return -1;
+}
+
+int intArgument()
+{
+    if (!validInt()) return -1;
+    int head = headInt(); dequeInt();
+    return head;
 }
