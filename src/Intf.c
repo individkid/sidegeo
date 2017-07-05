@@ -2408,19 +2408,6 @@ void enqueShader(enum Shader shader)
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
-void surface()
-{
-    int size = headInt();
-    int *buf = arrayInt()+1;
-    if (size > faceSub.room) {enqueWrap(&faceSub,size,1); relocInt(size+1); DEFER(surface)}
-    GLuint temp[size];
-    for (int i = 0; i < size; i++) temp[i] = buf[i];
-    glBindBuffer(GL_ARRAY_BUFFER,faceSub.handle);
-    glBufferSubData(GL_ARRAY_BUFFER,0,size,temp);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    delocInt(size+1);
-}
-
 /*
  * callbacks triggered by user actions
  */
@@ -2573,6 +2560,15 @@ void transformMouse()
     DEFAULT(exitErrstr("invalid mouse mode\n");)
 }
 
+void transformCylinder()
+{
+    float u[16];
+    float angle = wPos/ROLLER_GRANULARITY;
+    identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
+    matrixFixed(u); identmat(affineMatb,4); jumpmat(affineMatb,u,4);
+    transformMouse();
+}
+
 void transformClock()
 {
     float u[16]; float v[16]; float w[16];
@@ -2585,15 +2581,6 @@ void transformClock()
     copyary(identmat(w,4),u,3,4,9);
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     jumpmat(u,v,4); timesmat(u,w,4);
-    matrixFixed(u); identmat(affineMatb,4); jumpmat(affineMatb,u,4);
-    transformMouse();
-}
-
-void transformCylinder()
-{
-    float u[16];
-    float angle = wPos/ROLLER_GRANULARITY;
-    identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     matrixFixed(u); identmat(affineMatb,4); jumpmat(affineMatb,u,4);
     transformMouse();
 }
@@ -2806,7 +2793,7 @@ int *generic(int size)
     return arrayGeneric();
 }
 
-int *temporary(GLuint handle, int count)
+int *getBuffer(GLuint handle, int count)
 {
     GLuint temp[count];
     glBindBuffer(GL_ARRAY_BUFFER,handle);
@@ -2817,34 +2804,48 @@ int *temporary(GLuint handle, int count)
     return buf;
 }
 
+void putBuffer()
+{
+    struct Buffer *buffer = headBuffer();
+    int size = headInt();
+    int *buf = arrayInt()+1;
+    if (size > buffer->room) {enqueWrap(&faceSub,size,1); requeBuffer(); relocInt(size+1); DEFER(putBuffer)}
+    GLuint temp[size];
+    for (int i = 0; i < size; i++) temp[i] = buf[i];
+    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+    glBufferSubData(GL_ARRAY_BUFFER,0,size,temp);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    dequeBuffer(); delocInt(size+1);
+}
+
 int *face(int size)
 {
-    if (size) {enqueCommand(surface); enqueInt(size); return enlocInt(size);}
-    return temporary(faceSub.handle,facesOfPlanes(classifyDone));
+    if (size) {enqueCommand(putBuffer); enqueBuffer(&faceSub); enqueInt(size); return enlocInt(size);}
+    return getBuffer(faceSub.handle,facesOfPlanes(classifyDone));
 }
 
 int *sidedness()
 {
     // of intersections of planes with prior planes, sidednesses wrt prior planes
-    return temporary(sideBuf.handle,sidesOfPlanes(classifyDone));
+    return getBuffer(sideBuf.handle,sidesOfPlanes(classifyDone));
 }
 
 int *boundaryWrt()
 {
     // boundary that correspoinding sidedness is wrt
-    return temporary(sideSub.handle,sidesOfPlanes(classifyDone));
+    return getBuffer(sideSub.handle,sidesOfPlanes(classifyDone));
 }
 
 int *boundaryOk()
 {
     // whether boundary is valid
-    return temporary(planeOk.handle,classifyDone);
+    return getBuffer(planeOk.handle,classifyDone);
 }
 
 int *faceValid()
 {
     // whether face is valid
-    return temporary(faceOk.handle,facesOfPlanes(classifyDone));
+    return getBuffer(faceOk.handle,facesOfPlanes(classifyDone));
 }
 
 int boundaryCount()
