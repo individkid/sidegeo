@@ -2266,148 +2266,33 @@ void debug()
 }
 #endif
 
-void enqueDiplane()
+void enqueElement(const char *name, enum Shader shader, int vertex, int feedback, struct Buffer **buffer, struct Buffer *element, int restart)
 {
     struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(2);
-    arg->vertex = 2;
-    buf[0] = &planeBuf;
-    buf[1] = &versorBuf;
-    arg->element = &faceSub;
-    arg->feedback = feedbacks[Diplane];
-    arg->shader = Diplane;
+    struct Buffer **buf = enlocBuffer(vertex+feedback);
+    arg->vertex = vertex;
+    for (int i = 0; i < vertex; i++) buf[i] = buffer[i];
+    arg->element = element;
+    arg->feedback = feedback;
+    for (int i = vertex; i < vertex+feedback; i++) {buf[i] = buffer[i]; buf[i]->done = 0;}
+    arg->shader = shader;
     arg->state = RenderEnqued;
-    arg->restart = 1;
-    arg->name = "diplane";
-    enqueCommand(render); started[Diplane]++;
-}
-
-void enqueDipoint()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(1);
-    arg->vertex = 1;
-    buf[0] = &pointBuf;
-    arg->element = &frameSub;
-    arg->feedback = feedbacks[Dipoint];
-    arg->shader = Dipoint;
-    arg->state = RenderEnqued;
-    arg->restart = 1;
-    arg->name = "dipoint";
-    enqueCommand(render); started[Dipoint]++;
-}
-
-void enqueCoplane()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(3);
-    arg->vertex = 2;
-    buf[0] = &planeBuf;
-    buf[1] = &versorBuf;
-    arg->element = &pointSub;
-    arg->feedback = feedbacks[Coplane];
-    buf[2] = &pointBuf;
-    arg->shader = Coplane;
-    arg->state = RenderEnqued;
-    arg->restart = 0;
-    arg->name = "coplane";
-    enqueCommand(render); started[Coplane]++;
-}
-
-void enqueCopoint()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(3);
-    arg->vertex = 1;
-    buf[0] = &pointBuf;
-    arg->element = &planeSub;
-    arg->feedback = feedbacks[Copoint];
-    buf[1] = &planeBuf;
-    buf[2] = &versorBuf;
-    arg->shader = Copoint;
-    arg->state = RenderEnqued;
-    arg->restart = 0;
-    arg->name = "copoint";
-    enqueCommand(render); started[Copoint]++;
-}
-
-void enqueAdplane()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(3);
-    arg->vertex = 2;
-    buf[0] = &planeBuf;
-    buf[1] = &versorBuf;
-    arg->element = &sideSub;
-    arg->feedback = feedbacks[Adplane];
-    buf[2] = &sideBuf;
-    arg->shader = Adplane;
-    arg->state = RenderEnqued;
-    arg->restart = 0;
-    arg->name = "adplane";
-    enqueCommand(render); started[Adplane]++;
-}
-
-void enqueAdpoint()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(2);
-    arg->vertex = 1;
-    buf[0] = &pointBuf;
-    arg->element = &halfSub;
-    arg->feedback = feedbacks[Adpoint];
-    buf[1] = &sideBuf;
-    arg->shader = Adpoint;
-    arg->state = RenderEnqued;
-    arg->restart = 0;
-    arg->name = "adpoint";
-    enqueCommand(render); started[Adpoint]++;
-}
-
-void enquePerplane()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(3);
-    arg->vertex = 2;
-    buf[0] = &planeBuf;
-    buf[1] = &versorBuf;
-    arg->element = &faceSub;
-    arg->feedback = feedbacks[Perplane];
-    buf[2] = &pierceBuf; pierceBuf.done = 0;
-    arg->shader = Perplane;
-    arg->state = RenderEnqued;
-    arg->restart = 0;
-    arg->name = "perplane";
-    enqueCommand(render); started[Perplane]++;
-}
-
-void enquePerpoint()
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(2);
-    arg->vertex = 1;
-    buf[0] = &pointBuf;
-    arg->element = &frameSub;
-    arg->feedback = feedbacks[Perpoint];
-    buf[2] = &pierceBuf; pierceBuf.done = 0;
-    arg->shader = Perpoint;
-    arg->state = RenderEnqued;
-    arg->restart = 0;
-    arg->name = "perpoint";
-    enqueCommand(render); started[Perpoint]++;
+    arg->restart = restart;
+    arg->name = name;
+    enqueCommand(render); started[shader]++;
 }
 
 void enqueShader(enum Shader shader)
 {
     if (started[shader]) {restart[shader] = 1; return;}
-    SWITCH(shader,Diplane) enqueDiplane();
-    CASE(Dipoint) enqueDipoint();
-    CASE(Coplane) enqueCoplane();
-    CASE(Copoint) enqueCopoint();
-    CASE(Adplane) enqueAdplane();
-    CASE(Adpoint) enqueAdpoint();
-    CASE(Perplane) enquePerplane();
-    CASE(Perpoint) enquePerpoint();
+    SWITCH(shader,Diplane) {struct Buffer *buf[2] = {&planeBuf,&versorBuf}; enqueElement("diplane",Diplane,2,0,buf,&faceSub,1);}
+    CASE(Dipoint) {struct Buffer *buf[1] = {&pointBuf}; enqueElement("dipoint",Dipoint,1,0,buf,&frameSub,1);}
+    CASE(Coplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&pointBuf}; enqueElement("coplane",Coplane,2,1,buf,&pointSub,0);}
+    CASE(Copoint) {struct Buffer *buf[3] = {&pointBuf,&planeBuf,&versorBuf}; enqueElement("copoint",Copoint,1,2,buf,&planeSub,0);}
+    CASE(Adplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&sideBuf}; enqueElement("adplane",Adplane,2,1,buf,&sideSub,0);}
+    CASE(Adpoint) {struct Buffer *buf[2] = {&pointBuf,&sideBuf}; enqueElement("adpoint",Adpoint,1,1,buf,&halfSub,0);}
+    CASE(Perplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&pierceBuf}; enqueElement("perplane",Perplane,2,1,buf,&faceSub,0);}
+    CASE(Perpoint) {struct Buffer *buf[2] = {&pointBuf,&pierceBuf}; enqueElement("perpoint",Perpoint,1,1,buf,&frameSub,0);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
