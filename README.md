@@ -52,13 +52,13 @@ Configuration/history files consist of commands. Append commands, schedule comma
   * --matrix takes transformation of display  
   * --project takes slope and cutoff  
   * --configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay  
-  * --inject specifies user action to inject, ignored unless playback is at eof  
-  * --branch takes file and location for starting state  
+  * --inject specifies user action to inject, ignored if not at eof  
+  * --schedule appends at a wallclock time, ignored if not at eof  
   * --jump optionally causes playback to go to location in file  
-  * --delay takes duration for playback, ignored until played back  
-  * --schedule appends at a wallclock time, ignored unless playback is at eof  
-  * --append takes command for end of file, ignored until played back  
-  * --call takes Haskell functionof comment for commands to execute  
+  * --branch takes file and location for starting state  
+  * --delay takes duration for playback, ignored if at eof  
+  * --append takes command for end of file, ignored if at eof  
+  * --call takes Haskell function of comment for commands to execute  
   * --comment allows call action to record data for future use  
   * --toggle changes jump option at given location  
   * --replace changes comment at location with same size string  

@@ -33,8 +33,9 @@ foreign import ccall "boundaryOk" boundaryOkC :: CInt -> IO (Ptr CInt)
 foreign import ccall "faceValid" faceValidC :: CInt -> IO (Ptr CInt)
 foreign import ccall "boundaryCount" boundaryCountC :: IO CInt
 foreign import ccall "faceCount" faceCountC :: IO CInt
-foreign import ccall "event" eventC :: IO CInt
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
+foreign import ccall "event" eventC :: IO CInt
+foreign import ccall "intArgument" intArgumentC :: IO CInt
 
 removeMe :: [Side]
 removeMe = allSides
@@ -50,6 +51,14 @@ handleEvent = do
  case event of
   0 -> do
     printStr "inflate\n"
+    return False
+  1 -> do
+    face <- intArgumentC
+    printStr (concat ["fill ",(show face),"\n"])
+    return False
+  2 -> do
+    face <- intArgumentC
+    printStr (concat ["hollow ",(show face),"\n"])
     return False
   3 -> return True
   4 -> return True
