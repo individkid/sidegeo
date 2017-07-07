@@ -954,11 +954,10 @@ const GLchar *sideCode = 0;
 const GLchar *expandCode = 0;
 const GLchar *constructCode = 0;
 const GLchar *intersectCode = 0;
-const char *feedback[Shaders][NUM_FEEDBACK] = {0};
-int feedbacks[Shaders] = {0};
 
 GLuint compileProgram(
-    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, const char *name, enum Shader shader)
+    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
+    const char *name, enum Shader shader, int size, const char **feedback)
 {
     GLint success = 0;
     GLchar infoLog[512];
@@ -999,7 +998,7 @@ GLuint compileProgram(
             glGetShaderInfoLog(fragment, 512, NULL, infoLog);
             exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
         glAttachShader(program, fragment);}
-    if (feedbacks[shader]) glTransformFeedbackVaryings(program, feedbacks[shader], feedback[shader], GL_SEPARATE_ATTRIBS);
+    if (size) glTransformFeedbackVaryings(program, size, feedback, GL_SEPARATE_ATTRIBS);
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if(!success) {
@@ -1721,30 +1720,16 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *repointFragment = 0;
 
-    feedbacks[Diplane] = 0;
-    feedbacks[Dipoint] = 0;
-    feedback[Coplane][0] = "vector"; feedbacks[Coplane] = 1;
-    feedback[Copoint][0] = "vector"; feedback[Copoint][1] = "index"; feedbacks[Copoint] = 2;
-    feedback[Adplane][0] = "scalar"; feedbacks[Adplane] = 1;
-    feedback[Adpoint][0] = "scalar"; feedbacks[Adpoint] = 1;
-    feedback[Perplane][0] = "vector"; feedbacks[Perplane] = 1;
-    feedback[Perpoint][0] = "vector"; feedbacks[Perpoint] = 1;
-    feedback[Replane][0] = "vector"; feedbacks[Replane] = 1;
-    feedback[Repoint][0] = "vector"; feedback[Repoint][1] = "index"; feedbacks[Repoint] = 2;
-#ifdef DEBUG
-    feedback[DEBUGS][feedbacks[DEBUGS]] = "debug"; feedbacks[DEBUGS]++;
-#endif
-
-    program[Diplane] = compileProgram(diplaneVertex, diplaneGeometry, diplaneFragment, "diplane", Diplane);
-    program[Dipoint] = compileProgram(dipointVertex, dipointGeometry, dipointFragment, "dipoint", Dipoint);
-    program[Coplane] = compileProgram(coplaneVertex, coplaneGeometry, coplaneFragment, "coplane", Coplane);
-    program[Copoint] = compileProgram(copointVertex, copointGeometry, copointFragment, "copoint", Copoint);
-    program[Adplane] = compileProgram(adplaneVertex, adplaneGeometry, adplaneFragment, "adplane", Adplane);
-    program[Adpoint] = compileProgram(adpointVertex, adpointGeometry, adpointFragment, "adpoint", Adpoint);
-    program[Perplane] = compileProgram(perplaneVertex, perplaneGeometry, perplaneFragment, "perplane", Perplane);
-    program[Perpoint] = compileProgram(perpointVertex, perpointGeometry, perpointFragment, "perpoint", Perpoint);
-    program[Replane] = compileProgram(replaneVertex, replaneGeometry, replaneFragment, "replane", Replane);
-    program[Repoint] = compileProgram(repointVertex, repointGeometry, repointFragment, "repoint", Repoint);
+    {const char *buf[0] = {}; program[Diplane] = compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,"diplane",Diplane,0,buf);}
+    {const char *buf[0] = {}; program[Dipoint] = compileProgram(dipointVertex,dipointGeometry,dipointFragment,"dipoint",Dipoint,0,buf);}
+    {const char *buf[1] = {"vector"}; program[Coplane] = compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,"coplane",Coplane,1,buf);}
+    {const char *buf[2] = {"vector","index"}; program[Copoint] = compileProgram(copointVertex,copointGeometry,copointFragment,"copoint",Copoint,2,buf);}
+    {const char *buf[1] = {"scalar"}; program[Adplane] = compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,"adplane",Adplane,1,buf);}
+    {const char *buf[1] = {"scalar"}; program[Adpoint] = compileProgram(adpointVertex,adpointGeometry,adpointFragment,"adpoint",Adpoint,1,buf);}
+    {const char *buf[1] = {"vector"}; program[Perplane] = compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,"perplane",Perplane,1,buf);}
+    {const char *buf[1] = {"vector"}; program[Perpoint] = compileProgram(perpointVertex,perpointGeometry,perpointFragment,"perpoint",Perpoint,1,buf);}
+    {const char *buf[1] = {"vector"}; program[Replane] = compileProgram(replaneVertex,replaneGeometry,replaneFragment,"replane",Replane,1,buf);}
+    {const char *buf[2] = {"vector","index"}; program[Repoint] = compileProgram(repointVertex,repointGeometry,repointFragment,"repoint",Repoint,2,buf);}
 
     for (int i = 0; i < 27; i++) {
         int versor = i / 9;
@@ -2285,7 +2270,6 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
     arg->restart = restart;
     arg->state = RenderEnqued;
-    enqueCommand(render); started[shader]++;
 }
 
 void enqueShader(enum Shader shader)
@@ -2300,6 +2284,7 @@ void enqueShader(enum Shader shader)
     CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0);}
     CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
+    enqueCommand(render); started[shader]++;
 }
 
 /*
