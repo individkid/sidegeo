@@ -223,10 +223,8 @@ struct Buffer {
     GLuint query; // feedback completion test
     GLuint loc; // vertex shader input
     int room; // current vector count
-    int pack; // number to be packed out
     int wrap; // desired vector count
     int prim; // desired primitive count
-    int draw; // waiting for shader
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
@@ -252,8 +250,9 @@ int classifyDone = 0; // number of classify events
 int *faceMap = 0;
 int *frameMap = 0;
 struct Render {
+    int draw; // waiting for shader
     int vertex; // number of input buffers que
-    struct Buffer *element; // primitives per output buffer
+    int element; // primitives per output buffer
     int feedback; // number of output buffers on que
     enum Shader shader;
     enum RenderState state;
@@ -2121,31 +2120,30 @@ void process()
     dequeOption(); REQUE(process)
 }
 
-enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **feedback)
+enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
 {
-    if (!arg->vertex) exitErrstr("%s too vertex\n",arg->name);
-    if (!arg->element) exitErrstr("%s too element\n",arg->name);
     for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
-    exitErrbuf(arg->element,arg->name);
-    if (arg->element->dimn != bufferPrimitive(input[arg->shader])) exitErrstr("%s too dimension\n",arg->name);
+    for (int i = 0; i < arg->element; i++) exitErrbuf(element[i],arg->name);
+    for (int i = 0; i < arg->feedback; i++) exitErrbuf(feedback[i],arg->name);
+    if (arg->element && element[0]->dimn != bufferPrimitive(input[arg->shader])) exitErrstr("%s too dimension\n",arg->name);
     int defer = 0;
-    for (int i = 0; i < arg->feedback; i++) {
-        exitErrbuf(feedback[i],arg->name);
-        if (feedback[i]->done > arg->element->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < arg->element->done) {
-            enqueWrap(feedback[i],arg->element->done,bufferPrimitive(output[arg->shader])); defer = 1;}}
+    if (arg->element) for (int i = 0; i < arg->feedback; i++) {
+        if (feedback[i]->done > element[0]->done) exitErrstr("%s too done\n",arg->name);
+        if (feedback[i]->room < element[0]->done) {
+            enqueWrap(feedback[i],element[0]->done,bufferPrimitive(output[arg->shader])); defer = 1;}}
     return (defer?Defer:Advance);
 }
 
-enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer **feedback)
+enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
 {
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
     if (arg->feedback) done = feedback[0]->done;
-    todo = arg->element->done - done;
+    if (arg->element) todo = element[0]->done - done;
+    else if (arg->vertex) todo = vertex[0]->done - done;
     if (todo == 0) return Advance;
-    for (int i = 0; i < arg->vertex; i++) {
-        int count = arg->element->count(vertex[i]->done)-done;
+    if (arg->element) for (int i = 0; i < arg->vertex; i++) {
+        int count = element[0]->count(vertex[i]->done)-done;
         if (count < todo) todo = count;}
     if (todo <= 0) return Defer;
     glUseProgram(program[arg->shader]);
@@ -2159,14 +2157,18 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
         glBeginTransformFeedback(output[arg->shader]);}
     for (int i = 0; i < arg->vertex; i++)
         glEnableVertexAttribArray(vertex[i]->loc);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arg->element->handle);
+    if (arg->element)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element[0]->handle);
     if (!arg->feedback)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    int count = bufferPrimitive(input[arg->shader])*arg->element->dimn;
-    size_t size = count*bufferType(arg->element->type);
-    glDrawElements(input[arg->shader], todo*count, arg->element->type, (void *)(done*size));
-    arg->element->draw = done+todo;
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    int count = bufferPrimitive(input[arg->shader]);
+    if (arg->element) {
+        size_t size = count*bufferType(element[0]->type);
+        glDrawElements(input[arg->shader], todo*count, element[0]->type, (void *)(done*size));} else
+        glDrawArrays(input[arg->shader],done*count,todo*count);
+    arg->draw = done+todo;
+    if (arg->element)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     for (int i = 0; i < arg->vertex; i++)
         glDisableVertexAttribArray(vertex[i]->loc);
     if (arg->feedback) {
@@ -2180,19 +2182,19 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     return Advance;
 }
 
-enum Action renderWait(struct Render *arg, struct Buffer **feedback)
+enum Action renderWait(struct Render *arg, struct Buffer **element, struct Buffer **feedback)
 {
     if (!arg->feedback) return Advance;
-    if (feedback[0]->done == arg->element->done) return Advance;
+    if (arg->element && feedback[0]->done == element[0]->done) return Advance;
     GLuint count = 0;
     glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT_AVAILABLE, &count);
     if (count == GL_FALSE) count = 0;
     else glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT, &count);
-    if (feedback[0]->done+count < arg->element->draw) return Defer;
-    if (feedback[0]->done+count > arg->element->draw) exitErrstr("%s too count\n",arg->name);
+    if (feedback[0]->done+count < arg->draw) return Defer;
+    if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
     for (int i = 0; i < arg->feedback; i++)
-        feedback[i]->done = arg->element->draw;
-    if (arg->element->draw < arg->element->done) return Restart;
+        feedback[i]->done = arg->draw;
+    if (arg->element && arg->draw < element[0]->done) return Restart;
     return Advance;
 }
 
@@ -2200,19 +2202,19 @@ void render()
 {
     struct Render *arg = arrayRender();
     struct Buffer **buf = arrayBuffer();
-    int size = arg->vertex+arg->feedback;
+    int size = arg->vertex+arg->element+arg->feedback;
     SWITCH(arg->state,RenderEnqued) {
-        SWITCH(renderWrap(arg,buf,buf+arg->vertex),Defer) {
+        SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
             requeRender(); relocBuffer(size); DEFER(render)}
         CASE(Advance) arg->state = RenderDraw;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderDraw) {
-        SWITCH(renderDraw(arg,buf,buf+arg->vertex),Defer) {
+        SWITCH(renderDraw(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
             requeRender(); relocBuffer(size); DEFER(render)}
         CASE(Advance) arg->state = RenderWait;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
-        SWITCH(renderWait(arg,buf+arg->vertex),Restart) {
+        SWITCH(renderWait(arg,buf+arg->vertex,buf+arg->vertex+arg->element),Restart) {
             arg->state = RenderEnqued;
             requeRender(); relocBuffer(size); REQUE(render)}
         CASE(Defer) {
@@ -2266,33 +2268,33 @@ void debug()
 }
 #endif
 
-void enqueElement(const char *name, enum Shader shader, int vertex, int feedback, struct Buffer **buffer, struct Buffer *element, int restart)
+void enqueElement(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
 {
     struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(vertex+feedback);
+    struct Buffer **buf = enlocBuffer(vertex+element+feedback);
+    arg->name = name;
+    arg->shader = shader;
     arg->vertex = vertex;
-    for (int i = 0; i < vertex; i++) buf[i] = buffer[i];
     arg->element = element;
     arg->feedback = feedback;
-    for (int i = vertex; i < vertex+feedback; i++) {buf[i] = buffer[i]; buf[i]->done = 0;}
-    arg->shader = shader;
-    arg->state = RenderEnqued;
+    for (int i = 0; i < vertex+element+feedback; i++) buf[i] = buffer[i];
+    for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
     arg->restart = restart;
-    arg->name = name;
+    arg->state = RenderEnqued;
     enqueCommand(render); started[shader]++;
 }
 
 void enqueShader(enum Shader shader)
 {
     if (started[shader]) {restart[shader] = 1; return;}
-    SWITCH(shader,Diplane) {struct Buffer *buf[2] = {&planeBuf,&versorBuf}; enqueElement("diplane",Diplane,2,0,buf,&faceSub,1);}
-    CASE(Dipoint) {struct Buffer *buf[1] = {&pointBuf}; enqueElement("dipoint",Dipoint,1,0,buf,&frameSub,1);}
-    CASE(Coplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&pointBuf}; enqueElement("coplane",Coplane,2,1,buf,&pointSub,0);}
-    CASE(Copoint) {struct Buffer *buf[3] = {&pointBuf,&planeBuf,&versorBuf}; enqueElement("copoint",Copoint,1,2,buf,&planeSub,0);}
-    CASE(Adplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&sideBuf}; enqueElement("adplane",Adplane,2,1,buf,&sideSub,0);}
-    CASE(Adpoint) {struct Buffer *buf[2] = {&pointBuf,&sideBuf}; enqueElement("adpoint",Adpoint,1,1,buf,&halfSub,0);}
-    CASE(Perplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&pierceBuf}; enqueElement("perplane",Perplane,2,1,buf,&faceSub,0);}
-    CASE(Perpoint) {struct Buffer *buf[2] = {&pointBuf,&pierceBuf}; enqueElement("perpoint",Perpoint,1,1,buf,&frameSub,0);}
+    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&faceSub}; enqueElement("diplane",Diplane,2,1,0,buf,1);}
+    CASE(Dipoint) {struct Buffer *buf[2] = {&pointBuf,&frameSub}; enqueElement("dipoint",Dipoint,1,1,0,buf,1);}
+    CASE(Coplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&pointSub,&pointBuf}; enqueElement("coplane",Coplane,2,1,1,buf,0);}
+    CASE(Copoint) {struct Buffer *buf[4] = {&pointBuf,&planeSub,&versorBuf,&planeBuf}; enqueElement("copoint",Copoint,1,1,2,buf,0);}
+    CASE(Adplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&sideSub,&sideBuf}; enqueElement("adplane",Adplane,2,1,1,buf,0);}
+    CASE(Adpoint) {struct Buffer *buf[3] = {&pointBuf,&halfSub,&sideBuf}; enqueElement("adpoint",Adpoint,1,1,1,buf,0);}
+    CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; enqueElement("perplane",Perplane,2,1,1,buf,0);}
+    CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; enqueElement("perpoint",Perpoint,1,1,1,buf,0);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
