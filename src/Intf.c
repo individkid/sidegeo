@@ -222,14 +222,16 @@ struct Buffer {
     GLuint copy; // target memory handle
     GLuint query; // feedback completion test
     GLuint loc; // vertex shader input
-    int room; // current vector count
     int wrap; // desired vector count
-    int prim; // desired primitive count
+    int room; // current vector count
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
     int (*count)(int); // targets per vector
 }; // for use by *Bind* and *Map*
+ // buffer size in bytes is room*dimn*bufferType(type)
+ // initialized size in bytes is done*dimn*bufferType(type)
+ // desired size in bytes is wrap*dimn*bufferType(type)
 #ifdef DEBUG
 struct Buffer debugBuf = {0};
 #endif
@@ -1854,7 +1856,7 @@ int bufferPrimitive(int size)
 void wrap()
 {
     struct Buffer *buffer = headBuffer();
-    size_t size = buffer->prim*buffer->dimn*bufferType(buffer->type);
+    size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
         glGenBuffers(1,&buffer->copy);
         glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
@@ -1882,13 +1884,12 @@ void wrap()
     dequeBuffer();
 }
 
-void enqueWrap(struct Buffer *buffer, int room, int prim)
+void enqueWrap(struct Buffer *buffer, int room)
 {
     if (buffer->wrap > 0) return;
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    buffer->prim = prim;
     enqueBuffer(buffer); enqueCommand(wrap);
 }
 
@@ -1926,7 +1927,7 @@ void classify()
 void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
 {
     if (buffer->done+todo > room) todo = room-buffer->done;
-    if (buffer->room < buffer->done+todo) enqueWrap(buffer,buffer->done+todo,1);
+    if (buffer->room < buffer->done+todo) enqueWrap(buffer,buffer->done+todo);
     if (buffer->done+todo <= buffer->room) {
         int size = buffer->dimn*bufferType(buffer->type);
         glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
@@ -2125,12 +2126,16 @@ enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer
     for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
     for (int i = 0; i < arg->element; i++) exitErrbuf(element[i],arg->name);
     for (int i = 0; i < arg->feedback; i++) exitErrbuf(feedback[i],arg->name);
-    if (arg->element && element[0]->dimn != bufferPrimitive(input[arg->shader])) exitErrstr("%s too dimension\n",arg->name);
+    if (arg->element && element[0]->dimn != bufferPrimitive(input[arg->shader])) exitErrstr("%s too primitive\n",arg->name);
+    if (!arg->element && bufferPrimitive(input[arg->shader]) != 1) exitErrstr("%s too primitive\n",arg->name);
+    if (arg->feedback && bufferPrimitive(output[arg->shader]) != 1) exitErrstr("%s too primitive\n",arg->name);
     int defer = 0;
     if (arg->element) for (int i = 0; i < arg->feedback; i++) {
         if (feedback[i]->done > element[0]->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < element[0]->done) {
-            enqueWrap(feedback[i],element[0]->done,bufferPrimitive(output[arg->shader])); defer = 1;}}
+        if (feedback[i]->room < element[0]->done) {enqueWrap(feedback[i],element[0]->done); defer = 1;}}
+    if (!arg->element) if (arg->vertex) for (int i = 0; i < arg->feedback; i++) {
+        if (feedback[i]->done > vertex[0]->done) exitErrstr("%s too done\n",arg->name);
+        if (feedback[i]->room < vertex[0]->done) {enqueWrap(feedback[i],vertex[0]->done); defer = 1;}}
     return (defer?Defer:Advance);
 }
 
@@ -2145,11 +2150,11 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (arg->element) for (int i = 0; i < arg->vertex; i++) {
         int count = element[0]->count(vertex[i]->done)-done;
         if (count < todo) todo = count;}
-    if (todo <= 0) return Defer;
+    if (todo < 0) exitErrstr("%s too todo\n",arg->name);
+    if (todo == 0) return Defer;
     glUseProgram(program[arg->shader]);
     for (int i = 0; i < arg->feedback; i++) {
-        int count = bufferPrimitive(output[arg->shader])*feedback[i]->dimn;
-        size_t size = count*bufferType(feedback[i]->type);
+        size_t size = feedback[i]->dimn*bufferType(feedback[i]->type);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle, done*size, todo*size);}
     if (arg->feedback) {
         glEnable(GL_RASTERIZER_DISCARD);
@@ -2161,11 +2166,10 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element[0]->handle);
     if (!arg->feedback)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    int count = bufferPrimitive(input[arg->shader]);
     if (arg->element) {
-        size_t size = count*bufferType(element[0]->type);
-        glDrawElements(input[arg->shader], todo*count, element[0]->type, (void *)(done*size));} else
-        glDrawArrays(input[arg->shader],done*count,todo*count);
+        size_t size = element[0]->dimn*bufferType(element[0]->type);
+        glDrawElements(input[arg->shader], todo*element[0]->dimn, element[0]->type, (void *)(done*size));} else
+        glDrawArrays(input[arg->shader],done,todo);
     arg->draw = done+todo;
     if (arg->element)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -2192,8 +2196,7 @@ enum Action renderWait(struct Render *arg, struct Buffer **element, struct Buffe
     else glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT, &count);
     if (feedback[0]->done+count < arg->draw) return Defer;
     if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
-    for (int i = 0; i < arg->feedback; i++)
-        feedback[i]->done = arg->draw;
+    for (int i = 0; i < arg->feedback; i++) feedback[i]->done = arg->draw;
     if (arg->element && arg->draw < element[0]->done) return Restart;
     return Advance;
 }
@@ -2229,17 +2232,18 @@ void render()
 
 void pierce()
 {
-    if (pierceBuf.done<faceSub.done) {enqueCommand(pierce); return;}
-    int count = bufferPrimitive(output[pershader])*pierceBuf.dimn;
-    GLfloat result[pierceBuf.done*count];
+    int dimn = pierceBuf.dimn;
+    int done = pierceBuf.done;
+    GLfloat result[done*dimn];
+    if (done<faceSub.done) {enqueCommand(pierce); return;}
     glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, pierceBuf.done*count*bufferType(pierceBuf.type), result);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(pierceBuf.type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     float xFound = 0;
     float yFound = 0;
     float zFound = invalid[0];
-    for (int i = 0; i < pierceBuf.done*count; i += pierceBuf.dimn) {
-        int sub = i+pierceBuf.dimn-1;
+    for (int i = 0; i < done*dimn; i += dimn) {
+        int sub = i+dimn-1;
         if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
             xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
     if (zFound<invalid[1]) {xPos = xFound; yPos = yFound; zPos = zFound;}
@@ -2268,7 +2272,7 @@ void debug()
 }
 #endif
 
-void enqueElement(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
 {
     struct Render *arg = enlocRender(1);
     struct Buffer **buf = enlocBuffer(vertex+element+feedback);
@@ -2287,14 +2291,14 @@ void enqueElement(const char *name, enum Shader shader, int vertex, int element,
 void enqueShader(enum Shader shader)
 {
     if (started[shader]) {restart[shader] = 1; return;}
-    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&faceSub}; enqueElement("diplane",Diplane,2,1,0,buf,1);}
-    CASE(Dipoint) {struct Buffer *buf[2] = {&pointBuf,&frameSub}; enqueElement("dipoint",Dipoint,1,1,0,buf,1);}
-    CASE(Coplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&pointSub,&pointBuf}; enqueElement("coplane",Coplane,2,1,1,buf,0);}
-    CASE(Copoint) {struct Buffer *buf[4] = {&pointBuf,&planeSub,&versorBuf,&planeBuf}; enqueElement("copoint",Copoint,1,1,2,buf,0);}
-    CASE(Adplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&sideSub,&sideBuf}; enqueElement("adplane",Adplane,2,1,1,buf,0);}
-    CASE(Adpoint) {struct Buffer *buf[3] = {&pointBuf,&halfSub,&sideBuf}; enqueElement("adpoint",Adpoint,1,1,1,buf,0);}
-    CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; enqueElement("perplane",Perplane,2,1,1,buf,0);}
-    CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; enqueElement("perpoint",Perpoint,1,1,1,buf,0);}
+    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&faceSub}; setupShader("diplane",Diplane,2,1,0,buf,1);}
+    CASE(Dipoint) {struct Buffer *buf[2] = {&pointBuf,&frameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,1);}
+    CASE(Coplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&pointSub,&pointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0);}
+    CASE(Copoint) {struct Buffer *buf[4] = {&pointBuf,&planeSub,&versorBuf,&planeBuf}; setupShader("copoint",Copoint,1,1,2,buf,0);}
+    CASE(Adplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&sideSub,&sideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0);}
+    CASE(Adpoint) {struct Buffer *buf[3] = {&pointBuf,&halfSub,&sideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
+    CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0);}
+    CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
@@ -2683,11 +2687,13 @@ int *generic(int size)
     return arrayGeneric();
 }
 
-int *getBuffer(GLuint handle, int count)
+int *getBuffer(struct Buffer *buffer)
 {
+    int count = buffer->done*buffer->dimn;
     GLuint temp[count];
-    glBindBuffer(GL_ARRAY_BUFFER,handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GL_UNSIGNED_INT),temp);
+    if (buffer->type != GL_UNSIGNED_INT) exitErrstr("%s too type\n",buffer->name);
+    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GLuint),temp);
     glBindBuffer(GL_ARRAY_BUFFER,0);
     int *buf = enlocInt(count); unlocInt(count);
     for (int i = 0; i < count; i++) buf[i] = temp[i];
@@ -2697,62 +2703,56 @@ int *getBuffer(GLuint handle, int count)
 void putBuffer()
 {
     struct Buffer *buffer = headBuffer();
-    int size = headInt();
-    int *buf = arrayInt()+1;
-    if (size > buffer->room) {enqueWrap(&faceSub,size,1); requeBuffer(); relocInt(size+1); DEFER(putBuffer)}
-    GLuint temp[size];
-    for (int i = 0; i < size; i++) temp[i] = buf[i];
+    int start = arrayInt()[0];
+    int count = arrayInt()[1];
+    int *buf = arrayInt()+2;
+    int dimn = buffer->dimn;
+    int type = buffer->type;
+    int room = (start+count)/dimn;
+    if ((start+count)%dimn) room++;
+    if (type != GL_UNSIGNED_INT) exitErrstr("%s too type\n",buffer->name);
+    if (room > buffer->room) {enqueWrap(buffer,room); requeBuffer(); relocInt(count+2); DEFER(putBuffer)}
+    GLuint temp[count];
+    for (int i = 0; i < count; i++) temp[i] = buf[i];
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-    glBufferSubData(GL_ARRAY_BUFFER,0,size,temp);
+    glBufferSubData(GL_ARRAY_BUFFER,start*sizeof(GLuint),count*sizeof(GLuint),temp);
     glBindBuffer(GL_ARRAY_BUFFER,0);
-    dequeBuffer(); delocInt(size+1);
+    dequeBuffer(); delocInt(count+2);
 }
 
-int *accessBuffer(int size, int count, struct Buffer *buffer)
+int *face(int start, int count)
 {
-    if (size) {enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(size); return enlocInt(size);}
-    return getBuffer(buffer->handle,count);
+    enqueCommand(putBuffer); enqueBuffer(&faceSub); enqueInt(start); enqueInt(count); return enlocInt(count);
 }
 
-int *face(int size)
-{
-    return accessBuffer(size,facesOfPlanes(classifyDone),&faceSub);
-}
-
-int *sidedness(int size)
+int *sidedness()
 {
     // of intersections of planes with prior planes, sidednesses wrt prior planes
-    return accessBuffer(size,sidesOfPlanes(classifyDone),&sideBuf);
+    return getBuffer(&sideBuf);
 }
 
-int *boundaryWrt(int size)
+int *boundaryWrt()
 {
     // boundary that correspoinding sidedness is wrt
-    return accessBuffer(size,sidesOfPlanes(classifyDone),&sideSub);
+    return getBuffer(&sideSub);
 }
 
-int *boundaryOk(int size)
+int *boundaryOk()
 {
     // whether boundary is valid
-    return accessBuffer(size,classifyDone,&planeOk);
+    return getBuffer(&planeOk);
 }
 
-int *faceValid(int size)
+int *faceValid()
 {
     // whether face is valid
-    return accessBuffer(size,facesOfPlanes(classifyDone),&faceOk);
+    return getBuffer(&faceOk);
 }
 
 int boundaryCount()
 {
     // return number of planes in planeBuf
     return classifyDone;
-}
-
-int faceCount()
-{
-    // return number of faces being displayed
-    return facesOfPlanes(classifyDone);
 }
 
 char *print(int size)
