@@ -78,30 +78,45 @@ peel len ptr = do
  list <- peekArray len ptr
  return (map fromIntegral list, plusPtr ptr len)
 
+cook :: Monad m => (a -> b -> m (c, b)) -> [a] -> b -> m ([c], b)
+cook fun len ptr = do
+ (c,b) <- fold' (cookF fun) len (return ([],ptr))
+ return ((reverse c), b)
+
+cookF :: Monad m => (a -> b -> m (c, b)) -> a -> m ([c],b) -> m ([c],b)
+cookF f a d = do
+ (c,b) <- d
+ (c',b') <- f a b
+ return ((c' : c), b')
+
 onion :: [Int] -> Ptr CInt -> IO ([[Int]], Ptr CInt)
-onion len ptr = do
- ptrs <- return (scanl plusPtr ptr len)
- lens <- sequence (zipWith peekArray len (ptr:(init ptrs)))
- return (map2 fromIntegral lens, last ptrs)
+onion len ptr = cook peel len ptr
 
 patch :: [[Int]] -> Ptr CInt -> IO ([[[Int]]], Ptr CInt)
-patch = undefined
+patch len ptr = cook onion len ptr
 
 -- (num-places,[place-size],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
 --  [embeded-region-size],[[embeded-region]])
-placeFromGeneric :: IO Place
-placeFromGeneric = do
- -- ptr0 <- genericC 0
- -- (places,ptr1) <- chip ptr0
- -- (boundaries,ptr2) <- peel places ptr1
- -- (regions,ptr3) <- peel places ptr2
- -- (boundary,ptr4) <- onion boundaries ptr3
- -- (region,ptr5) <- onion regions ptr4
- -- (firsts,ptr6) <- onion boundaries ptr5
- -- (seconds,ptr7) <- onion boundaries ptr6
- -- (first,ptr8) <- patch firsts ptr7
- -- (second,ptr9) <- patch seconds ptr8
- -- (embeds,ptr10) <- peel places ptr9
- -- (embed,_) <- onion embeds ptr10
- return []
+representGeneric :: IO [(Place,[Region])]
+representGeneric = do
+ ptr0 <- genericC 0
+ (places,ptr1) <- chip ptr0
+ (boundaries,ptr2) <- peel places ptr1
+ (regions,ptr3) <- peel places ptr2
+ (boundary,ptr4) <- onion boundaries ptr3
+ (_,ptr5) <- onion regions ptr4
+ (firsts,ptr6) <- onion boundaries ptr5
+ (seconds,ptr7) <- onion boundaries ptr6
+ (first,ptr8) <- patch firsts ptr7
+ (second,ptr9) <- patch seconds ptr8
+ (embeds,ptr10) <- peel places ptr9
+ (embed,_) <- onion embeds ptr10
+ let a = map2 Boundary boundary
+ let b = map3 Region first
+ let c = map3 Region second
+ let d = map2 Region embed
+ return (zip (zipWith3 (zipWith3 representGenericF) a b c) d)
+
+representGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
+representGenericF a b c = (a,[b,c])
