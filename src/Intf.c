@@ -2685,6 +2685,12 @@ int *getBuffer(struct Buffer *buffer)
     return buf;
 }
 
+int *side()
+{
+    // of intersections of planes with prior planes, sidednesses wrt prior planes
+    return getBuffer(&sideBuf);
+}
+
 void putBuffer()
 {
     struct Buffer *buffer = headBuffer();
@@ -2693,50 +2699,49 @@ void putBuffer()
     int *buf = arrayInt()+2;
     int dimn = buffer->dimn;
     int type = buffer->type;
-    int room = (start+count)/dimn;
-    if ((start+count)%dimn) room++;
+    int done = (start+count)/dimn;
+    if ((start+count)%dimn) enqueErrstr("%s to mod\n",buffer->name);
     if (type != GL_UNSIGNED_INT) exitErrstr("%s too type\n",buffer->name);
-    if (room > buffer->room) {enqueWrap(buffer,room); requeBuffer(); relocInt(count+2); DEFER(putBuffer)}
-    GLuint temp[count];
-    for (int i = 0; i < count; i++) temp[i] = buf[i];
+    if (done > buffer->room) {enqueWrap(buffer,done); requeBuffer(); relocInt(count+2); DEFER(putBuffer)}
+    GLuint temp[count]; for (int i = 0; i < count; i++) temp[i] = buf[i];
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
     glBufferSubData(GL_ARRAY_BUFFER,start*sizeof(GLuint),count*sizeof(GLuint),temp);
     glBindBuffer(GL_ARRAY_BUFFER,0);
-    dequeBuffer(); delocInt(count+2);
+    buffer->done = done; dequeBuffer(); delocInt(count+2);
+}
+
+int *setupBuffer(int start, int count, struct Buffer *buffer)
+{
+    enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count); return enlocInt(count);
 }
 
 int *face(int start, int count)
 {
-    enqueCommand(putBuffer); enqueBuffer(&faceSub); enqueInt(start); enqueInt(count); return enlocInt(count);
+    return setupBuffer(start,count,&faceSub);
 }
 
-int *sidedness()
+int *point(int start, int count)
 {
-    // of intersections of planes with prior planes, sidednesses wrt prior planes
-    return getBuffer(&sideBuf);
+    return setupBuffer(start,count,&pointSub);
 }
 
-int *boundaryWrt()
+int *boundaryWrt(int start, int count)
 {
-    // boundary that correspoinding sidedness is wrt
-    return getBuffer(&sideSub);
+    return setupBuffer(start,count,&sideSub);
 }
 
-int *boundaryOk()
+int *boundaryOk(int start, int count)
 {
-    // whether boundary is valid
-    return getBuffer(&planeOk);
+    return setupBuffer(start,count,&planeOk);
 }
 
-int *faceValid()
+int *faceValid(int start, int count)
 {
-    // whether face is valid
-    return getBuffer(&faceOk);
+    return setupBuffer(start,count,&faceOk);
 }
 
 int boundaryCount()
 {
-    // return number of planes in planeBuf
     return classifyDone;
 }
 

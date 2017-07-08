@@ -26,11 +26,12 @@ import Foreign.C.String
 import AffTopo.Naive
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
+foreign import ccall "side" sideC :: IO (Ptr CInt)
 foreign import ccall "face" faceC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "sidedness" sidednessC :: IO (Ptr CInt)
-foreign import ccall "boundaryWrt" boundaryWrtC :: IO (Ptr CInt)
-foreign import ccall "boundaryOk" boundaryOkC :: IO (Ptr CInt)
-foreign import ccall "faceValid" faceValidC :: IO (Ptr CInt)
+foreign import ccall "point" pointC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "boundaryWrt" boundaryWrtC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "boundaryOk" boundaryOkC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "faceValid" faceValidC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaryCount" boundaryCountC :: IO CInt
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO CInt
