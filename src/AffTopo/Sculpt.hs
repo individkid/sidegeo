@@ -20,6 +20,7 @@ module AffTopo.Sculpt where
 
 -- import Foreign.Ptr
 import Foreign.Ptr
+import Foreign.Storable
 import Foreign.C.Types
 import Foreign.Marshal.Array
 import Foreign.C.String
@@ -42,24 +43,65 @@ removeMe = allSides
 
 printStr :: [Char] -> IO ()
 printStr str = do
-  ptr <- printC (fromIntegral (length str))
-  pokeArray ptr (map castCharToCChar str)
+ ptr <- printC (fromIntegral (length str))
+ pokeArray ptr (map castCharToCChar str)
 
 handleEvent :: IO Bool
 handleEvent = do
  event <- eventC
  case event of
   0 -> do
-    printStr "inflate\n"
+    printStr "plane\n"
     return False
   1 -> do
-    face <- intArgumentC
-    printStr (concat ["fill ",(show face),"\n"])
+    printStr "inflate\n"
     return False
   2 -> do
     face <- intArgumentC
+    printStr (concat ["fill ",(show face),"\n"])
+    return False
+  3 -> do
+    face <- intArgumentC
     printStr (concat ["hollow ",(show face),"\n"])
     return False
-  3 -> return True
   4 -> return True
+  5 -> return True
   _ -> return False
+
+chip :: Ptr CInt -> IO (Int, Ptr CInt)
+chip ptr = do
+ val <- peek ptr
+ return (fromIntegral val, plusPtr ptr 1)
+
+peel :: Int -> Ptr CInt -> IO ([Int], Ptr CInt)
+peel len ptr = do
+ list <- peekArray len ptr
+ return (map fromIntegral list, plusPtr ptr len)
+
+onion :: [Int] -> Ptr CInt -> IO ([[Int]], Ptr CInt)
+onion len ptr = do
+ ptrs <- return (scanl plusPtr ptr len)
+ lens <- sequence (zipWith peekArray len (ptr:(init ptrs)))
+ return (map2 fromIntegral lens, last ptrs)
+
+patch :: [[Int]] -> Ptr CInt -> IO ([[[Int]]], Ptr CInt)
+patch = undefined
+
+-- (num-places,[place-size],[num-regions],[[boundary]],[[region]],
+--  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
+--  [embeded-region-size],[[embeded-region]])
+placeFromGeneric :: IO Place
+placeFromGeneric = do
+ -- ptr0 <- genericC 0
+ -- (places,ptr1) <- chip ptr0
+ -- (boundaries,ptr2) <- peel places ptr1
+ -- (regions,ptr3) <- peel places ptr2
+ -- (boundary,ptr4) <- onion boundaries ptr3
+ -- (region,ptr5) <- onion regions ptr4
+ -- (firsts,ptr6) <- onion boundaries ptr5
+ -- (seconds,ptr7) <- onion boundaries ptr6
+ -- (first,ptr8) <- patch firsts ptr7
+ -- (second,ptr9) <- patch seconds ptr8
+ -- (embeds,ptr10) <- peel places ptr9
+ -- (embed,_) <- onion embeds ptr10
+ return []

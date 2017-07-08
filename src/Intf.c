@@ -274,6 +274,7 @@ typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
 enum Event {
+    Plane,
     Inflate,
     Fill,
     Hollow,
@@ -2754,11 +2755,12 @@ int event()
 {
     if (!validEvent()) return -1;
     enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Inflate) return 0;
-    CASE(Fill) return 1;
-    CASE(Hollow) return 2;
-    CASE(Error) return 3;
-    CASE(Done) return 4;
+    SWITCH(event,Plane) return 0;
+    CASE(Inflate) return 1;
+    CASE(Fill) return 2;
+    CASE(Hollow) return 3;
+    CASE(Error) return 4;
+    CASE(Done) return 5;
     DEFAULT({exitErrstr("invalid event\n");})
     return -1;
 }
