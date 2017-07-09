@@ -27,8 +27,10 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
+type Sideband = (Boundary,[Int])
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
+foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
 foreign import ccall "side" sideC :: IO (Ptr CInt)
 foreign import ccall "face" faceC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "point" pointC :: CInt -> CInt -> IO (Ptr CInt)
@@ -97,28 +99,37 @@ onion len ptr = cook peel len ptr
 patch :: [[Int]] -> Ptr CInt -> IO ([[[Int]]], Ptr CInt)
 patch len ptr = cook onion len ptr
 
--- (num-places,--num-done,num-todo,[place-todo],--[place-size],[num-regions],[[boundary]],[[region]],
+-- (num-places,[place-size],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
 --  [embeded-region-size],[[embeded-region]])
 readGeneric :: IO Generic
 readGeneric = do
- ptr0 <- genericC 0
- (places,ptr1) <- chip ptr0
- (boundaries,ptr2) <- peel places ptr1
- (regions,ptr3) <- peel places ptr2
- (boundary,ptr4) <- onion boundaries ptr3
- (_,ptr5) <- onion regions ptr4
- (firsts,ptr6) <- onion boundaries ptr5
- (seconds,ptr7) <- onion boundaries ptr6
- (first,ptr8) <- patch firsts ptr7
- (second,ptr9) <- patch seconds ptr8
- (embeds,ptr10) <- peel places ptr9
- (embed,_) <- onion embeds ptr10
+ ptr <- genericC 0
+ (places,placesPtr) <- chip ptr
+ (boundaries,boundariesPtr) <- peel places placesPtr
+ (regions,regionsPtr) <- peel places boundariesPtr
+ (boundary,boundaryPtr) <- onion boundaries regionsPtr
+ (_,regionPtr) <- onion regions boundaryPtr
+ (firsts,firstsPtr) <- onion boundaries regionPtr
+ (seconds,secondsPtr) <- onion boundaries firstsPtr
+ (first,firstPtr) <- patch firsts secondsPtr
+ (second,secondPtr) <- patch seconds firstPtr
+ (embeds,embedsPtr) <- peel places secondPtr
+ (embed,_) <- onion embeds embedsPtr
  let a = map2 Boundary boundary
  let b = map3 Region first
  let c = map3 Region second
  let d = map2 Region embed
  return (zip (zipWith3 (zipWith3 readGenericF) a b c) d)
+
+--num-done,num-todo,[place-todo]--
+readSideband :: IO Sideband
+readSideband = do
+ ptr <- sidebandC 0
+ (dones,donesPtr) <- chip ptr
+ (todos,todosPtr) <- chip donesPtr
+ (todo,_) <- peel todos todosPtr
+ return (Boundary dones, todo)
 
 readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
 readGenericF a b c = (a,[b,c])
@@ -135,7 +146,7 @@ layer = undefined
 hoard :: [[[Int]]] -> Ptr CInt -> IO (Ptr CInt)
 hoard = undefined
 
-writeGeneric :: [(Place,[Region])] -> IO (Ptr CInt)
+writeGeneric :: Generic -> IO (Ptr CInt)
 writeGeneric a = let
  places = length a
  boundaries = map (length . boundariesOfPlace) (domain a)
@@ -171,4 +182,13 @@ writeGenericF a = fold' (+) (map length a) 0
 
 writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
+
+writeSideband :: Sideband -> IO (Ptr CInt)
+writeSideband (a,b) = let
+ dones = (\(Boundary x) -> x) a
+ todos = length b
+ in (sidebandC (fromIntegral (todos+2))) >>=
+ (paste dones) >>=
+ (paste todos) >>=
+ (cover b)
 

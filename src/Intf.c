@@ -214,6 +214,7 @@ float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
 struct Ints generics = {0};
+struct Ints sidebands = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -483,6 +484,8 @@ ACCESS_QUEUE(Line,enum Menu,lines)
 ACCESS_QUEUE(Match,int,matchs)
 
 ACCESS_QUEUE(Generic,int,generics)
+
+ACCESS_QUEUE(Sideband,int,sidebands)
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -1794,6 +1797,7 @@ void finalize()
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Ints initial = {0}; free(generics.base); generics = initial;}
+    if (sidebands.base) {struct Ints initial = {0}; free(sidebands.base); sidebands = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -2671,6 +2675,13 @@ int *generic(int size)
     // if size is not zero, resize generic data
     if (size) {delocGeneric(sizeGeneric()); enlocGeneric(size);}
     return arrayGeneric();
+}
+
+int *sideband(int size)
+{
+    // if size is not zero, resize sideband data
+    if (size) {delocSideband(sizeSideband()); enlocSideband(size);}
+    return arraySideband();
 }
 
 int *getBuffer(struct Buffer *buffer)
