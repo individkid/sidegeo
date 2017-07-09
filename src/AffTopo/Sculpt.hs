@@ -26,6 +26,8 @@ import Foreign.Marshal.Array
 import Foreign.C.String
 import AffTopo.Naive
 
+type Generic = [(Place,[Region])]
+
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "side" sideC :: IO (Ptr CInt)
 foreign import ccall "face" faceC :: CInt -> CInt -> IO (Ptr CInt)
@@ -51,19 +53,19 @@ handleEvent = do
  event <- eventC
  case event of
   0 -> do
-    printStr "plane\n"
-    return False
+   printStr "plane\n"
+   return False
   1 -> do
-    printStr "inflate\n"
-    return False
+   printStr "inflate\n"
+   return False
   2 -> do
-    face <- intArgumentC
-    printStr (concat ["fill ",(show face),"\n"])
-    return False
+   face <- intArgumentC
+   printStr (concat ["fill ",(show face),"\n"])
+   return False
   3 -> do
-    face <- intArgumentC
-    printStr (concat ["hollow ",(show face),"\n"])
-    return False
+   face <- intArgumentC
+   printStr (concat ["hollow ",(show face),"\n"])
+   return False
   4 -> return True
   5 -> return True
   _ -> return False
@@ -95,11 +97,11 @@ onion len ptr = cook peel len ptr
 patch :: [[Int]] -> Ptr CInt -> IO ([[[Int]]], Ptr CInt)
 patch len ptr = cook onion len ptr
 
--- (num-places,[place-size],[num-regions],[[boundary]],[[region]],
+-- (num-places,--num-done,num-todo,[place-todo],--[place-size],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
 --  [embeded-region-size],[[embeded-region]])
-representGeneric :: IO [(Place,[Region])]
-representGeneric = do
+readGeneric :: IO Generic
+readGeneric = do
  ptr0 <- genericC 0
  (places,ptr1) <- chip ptr0
  (boundaries,ptr2) <- peel places ptr1
@@ -116,7 +118,57 @@ representGeneric = do
  let b = map3 Region first
  let c = map3 Region second
  let d = map2 Region embed
- return (zip (zipWith3 (zipWith3 representGenericF) a b c) d)
+ return (zip (zipWith3 (zipWith3 readGenericF) a b c) d)
 
-representGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
-representGenericF a b c = (a,[b,c])
+readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
+readGenericF a b c = (a,[b,c])
+
+paste :: Int -> Ptr CInt -> IO (Ptr CInt)
+paste = undefined
+
+cover :: [Int] -> Ptr CInt -> IO (Ptr CInt)
+cover = undefined
+
+layer :: [[Int]] -> Ptr CInt -> IO (Ptr CInt)
+layer = undefined
+
+hoard :: [[[Int]]] -> Ptr CInt -> IO (Ptr CInt)
+hoard = undefined
+
+writeGeneric :: [(Place,[Region])] -> IO (Ptr CInt)
+writeGeneric a = let
+ places = length a
+ boundaries = map (length . boundariesOfPlace) (domain a)
+ regions = map (length . regionsOfPlace) (domain a)
+ boundary = map boundariesOfPlace (domain a)
+ region = map regionsOfPlace (domain a)
+ firsts = map ((map (length . head)) . range) (domain a)
+ seconds = map ((map (length . head . tail)) . range) (domain a)
+ first = map ((map head) . range) (domain a)
+ second = map ((map (head . tail)) . range) (domain a)
+ embeds = map length (range a)
+ embed = range a
+ size0 = 1 + places + places + (writeGenericF boundary) + (writeGenericF region)
+ size1 = (writeGenericF firsts) + (writeGenericF seconds)
+ size2 = (writeGenericG first) + (writeGenericG second)
+ size3 = places + (writeGenericF embed)
+ size = size0 + size1 + size2 + size3
+ in (genericC (fromIntegral size)) >>=
+ (paste places) >>=
+ (cover boundaries) >>=
+ (cover regions) >>=
+ (layer (map2 (\(Boundary x) -> x) boundary)) >>=
+ (layer (map2 (\(Region x) -> x) region)) >>=
+ (layer firsts) >>=
+ (layer seconds) >>=
+ (hoard (map3 (\(Region x) -> x) first)) >>=
+ (hoard (map3 (\(Region x) -> x) second)) >>=
+ (cover embeds) >>=
+ (layer (map2 (\(Region x) -> x) embed))
+
+writeGenericF :: [[a]] -> Int
+writeGenericF a = fold' (+) (map length a) 0
+
+writeGenericG :: [[[a]]] -> Int
+writeGenericG a = fold' (+) (map writeGenericF a) 0
+
