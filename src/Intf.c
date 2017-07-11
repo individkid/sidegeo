@@ -98,7 +98,6 @@ extern void __stginit_Main(void);
 Display *displayHandle = 0; // for XWarpPointer
 #endif
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
-FILE *configFile = 0; // for appending generic deltas
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
@@ -249,7 +248,13 @@ struct Buffer sideSub = {0}; // per vertex prior planes
 struct Buffer halfSub = {0}; // per plane prior vertices
 struct Buffer planeOk = {0}; // per-plane valid flag
 struct Buffer faceOk = {0}; // per-face valid flag
+int planeDone = 0; // number of valid planes
 int classifyDone = 0; // number of classify events
+FILE *configFile = 0; // for appending generic deltas
+int configScan = 0; // whether arguments scanned
+char configCommand[20]; // --command from file
+int configIndex = 0; // scanned argument
+float configScalar[3]; // scanned arguments
 int *faceMap = 0;
 int *frameMap = 0;
 struct Render {
@@ -2023,16 +2028,45 @@ enum Action bringup()
 }
 #endif
 
+int loadBuffer(struct Buffer *buffer, int todo, void *data)
+{
+    if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return 0;}
+    if (buffer->done+todo <= buffer->room) {
+        int size = buffer->dimn*bufferType(buffer->type);
+        glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+        glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        buffer->done += todo;}
+    return todo;
+}
+
 enum Action loadFile()
 {
-    char *command = "";
-    char *argument = "";
-    if (strcmp(command,"--inflate") == 0) {enqueCommand(0); enqueEvent(Inflate);}
-    if (strcmp(command,"--fill") == 0) {enqueCommand(0); enqueEvent(Fill); enqueInt(atoi(argument));}
-    if (strcmp(command,"--hollow") == 0) {enqueCommand(0); enqueEvent(Hollow); enqueInt(atoi(argument));}
 #ifdef BRINGUP
     return bringup();
 #endif
+    int retval = 0;
+    if (!configScan && (retval = fscanf(configFile," %19s",configCommand)) != 1) {
+        if (retval != EOF) enqueMsgstr("cannot scan config\n"); return Advance;}
+    if (strcmp(configCommand,"--plane") == 0) {
+        GLfloat buffer[3];
+        if (!configScan && fscanf(configFile, "%d %f %f %f", &configIndex, configScalar+0, configScalar+1, configScalar+2) != 4) {
+            enqueErrstr("cannot scan config\n"); return Reque;}
+        for (int i = 0; i < 3; i++) buffer[i] = configScalar[i];
+        if (loadBuffer(&planeBuf,1,buffer) != 1) {configScan = 1; return Defer;} configScan = 0;
+        planeDone++; enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);}
+    if (strcmp(configCommand,"--inflate") == 0) {
+        if (classifyDone < planeDone) {configScan = 1; return Defer;} configScan = 0;
+        enqueCommand(0); enqueEvent(Inflate);}
+    if (strcmp(configCommand,"--fill") == 0) {
+        if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
+            enqueErrstr("cannot scan config\n"); return Reque;}
+        enqueCommand(0); enqueEvent(Fill); enqueInt(configIndex);}
+    if (strcmp(configCommand,"--hollow") == 0) {
+        if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
+            enqueErrstr("cannot scan config\n"); return Reque;}
+        enqueCommand(0); enqueEvent(Hollow); enqueInt(configIndex);}
+    return Reque;
 }
 
 enum Action initFile()
