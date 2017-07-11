@@ -24,7 +24,6 @@ import Foreign.Storable
 import Foreign.C.Types
 import Foreign.Marshal.Array
 import Foreign.C.String
-import Data.IORef
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
@@ -73,84 +72,58 @@ handleEvent = do
   5 -> return True
   _ -> return False
 
-chip :: IO (IORef Int) -> Ptr CInt -> IO (Ptr CInt)
-chip ref ptr = ref >>= (\x -> (fmap fromIntegral (peek ptr)) >>= (writeIORef x) >> (return (plusPtr ptr 1)))
+chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
+chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
 
-peel :: IO (IORef [Int]) -> IO (IORef Int) -> Ptr CInt -> IO (Ptr CInt)
-peel ref len ptr = ref >>= (\x -> len >>= readIORef >>= (\y -> (fmap (map fromIntegral) (peekArray y ptr)) >>= (writeIORef x) >> (return (plusPtr ptr y))))
+peel :: (Int, Ptr CInt) -> (a, Ptr CInt) -> IO ([Int], Ptr CInt)
+peel (len,_) (_,ptr) = (peekArray len ptr) >>= (\x -> return (map fromIntegral x, plusPtr ptr len))
 
-cook :: (IO (IORef a) -> IO (IORef b) -> Ptr CInt -> IO (Ptr CInt)) -> IO (IORef [a]) -> IO (IORef a) -> IO (IORef [b]) -> Ptr CInt -> IO (Ptr CInt)
-cook fun ref tmp len ptr = (cookH len) >>= (\x -> fold' (cookF fun ref tmp) x (return ptr))
+cook :: [IO (a, Ptr CInt)] -> IO ([a], Ptr CInt)
+cook (elm:mid:lst) = elm >>= (\(x,_) -> (cook (mid:lst)) >>= (\(y,z) -> return (x:y,z)))
+cook [elm] = elm >>= (\(x,y) -> return ([x],y))
+cook [] = return undefined
 
-cookF :: (IO (IORef a) -> IO (IORef b) -> Ptr CInt -> IO (Ptr CInt)) -> IO (IORef [a]) -> IO (IORef a) -> IO (IORef b) -> IO (Ptr CInt) -> IO (Ptr CInt)
-cookF fun ref tmp len ptr = ptr >>= (\x -> (\z -> cookG ref (seq z tmp) z) (fun tmp len x))
+onion :: ([Int], Ptr CInt) -> (a, Ptr CInt) -> IO ([[Int]], Ptr CInt)
+onion (len,_) (_,ptr) = cook (map (\x -> peel (x,undefined) (undefined,ptr)) len)
 
-cookG :: IO (IORef [a]) -> IO (IORef a) -> IO (Ptr CInt) -> IO (Ptr CInt)
-cookG ref tmp ptr = ref >>= (\x -> (readIORef x) >>= (\y -> tmp >>= readIORef >>= (\z -> (writeIORef x (z:y)) >> ptr)))
-
-cookH :: IO (IORef [b]) -> IO [IO (IORef b)]
-cookH len = len >>= readIORef >>= (\x -> return (map newIORef x))
-
-onion :: IO (IORef [[Int]]) -> IO (IORef [Int]) -> Ptr CInt -> IO (Ptr CInt)
-onion ref len ptr = let tmp = newIORef [] in cook peel ref tmp len ptr
-
-patch :: IO (IORef [[[Int]]]) -> IO (IORef [[Int]]) -> Ptr CInt -> IO (Ptr CInt)
-patch ref len ptr = let tmp  = newIORef [[]] in cook onion ref tmp len ptr
+patch :: ([[Int]], Ptr CInt) -> (a, Ptr CInt) -> IO ([[[Int]]], Ptr CInt)
+patch (len,_) (_,ptr) = cook (map (\x -> onion (x,undefined) (undefined,ptr)) len)
 
 --num-places,[num-boundaries],[[boundary]],num-done,num-todo,[place-todo]--
 readSideband :: IO Sideband
-readSideband = let
- places = newIORef (1::Int)
- boundaries = newIORef []
- boundary = newIORef [[]]
- dones = newIORef (1::Int)
- todos = newIORef (1::Int)
- todo = newIORef []
- in (sidebandC 0) >>=
- (chip places) >>=
- (peel boundaries places) >>=
- (onion boundary boundaries) >>=
- (chip dones) >>=
- (chip todos) >>=
- (peel todo todos) >>
- boundary >>= readIORef >>= (\x ->
- dones >>= readIORef >>= (\y ->
- todo >>= readIORef >>= (\z ->
- return (map2 Boundary x, Boundary y, z))))
+readSideband = (sidebandC 0) >>= (\ptr ->
+ (chip (undefined,ptr)) >>= (\places ->
+ (peel places places) >>= (\boundaries ->
+ (onion boundaries boundaries) >>= (\boundary ->
+ (chip boundary) >>= (\dones ->
+ (chip dones) >>= (\todos ->
+ (peel todos todos) >>= (\todo -> let
+ (x,_) = boundary
+ (y,_) = dones
+ (z,_) = todo
+ in return (map2 Boundary x, Boundary y, z))))))))
 
 -- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
 --  [embeded-region-size],[[embeded-region]])
 readGeneric :: IO Generic
-readGeneric = let
- places = newIORef (1::Int)
- boundaries = newIORef []
- regions = newIORef []
- boundary = newIORef [[]]
- region = newIORef [[]]
- firsts = newIORef [[]]
- seconds = newIORef [[]]
- first = newIORef [[[]]]
- second = newIORef [[[]]]
- embeds = newIORef []
- embed = newIORef [[]]
- in (genericC 0) >>=
- (chip places) >>=
- (peel boundaries places) >>=
- (peel regions places) >>=
- (onion boundary boundaries) >>=
- (onion region regions) >>=
- (onion firsts boundaries) >>=
- (onion seconds boundaries) >>=
- (patch first firsts) >>=
- (patch second seconds) >>=
- (peel embeds places) >>=
- (onion embed embeds) >>
- boundary >>= ((fmap (map2 Boundary)) . readIORef) >>= (\w ->
- first >>= ((fmap (map3 Region)) . readIORef) >>= (\x ->
- second >>= ((fmap (map3 Region)) . readIORef) >>= (\y ->
- embed >>= ((fmap (map2 Region)) . readIORef) >>= (\z -> let
- in return (zip (zipWith3 (zipWith3 readGenericF) w x y) z)))))
+readGeneric = (genericC 0) >>= (\ptr ->
+ (chip (undefined,ptr)) >>= (\places ->
+ (peel places places) >>= (\boundaries ->
+ (peel places boundaries) >>= (\regions ->
+ (onion boundaries regions) >>= (\boundary ->
+ (onion regions boundary) >>= (\region ->
+ (onion boundaries region) >>= (\firsts ->
+ (onion boundaries firsts) >>= (\seconds ->
+ (patch firsts seconds) >>= (\first ->
+ (patch seconds first) >>= (\second ->
+ (peel places second) >>= (\embeds ->
+ (onion embeds embeds) >>= (\embed -> let
+ w = map2 Boundary (fst boundary)
+ x = map3 Region (fst first)
+ y = map3 Region (fst second)
+ z = map2 Region (fst embed)
+ in return (zip (zipWith3 (zipWith3 readGenericF) w x y) z)))))))))))))
 
 readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
 readGenericF a b c = (a,[b,c])
