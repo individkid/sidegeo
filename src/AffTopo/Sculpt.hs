@@ -83,7 +83,7 @@ cook :: (IO (IORef a) -> IO (IORef b) -> Ptr CInt -> IO (Ptr CInt)) -> IO (IORef
 cook fun ref tmp len ptr = (cookH len) >>= (\x -> fold' (cookF fun ref tmp) x (return ptr))
 
 cookF :: (IO (IORef a) -> IO (IORef b) -> Ptr CInt -> IO (Ptr CInt)) -> IO (IORef [a]) -> IO (IORef a) -> IO (IORef b) -> IO (Ptr CInt) -> IO (Ptr CInt)
-cookF fun ref tmp len ptr = ptr >>= (\x -> cookG ref tmp (fun tmp len x))
+cookF fun ref tmp len ptr = ptr >>= (\x -> (\z -> cookG ref (seq z tmp) z) (fun tmp len x))
 
 cookG :: IO (IORef [a]) -> IO (IORef a) -> IO (Ptr CInt) -> IO (Ptr CInt)
 cookG ref tmp ptr = ref >>= (\x -> (readIORef x) >>= (\y -> tmp >>= readIORef >>= (\z -> (writeIORef x (z:y)) >> ptr)))
