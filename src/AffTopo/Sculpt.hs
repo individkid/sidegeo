@@ -126,16 +126,16 @@ readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
 readGenericF a b c = (a,[b,c])
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
-paste = undefined
+paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr ptr 1)))
 
 cover :: [Int] -> Ptr CInt -> IO (Ptr CInt)
-cover = undefined
+cover len ptr = pokeArray ptr (map fromIntegral len) >>= (\x -> seq x (return (plusPtr ptr (length len))))
 
 layer :: [[Int]] -> Ptr CInt -> IO (Ptr CInt)
-layer = undefined
+layer len ptr = fold' (\x y -> y >>= (\z -> cover x z)) len (return ptr)
 
 hoard :: [[[Int]]] -> Ptr CInt -> IO (Ptr CInt)
-hoard = undefined
+hoard len ptr = fold' (\x y -> y >>= (\z -> layer x z)) len (return ptr)
 
 writeGeneric :: Generic -> IO (Ptr CInt)
 writeGeneric a = let
