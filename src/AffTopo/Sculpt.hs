@@ -37,7 +37,6 @@ foreign import ccall "point" pointC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaryWrt" boundaryWrtC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaryOk" boundaryOkC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "faceValid" faceValidC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "boundaryCount" boundaryCountC :: IO CInt
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO CInt
 foreign import ccall "intArgument" intArgumentC :: IO CInt

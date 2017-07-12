@@ -227,7 +227,6 @@ struct Buffer {
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
-    int (*count)(int); // targets per vector
 }; // for use by *Bind* and *Map*
  // buffer size in bytes is room*dimn*bufferType(type)
  // initialized size in bytes is done*dimn*bufferType(type)
@@ -248,15 +247,12 @@ struct Buffer sideSub = {0}; // per vertex prior planes
 struct Buffer halfSub = {0}; // per plane prior vertices
 struct Buffer planeOk = {0}; // per-plane valid flag
 struct Buffer faceOk = {0}; // per-face valid flag
-int planeDone = 0; // number of valid planes
 int classifyDone = 0; // number of classify events
 FILE *configFile = 0; // for appending generic deltas
 int configScan = 0; // whether arguments scanned
 char configCommand[20]; // --command from file
 int configIndex = 0; // scanned argument
 float configScalar[3]; // scanned arguments
-int *faceMap = 0;
-int *frameMap = 0;
 struct Render {
     int draw; // waiting for shader
     int vertex; // number of input buffers que
@@ -1019,46 +1015,6 @@ GLuint compileProgram(
     return program;
 }
 
-int facesOfPlanes(int planes) // number of faces satisfied by given number of planes
-{
-    if (planes == 0) return 0;
-    return faceMap[planes-1];
-}
-
-int framesOfPoints(int points) // number of frames satisfied by given number of points
-{
-    if (points == 0) return 0;
-    return frameMap[points-1];
-}
-
-int pointsOfPlanes(int planes) // number of points produced by given number of planes
-{
-    int count = 0;
-    for (int i = 2; i < planes; i++) count += i*(i-1)/2;
-    return count;
-}
-
-int planesOfPoints(int points) // number of planes produced by given number of points
-{
-    int count = 0;
-    for (int i = 2; i < points; i++) count += i*(i-1)/2;
-    return count;
-}
-
-int sidesOfPlanes(int planes) // number of sides wrt planes prior to last containing boundary
-{
-    int count = 0;
-    for (int i = 3; i < planes; i++) count += i*(i-1)*(i-2)/2;
-    return count;
-}
-
-int sidesOfPoints(int points) // number of sides wrt planes prior to last containing boundary
-{
-    int count = 0;
-    for (int i = 2; points > 0; i++) for (int j = 0; points > 0 && j < i*(i-1)/2; j++, points--) count += i-2;
-    return count;
-}
-
 void displayClose(GLFWwindow* window);
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods);
 void displayClick(GLFWwindow *window, int button, int action, int mods);
@@ -1069,7 +1025,7 @@ void displaySize(GLFWwindow *window, int width, int height);
 void displayRefresh(GLFWwindow *window);
 void process();
 
-void buffer(struct Buffer *buffer, char *name, GLuint loc, int type, int dimn, int (*count)(int))
+void buffer(struct Buffer *buffer, char *name, GLuint loc, int type, int dimn)
 {
     buffer->name = name;
     glGenBuffers(1, &buffer->handle);
@@ -1081,7 +1037,6 @@ void buffer(struct Buffer *buffer, char *name, GLuint loc, int type, int dimn, i
         glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
         glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    buffer->count = count;
 }
 
 void initialize(int argc, char **argv)
@@ -1134,21 +1089,21 @@ void initialize(int argc, char **argv)
     glBindVertexArray(VAO);
 
 #ifdef DEBUG
-    buffer(&debugBuf,"debug",INVALID_LOCATION,DEBUG_TYPE,DEBUG_DIMENSION,0);
+    buffer(&debugBuf,"debug",INVALID_LOCATION,DEBUG_TYPE,DEBUG_DIMENSION);
 #endif
-    buffer(&planeBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS,0);
-    buffer(&versorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS,0);
-    buffer(&pointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS,0);
-    buffer(&pierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS,0);
-    buffer(&sideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS,0);
-    buffer(&faceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS,facesOfPlanes);
-    buffer(&frameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS,framesOfPoints);
-    buffer(&pointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,pointsOfPlanes);
-    buffer(&planeSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,planesOfPoints);
-    buffer(&sideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,sidesOfPlanes);
-    buffer(&halfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,sidesOfPoints);
-    buffer(&planeOk,"ok",OK_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,0);
-    buffer(&faceOk,"valid",VALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS,0);
+    buffer(&planeBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
+    buffer(&versorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
+    buffer(&pointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    buffer(&pierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    buffer(&sideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
+    buffer(&faceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
+    buffer(&frameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
+    buffer(&pointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
+    buffer(&planeSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
+    buffer(&sideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+    buffer(&halfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+    buffer(&planeOk,"ok",OK_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+    buffer(&faceOk,"valid",VALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 
     uniformCode = "\
     #version 330 core\n\
@@ -1898,24 +1853,22 @@ void enqueShader(enum Shader);
 void classify()
 {
     CHECK(classify,Classify)
-    if (classifyDone >= planeBuf.done) {flush(Adplane); DEQUE(classify,Classify)}
-    int points = pointsOfPlanes(classifyDone+1);
-    int sides = sidesOfPlanes(classifyDone+1);
-    if (pointBuf.done < points) enqueShader(Coplane);
-    if (pointBuf.done >= points && sideBuf.done < sides) {
-        GLfloat coords[pointBuf.dimn];
+    if (pointBuf.done < pointSub.done) enqueShader(Coplane);
+    if (sideBuf.done < sideSub.done && classifyDone < pointBuf.done && !started[Adplane]) {
+        GLfloat buffer[pointBuf.dimn];
         int size = pointBuf.dimn*bufferType(pointBuf.type);
-        sideSub.done = sides;
+        sideSub.done = sideSub.done;
         glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, coords);
+        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, buffer);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glUseProgram(program[Adplane]);
-        glUniform3f(uniform[Adplane][Feather],coords[0],coords[1],coords[2]);
+        glUniform3f(uniform[Adplane][Feather],buffer[0],buffer[1],buffer[2]);
         glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
         glUseProgram(0);
-        enqueShader(Adplane);}
-    if (sideBuf.done < sides) {DEFER(classify)}
-    classifyDone++; REQUE(classify)
+        enqueShader(Adplane);
+        classifyDone++;}
+    if (sideBuf.done < sideSub.done) {DEFER(classify)}
+    flush(Adplane); DEQUE(classify,Classify)
 }
 
 #ifdef BRINGUP
@@ -2007,16 +1960,6 @@ enum Action bringup()
  
     MAYBE(classify,Classify)
 
-    if (!faceMap) {
-        faceMap = malloc(NUM_PLANES*sizeof*faceMap);
-        for (int i = 0; i < NUM_PLANES; i++) faceMap[i] = 0;
-        faceMap[NUM_PLANES-1] = NUM_FACES;}
-
-    if (!frameMap) {
-        frameMap = malloc(NUM_POINTS*sizeof*frameMap);
-        for (int i = 0; i < NUM_POINTS; i++) frameMap[i] = 0;
-        frameMap[NUM_POINTS-1] = NUM_FRAMES;}
-
     if (planeBuf.done < NUM_PLANES) return Reque;
     if (versorBuf.done < NUM_PLANES) return Reque;
     if (faceSub.done < NUM_FACES) return Reque;
@@ -2054,9 +1997,9 @@ enum Action loadFile()
             enqueErrstr("cannot scan config\n"); return Reque;}
         for (int i = 0; i < 3; i++) buffer[i] = configScalar[i];
         if (loadBuffer(&planeBuf,1,buffer) != 1) {configScan = 1; return Defer;} configScan = 0;
-        planeDone++; enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);}
+        enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);}
     if (strcmp(configCommand,"--inflate") == 0) {
-        if (classifyDone < planeDone) {configScan = 1; return Defer;} configScan = 0;
+        if (sideBuf.done < sideSub.done) {configScan = 1; return Defer;} configScan = 0;
         enqueCommand(0); enqueEvent(Inflate);}
     if (strcmp(configCommand,"--fill") == 0) {
         if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
@@ -2170,12 +2113,8 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (arg->feedback) done = feedback[0]->done;
     if (arg->element) todo = element[0]->done - done;
     else if (arg->vertex) todo = vertex[0]->done - done;
-    if (todo == 0) return Advance;
-    if (arg->element) for (int i = 0; i < arg->vertex; i++) {
-        int count = element[0]->count(vertex[i]->done)-done;
-        if (count < todo) todo = count;}
     if (todo < 0) exitErrstr("%s too todo\n",arg->name);
-    if (todo == 0) return Defer;
+    if (todo == 0) return Advance;
     glUseProgram(program[arg->shader]);
     for (int i = 0; i < arg->feedback; i++) {
         size_t size = feedback[i]->dimn*bufferType(feedback[i]->type);
@@ -2784,11 +2723,6 @@ int *boundaryOk(int start, int count)
 int *faceValid(int start, int count)
 {
     return setupBuffer(start,count,&faceOk);
-}
-
-int boundaryCount()
-{
-    return classifyDone;
 }
 
 char *print(int size)
