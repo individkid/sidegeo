@@ -72,55 +72,55 @@ handleEvent = do
   5 -> return True
   _ -> return False
 
-chip :: Ptr CInt -> IO (Int, Ptr CInt)
-chip ptr = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
+chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
+chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
 
-peel :: Int -> Ptr CInt -> IO ([Int], Ptr CInt)
-peel len ptr = (peekArray len ptr) >>= (\x -> return (map fromIntegral x, plusPtr ptr len))
+peel :: (Int, Ptr CInt) -> (a, Ptr CInt) -> IO ([Int], Ptr CInt)
+peel (len,_) (_,ptr) = (peekArray len ptr) >>= (\x -> return (map fromIntegral x, plusPtr ptr len))
 
 cook :: [IO (a, Ptr CInt)] -> IO ([a], Ptr CInt)
 cook (elm:mid:lst) = elm >>= (\(x,_) -> (cook (mid:lst)) >>= (\(y,z) -> return (x:y,z)))
 cook [elm] = elm >>= (\(x,y) -> return ([x],y))
 cook [] = return undefined
 
-onion :: [Int] -> Ptr CInt -> IO ([[Int]], Ptr CInt)
-onion len ptr = cook (map (\x -> peel x ptr) len)
+onion :: ([Int], Ptr CInt) -> (a, Ptr CInt) -> IO ([[Int]], Ptr CInt)
+onion (len,_) (_,ptr) = cook (map (\x -> peel (x,ptr) (x,ptr)) len)
 
-patch :: [[Int]] -> Ptr CInt -> IO ([[[Int]]], Ptr CInt)
-patch len ptr = cook (map (\x -> onion x ptr) len)
+patch :: ([[Int]], Ptr CInt) -> (a, Ptr CInt) -> IO ([[[Int]]], Ptr CInt)
+patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 
 --num-places,[num-boundaries],[[boundary]],num-done,num-todo,[place-todo]--
 readSideband :: IO Sideband
-readSideband = (sidebandC 0) >>=
- chip >>= (\(places,placesPtr) -> return placesPtr >>=
- (peel places) >>= (\(boundaries,boundariesPtr) -> return boundariesPtr >>=
- (onion boundaries) >>= (\(boundary,boundaryPtr) -> return boundaryPtr >>=
- chip >>= (\(dones,donesPtr) -> return donesPtr >>=
- chip >>= (\(todos,todosPtr) -> return todosPtr >>=
- (peel todos) >>= (\(todo,_) -> 
- return (map2 Boundary boundary, Boundary dones, todo)))))))
+readSideband = (sidebandC 0) >>= (\ptr -> return (0::Int,ptr) >>=
+ chip >>= (\places -> return places >>=
+ (peel places) >>= (\boundaries -> return boundaries >>=
+ (onion boundaries) >>= (\boundary -> return boundary >>=
+ chip >>= (\dones -> return dones >>=
+ chip >>= (\todos -> return todos >>=
+ (peel todos) >>= (\todo ->
+ return (map2 Boundary (fst boundary), Boundary (fst dones), (fst todo)))))))))
 
 -- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
 --  [embeded-region-size],[[embeded-region]])
 readGeneric :: IO Generic
-readGeneric = (genericC 0) >>=
- chip >>= (\(places,placesPtr) -> return placesPtr >>=
- (peel places) >>= (\(boundaries,boundariesPtr) -> return boundariesPtr >>=
- (peel places) >>= (\(regions,regionsPtr) -> return regionsPtr >>=
- (onion boundaries) >>= (\(boundary,boundaryPtr) -> return boundaryPtr >>=
- (onion regions) >>= (\(_,regionPtr) -> return regionPtr >>=
- (onion boundaries) >>= (\(firsts,firstsPtr) -> return firstsPtr >>=
- (onion boundaries) >>= (\(seconds,secondsPtr) -> return secondsPtr >>=
- (patch firsts) >>= (\(first,firstPtr) -> return firstPtr >>=
- (patch seconds) >>= (\(second,secondPtr) -> return secondPtr >>=
- (peel places) >>= (\(embeds,embedsPtr) -> return embedsPtr >>=
- (onion embeds) >>= (\(embed,_) -> let
- w = map2 Boundary boundary
- x = map3 Region first
- y = map3 Region second
- z = map2 Region embed
- in return (zip (zipWith3 (zipWith3 readGenericF) w x y) z))))))))))))
+readGeneric = (genericC 0) >>= (\ptr -> return (0::Int,ptr) >>=
+ chip >>= (\places -> return places >>=
+ (peel places) >>= (\boundaries -> return boundaries >>=
+ (peel places) >>= (\regions -> return regions >>=
+ (onion boundaries) >>= (\boundary -> return boundary >>=
+ (onion regions) >>= (\region -> return region >>=
+ (onion boundaries) >>= (\firsts -> return firsts >>=
+ (onion boundaries) >>= (\seconds -> return seconds >>=
+ (patch firsts) >>= (\first -> return first >>=
+ (patch seconds) >>= (\second -> return second >>=
+ (peel places) >>= (\embeds -> return embeds >>=
+ (onion embeds) >>= (\embed -> let
+ w = map2 Boundary (fst boundary)
+ x = map3 Region (fst first)
+ y = map3 Region (fst second)
+ z = map2 Region (fst embed)
+ in return (zip (zipWith3 (zipWith3 readGenericF) w x y) z)))))))))))))
 
 readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
 readGenericF a b c = (a,[b,c])
