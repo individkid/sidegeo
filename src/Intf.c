@@ -2149,10 +2149,11 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     return Advance;
 }
 
-enum Action renderWait(struct Render *arg, struct Buffer **element, struct Buffer **feedback)
+enum Action renderWait(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
 {
     if (!arg->feedback) return Advance;
     if (arg->element && feedback[0]->done == element[0]->done) return Advance;
+    if (!arg->element && feedback[0]->done == vertex[0]->done) return Advance;
     GLuint count = 0;
     glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT_AVAILABLE, &count);
     if (count == GL_FALSE) count = 0;
@@ -2161,6 +2162,7 @@ enum Action renderWait(struct Render *arg, struct Buffer **element, struct Buffe
     if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = arg->draw;
     if (arg->element && arg->draw < element[0]->done) return Restart;
+    if (!arg->element && arg->draw < vertex[0]->done) return Restart;
     return Advance;
 }
 
@@ -2180,7 +2182,7 @@ void render()
         CASE(Advance) arg->state = RenderWait;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
-        SWITCH(renderWait(arg,buf+arg->vertex,buf+arg->vertex+arg->element),Restart) {
+        SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Restart) {
             arg->state = RenderEnqued;
             requeRender(); relocBuffer(size); REQUE(render)}
         CASE(Defer) {
@@ -2646,14 +2648,18 @@ void displayRefresh(GLFWwindow *window)
 int *generic(int size)
 {
     // if size is not zero, resize generic data
-    if (size) {delocGeneric(sizeGeneric()); enlocGeneric(size);}
+    if (size == 0) size = sizeGeneric();
+    if (size > sizeGeneric()) enlocGeneric(size-sizeGeneric());
+    if (size < sizeGeneric()) unlocGeneric(sizeGeneric()-size);
     return arrayGeneric();
 }
 
 int *sideband(int size)
 {
     // if size is not zero, resize sideband data
-    if (size) {delocSideband(sizeSideband()); enlocSideband(size);}
+    if (size == 0) size = sizeSideband();
+    if (size > sizeSideband()) enlocSideband(size-sizeSideband());
+    if (size < sizeSideband()) unlocSideband(sizeSideband()-size);
     return arraySideband();
 }
 
