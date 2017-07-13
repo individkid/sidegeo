@@ -104,9 +104,6 @@ pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 struct Strings filenames = {0}; // for config files
-struct Chars {DECLARE_QUEUE(char)} formats = {0};
- // from first line of history portion of config file
-struct Chars metrics = {0}; // animation if valid
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
@@ -247,7 +244,8 @@ struct Buffer sideSub = {0}; // per vertex prior planes
 struct Buffer halfSub = {0}; // per plane prior vertices
 struct Buffer planeOk = {0}; // per-plane valid flag
 struct Buffer faceOk = {0}; // per-face valid flag
-int classifyDone = 0; // number of classify events
+int classifyDone = 0; // number of points classifed
+int configDone = 0; // sides done when classify issued
 FILE *configFile = 0; // for appending generic deltas
 int configScan = 0; // whether arguments scanned
 char configCommand[20]; // --command from file
@@ -284,7 +282,7 @@ enum Event {
     Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-struct Chars chars = {0};
+struct Chars {DECLARE_QUEUE(char)} chars = {0};
  // for scratchpad and arguments
 struct Ints ints = {0};
  // for scratchpad and arguments
@@ -475,10 +473,6 @@ void exitErrstr(const char *fmt, ...)
 ACCESS_QUEUE(Option,char *,options)
 
 ACCESS_QUEUE(Filename,char *,filenames)
-
-ACCESS_QUEUE(Format,char,formats)
-
-ACCESS_QUEUE(Metric,char,metrics)
 
 ACCESS_QUEUE(Line,enum Menu,lines)
 
@@ -1752,8 +1746,6 @@ void finalize()
     if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
-    if (formats.base) {struct Chars initial = {0}; free(formats.base); formats = initial;}
-    if (metrics.base) {struct Chars initial = {0}; free(metrics.base); metrics = initial;}
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Ints initial = {0}; free(generics.base); generics = initial;}
@@ -1997,7 +1989,10 @@ enum Action loadFile()
             enqueErrstr("cannot scan config\n"); return Reque;}
         for (int i = 0; i < 3; i++) buffer[i] = configScalar[i];
         if (loadBuffer(&planeBuf,1,buffer) != 1) {configScan = 1; return Defer;} configScan = 0;
-        enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);}
+        enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);
+        if (configDone == sideSub.done) return Defer;
+        configDone = sideSub.done; MAYBE(classify,Classify)
+    }
     if (strcmp(configCommand,"--inflate") == 0) {
         if (sideBuf.done < sideSub.done) {configScan = 1; return Defer;} configScan = 0;
         enqueCommand(0); enqueEvent(Inflate);}
