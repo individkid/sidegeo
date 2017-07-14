@@ -1983,14 +1983,15 @@ enum Action loadFile()
         if (retval != EOF) enqueMsgstr("cannot scan config\n"); return Advance;}
     if (strcmp(configCommand,"--plane") == 0) {
         GLfloat buffer[3];
+        GLuint valid[1];
         if (!configScan && fscanf(configFile, "%d %f %f %f", &configIndex, configScalar+0, configScalar+1, configScalar+2) != 4) {
-            enqueErrstr("cannot scan config\n"); return Reque;}
-        for (int i = 0; i < 3; i++) buffer[i] = configScalar[i];
-        if (loadBuffer(&planeBuf,1,buffer) != 1) {configScan = 1; return Defer;} configScan = 0;
+            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
+        for (int i = 0; i < 3; i++) buffer[i] = configScalar[i]; valid[0] = 1;
+        if (loadBuffer(&planeBuf,1,buffer) != 1) return Defer;
+        if (loadBuffer(&planeOk,1,valid) != 1) return Defer;
         enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);
         if (configDone == sideSub.done) return Defer;
-        configDone = sideSub.done; MAYBE(classify,Classify)
-    }
+        configScan = 0; configDone = sideSub.done; MAYBE(classify,Classify)}
     if (strcmp(configCommand,"--inflate") == 0) {
         if (sideBuf.done < sideSub.done) {configScan = 1; return Defer;} configScan = 0;
         enqueCommand(0); enqueEvent(Inflate);}
