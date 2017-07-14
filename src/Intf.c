@@ -1846,10 +1846,10 @@ void classify()
 {
     CHECK(classify,Classify)
     if (pointBuf.done < pointSub.done) enqueShader(Coplane);
-    if (sideBuf.done < sideSub.done && classifyDone < pointBuf.done && !started[Adplane]) {
+    if (classifyDone < pointBuf.done && !started[Adplane]) {
         GLfloat buffer[pointBuf.dimn];
         int size = pointBuf.dimn*bufferType(pointBuf.type);
-        sideSub.done = sideSub.done;
+        if (sideBuf.done >= sideSub.done) exitErrstr("classify too done\n");
         glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
         glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, buffer);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -1950,8 +1950,6 @@ enum Action bringup()
     bringupBuffer(&planeOk,1,NUM_PLANES,ok);
     bringupBuffer(&faceOk,1,NUM_FACES,valid);
  
-    MAYBE(classify,Classify)
-
     if (planeBuf.done < NUM_PLANES) return Reque;
     if (versorBuf.done < NUM_PLANES) return Reque;
     if (faceSub.done < NUM_FACES) return Reque;
@@ -2731,18 +2729,18 @@ char *print(int size)
     return enlocPrint(size);
 }
 
-int event()
+char *event()
 {
-    if (!validEvent()) return -1;
+    if (!validEvent()) return (char *)"";
     enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Plane) return 0;
-    CASE(Inflate) return 1;
-    CASE(Fill) return 2;
-    CASE(Hollow) return 3;
-    CASE(Error) return 4;
-    CASE(Done) return 5;
+    SWITCH(event,Plane) return (char *)"Plane";
+    CASE(Inflate) return (char *)"Inflate";
+    CASE(Fill) return (char *)"Fill";
+    CASE(Hollow) return (char *)"Hollow";
+    CASE(Error) return (char *)"Error";
+    CASE(Done) return (char *)"Done";
     DEFAULT({exitErrstr("invalid event\n");})
-    return -1;
+    return (char *)"";
 }
 
 int intArgument()

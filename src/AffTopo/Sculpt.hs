@@ -18,7 +18,6 @@
 
 module AffTopo.Sculpt where
 
--- import Foreign.Ptr
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.C.Types
@@ -27,7 +26,7 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
-type Sideband = ([[Boundary]],Boundary,[Int])
+type Sideband = ([Int],[Int],[Int],Int,[Int])
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
@@ -38,11 +37,8 @@ foreign import ccall "boundaryWrt" boundaryWrtC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaryOk" boundaryOkC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "faceValid" faceValidC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
-foreign import ccall "event" eventC :: IO CInt
+foreign import ccall "event" eventC :: IO (Ptr CChar)
 foreign import ccall "intArgument" intArgumentC :: IO CInt
-
-removeMe :: [Side]
-removeMe = allSides
 
 printStr :: [Char] -> IO ()
 printStr str = do
@@ -51,25 +47,36 @@ printStr str = do
 
 handleEvent :: IO Bool
 handleEvent = do
- event <- eventC
+ event <- (eventC >>= peekCString)
  case event of
-  0 -> do
-   printStr "plane\n"
+  "Plane" -> do
+   index <- intArgumentC
+   -- call readSideband for current number of boundaries, points, point classifications
+   -- find number of new points for new boundary in indicated place
+   -- for number of new point classifications,
+   --  multiply number of new points by current number of planes
+   -- request pointSub of new size, and append starting at current size
+   -- request sideSub of new size, and append starting at current size
+   -- append indicated to todo, change points and classifications
+   -- call writeSideband with changed sideband
+   printStr (concat ["plane ",(show index),"\n"])
    return False
-  1 -> do
+  "Inflate" -> do
    printStr "inflate\n"
    return False
-  2 -> do
+  "Fill" -> do
    face <- intArgumentC
    printStr (concat ["fill ",(show face),"\n"])
    return False
-  3 -> do
+  "Hollow" -> do
    face <- intArgumentC
    printStr (concat ["hollow ",(show face),"\n"])
    return False
-  4 -> return True
-  5 -> return True
-  _ -> return False
+  "Error" -> return True
+  "Done" -> return True
+  _ -> do
+   printStr (concat ["unknown event ",(show event),"\n"])
+   return True
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
@@ -91,17 +98,18 @@ patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 jump :: a -> (a -> b) -> b
 jump a f = f a
 
---num-places,[num-boundaries],[[boundary]],num-done,num-todo,[place-todo]--
+--num-places,[num-boundaries],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
 readSideband :: IO Sideband
 readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
  (peel places) >>= (\boundaries -> jump boundaries
- (onion boundaries) >>= (\boundary -> jump boundary
+ (peel places) >>= (\points -> jump points
+ (peel places) >>= (\classifications -> jump classifications
  chip >>= (\dones -> jump dones
  chip >>= (\todos -> jump todos
  (peel todos) >>= (\todo ->
- return (map2 Boundary (fst boundary), Boundary (fst dones), (fst todo))
- )))))))
+ return ((fst boundaries), (fst points), (fst classifications), (fst dones), (fst todo))
+ ))))))))
 
 -- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
@@ -178,21 +186,19 @@ writeGenericF a = fold' (+) (map length a) 0
 writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
 
---type Sideband = ([[Boundary]],Boundary,[Int])
---num-places,[num-boundaries],[[boundary]],num-done,num-todo,[place-todo]--
+-- type Sideband = ([Int],[Int],[Int],Int,[Int])
+--num-places,[num-boundaries],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
 writeSideband :: Sideband -> IO (Ptr CInt)
-writeSideband (a,b,c) = let
+writeSideband (a,b,c,d,e) = let
  places = length a
- boundaries = map length a
- boundary = map2 (\(Boundary x) -> x) a
- dones = (\(Boundary x) -> x) b
- todos = length c
- size = 1 + places + (writeGenericF a) + 2 + todos
+ todos = length e
+ size = 1 + places + places + places + 1 + 1 + todos
  in (sidebandC (fromIntegral size)) >>=
  (paste places) >>=
- (cover boundaries) >>=
- (layer boundary) >>=
- (paste dones) >>=
+ (cover a) >>=
+ (cover b) >>=
+ (cover c) >>=
+ (paste d) >>=
  (paste todos) >>=
- (cover c)
+ (cover e)
 
