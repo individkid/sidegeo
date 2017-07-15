@@ -58,20 +58,13 @@ handleEvent :: IO Bool
 handleEvent = do
  event <- (eventC >>= peekCString)
  case event of
-  "Plane" -> do
-   index <- intArgumentC >>= (return . fromIntegral)
-   (boundary,points,classifications,done,todo) <- readSideband
-   -- ([[boundary]],[num-points],[num-classifications],num-done,[place-todo])
-   let newBoundary = inplace (\x -> concat [x,[done]]) index boundary
-   let boundaries = length (boundary !! index)
-   let newPoints = inplace (\x -> x + (boundaries * (boundaries-1))) index points
-   let newClassifications = inplace (\x -> x + (boundaries * (boundaries-1) * (boundaries-2))) index classifications
-   let newDone = done + 1
-   let newTodo = concat [todo,[index]]
-   -- request pointSub of new size, and append starting at current size
-   -- request sideSub of new size, and append starting at current size
-   _ <- writeSideband (newBoundary,newPoints,newClassifications,newDone,newTodo)
-   printStr (concat ["plane ",(show index),"\n"])
+  "Plane" ->
+   intArgumentC >>=
+   (return . fromIntegral) >>= (\index ->
+   readSideband >>=
+   (handleEventF index)) >>=
+   writeSideband >>
+   printStr (concat ["plane\n"]) >>
    return False
   "Inflate" -> do
    printStr "inflate\n"
@@ -89,6 +82,30 @@ handleEvent = do
   _ -> do
    printStr (concat ["unknown event ",(show event),"\n"])
    return True
+
+handleEventF :: Int -> Sideband -> IO Sideband
+handleEventF index (boundary,points,classifications,done,todo) = let
+ newBoundary = inplace (\x -> concat [x,[done]]) index boundary
+ boundaries = length (boundary !! index)
+ newPoints = inplace (\x -> x + (boundaries * (boundaries-1))) index points
+ newClassifications = inplace (\x -> x + (boundaries * (boundaries-1) * (boundaries-2))) index classifications
+ newDone = done + 1
+ newTodo = concat [todo,[index]]
+ selected = (boundary !! index)
+ ordered = map (done:) (subsets 2 selected)
+ removed = map (selected \\) ordered
+ point = map fromIntegral (concat ordered)
+ classification = map fromIntegral (concat removed)
+ pointPtr :: IO (Ptr CInt)
+ pointPtr = pointC (fromIntegral (points !! index)) (fromIntegral (newPoints !! index))
+ classificationPtr :: IO (Ptr CInt)
+ classificationPtr = boundaryWrtC (fromIntegral (classifications !! index)) (fromIntegral (newClassifications !! index))
+ in pointPtr >>= (handleEventG point) >>
+ classificationPtr >>= (handleEventG classification) >>
+ return (newBoundary,newPoints,newClassifications,newDone,newTodo)
+
+handleEventG :: [CInt] -> Ptr CInt -> IO ()
+handleEventG list ptr = pokeArray ptr list
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
