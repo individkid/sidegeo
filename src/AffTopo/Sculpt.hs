@@ -26,7 +26,8 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
-type Sideband = ([Int],[Int],[Int],Int,[Int])
+type Sideband = ([[Int]],[Int],[Int],Int,[Int])
+ -- ([[boundary]],[num-points],[num-classifications],num-done,[place-todo])
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
@@ -45,20 +46,31 @@ printStr str = do
  ptr <- printC (fromIntegral (length str))
  pokeArray ptr (map castCharToCChar str)
 
+inplace :: (a -> a) -> Int -> [a] -> [a]
+inplace f i a = map (inplaceF f i) (zip (iterate (1+) 0) a)
+
+inplaceF :: (a -> a) -> Int -> (Int, a) -> a
+inplaceF f i (j, a)
+ | i == j = f a
+ | otherwise = a
+
 handleEvent :: IO Bool
 handleEvent = do
  event <- (eventC >>= peekCString)
  case event of
   "Plane" -> do
-   index <- intArgumentC
-   -- call readSideband for current number of boundaries, points, point classifications
-   -- find number of new points for new boundary in indicated place
-   -- for number of new point classifications,
-   --  multiply number of new points by current number of planes
+   index <- intArgumentC >>= (return . fromIntegral)
+   (boundary,points,classifications,done,todo) <- readSideband
+   -- ([[boundary]],[num-points],[num-classifications],num-done,[place-todo])
+   let newBoundary = inplace (\x -> concat [x,[done]]) index boundary
+   let boundaries = length (boundary !! index)
+   let newPoints = inplace (\x -> x + (boundaries * (boundaries-1))) index points
+   let newClassifications = inplace (\x -> x + (boundaries * (boundaries-1) * (boundaries-2))) index classifications
+   let newDone = done + 1
+   let newTodo = concat [todo,[index]]
    -- request pointSub of new size, and append starting at current size
    -- request sideSub of new size, and append starting at current size
-   -- append indicated to todo, change points and classifications
-   -- call writeSideband with changed sideband
+   _ <- writeSideband (newBoundary,newPoints,newClassifications,newDone,newTodo)
    printStr (concat ["plane ",(show index),"\n"])
    return False
   "Inflate" -> do
@@ -98,18 +110,19 @@ patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 jump :: a -> (a -> b) -> b
 jump a f = f a
 
---num-places,[num-boundaries],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
 readSideband :: IO Sideband
 readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
  (peel places) >>= (\boundaries -> jump boundaries
+ (onion boundaries) >>= (\boundary -> jump boundary
  (peel places) >>= (\points -> jump points
  (peel places) >>= (\classifications -> jump classifications
  chip >>= (\dones -> jump dones
  chip >>= (\todos -> jump todos
  (peel todos) >>= (\todo ->
- return ((fst boundaries), (fst points), (fst classifications), (fst dones), (fst todo))
- ))))))))
+ return ((fst boundary), (fst points), (fst classifications), (fst dones), (fst todo))
+ )))))))))
 
 -- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
@@ -186,16 +199,18 @@ writeGenericF a = fold' (+) (map length a) 0
 writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
 
--- type Sideband = ([Int],[Int],[Int],Int,[Int])
---num-places,[num-boundaries],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
+-- type Sideband = ([[Int]],[Int],[Int],Int,[Int])
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
 writeSideband :: Sideband -> IO (Ptr CInt)
 writeSideband (a,b,c,d,e) = let
  places = length a
+ boundaries = map length a
  todos = length e
  size = 1 + places + places + places + 1 + 1 + todos
  in (sidebandC (fromIntegral size)) >>=
  (paste places) >>=
- (cover a) >>=
+ (cover boundaries) >>=
+ (layer a) >>=
  (cover b) >>=
  (cover c) >>=
  (paste d) >>=
