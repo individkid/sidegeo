@@ -1986,7 +1986,7 @@ enum Action loadFile()
 #endif
     int retval = 0;
     if (!configScan && (retval = fscanf(configFile," %19s",configCommand)) != 1) {
-        if (retval != EOF) enqueMsgstr("cannot scan config\n"); return Advance;}
+        if (retval != EOF) enqueMsgstr("cannot scan config\n"); return Reque;}
     if (strcmp(configCommand,"--plane") == 0) {
         GLfloat buffer[3];
         GLuint valid[1];
@@ -1999,16 +1999,18 @@ enum Action loadFile()
         if (configDone == sideSub.done) return Defer;
         configScan = 0; configDone = sideSub.done; MAYBE(classify,Classify)}
     if (strcmp(configCommand,"--inflate") == 0) {
-        if (sideBuf.done < sideSub.done) {configScan = 1; return Defer;} configScan = 0;
-        enqueCommand(0); enqueEvent(Inflate);}
+        if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
+            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
+        if (sideBuf.done < sideSub.done) return Defer;
+        configScan = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(configIndex);}
     if (strcmp(configCommand,"--fill") == 0) {
         if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
-            enqueErrstr("cannot scan config\n"); return Reque;}
-        enqueCommand(0); enqueEvent(Fill); enqueInt(configIndex);}
+            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
+        configScan = 0; enqueCommand(0); enqueEvent(Fill); enqueInt(configIndex);}
     if (strcmp(configCommand,"--hollow") == 0) {
         if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
-            enqueErrstr("cannot scan config\n"); return Reque;}
-        enqueCommand(0); enqueEvent(Hollow); enqueInt(configIndex);}
+            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
+        configScan = 0; enqueCommand(0); enqueEvent(Hollow); enqueInt(configIndex);}
     return Reque;
 }
 
@@ -2113,7 +2115,7 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (arg->feedback) done = feedback[0]->done;
     if (arg->element) todo = element[0]->done - done;
     else if (arg->vertex) todo = vertex[0]->done - done;
-    if (limit[arg->shader] > 0 && limit[arg->shader] < todo) todo = limit[arg->shader];
+    if (limit[arg->shader] > 0 && limit[arg->shader] - done < todo) todo = limit[arg->shader] - done;
     if (todo < 0) exitErrstr("%s too todo\n",arg->name);
     if (todo == 0) return Advance;
     glUseProgram(program[arg->shader]);
