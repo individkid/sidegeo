@@ -146,6 +146,7 @@ GLint uniform[Shaders][Uniforms] = {0};
 GLuint program[Shaders] = {0};
 int input[Shaders] = {0};
 int output[Shaders] = {0};
+int limit[Shaders] = {0};
 int started[Shaders] = {0};
 int restart[Shaders] = {0};
 int ready[Shaders] = {0};
@@ -211,6 +212,7 @@ float slope = 0;
 float aspect = 0;
 struct Ints generics = {0};
 struct Ints sidebands = {0};
+struct Ints correlates = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -481,6 +483,8 @@ ACCESS_QUEUE(Match,int,matchs)
 ACCESS_QUEUE(Generic,int,generics)
 
 ACCESS_QUEUE(Sideband,int,sidebands)
+
+ACCESS_QUEUE(Correlate,int,correlates)
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -1750,6 +1754,7 @@ void finalize()
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Ints initial = {0}; free(generics.base); generics = initial;}
     if (sidebands.base) {struct Ints initial = {0}; free(sidebands.base); sidebands = initial;}
+    if (correlates.base) {struct Ints initial = {0}; free(correlates.base); correlates = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -1857,6 +1862,7 @@ void classify()
         glUniform3f(uniform[Adplane][Feather],buffer[0],buffer[1],buffer[2]);
         glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
         glUseProgram(0);
+        limit[Adplane] = arrayCorrelate()[classifyDone];
         enqueShader(Adplane);
         classifyDone++;}
     if (sideBuf.done < sideSub.done) {DEFER(classify)}
@@ -2107,6 +2113,7 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (arg->feedback) done = feedback[0]->done;
     if (arg->element) todo = element[0]->done - done;
     else if (arg->vertex) todo = vertex[0]->done - done;
+    if (limit[arg->shader] > 0 && limit[arg->shader] < todo) todo = limit[arg->shader];
     if (todo < 0) exitErrstr("%s too todo\n",arg->name);
     if (todo == 0) return Advance;
     glUseProgram(program[arg->shader]);
@@ -2655,6 +2662,15 @@ int *sideband(int size)
     if (size > sizeSideband()) enlocSideband(size-sizeSideband());
     if (size < sizeSideband()) unlocSideband(sizeSideband()-size);
     return arraySideband();
+}
+
+int *correlate(int size)
+{
+    // if size is not zero, resize correlate data
+    if (size == 0) size = sizeCorrelate();
+    if (size > sizeCorrelate()) enlocCorrelate(size-sizeCorrelate());
+    if (size < sizeCorrelate()) unlocCorrelate(sizeCorrelate()-size);
+    return arrayCorrelate();
 }
 
 int *getBuffer(struct Buffer *buffer)

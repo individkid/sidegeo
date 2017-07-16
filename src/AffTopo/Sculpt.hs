@@ -26,11 +26,12 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
-type Sideband = ([[Int]],[Int],[Int],Int,[Int])
- -- ([[boundary]],[num-points],[num-classifications],num-done,[place-todo])
+type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int])
+ -- ([[boundary]],[num-points],[num-classifications],[num-correlates],num-done,[place-todo])
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
+foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
 foreign import ccall "side" sideC :: IO (Ptr CInt)
 foreign import ccall "face" faceC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "point" pointC :: CInt -> CInt -> IO (Ptr CInt)
@@ -84,31 +85,41 @@ handleEvent = do
    return True
 
 handleEventF :: Int -> Sideband -> IO Sideband
-handleEventF index (boundary,points,classes,done,todo) = let
+handleEventF index (boundary,points,classes,relates,done,todo) = let
  inboundary = boundary !! index
  inpoints = points !! index
  inclasses = classes !! index
+ inrelates = relates !! index
+ inboundaries = length inboundary
  point = map (done:) (subsets 2 inboundary)
  classify = map (inboundary \\) point
+ relate = map (\_ -> inboundaries) point
  pointed = map fromIntegral (concat point)
  classified = map fromIntegral (concat classify)
+ related = map fromIntegral relate
  newInboundary = inboundary `append` [done]
  newInpoints = inpoints + (length pointed)
  newInclasses = inclasses + (length classified)
+ newInrelates = inrelates + (length related)
  newBoundary = replace index newInboundary boundary
  newPoints = replace index newInpoints points
  newClasses = replace index newInclasses classes
+ newRelates = replace index newInrelates relates
  newDone = done + 1
  newTodo = concat [todo,[index]]
  inpointed = fromIntegral inpoints
  inclassified = fromIntegral inclasses
+ inrelated = fromIntegral inrelates
  newInpointed = fromIntegral newInpoints
  newInclassified = fromIntegral newInclasses
+ newInrelated = fromIntegral newInrelates
  pointPtr = pointC inpointed newInpointed
  classifyPtr = boundaryWrtC inclassified newInclassified
+ relatePtr = (correlateC newInrelated) >>= (\x -> return (plusPtr x inrelated))
  in pointPtr >>= (handleEventG pointed) >>
  classifyPtr >>= (handleEventG classified) >>
- return (newBoundary,newPoints,newClasses,newDone,newTodo)
+ relatePtr >>= (handleEventG related) >>
+ return (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo)
 
 handleEventG :: [CInt] -> Ptr CInt -> IO ()
 handleEventG list ptr = pokeArray ptr list
@@ -133,7 +144,7 @@ patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 jump :: a -> (a -> b) -> b
 jump a f = f a
 
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
 readSideband :: IO Sideband
 readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
@@ -141,11 +152,12 @@ readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  (onion boundaries) >>= (\boundary -> jump boundary
  (peel places) >>= (\points -> jump points
  (peel places) >>= (\classifications -> jump classifications
+ (peel places) >>= (\correlates -> jump correlates
  chip >>= (\dones -> jump dones
  chip >>= (\todos -> jump todos
  (peel todos) >>= (\todo ->
- return ((fst boundary), (fst points), (fst classifications), (fst dones), (fst todo))
- )))))))))
+ return ((fst boundary), (fst points), (fst classifications), (fst correlates), (fst dones), (fst todo))
+ ))))))))))
 
 -- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
@@ -222,21 +234,21 @@ writeGenericF a = fold' (+) (map length a) 0
 writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
 
--- type Sideband = ([[Int]],[Int],[Int],Int,[Int])
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],num-done,num-todo,[place-todo]--
+-- type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int])
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
 writeSideband :: Sideband -> IO (Ptr CInt)
-writeSideband (a,b,c,d,e) = let
+writeSideband (a,b,c,d,e,f) = let
  places = length a
  boundaries = map length a
- todos = length e
- size = 1 + places + places + places + 1 + 1 + todos
+ todos = length f
+ size = 1 + places + places + places + places + 1 + 1 + todos
  in (sidebandC (fromIntegral size)) >>=
  (paste places) >>=
  (cover boundaries) >>=
  (layer a) >>=
  (cover b) >>=
  (cover c) >>=
- (paste d) >>=
+ (cover d) >>=
+ (paste e) >>=
  (paste todos) >>=
- (cover e)
-
+ (cover f)
