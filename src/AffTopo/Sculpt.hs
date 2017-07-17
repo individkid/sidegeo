@@ -60,28 +60,27 @@ handleEvent = do
  event <- (eventC >>= peekCString)
  case event of
   "Plane" ->
-   intArgumentC >>=
-   (return . fromIntegral) >>= (\index ->
-   readSideband >>=
-   (handleEventF index)) >>=
+   handleEventF <$> handleEventH <*> readSideband >>= id >>=
    writeSideband >>
-   printStr (concat ["plane\n"]) >>
+   printStr "plane\n" >>
    return False
-  "Inflate" -> do
-   printStr "inflate\n"
+  "Inflate" ->
+   handleEventG <$> handleEventH <*> readSideband <*> readGeneric >>= id >>=
+   (handleEventI writeSideband writeGeneric) >>
+   printStr "inflate\n" >>
    return False
-  "Fill" -> do
-   face <- intArgumentC
-   printStr (concat ["fill ",(show face),"\n"])
-   return False
-  "Hollow" -> do
-   face <- intArgumentC
-   printStr (concat ["hollow ",(show face),"\n"])
-   return False
+  "Fill" ->
+   handleEventH >>= (\face ->
+   printStr (concat ["fill ",(show face),"\n"]) >>
+   return False)
+  "Hollow" ->
+   handleEventH >>= (\face ->
+   printStr (concat ["hollow ",(show face),"\n"]) >>
+   return False)
   "Error" -> return True
   "Done" -> return True
-  _ -> do
-   printStr (concat ["unknown event ",(show event),"\n"])
+  _ ->
+   printStr (concat ["unknown event ",(show event),"\n"]) >>
    return True
 
 handleEventF :: Int -> Sideband -> IO Sideband
@@ -106,7 +105,7 @@ handleEventF index (boundary,points,classes,relates,done,todo) = let
  newClasses = replace index newInclasses classes
  newRelates = replace index newInrelates relates
  newDone = done + 1
- newTodo = concat [todo,[index]]
+ newTodo = todo `append` [index]
  inpointed = fromIntegral inpoints
  inclassified = fromIntegral inclasses
  inrelated = fromIntegral inrelates
@@ -116,13 +115,22 @@ handleEventF index (boundary,points,classes,relates,done,todo) = let
  pointPtr = pointC inpointed newInpointed
  classifyPtr = boundaryWrtC inclassified newInclassified
  relatePtr = (correlateC newInrelated) >>= (\x -> return (plusPtr x inrelated))
- in pointPtr >>= (handleEventG pointed) >>
- classifyPtr >>= (handleEventG classified) >>
- relatePtr >>= (handleEventG related) >>
+ in (pointPtr >>= (handleEventJ pointed)) >>
+ classifyPtr >>= (handleEventJ classified) >>
+ relatePtr >>= (handleEventJ related) >>
  return (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo)
 
-handleEventG :: [CInt] -> Ptr CInt -> IO ()
-handleEventG list ptr = pokeArray ptr list
+handleEventG :: Int -> Sideband -> Generic -> IO (Sideband,Generic)
+handleEventG = undefined
+
+handleEventH :: IO Int
+handleEventH = intArgumentC >>= (return . fromIntegral)
+
+handleEventI :: (a -> IO c) -> (b -> IO d) -> (a,b) -> IO ()
+handleEventI f g (a,b) = f a >> g b >> return ()
+
+handleEventJ :: [CInt] -> Ptr CInt -> IO ()
+handleEventJ list ptr = pokeArray ptr list
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
