@@ -65,7 +65,7 @@ handleEvent = do
    printStr "plane\n" >>
    return False
   "Inflate" ->
-   handleEventG <$> handleEventH <*> readSideband <*> readGeneric >>= id >>=
+   handleEventG <$> readSideband <*> readGeneric >>= id >>=
    (handleEventI writeSideband writeGeneric) >>
    printStr "inflate\n" >>
    return False
@@ -120,14 +120,18 @@ handleEventF index (boundary,points,classes,relates,done,todo) = let
  relatePtr >>= (handleEventJ related) >>
  return (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo)
 
-handleEventG :: Int -> Sideband -> Generic -> IO (Sideband,Generic)
+handleEventG :: Sideband -> Generic -> IO (Sideband,Generic)
 handleEventG = undefined
+-- extract sideband for todo indexes.
+-- extract generic for places
+-- add boundary to indexed place according to side
+-- find faces between inside and outside regions
 
 handleEventH :: IO Int
 handleEventH = intArgumentC >>= (return . fromIntegral)
 
-handleEventI :: (a -> IO c) -> (b -> IO d) -> (a,b) -> IO ()
-handleEventI f g (a,b) = f a >> g b >> return ()
+handleEventI :: (a -> IO c) -> (b -> IO d) -> (a,b) -> IO (c,d)
+handleEventI f g (a,b) = f a >>= (\c -> g b >>= (\d -> return (c,d)))
 
 handleEventJ :: [CInt] -> Ptr CInt -> IO ()
 handleEventJ list ptr = pokeArray ptr list
