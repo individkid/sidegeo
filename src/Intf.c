@@ -212,6 +212,7 @@ float slope = 0;
 float aspect = 0;
 struct Ints generics = {0};
 struct Ints sidebands = {0};
+struct Ints pendings = {0};
 struct Ints correlates = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
@@ -483,6 +484,8 @@ ACCESS_QUEUE(Match,int,matchs)
 ACCESS_QUEUE(Generic,int,generics)
 
 ACCESS_QUEUE(Sideband,int,sidebands)
+
+ACCESS_QUEUE(Pending,int,pendings)
 
 ACCESS_QUEUE(Correlate,int,correlates)
 
@@ -2664,6 +2667,15 @@ int *sideband(int size)
     if (size > sizeSideband()) enlocSideband(size-sizeSideband());
     if (size < sizeSideband()) unlocSideband(sizeSideband()-size);
     return arraySideband();
+}
+
+int *pending(int size)
+{
+    // if size is not zero, resize pending data
+    if (size == 0) size = sizePending();
+    if (size > sizePending()) enlocPending(size-sizePending());
+    if (size < sizePending()) unlocPending(sizePending()-size);
+    return arrayPending();
 }
 
 int *correlate(int size)
