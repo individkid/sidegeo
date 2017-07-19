@@ -26,21 +26,19 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
-type Sideband = ([[Int]],[Int],[Int],[Int])
- -- ([[boundary]],[num-points],[num-classifications],[num-correlates])
-type Pending = (Int,[Int])
- -- (num-done,[place-todo])
+type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int])
+ -- ([[boundary]],[num-points],[num-classifications],[num-correlates],num-done,[place-todo])
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
-foreign import ccall "pending" pendingC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
-foreign import ccall "side" sideC :: IO (Ptr CInt)
-foreign import ccall "face" faceC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "point" pointC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "boundaryWrt" boundaryWrtC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "boundaryOk" boundaryOkC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "faceValid" faceValidC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
+foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
+foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writePointSub" writePointSubC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writeSideSub" writeSideSubC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writePlaneOk" writePlaneOkC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writeFaceOk" writeFaceOkC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO (Ptr CChar)
 foreign import ccall "intArgument" intArgumentC :: IO CInt
@@ -63,21 +61,19 @@ handleEvent = do
  event <- (eventC >>= peekCString)
  case event of
   "Plane" ->
-   handleEventF <$> handleEventX <*> readSideband <*> readPending >>= id >>=
-   (handleEventY writeSideband writePending) >>
+   handlePlane >>
    printStr "plane\n" >>
    return False
   "Inflate" ->
-   handleEventG <$> handleEventX <*> readPending <*> readGeneric >>= id >>=
-   (handleEventY writePending writeGeneric) >>
+   handleInflate >>
    printStr "inflate\n" >>
    return False
   "Fill" ->
-   handleEventX >>= (\face ->
+   handleEventF >>= (\face ->
    printStr (concat ["fill ",(show face),"\n"]) >>
    return False)
   "Hollow" ->
-   handleEventX >>= (\face ->
+   handleEventF >>= (\face ->
    printStr (concat ["hollow ",(show face),"\n"]) >>
    return False)
   "Error" -> return True
@@ -86,8 +82,16 @@ handleEvent = do
    printStr (concat ["unknown event ",(show event),"\n"]) >>
    return True
 
-handleEventF :: Int -> Sideband -> Pending -> IO (Sideband,Pending)
-handleEventF index (boundary,points,classes,relates) (done,todo) = let
+handleEventF :: IO Int
+handleEventF = intArgumentC >>= (return . fromIntegral)
+
+handleEventG :: [CInt] -> Ptr CInt -> IO ()
+handleEventG list ptr = pokeArray ptr list
+
+handlePlane :: IO ()
+handlePlane =
+ handleEventF >>= (\index ->
+ readSideband >>= (\(boundary,points,classes,relates,done,todo) -> let
  inboundary = boundary !! index
  inpoints = points !! index
  inclasses = classes !! index
@@ -115,33 +119,34 @@ handleEventF index (boundary,points,classes,relates) (done,todo) = let
  newInpointed = fromIntegral newInpoints
  newInclassified = fromIntegral newInclasses
  newInrelated = fromIntegral newInrelates
- pointPtr = pointC inpointed newInpointed
- classifyPtr = boundaryWrtC inclassified newInclassified
- relatePtr = (correlateC newInrelated) >>= (\x -> return (plusPtr x inrelated))
- in (pointPtr >>= (handleEventZ pointed)) >>
- classifyPtr >>= (handleEventZ classified) >>
- relatePtr >>= (handleEventZ related) >>
- return ((newBoundary,newPoints,newClasses,newRelates),(newDone,newTodo))
+ in writePointSubC inpointed newInpointed >>= handleEventG pointed >>
+ writeSideSubC inclassified newInclassified >>= handleEventG classified >>
+ correlateC newInrelated >>= (\x -> handleEventG related (plusPtr x inrelated)) >>
+ writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo) >>
+ return ()
+ ))
 
-handleEventG :: Int -> Pending -> Generic -> IO (Pending,Generic)
-handleEventG = undefined
--- handleEventG index (done,todo) generic = let
---  (place,embed) = unzip generic
---  newPlace = fold' handleEventH todo (place, (done - (length todo)))
---  newEmbed = fold' handleEventI newPlace)
--- extract sideband for todo indexes.
--- extract generic for places
--- add boundary to indexed place according to side
--- find faces between inside and outside regions
+handleInflate :: IO ()
+handleInflate =
+ handleEventF >>= (\index ->
+ readGeneric >>= (\generic ->
+ readSideband >>= (\(_,_,_,_,done,todo) -> let
+ (generic1,_) = fold' handleInflateF todo (generic, (done - (length todo)))
+ (inplace1,_) = generic1 !! index
+ (inboundary1,inspace1) = unzipPlace inplace1
+ inregions1 = regionsOfSpace inspace1
+ inembed1 = filter (\x -> oppositeOfRegionExists inboundary1 x inspace1) inregions1
+ generic2 = replace index (inplace1,inembed1) generic1
+ -- extract sideband for todo indexes.
+ -- extract generic for places
+ -- add boundary to indexed place according to side
+ -- find faces between inside and outside regions
+ in writeGeneric generic2 >>
+ return ()
+ )))
 
-handleEventX :: IO Int
-handleEventX = intArgumentC >>= (return . fromIntegral)
-
-handleEventY :: (a -> IO c) -> (b -> IO d) -> (a,b) -> IO (c,d)
-handleEventY f g (a,b) = f a >>= (\c -> g b >>= (\d -> return (c,d)))
-
-handleEventZ :: [CInt] -> Ptr CInt -> IO ()
-handleEventZ list ptr = pokeArray ptr list
+handleInflateF :: Int -> (Generic, Int) -> (Generic, Int)
+handleInflateF = undefined
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
@@ -163,16 +168,7 @@ patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 jump :: a -> (a -> b) -> b
 jump a f = f a
 
---num-done,num-todo,[place-todo]--
-readPending :: IO Pending
-readPending = (pendingC 0) >>= (\ptr -> jump (0::Int,ptr)
- chip >>= (\dones -> jump dones
- chip >>= (\todos -> jump todos
- (peel todos) >>= (\todo ->
- return ((fst dones), (fst todo))
- ))))
-
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates]--
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
 readSideband :: IO Sideband
 readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
@@ -180,9 +176,12 @@ readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  (onion boundaries) >>= (\boundary -> jump boundary
  (peel places) >>= (\points -> jump points
  (peel places) >>= (\classifications -> jump classifications
- (peel places) >>= (\correlates ->
- return ((fst boundary), (fst points), (fst classifications), (fst correlates))
- )))))))
+ (peel places) >>= (\correlates -> jump correlates
+ chip >>= (\dones -> jump dones
+ chip >>= (\todos -> jump todos
+ (peel todos) >>= (\todo ->
+ return ((fst boundary), (fst points), (fst classifications), (fst correlates), (fst dones), (fst todo))
+ ))))))))))
 
 -- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
@@ -259,28 +258,21 @@ writeGenericF a = fold' (+) (map length a) 0
 writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
 
--- type Sideband = ([[Int]],[Int],[Int],[Int])
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates]--
+-- type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int])
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
 writeSideband :: Sideband -> IO (Ptr CInt)
-writeSideband (a,b,c,d) = let
+writeSideband (a,b,c,d,e,f) = let
  places = length a
  boundaries = map length a
- size = 1 + places + places + places + places
+ todos = length f
+ size = 1 + places + places + places + places + 1 + 1 + todos
  in (sidebandC (fromIntegral size)) >>=
  (paste places) >>=
  (cover boundaries) >>=
  (layer a) >>=
  (cover b) >>=
  (cover c) >>=
- (cover d)
-
--- type Sideband = (Int,[Int])
---num-done,num-todo,[place-todo]--
-writePending :: Pending -> IO (Ptr CInt)
-writePending (e,f) = let
- todos = length f
- size = 1 + 1 + todos
- in (pendingC (fromIntegral size)) >>=
+ (cover d) >>=
  (paste e) >>=
  (paste todos) >>=
  (cover f)

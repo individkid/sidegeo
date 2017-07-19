@@ -485,8 +485,6 @@ ACCESS_QUEUE(Generic,int,generics)
 
 ACCESS_QUEUE(Sideband,int,sidebands)
 
-ACCESS_QUEUE(Pending,int,pendings)
-
 ACCESS_QUEUE(Correlate,int,correlates)
 
 ACCESS_QUEUE(Render,struct Render,renders)
@@ -2669,15 +2667,6 @@ int *sideband(int size)
     return arraySideband();
 }
 
-int *pending(int size)
-{
-    // if size is not zero, resize pending data
-    if (size == 0) size = sizePending();
-    if (size > sizePending()) enlocPending(size-sizePending());
-    if (size < sizePending()) unlocPending(sizePending()-size);
-    return arrayPending();
-}
-
 int *correlate(int size)
 {
     // if size is not zero, resize correlate data
@@ -2700,7 +2689,13 @@ int *getBuffer(struct Buffer *buffer)
     return buf;
 }
 
-int *side()
+int *readFaceSub()
+{
+    // of intersections of planes with prior planes, sidednesses wrt prior planes
+    return getBuffer(&faceSub);
+}
+
+int *readSideBuf()
 {
     // of intersections of planes with prior planes, sidednesses wrt prior planes
     return getBuffer(&sideBuf);
@@ -2730,27 +2725,27 @@ int *setupBuffer(int start, int count, struct Buffer *buffer)
     enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count); return enlocInt(count);
 }
 
-int *face(int start, int count)
+int *writeFaceSub(int start, int count)
 {
     return setupBuffer(start,count,&faceSub);
 }
 
-int *point(int start, int count)
+int *writePointSub(int start, int count)
 {
     return setupBuffer(start,count,&pointSub);
 }
 
-int *boundaryWrt(int start, int count)
+int *writeSideSub(int start, int count)
 {
     return setupBuffer(start,count,&sideSub);
 }
 
-int *boundaryOk(int start, int count)
+int *writePlaneOk(int start, int count)
 {
     return setupBuffer(start,count,&planeOk);
 }
 
-int *faceValid(int start, int count)
+int *writeFaceOk(int start, int count)
 {
     return setupBuffer(start,count,&faceOk);
 }
