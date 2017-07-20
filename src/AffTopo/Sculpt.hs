@@ -49,14 +49,6 @@ printStr str = do
  ptr <- printC (fromIntegral (length str))
  pokeArray ptr (map castCharToCChar str)
 
-inplace :: (a -> a) -> Int -> [a] -> [a]
-inplace f i a = map (inplaceF f i) (zip (iterate (1+) 0) a)
-
-inplaceF :: (a -> a) -> Int -> (Int, a) -> a
-inplaceF f i (j, a)
- | i == j = f a
- | otherwise = a
-
 handleEvent :: IO Bool
 handleEvent = do
  event <- (eventC >>= peekCString)
@@ -82,8 +74,22 @@ handleEvent = do
 handleEventF :: IO Int
 handleEventF = intArgumentC >>= (return . fromIntegral)
 
-handleEventG :: [CInt] -> Ptr CInt -> IO ()
-handleEventG list ptr = pokeArray ptr list
+plusPtr' :: Ptr CInt -> Int -> Ptr CInt
+plusPtr' ptr offset = let
+ dummy :: Int
+ dummy = 0
+ dummyC :: CInt
+ dummyC = fromIntegral dummy
+ in plusPtr ptr (offset*(sizeOf dummyC))
+
+readBuffer :: Int -> Int -> Ptr CInt -> IO [Int]
+readBuffer base limit ptr = peekArray (limit-base) (plusPtr' ptr base) >>= return . (map fromIntegral)
+
+writeBuffer :: [CInt] -> Ptr CInt -> IO ()
+writeBuffer list ptr = pokeArray ptr list
+
+mapAccum2 :: (a -> b -> (b,c)) -> [a] -> b -> (b,[c])
+mapAccum2 = undefined
 
 handlePlane :: Int -> IO ()
 handlePlane index =
@@ -115,9 +121,9 @@ handlePlane index =
  newInpointed = fromIntegral newInpoints
  newInclassified = fromIntegral newInclasses
  newInrelated = fromIntegral newInrelates
- in writePointSubC inpointed newInpointed >>= handleEventG pointed >>
- writeSideSubC inclassified newInclassified >>= handleEventG classified >>
- correlateC newInrelated >>= (\x -> handleEventG related (plusPtr x inrelated)) >>
+ in writePointSubC inpointed newInpointed >>= writeBuffer pointed >>
+ writeSideSubC inclassified newInclassified >>= writeBuffer classified >>
+ correlateC newInrelated >>= (\x -> writeBuffer related (plusPtr' x inrelated)) >>
  writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo,base,limit) >>
  return ()
  )
@@ -154,9 +160,6 @@ handleInflate index =
  return ()
  )))
 
-readBuffer :: Int -> Int -> Ptr CInt -> IO [Int]
-readBuffer = undefined
-
 handleFill :: Int -> IO ()
 handleFill = undefined
 
@@ -164,10 +167,10 @@ handleHollow :: Int -> IO ()
 handleHollow = undefined
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
-chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
+chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr' ptr 1))
 
 peel :: (Int, Ptr CInt) -> (a, Ptr CInt) -> IO ([Int], Ptr CInt)
-peel (len,_) (_,ptr) = (peekArray len ptr) >>= (\x -> return (map fromIntegral x, plusPtr ptr len))
+peel (len,_) (_,ptr) = (peekArray len ptr) >>= (\x -> return (map fromIntegral x, plusPtr' ptr len))
 
 cook :: [IO (a, Ptr CInt)] -> IO ([a], Ptr CInt)
 cook (elm:mid:lst) = elm >>= (\(x,_) -> (cook (mid:lst)) >>= (\(y,z) -> return (x:y,z)))
@@ -227,10 +230,10 @@ readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  ))))))))))))
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
-paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr ptr 1)))
+paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))
 
 cover :: [Int] -> Ptr CInt -> IO (Ptr CInt)
-cover len ptr = pokeArray ptr (map fromIntegral len) >>= (\x -> seq x (return (plusPtr ptr (length len))))
+cover len ptr = pokeArray ptr (map fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr (length len))))
 
 layer :: [[Int]] -> Ptr CInt -> IO (Ptr CInt)
 layer len ptr = fold' (\x y -> y >>= (\z -> cover x z)) len (return ptr)
