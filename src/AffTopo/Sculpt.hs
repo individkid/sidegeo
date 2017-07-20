@@ -18,6 +18,7 @@
 
 module AffTopo.Sculpt where
 
+import Data.List (mapAccumL)
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.C.Types
@@ -88,8 +89,8 @@ readBuffer base limit ptr = peekArray (limit-base) (plusPtr' ptr base) >>= retur
 writeBuffer :: [CInt] -> Ptr CInt -> IO ()
 writeBuffer list ptr = pokeArray ptr list
 
-mapAccum2 :: (a -> b -> (b,c)) -> [a] -> b -> (b,[c])
-mapAccum2 = undefined
+mapAccum2 :: (a -> b -> (b,c)) -> [[a]] -> b -> (b,[[c]])
+mapAccum2 f a b = mapAccumL (\acc lst -> mapAccumL (\x y -> f y x) acc lst) b a
 
 handlePlane :: Int -> IO ()
 handlePlane index =
