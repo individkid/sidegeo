@@ -26,8 +26,8 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
-type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int])
- -- ([[boundary]],[num-points],[num-classifications],[num-correlates],num-done,[place-todo])
+type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int],Int,Int)
+ -- ([[boundary]],[num-points],[num-classifications],[num-correlates],num-done,[place-todo],side-done,side-todo)
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
@@ -87,7 +87,7 @@ handleEventG list ptr = pokeArray ptr list
 
 handlePlane :: Int -> IO ()
 handlePlane index =
- readSideband >>= (\(boundary,points,classes,relates,done,todo) -> let
+ readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) -> let
  inboundary = boundary !! index
  inpoints = points !! index
  inclasses = classes !! index
@@ -118,19 +118,29 @@ handlePlane index =
  in writePointSubC inpointed newInpointed >>= handleEventG pointed >>
  writeSideSubC inclassified newInclassified >>= handleEventG classified >>
  correlateC newInrelated >>= (\x -> handleEventG related (plusPtr x inrelated)) >>
- writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo) >>
+ writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo,base,limit) >>
  return ()
  )
 
+-- [[Maybe Boundary]] -- each row has a single Just where Boundary is position in todo, and column is Place index from todo
+-- [[Maybe Boundary]] -- transpose; each row has zero or more Just where each row is a Place to add to
+-- [(Place, [Maybe Boundary])] -- zip with place from generic
+-- [([Boundary], [Maybe Boundary])] -- take boundariesOfPlace
+-- [[([Boundary], Maybe Boundary)]] -- fold by appending Justs
+-- [[Maybe (Boundary,[[Boundary]])]] -- sparse map boundary-to-add to per pair, boundaries-so-far minus pair
+-- [[Maybe (Boundary,[[Boundary]])]] -- transpose; rows are now in positions in todo
+-- ([Sidedness],[[Maybe (Boundary,[[(Boundary,Sidedness]])]]) -- use mapAccumL2 to split sideBuf on each Just in double nested list 
+-- [[Maybe (Boundary,[[(Boundary,Sidedness)]])]] -- fst should be empty
+-- [[Maybe (Boundary,[[(Boundary,Sidedness)]])]] -- transpose; rows are now places
+-- [(Place,[Maybe (Boundary,[[(Boundary,Sidedness)]])])] -- zip with places from generic
+-- [(Place,[(Boundary,[[(Boundary,Sidedness)]])])] -- each place now has boundary to add together with polyant of prior boundaries
+-- [Place] -- have to fold each place in one shot because finding regions to divide requires place with prior boundaries added
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
- readSideband >>= (\(_,_,_,_,done,todo) -> let
- subtracted = done - (length todo)
- zipped = zip (iterate (1+) subtracted) todo
- indexed = indices (length generic)
- filtered = map2 fst (map (\x -> filter (\(y,z) -> x == z) zipped) indexed)
- (generic1,_) = fold' handleInflateF todo (generic, (done - (length todo)))
+ readSideband >>= (\(_,_,_,_,done,todo,base,limit) ->
+ readSideBufC >>= readBuffer base limit >>= (\sidedness -> let
+ generic1 = undefined
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
  inregions1 = regionsOfSpace inspace1
@@ -142,10 +152,10 @@ handleInflate index =
  -- find faces between inside and outside regions
  in writeGeneric generic2 >>
  return ()
- ))
+ )))
 
-handleInflateF :: Int -> (Generic, Int) -> (Generic, Int)
-handleInflateF = undefined
+readBuffer :: Int -> Int -> Ptr CInt -> IO [Int]
+readBuffer = undefined
 
 handleFill :: Int -> IO ()
 handleFill = undefined
@@ -210,9 +220,11 @@ readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  (peel places) >>= (\correlates -> jump correlates
  chip >>= (\dones -> jump dones
  chip >>= (\todos -> jump todos
- (peel todos) >>= (\todo ->
- return ((fst boundary), (fst points), (fst classifications), (fst correlates), (fst dones), (fst todo))
- ))))))))))
+ (peel todos) >>= (\todo -> jump todo
+ chip >>= (\base -> jump base
+ chip >>= (\limit ->
+ return ((fst boundary), (fst points), (fst classifications), (fst correlates), (fst dones), (fst todo), (fst base), (fst limit))
+ ))))))))))))
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr ptr 1)))
@@ -263,14 +275,14 @@ writeGenericF a = fold' (+) (map length a) 0
 writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
 
--- type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int])
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
+-- type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int],Int,Int)
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo],side-done,side-todo--
 writeSideband :: Sideband -> IO (Ptr CInt)
-writeSideband (a,b,c,d,e,f) = let
+writeSideband (a,b,c,d,e,f,g,h) = let
  places = length a
  boundaries = map length a
  todos = length f
- size = 1 + places + places + places + places + 1 + 1 + todos
+ size = 1 + places + places + places + places + 1 + 1 + todos + 1 + 1
  in (sidebandC (fromIntegral size)) >>=
  (paste places) >>=
  (cover boundaries) >>=
@@ -280,4 +292,6 @@ writeSideband (a,b,c,d,e,f) = let
  (cover d) >>=
  (paste e) >>=
  (paste todos) >>=
- (cover f)
+ (cover f) >>=
+ (paste g) >>=
+ (paste h)
