@@ -145,19 +145,20 @@ handlePlane index =
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
- readSideband >>= (\(_,_,_,_,done,todo,base,limit) ->
+ readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) ->
  readSideBufC >>= readBuffer base limit >>= (\sidedness -> let
  generic1 = undefined
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
  inregions1 = regionsOfSpace inspace1
  inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
+ boundary1 = replace index (map (\(Boundary x) -> x) inboundary1) boundary
  generic2 = replace index (inplace1,inembed1) generic1
- -- extract sideband for todo indexes.
- -- extract generic for places
- -- add boundary to indexed place according to side
+ -- remove faces of indexed place
  -- find faces between inside and outside regions
+ -- append found faces
  in writeGeneric generic2 >>
+ writeSideband (boundary1,points,classes,relates,done,[],limit,limit) >>
  return ()
  )))
 
