@@ -2691,13 +2691,16 @@ int *getBuffer(struct Buffer *buffer)
 
 int *readFaceSub()
 {
-    // of intersections of planes with prior planes, sidednesses wrt prior planes
     return getBuffer(&faceSub);
+}
+
+int *readFaceOk()
+{
+    return getBuffer(&faceOk);
 }
 
 int *readSideBuf()
 {
-    // of intersections of planes with prior planes, sidednesses wrt prior planes
     return getBuffer(&sideBuf);
 }
 

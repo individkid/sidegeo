@@ -33,6 +33,7 @@ foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
+foreign import ccall "readFaceOk" readFaceOkC :: IO (Ptr CInt)
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
 foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writePointSub" writePointSubC :: CInt -> CInt -> IO (Ptr CInt)
@@ -61,21 +62,17 @@ handleEvent = do
  event <- (eventC >>= peekCString)
  case event of
   "Plane" ->
-   handlePlane >>
-   printStr "plane\n" >>
+   handleEventF >>= handlePlane >>
    return False
   "Inflate" ->
-   handleInflate >>
-   printStr "inflate\n" >>
+   handleEventF >>= handleInflate >>
    return False
   "Fill" ->
-   handleEventF >>= (\face ->
-   printStr (concat ["fill ",(show face),"\n"]) >>
-   return False)
+   handleEventF >>= handleFill >>
+   return False
   "Hollow" ->
-   handleEventF >>= (\face ->
-   printStr (concat ["hollow ",(show face),"\n"]) >>
-   return False)
+   handleEventF >>= handleHollow >>
+   return False
   "Error" -> return True
   "Done" -> return True
   _ ->
@@ -88,9 +85,8 @@ handleEventF = intArgumentC >>= (return . fromIntegral)
 handleEventG :: [CInt] -> Ptr CInt -> IO ()
 handleEventG list ptr = pokeArray ptr list
 
-handlePlane :: IO ()
-handlePlane =
- handleEventF >>= (\index ->
+handlePlane :: Int -> IO ()
+handlePlane index =
  readSideband >>= (\(boundary,points,classes,relates,done,todo) -> let
  inboundary = boundary !! index
  inpoints = points !! index
@@ -124,18 +120,21 @@ handlePlane =
  correlateC newInrelated >>= (\x -> handleEventG related (plusPtr x inrelated)) >>
  writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo) >>
  return ()
- ))
+ )
 
-handleInflate :: IO ()
-handleInflate =
- handleEventF >>= (\index ->
+handleInflate :: Int -> IO ()
+handleInflate index =
  readGeneric >>= (\generic ->
  readSideband >>= (\(_,_,_,_,done,todo) -> let
+ subtracted = done - (length todo)
+ zipped = zip (iterate (1+) subtracted) todo
+ indexed = indices (length generic)
+ filtered = map2 fst (map (\x -> filter (\(y,z) -> x == z) zipped) indexed)
  (generic1,_) = fold' handleInflateF todo (generic, (done - (length todo)))
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
  inregions1 = regionsOfSpace inspace1
- inembed1 = filter (\x -> oppositeOfRegionExists inboundary1 x inspace1) inregions1
+ inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
  generic2 = replace index (inplace1,inembed1) generic1
  -- extract sideband for todo indexes.
  -- extract generic for places
@@ -143,10 +142,16 @@ handleInflate =
  -- find faces between inside and outside regions
  in writeGeneric generic2 >>
  return ()
- )))
+ ))
 
 handleInflateF :: Int -> (Generic, Int) -> (Generic, Int)
 handleInflateF = undefined
+
+handleFill :: Int -> IO ()
+handleFill = undefined
+
+handleHollow :: Int -> IO ()
+handleHollow = undefined
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr ptr 1))
@@ -167,21 +172,6 @@ patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 
 jump :: a -> (a -> b) -> b
 jump a f = f a
-
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
-readSideband :: IO Sideband
-readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
- chip >>= (\places -> jump places
- (peel places) >>= (\boundaries -> jump boundaries
- (onion boundaries) >>= (\boundary -> jump boundary
- (peel places) >>= (\points -> jump points
- (peel places) >>= (\classifications -> jump classifications
- (peel places) >>= (\correlates -> jump correlates
- chip >>= (\dones -> jump dones
- chip >>= (\todos -> jump todos
- (peel todos) >>= (\todo ->
- return ((fst boundary), (fst points), (fst classifications), (fst correlates), (fst dones), (fst todo))
- ))))))))))
 
 -- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
 --  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
@@ -208,6 +198,21 @@ readGeneric = (genericC 0) >>= (\ptr -> jump (0::Int,ptr)
 
 readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
 readGenericF a b c = (a,[b,c])
+
+--num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
+readSideband :: IO Sideband
+readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
+ chip >>= (\places -> jump places
+ (peel places) >>= (\boundaries -> jump boundaries
+ (onion boundaries) >>= (\boundary -> jump boundary
+ (peel places) >>= (\points -> jump points
+ (peel places) >>= (\classifications -> jump classifications
+ (peel places) >>= (\correlates -> jump correlates
+ chip >>= (\dones -> jump dones
+ chip >>= (\todos -> jump todos
+ (peel todos) >>= (\todo ->
+ return ((fst boundary), (fst points), (fst classifications), (fst correlates), (fst dones), (fst todo))
+ ))))))))))
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr ptr 1)))
