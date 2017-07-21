@@ -18,7 +18,8 @@
 
 module AffTopo.Sculpt where
 
-import Data.List (mapAccumL)
+import Data.List (mapAccumL,mapAccumR,transpose)
+import Data.Maybe (catMaybes)
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.C.Types
@@ -89,12 +90,23 @@ readBuffer base limit ptr = peekArray (limit-base) (plusPtr' ptr base) >>= retur
 writeBuffer :: [CInt] -> Ptr CInt -> IO ()
 writeBuffer list ptr = pokeArray ptr list
 
-mapAccum2 :: (a -> b -> (b,c)) -> [[a]] -> b -> (b,[[c]])
-mapAccum2 f a b = mapAccumL (\acc lst -> mapAccumL (\x y -> f y x) acc lst) b a
+mapAccumL2 :: (a -> b -> (a,c)) -> a -> [[b]] -> (a,[[c]])
+mapAccumL2 f a b = mapAccumL (\acc lst -> mapAccumL f acc lst) a b
+
+oneHot :: Int -> Int -> a -> [Maybe a]
+oneHot pos lim val = map (\x -> if x == pos then Just val else Nothing) (indices lim)
+
+zip2 :: [[a]] -> [b] -> [[(a,b)]]
+zip2 a b = let
+ zipped = snd (mapAccumL2 (\w x -> case w of (y:z) -> (z, Just (x,y)); [] -> ([],Nothing)) b a)
+ in filter (not . null) (map catMaybes zipped)
+
+length2 :: [[a]] -> Int
+length2 a = fold' (\x y -> (length x) + y) a 0
 
 handlePlane :: Int -> IO ()
 handlePlane index =
- readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) -> let
+ readSideband >>= (\(boundary,points,classes,relates,done,todo,base,_) -> let
  inboundary = boundary !! index
  inpoints = points !! index
  inclasses = classes !! index
@@ -125,7 +137,7 @@ handlePlane index =
  in writePointSubC inpointed newInpointed >>= writeBuffer pointed >>
  writeSideSubC inclassified newInclassified >>= writeBuffer classified >>
  correlateC newInrelated >>= (\x -> writeBuffer related (plusPtr' x inrelated)) >>
- writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo,base,limit) >>
+ writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo,base,newInclasses) >>
  return ()
  )
 
@@ -147,7 +159,34 @@ handleInflate index =
  readGeneric >>= (\generic ->
  readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) ->
  readSideBufC >>= readBuffer base limit >>= (\sidedness -> let
- generic1 = undefined
+ todos = length todo
+ matrix1 :: [[Maybe Boundary]]
+ matrix1 = map (\(x,y) -> oneHot x todos (Boundary y)) (zip todo (iterate (1+) done))
+ matrix2 :: [[Maybe Boundary]]
+ matrix2 = transpose matrix1
+ matrix3 :: [(Place, [Maybe Boundary])]
+ matrix3 = zip (domain generic) matrix2
+ matrix4 :: [([Boundary], [Maybe Boundary])]
+ matrix4 = map (\(x,y) -> ((boundariesOfPlace x), y)) matrix3
+ matrix5 :: [[([Boundary], Maybe Boundary)]]
+ matrix5 = map (\(x,y) -> snd (mapAccumR (\lst val -> case val of Just z -> ((z:lst),(lst,val)); Nothing -> (lst,(lst,val))) x y)) matrix4
+ matrix6 :: [[Maybe (Boundary, [[Boundary]])]]
+ matrix6 = map2 (\(x,y) -> case y of Just z -> Just (z, map (\w -> x \\ w) (subsets 2 x)); Nothing -> Nothing) matrix5
+ matrix7 :: [[Maybe (Boundary, [[Boundary]])]]
+ matrix7 = transpose matrix6
+ matrix8 :: ([Side],[[Maybe (Boundary, [[(Boundary,Side)]])]])
+ matrix8 = mapAccumL2 (\w x -> case x of Just (y,z) -> ((drop (length2 z) w), Just (y, zip2 z w)); Nothing -> (w,Nothing)) (map Side sidedness) matrix7
+ matrix9 :: [[Maybe (Boundary, [[(Boundary,Side)]])]]
+ ([],matrix9) = matrix8
+ matrix10 :: [[Maybe (Boundary,[[(Boundary,Side)]])]]
+ matrix10 = transpose matrix9
+ matrix11 :: [(Place,[Maybe (Boundary,[[(Boundary,Side)]])])]
+ matrix11 = zip (domain generic) matrix10
+ matrix12 :: [(Place,[(Boundary,[[(Boundary,Side)]])])]
+ matrix12 = map (\(x,y) -> (x, catMaybes y)) matrix11
+ generic0 :: [Place]
+ generic0 = map (\(x,y) -> fold' handleInflateF y x) matrix12
+ generic1 = zip generic0 (range generic)
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
  inregions1 = regionsOfSpace inspace1
@@ -161,6 +200,9 @@ handleInflate index =
  writeSideband (boundary1,points,classes,relates,done,[],limit,limit) >>
  return ()
  )))
+
+handleInflateF :: (Boundary,[[(Boundary,Side)]]) -> Place -> Place
+handleInflateF = undefined
 
 handleFill :: Int -> IO ()
 handleFill = undefined
