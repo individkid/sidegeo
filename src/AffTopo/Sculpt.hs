@@ -159,15 +159,44 @@ handleInflate index =
  readGeneric >>= (\generic ->
  readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) ->
  readSideBufC >>= readBuffer base limit >>= (\sidedness -> let
+ generic1 = handleInflateG' boundary done todo sidedness generic
+ (inplace1,_) = generic1 !! index
+ (inboundary1,inspace1) = unzipPlace inplace1
+ inregions1 = regionsOfSpace inspace1
+ inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
+ boundary1 = map (boundariesOfPlace . fst) generic1
+ boundary2 = map2 (\(Boundary x) -> x) boundary1
+ generic2 = replace index (inplace1,inembed1) generic1
+ -- remove faces of indexed place
+ -- find faces between inside and outside regions
+ -- append found faces
+ in writeGeneric generic2 >>
+ writeSideband (boundary2,points,classes,relates,done,[],limit,limit) >>
+ return ()
+ )))
+
+handleInflateF :: (Boundary,[[(Boundary,Side)]]) -> Place -> Place
+handleInflateF = undefined
+
+handleInflateG :: Int -> [Int] -> [Int] -> Generic -> Generic
+handleInflateG done todo sidedness generic = let
+ (_,_,result) = fold' handleInflateH todo ((done - (length todo)), sidedness, generic)
+ in result
+
+handleInflateH :: Int -> (Int, [Int], Generic) -> (Int, [Int], Generic)
+handleInflateH = undefined
+
+handleInflateG' :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
+handleInflateG' boundary done todo sidedness generic = let
  todos = length todo
  matrix1 :: [[Maybe Boundary]]
  matrix1 = map (\(x,y) -> oneHot x todos (Boundary y)) (zip todo (iterate (1+) done))
  matrix2 :: [[Maybe Boundary]]
  matrix2 = transpose matrix1
- matrix3 :: [(Place, [Maybe Boundary])]
- matrix3 = zip (domain generic) matrix2
+ matrix3 :: [([Int], [Maybe Boundary])]
+ matrix3 = zip boundary matrix2
  matrix4 :: [([Boundary], [Maybe Boundary])]
- matrix4 = map (\(x,y) -> ((boundariesOfPlace x), y)) matrix3
+ matrix4 = map (\(x,y) -> (map Boundary x, y)) matrix3
  matrix5 :: [[([Boundary], Maybe Boundary)]]
  matrix5 = map (\(x,y) -> snd (mapAccumR (\lst val -> case val of Just z -> ((z:lst),(lst,val)); Nothing -> (lst,(lst,val))) x y)) matrix4
  matrix6 :: [[Maybe (Boundary, [[Boundary]])]]
@@ -186,23 +215,7 @@ handleInflate index =
  matrix12 = map (\(x,y) -> (x, catMaybes y)) matrix11
  generic0 :: [Place]
  generic0 = map (\(x,y) -> fold' handleInflateF y x) matrix12
- generic1 = zip generic0 (range generic)
- (inplace1,_) = generic1 !! index
- (inboundary1,inspace1) = unzipPlace inplace1
- inregions1 = regionsOfSpace inspace1
- inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
- boundary1 = replace index (map (\(Boundary x) -> x) inboundary1) boundary
- generic2 = replace index (inplace1,inembed1) generic1
- -- remove faces of indexed place
- -- find faces between inside and outside regions
- -- append found faces
- in writeGeneric generic2 >>
- writeSideband (boundary1,points,classes,relates,done,[],limit,limit) >>
- return ()
- )))
-
-handleInflateF :: (Boundary,[[(Boundary,Side)]]) -> Place -> Place
-handleInflateF = undefined
+ in zip generic0 (range generic)
 
 handleFill :: Int -> IO ()
 handleFill = undefined
