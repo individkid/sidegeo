@@ -159,7 +159,7 @@ handleInflate index =
  readGeneric >>= (\generic ->
  readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) ->
  readSideBufC >>= readBuffer base limit >>= (\sidedness -> let
- generic1 = handleInflateG' boundary done todo sidedness generic
+ generic1 = handleInflateG boundary done todo sidedness generic
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
  inregions1 = regionsOfSpace inspace1
@@ -175,16 +175,24 @@ handleInflate index =
  return ()
  )))
 
-handleInflateF :: (Boundary,[[(Boundary,Side)]]) -> Place -> Place
+handleInflateF :: (Boundary,[[(Boundary,Side)]]) -> (Place,[Region]) -> (Place,[Region])
 handleInflateF = undefined
 
-handleInflateG :: Int -> [Int] -> [Int] -> Generic -> Generic
-handleInflateG done todo sidedness generic = let
- (_,_,result) = fold' handleInflateH todo ((done - (length todo)), sidedness, generic)
+handleInflateG :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
+handleInflateG boundary done todo sidedness generic = let
+ (_,_,result) = fold' handleInflateH (zip (iterate (1+) (done - (length todo))) todo) (boundary, sidedness, generic)
  in result
 
-handleInflateH :: Int -> (Int, [Int], Generic) -> (Int, [Int], Generic)
-handleInflateH = undefined
+handleInflateH :: (Int, Int) -> ([[Int]], [Int], Generic) -> ([[Int]], [Int], Generic)
+handleInflateH (done, todo) (boundary, sidedness, generic) = let
+ inboundary = map Boundary (boundary !! todo)
+ boundaried = Boundary done
+ inboundaried = map (\(Boundary x) -> x) (inboundary `append` [boundaried])
+ pair = subsets 2 inboundary
+ wrt = map (inboundary \\) pair
+ polyant = map2 (\(x,y) -> (x, Side y)) (zip2 wrt sidedness)
+ ingeneric = handleInflateF (boundaried, polyant) (generic !! todo)
+ in (replace todo inboundaried boundary, drop (length2 polyant) sidedness, replace todo ingeneric generic)
 
 handleInflateG' :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
 handleInflateG' boundary done todo sidedness generic = let
@@ -209,13 +217,11 @@ handleInflateG' boundary done todo sidedness generic = let
  ([],matrix9) = matrix8
  matrix10 :: [[Maybe (Boundary,[[(Boundary,Side)]])]]
  matrix10 = transpose matrix9
- matrix11 :: [(Place,[Maybe (Boundary,[[(Boundary,Side)]])])]
- matrix11 = zip (domain generic) matrix10
- matrix12 :: [(Place,[(Boundary,[[(Boundary,Side)]])])]
+ matrix11 :: [((Place,[Region]),[Maybe (Boundary,[[(Boundary,Side)]])])]
+ matrix11 = zip generic matrix10
+ matrix12 :: [((Place,[Region]),[(Boundary,[[(Boundary,Side)]])])]
  matrix12 = map (\(x,y) -> (x, catMaybes y)) matrix11
- generic0 :: [Place]
- generic0 = map (\(x,y) -> fold' handleInflateF y x) matrix12
- in zip generic0 (range generic)
+ in map (\(x,y) -> fold' handleInflateF y x) matrix12
 
 handleFill :: Int -> IO ()
 handleFill = undefined
