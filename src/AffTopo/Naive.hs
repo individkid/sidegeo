@@ -569,6 +569,12 @@ unzipBoundary a b = Boundary (elemIndex' a b)
 unzipBoundaries :: [Boundary] -> [Boundary] -> [Boundary]
 unzipBoundaries a b = map (\x -> unzipBoundary x b) a
 
+zipBoundary :: Boundary -> [Boundary] -> Boundary
+zipBoundary (Boundary a) b = b !! a
+
+zipBoundaries :: [Boundary] -> [Boundary] -> [Boundary]
+zipBoundaries a b = map (\x -> zipBoundary x b) a
+
 pointToVector :: Point -> Vector
 pointToVector v = v
 

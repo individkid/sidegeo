@@ -133,22 +133,57 @@ handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
  readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) ->
- readSideBufC >>= readBuffer base limit >>= (\sidedness -> let
+ readSideBufC >>= readBuffer base limit >>= (\sidedness ->
+ readFaceOkC >>= readBuffer 0 0 >>= (\valid ->
+ readFaceSubC >>= readBuffer 0 0 >>= (\face -> let
+ -- add boundaries accoriding to sidedness
  generic1 = handleInflateF boundary done todo sidedness generic
+ -- replace embed for indicated place by all inside regions
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
+ inboundary2 = map (\(Boundary x) -> x) inboundary1
  inregions1 = regionsOfSpace inspace1
  inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
+ generic2 = replace index (inplace1,inembed1) generic1
+ -- maintain boundary lists in sideband
  boundary1 = map (boundariesOfPlace . fst) generic1
  boundary2 = map2 (\(Boundary x) -> x) boundary1
- generic2 = replace index (inplace1,inembed1) generic1
  -- remove faces of indexed place
- -- find faces between inside and outside regions
+ valid1 :: [Int]
+ valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) inboundary2)) then 1 else 0) (zip valid (handleInflateI face (repeat 6)))
+ -- find boundaries between inside and outside regions
+ attached1 :: [(Boundary,Region,Region)]
+ attached1 = concat (map (\x -> map (\y -> (y, x, oppositeOfRegion [y] x inspace1)) (attachedBoundaries x inspace1)) inembed1)
+ attached2 :: [(Boundary,Region,Region)]
+ attached2 = filter (\(_,_,y) -> not (elem y inembed1)) attached1
+ -- choose vertex per found boundary
+ attached3 :: [(Boundary,Region,[Boundary])]
+ attached3 = map (\(x,r,_) -> (x, r, choose (filter (\w -> elem x w) (attachedFacets 3 r inspace1)))) attached2
+ -- find all edges per boundary
+ attached4 :: [(Boundary,Region,[Boundary],[[Boundary]])]
+ attached4 = map (\(x,r,y) -> (x, r, y, filter (\w -> elem x w) (attachedFacets 2 r inspace1))) attached3
+ -- find vertex pair per found edge
+ attached5 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
+ attached5 = map (\(x,r,y,z) -> (x, y, map (\w -> (w, filter (\v -> all (\u -> elem u v) w) (attachedFacets 3 r inspace1))) z)) attached4
+ -- construct face from base vertex and edge
+ face1 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
+ face1 = map (\(x,y,z) -> (x, filter (/=x) y, map (\(w,v) -> (filter (/=x) w, map (\u -> filter (/=x) u) v)) z)) attached5
+ face2 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
+ face2 = map (\(x,y,z) -> (x, y, map (\(w,v) -> (w, map (\u -> u \\ w) v)) z)) face1
+ faceF :: Boundary -> [Boundary] -> [Boundary] -> [[Boundary]] -> [Boundary]
+ faceF x y w v = concat [[x],w,(concat v),y]
+ face3 :: [Boundary]
+ face3 = concat (concat (map (\(x,y,z) -> map (\(w,v) -> faceF x y w v) z) face2))
+ face4 :: [Int]
+ face4 = map (\(Boundary x) -> x) (zipBoundaries face3 inboundary1)
+ valid2 = valid1 `append` (replicate (length face3) 1)
  -- append found faces
  in writeGeneric generic2 >>
  writeSideband (boundary2,points,classes,relates,done,[],limit,limit) >>
+ writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
+ writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face3)) >>= writeBuffer (map fromIntegral face4) >>
  return ()
- )))
+ )))))
 
 handleInflateF :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
 handleInflateF boundary done todo sidedness generic = let
