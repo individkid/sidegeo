@@ -149,39 +149,28 @@ handleInflate index =
  boundary1 = map (boundariesOfPlace . fst) generic1
  boundary2 = map2 (\(Boundary x) -> x) boundary1
  -- remove faces of indexed place
- valid1 :: [Int]
  valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) inboundary2)) then 1 else 0) (zip valid (handleInflateI face (repeat 6)))
  -- find boundaries between inside and outside regions
- attached1 :: [(Boundary,Region,Region)]
- attached1 = concat (map (\x -> map (\y -> (y, x, oppositeOfRegion [y] x inspace1)) (attachedBoundaries x inspace1)) inembed1)
- attached2 :: [(Boundary,Region,Region)]
+ attached1 = concat (map (\r -> map (\x -> (x, r, oppositeOfRegion [x] r inspace1)) (attachedBoundaries r inspace1)) inembed1)
  attached2 = filter (\(_,_,y) -> not (elem y inembed1)) attached1
  -- choose vertex per found boundary
- attached3 :: [(Boundary,Region,[Boundary])]
  attached3 = map (\(x,r,_) -> (x, r, choose (filter (\w -> elem x w) (attachedFacets 3 r inspace1)))) attached2
  -- find all edges per boundary
- attached4 :: [(Boundary,Region,[Boundary],[[Boundary]])]
  attached4 = map (\(x,r,y) -> (x, r, y, filter (\w -> elem x w) (attachedFacets 2 r inspace1))) attached3
  -- find vertex pair per found edge
- attached5 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
  attached5 = map (\(x,r,y,z) -> (x, y, map (\w -> (w, filter (\v -> all (\u -> elem u v) w) (attachedFacets 3 r inspace1))) z)) attached4
  -- construct face from base vertex and edge
- face1 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
  face1 = map (\(x,y,z) -> (x, filter (/=x) y, map (\(w,v) -> (filter (/=x) w, map (\u -> filter (/=x) u) v)) z)) attached5
- face2 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
  face2 = map (\(x,y,z) -> (x, y, map (\(w,v) -> (w, map (\u -> u \\ w) v)) z)) face1
- faceF :: Boundary -> [Boundary] -> [Boundary] -> [[Boundary]] -> [Boundary]
- faceF x y w v = concat [[x],w,(concat v),y]
- face3 :: [Boundary]
- face3 = concat (concat (map (\(x,y,z) -> map (\(w,v) -> faceF x y w v) z) face2))
- face4 :: [Int]
+ face3 = concat (concat (map (\(x,y,z) -> map (\(w,v) -> concat [[x],w,(concat v),y]) z) face2))
  face4 = map (\(Boundary x) -> x) (zipBoundaries face3 inboundary1)
+ valid2 :: [Int]
  valid2 = valid1 `append` (replicate (length face3) 1)
  -- append found faces
  in writeGeneric generic2 >>
  writeSideband (boundary2,points,classes,relates,done,[],limit,limit) >>
  writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
- writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face3)) >>= writeBuffer (map fromIntegral face4) >>
+ writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer (map fromIntegral face4) >>
  return ()
  )))))
 
