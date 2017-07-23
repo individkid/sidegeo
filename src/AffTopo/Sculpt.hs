@@ -18,8 +18,7 @@
 
 module AffTopo.Sculpt where
 
-import Data.List (mapAccumL,mapAccumR,transpose)
-import Data.Maybe (catMaybes)
+import Prelude hiding ((++))
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.C.Types
@@ -90,17 +89,6 @@ readBuffer base limit ptr = peekArray (limit-base) (plusPtr' ptr base) >>= retur
 writeBuffer :: [CInt] -> Ptr CInt -> IO ()
 writeBuffer list ptr = pokeArray ptr list
 
-mapAccumL2 :: (a -> b -> (a,c)) -> a -> [[b]] -> (a,[[c]])
-mapAccumL2 f a b = mapAccumL (\acc lst -> mapAccumL f acc lst) a b
-
-oneHot :: Int -> Int -> a -> [Maybe a]
-oneHot pos lim val = map (\x -> if x == pos then Just val else Nothing) (indices lim)
-
-zip2 :: [[a]] -> [b] -> [[(a,b)]]
-zip2 a b = let
- zipped = snd (mapAccumL2 (\w x -> case w of (y:z) -> (z, Just (x,y)); [] -> ([],Nothing)) b a)
- in filter (not . null) (map catMaybes zipped)
-
 length2 :: [[a]] -> Int
 length2 a = fold' (\x y -> (length x) + y) a 0
 
@@ -141,25 +129,12 @@ handlePlane index =
  return ()
  )
 
--- [[Maybe Boundary]] -- each row has a single Just where Boundary is position in todo, and column is Place index from todo
--- [[Maybe Boundary]] -- transpose; each row has zero or more Just where each row is a Place to add to
--- [(Place, [Maybe Boundary])] -- zip with place from generic
--- [([Boundary], [Maybe Boundary])] -- take boundariesOfPlace
--- [[([Boundary], Maybe Boundary)]] -- fold by appending Justs
--- [[Maybe (Boundary,[[Boundary]])]] -- sparse map boundary-to-add to per pair, boundaries-so-far minus pair
--- [[Maybe (Boundary,[[Boundary]])]] -- transpose; rows are now in positions in todo
--- ([Sidedness],[[Maybe (Boundary,[[(Boundary,Sidedness]])]]) -- use mapAccumL2 to split sideBuf on each Just in double nested list 
--- [[Maybe (Boundary,[[(Boundary,Sidedness)]])]] -- fst should be empty
--- [[Maybe (Boundary,[[(Boundary,Sidedness)]])]] -- transpose; rows are now places
--- [(Place,[Maybe (Boundary,[[(Boundary,Sidedness)]])])] -- zip with places from generic
--- [(Place,[(Boundary,[[(Boundary,Sidedness)]])])] -- each place now has boundary to add together with polyant of prior boundaries
--- [Place] -- have to fold each place in one shot because finding regions to divide requires place with prior boundaries added
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
  readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) ->
  readSideBufC >>= readBuffer base limit >>= (\sidedness -> let
- generic1 = handleInflateG boundary done todo sidedness generic
+ generic1 = handleInflateF boundary done todo sidedness generic
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
  inregions1 = regionsOfSpace inspace1
@@ -175,53 +150,38 @@ handleInflate index =
  return ()
  )))
 
-handleInflateF :: (Boundary,[[(Boundary,Side)]]) -> (Place,[Region]) -> (Place,[Region])
-handleInflateF = undefined
-
-handleInflateG :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
-handleInflateG boundary done todo sidedness generic = let
- (_,_,result) = fold' handleInflateH (zip (iterate (1+) (done - (length todo))) todo) (boundary, sidedness, generic)
+handleInflateF :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
+handleInflateF boundary done todo sidedness generic = let
+ (_,_,result) = fold' handleInflateG (zip (iterate (1+) (done - (length todo))) todo) (boundary, sidedness, generic)
  in result
 
-handleInflateH :: (Int, Int) -> ([[Int]], [Int], Generic) -> ([[Int]], [Int], Generic)
-handleInflateH (done, todo) (boundary, sidedness, generic) = let
+handleInflateG :: (Int, Int) -> ([[Int]], [Int], Generic) -> ([[Int]], [Int], Generic)
+handleInflateG (done, todo) (boundary, sidedness, generic) = let
  inboundary = map Boundary (boundary !! todo)
  boundaried = Boundary done
  inboundaried = map (\(Boundary x) -> x) (inboundary `append` [boundaried])
  pair = subsets 2 inboundary
  wrt = map (inboundary \\) pair
- polyant = map2 (\(x,y) -> (x, Side y)) (zip2 wrt sidedness)
- ingeneric = handleInflateF (boundaried, polyant) (generic !! todo)
+ polyant = map2 (\(x,y) -> (x, Side y)) (handleInflateH sidedness wrt)
+ ingeneric = handleInflateJ boundaried polyant (generic !! todo)
  in (replace todo inboundaried boundary, drop (length2 polyant) sidedness, replace todo ingeneric generic)
 
-handleInflateG' :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
-handleInflateG' boundary done todo sidedness generic = let
- todos = length todo
- matrix1 :: [[Maybe Boundary]]
- matrix1 = map (\(x,y) -> oneHot x todos (Boundary y)) (zip todo (iterate (1+) done))
- matrix2 :: [[Maybe Boundary]]
- matrix2 = transpose matrix1
- matrix3 :: [([Int], [Maybe Boundary])]
- matrix3 = zip boundary matrix2
- matrix4 :: [([Boundary], [Maybe Boundary])]
- matrix4 = map (\(x,y) -> (map Boundary x, y)) matrix3
- matrix5 :: [[([Boundary], Maybe Boundary)]]
- matrix5 = map (\(x,y) -> snd (mapAccumR (\lst val -> case val of Just z -> ((z:lst),(lst,val)); Nothing -> (lst,(lst,val))) x y)) matrix4
- matrix6 :: [[Maybe (Boundary, [[Boundary]])]]
- matrix6 = map2 (\(x,y) -> case y of Just z -> Just (z, map (\w -> x \\ w) (subsets 2 x)); Nothing -> Nothing) matrix5
- matrix7 :: [[Maybe (Boundary, [[Boundary]])]]
- matrix7 = transpose matrix6
- matrix8 :: ([Side],[[Maybe (Boundary, [[(Boundary,Side)]])]])
- matrix8 = mapAccumL2 (\w x -> case x of Just (y,z) -> ((drop (length2 z) w), Just (y, zip2 z w)); Nothing -> (w,Nothing)) (map Side sidedness) matrix7
- matrix9 :: [[Maybe (Boundary, [[(Boundary,Side)]])]]
- ([],matrix9) = matrix8
- matrix10 :: [[Maybe (Boundary,[[(Boundary,Side)]])]]
- matrix10 = transpose matrix9
- matrix11 :: [((Place,[Region]),[Maybe (Boundary,[[(Boundary,Side)]])])]
- matrix11 = zip generic matrix10
- matrix12 :: [((Place,[Region]),[(Boundary,[[(Boundary,Side)]])])]
- matrix12 = map (\(x,y) -> (x, catMaybes y)) matrix11
- in map (\(x,y) -> fold' handleInflateF y x) matrix12
+handleInflateH :: [Int] -> [[Boundary]] -> [[(Boundary,Int)]]
+handleInflateH a b = map (\(x,y) -> zip x y) (zip b (handleInflateI a (map length b)))
+
+handleInflateI :: [a] -> [Int] -> [[a]]
+handleInflateI [] _ = []
+handleInflateI _ [] = []
+handleInflateI a (b:c) = (take b a):(handleInflateI (drop b a) c)
+
+handleInflateJ :: Boundary -> [[(Boundary,Side)]] -> (Place,[Region]) -> (Place,[Region])
+handleInflateJ a b (c,d) = let
+ region = fold' (++) (map (handleInflateK c) b) []
+ place = choose (divideSpace a (embedSpace region c) c)
+ in (place, takeRegions (embedSpace d c) place)
+
+handleInflateK :: Place -> [(Boundary,Side)] -> [Region]
+handleInflateK a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
 
 handleFill :: Int -> IO ()
 handleFill = undefined
