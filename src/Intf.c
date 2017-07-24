@@ -2116,7 +2116,7 @@ enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (arg->feedback) done = feedback[0]->done;
     if (arg->element) todo = element[0]->done - done;
     else if (arg->vertex) todo = vertex[0]->done - done;
-    if (limit[arg->shader] > 0 && limit[arg->shader] < todo) todo = limit[arg->shader];
+    if (limit[arg->shader] > 0 && limit[arg->shader] - done < todo) todo = limit[arg->shader] - done;
     if (todo < 0) exitErrstr("%s too todo\n",arg->name);
     if (todo == 0) return Advance;
     glUseProgram(program[arg->shader]);

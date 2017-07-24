@@ -66,6 +66,23 @@ split [] _ = []
 split _ [] = []
 split a (b:c) = (take b a):(split (drop b a) c)
 
+recurse1 :: (a -> a) -> a -> Int -> [a]
+recurse1 f a b = a:(recurse1F f a (b-1))
+
+recurse1F :: (a -> a) -> a -> Int -> [a]
+recurse1F _ _ 0 = []
+recurse1F f a b = let last1 = f a in last1:(recurse1F f last1 (b-1))
+
+recurse2 :: (a -> a -> a) -> a -> a -> Int -> [a]
+recurse2 f a b c = a:b:(recurse2G f a b (c-2))
+
+recurse2F :: (a -> a -> a) -> a -> a -> Int -> [a]
+recurse2F f a b c = b:(recurse2G f a b (c-1))
+
+recurse2G :: (a -> a -> a) -> a -> a -> Int -> [a]
+recurse2G _ _ _ 0 = []
+recurse2G f a b c = let last1 = b; last2 = f a b in last2:(recurse2G f last1 last2 (c-1))
+
 handleEvent :: IO Bool
 handleEvent = do
  event <- (eventC >>= peekCString)
@@ -101,7 +118,7 @@ handlePlane index =
  inboundaries = length inboundary
  point = map (done:) (subsets 2 inboundary)
  classify = map (inboundary \\) point
- relate = map (\_ -> inboundaries) point
+ relate = recurse1F (\x -> x + inboundaries) base (length point)
  pointed = map fromIntegral (concat point)
  classified = map fromIntegral (concat classify)
  related = map fromIntegral relate
