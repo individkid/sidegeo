@@ -50,6 +50,22 @@ printStr str = do
  ptr <- printC (fromIntegral (length str))
  pokeArray ptr (map castCharToCChar str)
 
+plusPtr' :: Ptr CInt -> Int -> Ptr CInt
+plusPtr' ptr offset = let
+ dummy :: Int
+ dummy = 0
+ dummyC :: CInt
+ dummyC = fromIntegral dummy
+ in plusPtr ptr (offset*(sizeOf dummyC))
+
+length2 :: [[a]] -> Int
+length2 a = fold' (\x y -> (length x) + y) a 0
+
+split :: [a] -> [Int] -> [[a]]
+split [] _ = []
+split _ [] = []
+split a (b:c) = (take b a):(split (drop b a) c)
+
 handleEvent :: IO Bool
 handleEvent = do
  event <- (eventC >>= peekCString)
@@ -74,23 +90,6 @@ handleEvent = do
 
 handleEventF :: IO Int
 handleEventF = intArgumentC >>= (return . fromIntegral)
-
-plusPtr' :: Ptr CInt -> Int -> Ptr CInt
-plusPtr' ptr offset = let
- dummy :: Int
- dummy = 0
- dummyC :: CInt
- dummyC = fromIntegral dummy
- in plusPtr ptr (offset*(sizeOf dummyC))
-
-readBuffer :: Int -> Int -> Ptr CInt -> IO [Int]
-readBuffer base limit ptr = peekArray (limit-base) (plusPtr' ptr base) >>= return . (map fromIntegral)
-
-writeBuffer :: [CInt] -> Ptr CInt -> IO ()
-writeBuffer list ptr = pokeArray ptr list
-
-length2 :: [[a]] -> Int
-length2 a = fold' (\x y -> (length x) + y) a 0
 
 handlePlane :: Int -> IO ()
 handlePlane index =
@@ -149,7 +148,7 @@ handleInflate index =
  boundary1 = map (boundariesOfPlace . fst) generic1
  boundary2 = map2 (\(Boundary x) -> x) boundary1
  -- remove faces of indexed place
- valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) inboundary2)) then 1 else 0) (zip valid (handleInflateI face (repeat 6)))
+ valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) inboundary2)) then 1 else 0) (zip valid (split face (repeat 6)))
  -- find boundaries between inside and outside regions
  attached1 = concat (map (\r -> map (\x -> (x, r, oppositeOfRegion [x] r inspace1)) (attachedBoundaries r inspace1)) inembed1)
  attached2 = filter (\(_,_,y) -> not (elem y inembed1)) attached1
@@ -187,31 +186,32 @@ handleInflateG (done, todo) (boundary, sidedness, generic) = let
  pair = subsets 2 inboundary
  wrt = map (inboundary \\) pair
  polyant = map2 (\(x,y) -> (x, Side y)) (handleInflateH sidedness wrt)
- ingeneric = handleInflateJ boundaried polyant (generic !! todo)
+ ingeneric = handleInflateI boundaried polyant (generic !! todo)
  in (replace todo inboundaried boundary, drop (length2 polyant) sidedness, replace todo ingeneric generic)
 
 handleInflateH :: [Int] -> [[Boundary]] -> [[(Boundary,Int)]]
-handleInflateH a b = map (\(x,y) -> zip x y) (zip b (handleInflateI a (map length b)))
+handleInflateH a b = map (\(x,y) -> zip x y) (zip b (split a (map length b)))
 
-handleInflateI :: [a] -> [Int] -> [[a]]
-handleInflateI [] _ = []
-handleInflateI _ [] = []
-handleInflateI a (b:c) = (take b a):(handleInflateI (drop b a) c)
-
-handleInflateJ :: Boundary -> [[(Boundary,Side)]] -> (Place,[Region]) -> (Place,[Region])
-handleInflateJ a b (c,d) = let
- region = fold' (++) (map (handleInflateK c) b) []
+handleInflateI :: Boundary -> [[(Boundary,Side)]] -> (Place,[Region]) -> (Place,[Region])
+handleInflateI a b (c,d) = let
+ region = fold' (++) (map (handleInflateJ c) b) []
  place = choose (divideSpace a (embedSpace region c) c)
  in (place, takeRegions (embedSpace d c) place)
 
-handleInflateK :: Place -> [(Boundary,Side)] -> [Region]
-handleInflateK a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
+handleInflateJ :: Place -> [(Boundary,Side)] -> [Region]
+handleInflateJ a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
 
 handleFill :: Int -> IO ()
 handleFill = undefined
 
 handleHollow :: Int -> IO ()
 handleHollow = undefined
+
+readBuffer :: Int -> Int -> Ptr CInt -> IO [Int]
+readBuffer base limit ptr = peekArray (limit-base) (plusPtr' ptr base) >>= return . (map fromIntegral)
+
+writeBuffer :: [CInt] -> Ptr CInt -> IO ()
+writeBuffer list ptr = pokeArray ptr list
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr' ptr 1))
