@@ -133,11 +133,11 @@ handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
  readSideband >>= (\(boundary,todo,done,base,classifies,points,relates) ->
- readSideBufC >>= readBuffer base classifies >>= (\sidedness ->
+ readSideBufC >>= readBuffer base classifies >>= (\side ->
  readFaceOkC >>= readBuffer 0 0 >>= (\valid ->
  readFaceSubC >>= readBuffer 0 0 >>= (\face -> let
  -- add boundaries accoriding to sidedness
- generic1 = handleInflateF boundary done todo sidedness generic
+ generic1 = handleInflateF boundary todo done side generic
  -- replace embed for indicated place by all inside regions
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
@@ -148,8 +148,6 @@ handleInflate index =
  -- maintain boundary lists in sideband
  boundary1 = map (boundariesOfPlace . fst) generic1
  boundary2 = map2 (\(Boundary x) -> x) boundary1
- -- remove faces of indexed place
- valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) inboundary2)) then 1 else 0) (zip valid (split face (repeat 6)))
  -- find boundaries between inside and outside regions
  attached1 = concat (map (\r -> map (\x -> (x, r, oppositeOfRegion [x] r inspace1)) (attachedBoundaries r inspace1)) inembed1)
  attached2 = filter (\(_,_,y) -> not (elem y inembed1)) attached1
@@ -164,8 +162,11 @@ handleInflate index =
  face2 = map (\(x,y,z) -> (x, y, map (\(w,v) -> (w, map (\u -> u \\ w) v)) z)) face1
  face3 = concat (concat (map (\(x,y,z) -> map (\(w,v) -> concat [[x],w,(concat v),y]) z) face2))
  face4 = map (\(Boundary x) -> x) (zipBoundaries face3 inboundary1)
+ -- remove faces of indexed place
+ valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) inboundary2)) then 1 else 0) (zip valid (split face (repeat 6)))
+ -- indicate new faces are valid
  valid2 :: [Int]
- valid2 = valid1 `append` (replicate (length face3) 1)
+ valid2 = valid1 `append` (replicate (quot (length face4) 6) 1)
  -- append found faces
  in writeGeneric generic2 >>
  writeSideband (boundary2,[],done,classifies,classifies,points,relates) >>
@@ -174,8 +175,8 @@ handleInflate index =
  return ()
  )))))
 
-handleInflateF :: [[Int]] -> Int -> [Int] -> [Int] -> Generic -> Generic
-handleInflateF boundary done todo sidedness generic = let
+handleInflateF :: [[Int]] -> [Int] -> Int -> [Int] -> Generic -> Generic
+handleInflateF boundary todo done sidedness generic = let
  (_,_,result) = fold' handleInflateG (zip (iterate (1+) (done - (length todo))) todo) (boundary, sidedness, generic)
  in result
 
