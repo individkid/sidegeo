@@ -27,7 +27,7 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
-type Sideband = ([[Int]],Int,Int,Int,Int,[Int],Int,Int)
+type Sideband = ([[Int]],[Int],Int,Int,Int,Int,Int)
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
@@ -110,7 +110,7 @@ handleEventF = intArgumentC >>= (return . fromIntegral)
 
 handlePlane :: Int -> IO ()
 handlePlane index =
- readSideband >>= (\(boundary,points,classifies,relates,done,todo,base,limit) -> let
+ readSideband >>= (\(boundary,todo,done,base,classifies,points,relates) -> let
  inboundary = boundary !! index
  inboundaries = length inboundary
  point = map (done:) (subsets 2 inboundary)
@@ -122,19 +122,18 @@ handlePlane index =
  newRelates = relates + (length relate)
  newDone = done + 1
  newTodo = todo `append` [index]
- newLimit = limit + ((length point) * inboundaries)
  in writePointSubC (fromIntegral points) (fromIntegral newPoints) >>= writeBuffer (map fromIntegral (concat point)) >>
  writeSideSubC (fromIntegral classifies) (fromIntegral newClassifies) >>= writeBuffer (map fromIntegral (concat classify)) >>
  correlateC (fromIntegral newRelates) >>= (\x -> writeBuffer (map fromIntegral relate) (plusPtr' x relates)) >>
- writeSideband (newBoundary,newPoints,newClassifies,newRelates,newDone,newTodo,base,newLimit) >>
+ writeSideband (newBoundary,newTodo,newDone,base,newClassifies,newPoints,newRelates) >>
  return ()
  )
 
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
- readSideband >>= (\(boundary,points,classifies,relates,done,todo,base,limit) ->
- readSideBufC >>= readBuffer base limit >>= (\sidedness ->
+ readSideband >>= (\(boundary,todo,done,base,classifies,points,relates) ->
+ readSideBufC >>= readBuffer base classifies >>= (\sidedness ->
  readFaceOkC >>= readBuffer 0 0 >>= (\valid ->
  readFaceSubC >>= readBuffer 0 0 >>= (\face -> let
  -- add boundaries accoriding to sidedness
@@ -169,7 +168,7 @@ handleInflate index =
  valid2 = valid1 `append` (replicate (length face3) 1)
  -- append found faces
  in writeGeneric generic2 >>
- writeSideband (boundary2,points,classifies,relates,done,[],limit,limit) >>
+ writeSideband (boundary2,[],done,classifies,classifies,points,relates) >>
  writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
  writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer (map fromIntegral face4) >>
  return ()
@@ -263,16 +262,15 @@ readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
  (peel places) >>= (\boundaries -> jump boundaries
  (onion boundaries) >>= (\boundary -> jump boundary
- chip >>= (\points -> jump points
- chip >>= (\classifies -> jump classifies
- chip >>= (\relates -> jump relates
- chip >>= (\dones -> jump dones
  chip >>= (\todos -> jump todos
  (peel todos) >>= (\todo -> jump todo
+ chip >>= (\done -> jump done
  chip >>= (\base -> jump base
- chip >>= (\limit ->
- return ((fst boundary), (fst points), (fst classifies), (fst relates), (fst dones), (fst todo), (fst base), (fst limit))
- ))))))))))))
+ chip >>= (\classifies -> jump classifies
+ chip >>= (\points -> jump points
+ chip >>= (\relates ->
+ return ((fst boundary), (fst todo), (fst done), (fst base), (fst classifies), (fst points), (fst relates))
+ )))))))))))
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))
@@ -324,20 +322,19 @@ writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
 
 writeSideband :: Sideband -> IO (Ptr CInt)
-writeSideband (a,b,c,d,e,f,g,h) = let
+writeSideband (a,b,c,d,e,f,g) = let
  places = length a
  boundaries = map length a
- todos = length f
- size = 8 + (length boundaries) + (length2 a) + (length f)
+ todos = length b
+ size = 7 + (length boundaries) + (length2 a) + (length b)
  in (sidebandC (fromIntegral size)) >>=
  (paste places) >>=
  (cover boundaries) >>=
  (layer a) >>=
- (paste b) >>=
+ (paste todos) >>=
+ (cover b) >>=
  (paste c) >>=
  (paste d) >>=
  (paste e) >>=
- (paste todos) >>=
- (cover f) >>=
- (paste g) >>=
- (paste h)
+ (paste f) >>=
+ (paste g)
