@@ -27,8 +27,7 @@ import Foreign.C.String
 import AffTopo.Naive
 
 type Generic = [(Place,[Region])]
-type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int],Int,Int)
- -- ([[boundary]],[num-points],[num-classifications],[num-correlates],num-done,[place-todo],side-done,side-todo)
+type Sideband = ([[Int]],Int,Int,Int,Int,[Int],Int,Int)
 
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
@@ -111,45 +110,30 @@ handleEventF = intArgumentC >>= (return . fromIntegral)
 
 handlePlane :: Int -> IO ()
 handlePlane index =
- readSideband >>= (\(boundary,points,classes,relates,done,todo,base,_) -> let
+ readSideband >>= (\(boundary,points,classifies,relates,done,todo,base,limit) -> let
  inboundary = boundary !! index
- inpoints = points !! index
- inclasses = classes !! index
- inrelates = relates !! index
  inboundaries = length inboundary
  point = map (done:) (subsets 2 inboundary)
  classify = map (inboundary \\) point
  relate = recurseF (inboundaries+) base (length point)
- pointed = map fromIntegral (concat point)
- classified = map fromIntegral (concat classify)
- related = map fromIntegral relate
- newInboundary = inboundary `append` [done]
- newInpoints = inpoints + (length pointed)
- newInclasses = inclasses + (length classified)
- newInrelates = inrelates + (length related)
- newBoundary = replace index newInboundary boundary
- newPoints = replace index newInpoints points
- newClasses = replace index newInclasses classes
- newRelates = replace index newInrelates relates
+ newBoundary = replace index (inboundary `append` [done]) boundary
+ newPoints = points + (length2 point)
+ newClassifies = classifies + (length2 classify)
+ newRelates = relates + (length relate)
  newDone = done + 1
  newTodo = todo `append` [index]
- inpointed = fromIntegral inpoints
- inclassified = fromIntegral inclasses
- inrelated = fromIntegral inrelates
- newInpointed = fromIntegral newInpoints
- newInclassified = fromIntegral newInclasses
- newInrelated = fromIntegral newInrelates
- in writePointSubC inpointed newInpointed >>= writeBuffer pointed >>
- writeSideSubC inclassified newInclassified >>= writeBuffer classified >>
- correlateC newInrelated >>= (\x -> writeBuffer related (plusPtr' x inrelated)) >>
- writeSideband (newBoundary,newPoints,newClasses,newRelates,newDone,newTodo,base,newInclasses) >>
+ newLimit = limit + ((length point) * inboundaries)
+ in writePointSubC (fromIntegral points) (fromIntegral newPoints) >>= writeBuffer (map fromIntegral (concat point)) >>
+ writeSideSubC (fromIntegral classifies) (fromIntegral newClassifies) >>= writeBuffer (map fromIntegral (concat classify)) >>
+ correlateC (fromIntegral newRelates) >>= (\x -> writeBuffer (map fromIntegral relate) (plusPtr' x relates)) >>
+ writeSideband (newBoundary,newPoints,newClassifies,newRelates,newDone,newTodo,base,newLimit) >>
  return ()
  )
 
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
- readSideband >>= (\(boundary,points,classes,relates,done,todo,base,limit) ->
+ readSideband >>= (\(boundary,points,classifies,relates,done,todo,base,limit) ->
  readSideBufC >>= readBuffer base limit >>= (\sidedness ->
  readFaceOkC >>= readBuffer 0 0 >>= (\valid ->
  readFaceSubC >>= readBuffer 0 0 >>= (\face -> let
@@ -185,7 +169,7 @@ handleInflate index =
  valid2 = valid1 `append` (replicate (length face3) 1)
  -- append found faces
  in writeGeneric generic2 >>
- writeSideband (boundary2,points,classes,relates,done,[],limit,limit) >>
+ writeSideband (boundary2,points,classifies,relates,done,[],limit,limit) >>
  writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
  writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer (map fromIntegral face4) >>
  return ()
@@ -251,9 +235,6 @@ patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 jump :: a -> (a -> b) -> b
 jump a f = f a
 
--- (num-places,[num-boundaries],[num-regions],[[boundary]],[[region]],
---  [[first-halfspace-size]],[[second-halfspace-size]],[[[first-halfspace-region]]],[[[second-halfspace-region]]],
---  [embeded-region-size],[[embeded-region]])
 readGeneric :: IO Generic
 readGeneric = (genericC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
@@ -277,21 +258,20 @@ readGeneric = (genericC 0) >>= (\ptr -> jump (0::Int,ptr)
 readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
 readGenericF a b c = (a,[b,c])
 
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo]--
 readSideband :: IO Sideband
 readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
  (peel places) >>= (\boundaries -> jump boundaries
  (onion boundaries) >>= (\boundary -> jump boundary
- (peel places) >>= (\points -> jump points
- (peel places) >>= (\classifications -> jump classifications
- (peel places) >>= (\correlates -> jump correlates
+ chip >>= (\points -> jump points
+ chip >>= (\classifies -> jump classifies
+ chip >>= (\relates -> jump relates
  chip >>= (\dones -> jump dones
  chip >>= (\todos -> jump todos
  (peel todos) >>= (\todo -> jump todo
  chip >>= (\base -> jump base
  chip >>= (\limit ->
- return ((fst boundary), (fst points), (fst classifications), (fst correlates), (fst dones), (fst todo), (fst base), (fst limit))
+ return ((fst boundary), (fst points), (fst classifies), (fst relates), (fst dones), (fst todo), (fst base), (fst limit))
  ))))))))))))
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
@@ -343,21 +323,19 @@ writeGenericF a = fold' (+) (map length a) 0
 writeGenericG :: [[[a]]] -> Int
 writeGenericG a = fold' (+) (map writeGenericF a) 0
 
--- type Sideband = ([[Int]],[Int],[Int],[Int],Int,[Int],Int,Int)
---num-places,[num-boundaries],[[boundary]],[num-points],[num-classifications],[num-correlates],num-done,num-todo,[place-todo],side-done,side-todo--
 writeSideband :: Sideband -> IO (Ptr CInt)
 writeSideband (a,b,c,d,e,f,g,h) = let
  places = length a
  boundaries = map length a
  todos = length f
- size = 1 + places + places + places + places + 1 + 1 + todos + 1 + 1
+ size = 8 + (length boundaries) + (length2 a) + (length f)
  in (sidebandC (fromIntegral size)) >>=
  (paste places) >>=
  (cover boundaries) >>=
  (layer a) >>=
- (cover b) >>=
- (cover c) >>=
- (cover d) >>=
+ (paste b) >>=
+ (paste c) >>=
+ (paste d) >>=
  (paste e) >>=
  (paste todos) >>=
  (cover f) >>=
