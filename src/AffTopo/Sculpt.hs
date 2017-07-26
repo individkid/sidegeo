@@ -110,34 +110,37 @@ handleEventF = intArgumentC >>= (return . fromIntegral)
 
 handlePlane :: Int -> IO ()
 handlePlane index =
- readSideband >>= (\(boundary,todo,done,base,classifies,points,relates) -> let
+ readSideband >>= (\(boundary,todo,done,base,limit,points,relates) -> let
  inboundary = boundary !! index
  inboundaries = length inboundary
- point = map (done:) (subsets 2 inboundary)
+ point = map (done :) (subsets 2 inboundary)
  classify = map (inboundary \\) point
- relate = recurseF (inboundaries+) base (length point)
+ relate = recurseF (inboundaries +) base (length point)
  newBoundary = replace index (inboundary `append` [done]) boundary
+ newLimit = find' ((last relate) ==) [limit + (length2 classify)]
  newPoints = points + (length2 point)
- newClassifies = classifies + (length2 classify)
  newRelates = relates + (length relate)
  newDone = done + 1
  newTodo = todo `append` [index]
  in writePointSubC (fromIntegral points) (fromIntegral newPoints) >>= writeBuffer (map fromIntegral (concat point)) >>
- writeSideSubC (fromIntegral classifies) (fromIntegral newClassifies) >>= writeBuffer (map fromIntegral (concat classify)) >>
+ writeSideSubC (fromIntegral limit) (fromIntegral newLimit) >>= writeBuffer (map fromIntegral (concat classify)) >>
  correlateC (fromIntegral newRelates) >>= (\x -> writeBuffer (map fromIntegral relate) (plusPtr' x relates)) >>
- writeSideband (newBoundary,newTodo,newDone,base,newClassifies,newPoints,newRelates) >>
+ writeSideband (newBoundary,newTodo,newDone,base,newLimit,newPoints,newRelates) >>
  return ()
  )
 
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
- readSideband >>= (\(boundary,todo,done,base,classifies,points,relates) ->
- readSideBufC >>= readBuffer base classifies >>= (\side ->
+ readSideband >>= (\(boundary,todo,done,base,limit,points,relates) ->
+ readSideBufC >>= readBuffer base limit >>= (\side ->
  readFaceOkC >>= readBuffer 0 0 >>= (\valid ->
  readFaceSubC >>= readBuffer 0 0 >>= (\face -> let
  -- add boundaries accoriding to sidedness
  generic1 = handleInflateF boundary todo done side generic
+ -- maintain boundary lists in sideband
+ boundary1 = map (boundariesOfPlace . fst) generic1
+ boundary2 = map2 (\(Boundary x) -> x) boundary1
  -- replace embed for indicated place by all inside regions
  (inplace1,_) = generic1 !! index
  (inboundary1,inspace1) = unzipPlace inplace1
@@ -145,9 +148,6 @@ handleInflate index =
  inregions1 = regionsOfSpace inspace1
  inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
  generic2 = replace index (inplace1,inembed1) generic1
- -- maintain boundary lists in sideband
- boundary1 = map (boundariesOfPlace . fst) generic1
- boundary2 = map2 (\(Boundary x) -> x) boundary1
  -- find boundaries between inside and outside regions
  attached1 = concat (map (\r -> map (\x -> (x, r, oppositeOfRegion [x] r inspace1)) (attachedBoundaries r inspace1)) inembed1)
  attached2 = filter (\(_,_,y) -> not (elem y inembed1)) attached1
@@ -169,7 +169,7 @@ handleInflate index =
  valid2 = valid1 `append` (replicate (quot (length face4) 6) 1)
  -- append found faces
  in writeGeneric generic2 >>
- writeSideband (boundary2,[],done,classifies,classifies,points,relates) >>
+ writeSideband (boundary2,[],done,limit,limit,points,relates) >>
  writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
  writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer (map fromIntegral face4) >>
  return ()
@@ -267,10 +267,10 @@ readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  (peel todos) >>= (\todo -> jump todo
  chip >>= (\done -> jump done
  chip >>= (\base -> jump base
- chip >>= (\classifies -> jump classifies
+ chip >>= (\limit -> jump limit
  chip >>= (\points -> jump points
  chip >>= (\relates ->
- return ((fst boundary), (fst todo), (fst done), (fst base), (fst classifies), (fst points), (fst relates))
+ return ((fst boundary), (fst todo), (fst done), (fst base), (fst limit), (fst points), (fst relates))
  )))))))))))
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
