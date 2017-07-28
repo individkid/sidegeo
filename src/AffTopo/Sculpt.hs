@@ -87,21 +87,12 @@ handleEvent :: IO Bool
 handleEvent = do
  event <- (eventC >>= peekCString)
  case event of
-  "Plane" ->
-   handleEventF >>= handlePlane >>
-   return False
-  "Classify" ->
-   handleClassify >>
-   return False
-  "Inflate" ->
-   handleEventF >>= handleInflate >>
-   return False
-  "Fill" ->
-   handleEventF >>= handleFill >>
-   return False
-  "Hollow" ->
-   handleEventF >>= handleHollow >>
-   return False
+  "Initialize" -> handleInitialize >> return False
+  "Plane" -> handleEventF >>= handlePlane >> return False
+  "Classify" -> handleClassify >> return False
+  "Inflate" -> handleEventF >>= handleInflate >> return False
+  "Fill" -> handleEventF >>= handleFill >> return False
+  "Hollow" -> handleEventF >>= handleHollow >> return False
   "Error" -> return True
   "Done" -> return True
   _ ->
@@ -111,9 +102,14 @@ handleEvent = do
 handleEventF :: IO Int
 handleEventF = intArgumentC >>= (return . fromIntegral)
 
+handleInitialize :: IO ()
+handleInitialize =
+ writeSideband ([],[],0,0,0,0,0) >>
+ return ()
+
 handlePlane :: Int -> IO ()
 handlePlane index =
- readSideband >>= (\(boundary,todo,done,base,limit,points,relates) -> let
+ readSideband index >>= (\(boundary,todo,done,base,limit,points,relates) -> let
  inboundary = boundary !! index
  inboundaries = length inboundary
  point = map (done :) (subsets 2 inboundary)
@@ -133,8 +129,8 @@ handlePlane index =
 
 handleClassify :: IO ()
 handleClassify =
- readGeneric >>= (\generic ->
- readSideband >>= (\(boundary,todo,done,base,limit,points,relates) ->
+ readGenericF >>= (\generic ->
+ readSidebandF >>= (\(boundary,todo,done,base,limit,points,relates) ->
  readSideBufC >>= readBuffer base limit >>= (\side -> let
  -- add boundaries accoriding to sidedness
  (_,_,generic1) = fold' handleClassifyF (zip (iterate (1+) done) todo) (boundary, side, generic)
@@ -172,7 +168,7 @@ handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y
 
 handleInflate :: Int -> IO ()
 handleInflate index =
- readGeneric >>= (\generic ->
+ readGeneric index >>= (\generic ->
  readFaceOkC >>= readBuffer 0 0 >>= (\valid ->
  readFaceSubC >>= readBuffer 0 0 >>= (\face -> let
  -- replace embed for indicated place by all inside regions
@@ -240,8 +236,12 @@ patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 jump :: a -> (a -> b) -> b
 jump a f = f a
 
-readGeneric :: IO Generic
-readGeneric = (genericC 0) >>= (\ptr -> jump (0::Int,ptr)
+readGeneric :: Int -> IO Generic
+readGeneric index =
+ readGenericF >>= (\x -> return (take index (x `append` (repeat ([],[])))))
+
+readGenericF :: IO Generic
+readGenericF = (genericC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
  (peel places) >>= (\boundaries -> jump boundaries
  (peel places) >>= (\regions -> jump regions
@@ -257,14 +257,19 @@ readGeneric = (genericC 0) >>= (\ptr -> jump (0::Int,ptr)
  x = map3 Region (fst first)
  y = map3 Region (fst second)
  z = map2 Region (fst embed)
- in return (zip (zipWith3 (zipWith3 readGenericF) w x y) z)
+ in return (zip (zipWith3 (zipWith3 readGenericG) w x y) z)
  ))))))))))))
 
-readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
-readGenericF a b c = (a,[b,c])
+readGenericG :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
+readGenericG a b c = (a,[b,c])
 
-readSideband :: IO Sideband
-readSideband = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
+readSideband :: Int -> IO Sideband
+readSideband index =
+ readSidebandF >>= (\(boundary,todo,done,base,limit,points,relates) ->
+ return (take index (boundary `append` (repeat [])),todo,done,base,limit,points,relates))
+
+readSidebandF :: IO Sideband
+readSidebandF = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
  chip >>= (\places -> jump places
  (peel places) >>= (\boundaries -> jump boundaries
  (onion boundaries) >>= (\boundary -> jump boundary

@@ -51,7 +51,7 @@ Configuration/history files consist of commands. Append commands, schedule comma
   * --color takes plane subscript and decoration  
   * --matrix takes transformation of display  
   * --project takes slope and cutoff  
-  * --configure takes autowarp, autorefine, autodecorate, autovibrate, autodelay  
+  * --configure takes autowarp, autorefine, autocolor, autofilter, autodelay, automatrix  
   * --inject specifies user action to inject, ignored if not at eof  
   * --schedule appends at a wallclock time, ignored if not at eof  
   * --jump optionally causes playback to go to location in file  

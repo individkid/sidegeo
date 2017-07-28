@@ -276,7 +276,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Plane,Classify,Inflate,Fill,Hollow,Error,Done};
+enum Event {Initialize,Plane,Classify,Inflate,Fill,Hollow,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 struct Chars {DECLARE_QUEUE(char)} chars = {0};
@@ -1728,6 +1728,7 @@ void initialize(int argc, char **argv)
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
 
+    enqueCommand(0); enqueEvent(Initialize);
     ENQUE(process,Process)
 }
 
@@ -2821,7 +2822,8 @@ char *event()
 {
     if (!validEvent()) return (char *)"";
     enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Plane) return (char *)"Plane";
+    SWITCH(event,Initialize) return (char *)"Initialize";
+    CASE(Plane) return (char *)"Plane";
     CASE(Classify) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
     CASE(Fill) return (char *)"Fill";
