@@ -24,13 +24,14 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Additive -- click fills in region over pierce point  
   * Subtractive -- click hollows out region under pierce point  
   * Refine -- click adds random plane through pierce point  
-  * Transform -- modify model or perspective matrix  
+  * Transform -- modify world or perspective matrix  
+  * Modify -- modify pierced polytope independent of others  
   * Manipulate -- modify pierced plane  
-  * Mouse -- action of mouse motion in Transform/Manipulate modes  
+  * Mouse -- action of mouse motion in Transform/Modify/Manipulate modes  
     * Rotate -- tilt polytope/plane around pierce point  
     * Translate -- slide polytope/plane from pierce point  
     * Look -- tilt camera around focal point  
-  * Roller -- action of roller button in Transform/Manipulate modes  
+  * Roller -- action of roller button in Transform/Modify/Manipulate modes  
     * Cylinder -- rotate polytope around tilt line  
     * Clock -- rotate picture plane around perpendicular to pierce point  
     * Scale -- grow or shrink polytope with pierce point fixed  
@@ -45,7 +46,7 @@ Configuration/history files consist of commands. Append commands, schedule comma
   * --hollow takes face subscript, removes it and adds those of its inside region    
   * --remove takes buffer type and subscript to invalidate  
   * --sample takes sidednesses to sample  
-  * --volume takes polyant, amplitude, fundamental, harmonics, envelope, rhythm  
+  * --source takes sound file or source  
   * --filter takes plane subscript, per area equalization of tempo, dynamic, tone  
   * --color takes plane subscript and decoration  
   * --matrix takes transformation of display  

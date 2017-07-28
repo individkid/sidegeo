@@ -153,7 +153,7 @@ int ready[Shaders] = {0};
 int reset[Shaders] = {0};
 GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Transform,Manipulate,
+    Sculpts,Additive,Subtractive,Refine,Transform,Modify,Manipulate,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Menus};
@@ -174,12 +174,13 @@ struct Item { // per-menu-line info
     {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Transform","modify affine or perspective matrix"},
+    {Sculpts,Sculpt,1,"Modify","modify pierced polytope independent of others"},
     {Sculpts,Sculpt,1,"Manipulate","modify pierced plane"},
-    {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform/Manipulate modes"},
+    {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform/Modify/Manipulate modes"},
     {Mouses,Mouse,2,"Rotate","tilt polytope/plane around pierce point"},
     {Mouses,Mouse,2,"Translate","slide polytope/plane from pierce point"},
     {Mouses,Mouse,2,"Look","tilt camera around focal point"},
-    {Sculpts,Roller,1,"Roller","action of roller button in Transform/Manipulate modes"},
+    {Sculpts,Roller,1,"Roller","action of roller button in Transform/Modify/Manipulate modes"},
     {Rollers,Roller,2,"Cylinder","rotate around tilt line"},
     {Rollers,Roller,2,"Clock","rotate around perpendicular to pierce point"},
     {Rollers,Roller,2,"Scale","grow or shrink with pierce point fixed"},
@@ -2290,6 +2291,12 @@ void leftTransform()
     click = Left;
 }
 
+void leftModify()
+{
+    wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
+    click = Left;
+}
+
 void leftManipulate()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
@@ -2457,6 +2464,41 @@ void transformDrive()
     transformMouse();
 }
 
+void modifyRotate()
+{
+    // TODO
+}
+
+void modifyTranslate()
+{
+    // TODO
+}
+
+void modifyLook()
+{
+    // TODO
+}
+
+void modifyClock()
+{
+    // TODO
+}
+
+void modifyCylinder()
+{
+    // TODO
+}
+
+void modifyScale()
+{
+    // TODO
+}
+
+void modifyDrive()
+{
+    // TODO
+}
+
 void manipulateRotate()
 {
     // TODO
@@ -2528,6 +2570,11 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             CASE(Matrix) matrixMatrix();
             FALL(Left) leftLeft();
             DEFAULT(exitErrstr("invalid click mode\n");)}
+        CASE(Modify) {
+            SWITCH(click,Init) FALL(Right) leftModify();
+            CASE(Matrix) matrixMatrix();
+            FALL(Left) leftLeft();
+            DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Manipulate) {
             SWITCH(click,Init) FALL(Right) leftManipulate();
             CASE(Matrix) matrixMatrix();
@@ -2536,7 +2583,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
         SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
-        CASE(Transform) FALL(Manipulate) {
+        CASE(Transform) FALL(Modify) FALL(Manipulate) {
             SWITCH(click,Init) {/*ignore*/}
             CASE(Right) rightRight();
             CASE(Matrix) matrixMatrix();
@@ -2562,6 +2609,16 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
             SWITCH(mode[Mouse],Rotate) transformRotate();
             CASE(Translate) transformTranslate();
             CASE(Look) transformLook();
+            DEFAULT(exitErrstr("invalid mouse mode\n");)}
+        DEFAULT(exitErrstr("invalid click mode\n");)}
+    CASE(Modify) {
+        SWITCH(click,Init) FALL(Right) 
+            transformRight();
+        CASE(Matrix) matrixMatrix();
+        FALL(Left) {
+            SWITCH(mode[Mouse],Rotate) modifyRotate();
+            CASE(Translate) modifyTranslate();
+            CASE(Look) modifyLook();
             DEFAULT(exitErrstr("invalid mouse mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}
     CASE(Manipulate) {
@@ -2591,6 +2648,16 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             CASE(Cylinder) transformCylinder();
             CASE(Scale) transformScale();
             CASE(Drive) transformDrive();
+            DEFAULT(exitErrstr("invalid roller mode\n");)}
+        DEFAULT(exitErrstr("invalid click mode\n");)}            
+    CASE(Modify) {
+        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        CASE(Left) click = Matrix;
+        FALL(Matrix) {
+            SWITCH(mode[Roller],Clock) modifyClock();
+            CASE(Cylinder) modifyCylinder();
+            CASE(Scale) modifyScale();
+            CASE(Drive) modifyDrive();
             DEFAULT(exitErrstr("invalid roller mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}            
     CASE(Manipulate) {
