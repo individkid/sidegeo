@@ -90,6 +90,9 @@ handleEvent = do
   "Plane" ->
    handleEventF >>= handlePlane >>
    return False
+  "Classify" ->
+   handleClassify >>
+   return False
   "Inflate" ->
    handleEventF >>= handleInflate >>
    return False
@@ -120,34 +123,65 @@ handlePlane index =
  newLimit = find' ((last relate) ==) [limit + (length2 classify)]
  newPoints = points + (length2 point)
  newRelates = relates + (length relate)
- newDone = done + 1
  newTodo = todo `append` [index]
  in writePointSubC (fromIntegral points) (fromIntegral newPoints) >>= writeBuffer (map fromIntegral (concat point)) >>
  writeSideSubC (fromIntegral limit) (fromIntegral newLimit) >>= writeBuffer (map fromIntegral (concat classify)) >>
  correlateC (fromIntegral newRelates) >>= (\x -> writeBuffer (map fromIntegral relate) (plusPtr' x relates)) >>
- writeSideband (newBoundary,newTodo,newDone,base,newLimit,newPoints,newRelates) >>
+ writeSideband (newBoundary,newTodo,done,base,newLimit,newPoints,newRelates) >>
  return ()
  )
+
+handleClassify :: IO ()
+handleClassify =
+ readGeneric >>= (\generic ->
+ readSideband >>= (\(boundary,todo,done,base,limit,points,relates) ->
+ readSideBufC >>= readBuffer base limit >>= (\side -> let
+ -- add boundaries accoriding to sidedness
+ (_,_,generic1) = fold' handleClassifyF (zip (iterate (1+) done) todo) (boundary, side, generic)
+ done1 = done + (length todo)
+ -- maintain boundary lists in sideband
+ boundary1 = map (boundariesOfPlace . fst) generic1
+ boundary2 = map2 (\(Boundary x) -> x) boundary1
+ in writeGeneric generic1 >>
+ writeSideband (boundary2,[],done1,limit,limit,points,relates) >>
+ return ()
+ )))
+
+handleClassifyF :: (Int, Int) -> ([[Int]], [Int], Generic) -> ([[Int]], [Int], Generic)
+handleClassifyF (done, todo) (boundary, sidedness, generic) = let
+ inboundary = map Boundary (boundary !! todo)
+ boundaried = Boundary done
+ inboundaried = map (\(Boundary x) -> x) (inboundary `append` [boundaried])
+ pair = subsets 2 inboundary
+ wrt = map (inboundary \\) pair
+ polyant = map2 (\(x,y) -> (x, Side y)) (handleClassifyG sidedness wrt)
+ ingeneric = handleClassifyH boundaried polyant (generic !! todo)
+ in (replace todo inboundaried boundary, drop (length2 polyant) sidedness, replace todo ingeneric generic)
+
+handleClassifyG :: [Int] -> [[Boundary]] -> [[(Boundary,Int)]]
+handleClassifyG a b = map (\(x,y) -> zip x y) (zip b (split a (map length b)))
+
+handleClassifyH :: Boundary -> [[(Boundary,Side)]] -> (Place,[Region]) -> (Place,[Region])
+handleClassifyH a b (c,d) = let
+ region = fold' (++) (map (handleClassifyI c) b) []
+ place = choose (divideSpace a (embedSpace region c) c)
+ in (place, takeRegions (embedSpace d c) place)
+
+handleClassifyI :: Place -> [(Boundary,Side)] -> [Region]
+handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
 
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric >>= (\generic ->
- readSideband >>= (\(boundary,todo,done,base,limit,points,relates) ->
- readSideBufC >>= readBuffer base limit >>= (\side ->
  readFaceOkC >>= readBuffer 0 0 >>= (\valid ->
  readFaceSubC >>= readBuffer 0 0 >>= (\face -> let
- -- add boundaries accoriding to sidedness
- generic1 = handleInflateF boundary todo done side generic
- -- maintain boundary lists in sideband
- boundary1 = map (boundariesOfPlace . fst) generic1
- boundary2 = map2 (\(Boundary x) -> x) boundary1
  -- replace embed for indicated place by all inside regions
- (inplace1,_) = generic1 !! index
+ (inplace1,_) = generic !! index
  (inboundary1,inspace1) = unzipPlace inplace1
  inboundary2 = map (\(Boundary x) -> x) inboundary1
  inregions1 = regionsOfSpace inspace1
  inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
- generic2 = replace index (inplace1,inembed1) generic1
+ generic1 = replace index (inplace1,inembed1) generic
  -- find boundaries between inside and outside regions
  attached1 = concat (map (\r -> map (\x -> (x, r, oppositeOfRegion [x] r inspace1)) (attachedBoundaries r inspace1)) inembed1)
  attached2 = filter (\(_,_,y) -> not (elem y inembed1)) attached1
@@ -168,40 +202,11 @@ handleInflate index =
  valid2 :: [Int]
  valid2 = valid1 `append` (replicate (quot (length face4) 6) 1)
  -- append found faces
- in writeGeneric generic2 >>
- writeSideband (boundary2,[],done,limit,limit,points,relates) >>
+ in writeGeneric generic1 >>
  writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
  writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer (map fromIntegral face4) >>
  return ()
- )))))
-
-handleInflateF :: [[Int]] -> [Int] -> Int -> [Int] -> Generic -> Generic
-handleInflateF boundary todo done sidedness generic = let
- (_,_,result) = fold' handleInflateG (zip (iterate (1+) (done - (length todo))) todo) (boundary, sidedness, generic)
- in result
-
-handleInflateG :: (Int, Int) -> ([[Int]], [Int], Generic) -> ([[Int]], [Int], Generic)
-handleInflateG (done, todo) (boundary, sidedness, generic) = let
- inboundary = map Boundary (boundary !! todo)
- boundaried = Boundary done
- inboundaried = map (\(Boundary x) -> x) (inboundary `append` [boundaried])
- pair = subsets 2 inboundary
- wrt = map (inboundary \\) pair
- polyant = map2 (\(x,y) -> (x, Side y)) (handleInflateH sidedness wrt)
- ingeneric = handleInflateI boundaried polyant (generic !! todo)
- in (replace todo inboundaried boundary, drop (length2 polyant) sidedness, replace todo ingeneric generic)
-
-handleInflateH :: [Int] -> [[Boundary]] -> [[(Boundary,Int)]]
-handleInflateH a b = map (\(x,y) -> zip x y) (zip b (split a (map length b)))
-
-handleInflateI :: Boundary -> [[(Boundary,Side)]] -> (Place,[Region]) -> (Place,[Region])
-handleInflateI a b (c,d) = let
- region = fold' (++) (map (handleInflateJ c) b) []
- place = choose (divideSpace a (embedSpace region c) c)
- in (place, takeRegions (embedSpace d c) place)
-
-handleInflateJ :: Place -> [(Boundary,Side)] -> [Region]
-handleInflateJ a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
+ )))
 
 handleFill :: Int -> IO ()
 handleFill = undefined

@@ -248,7 +248,6 @@ struct Buffer halfSub = {0}; // per plane prior vertices
 struct Buffer planeOk = {0}; // per-plane valid flag
 struct Buffer faceOk = {0}; // per-face valid flag
 int classifyDone = 0; // number of points classifed
-int configDone = 0; // sides done when classify issued
 FILE *configFile = 0; // for appending generic deltas
 int configScan = 0; // whether arguments scanned
 char configCommand[20]; // --command from file
@@ -276,13 +275,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {
-    Plane,
-    Inflate,
-    Fill,
-    Hollow,
-    Error,
-    Done};
+enum Event {Plane,Classify,Inflate,Fill,Hollow,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 struct Chars {DECLARE_QUEUE(char)} chars = {0};
@@ -1992,26 +1985,27 @@ enum Action loadFile()
         GLfloat buffer[3];
         GLuint valid[1];
         if (!configScan && fscanf(configFile, "%d %f %f %f", &configIndex, configScalar+0, configScalar+1, configScalar+2) != 4) {
-            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
+            enqueErrstr("cannot scan config\n"); return Reque;}
         for (int i = 0; i < 3; i++) buffer[i] = configScalar[i]; valid[0] = 1;
-        if (loadBuffer(&planeBuf,1,buffer) != 1) return Defer;
+        configScan = 1; if (loadBuffer(&planeBuf,1,buffer) != 1) return Defer;
         if (loadBuffer(&planeOk,1,valid) != 1) return Defer;
-        enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);
-        if (configDone == sideSub.done) return Defer;
-        configScan = 0; configDone = sideSub.done; MAYBE(classify,Classify)}
+        configScan = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);}
+    if (strcmp(configCommand,"--refine") == 0) {
+        MAYBE(classify,Classify)
+        configScan = 1; if (sideBuf.done < sideSub.done) return Defer;
+        configScan = 0; enqueCommand(0); enqueEvent(Classify);}
     if (strcmp(configCommand,"--inflate") == 0) {
-        if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
-            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
-        if (sideBuf.done < sideSub.done) return Defer;
-        configScan = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(configIndex);}
+        if (fscanf(configFile, "%d", &configIndex) != 1) {
+            enqueErrstr("cannot scan config\n"); return Reque;}
+        enqueCommand(0); enqueEvent(Inflate); enqueInt(configIndex);}
     if (strcmp(configCommand,"--fill") == 0) {
-        if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
-            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
-        configScan = 0; enqueCommand(0); enqueEvent(Fill); enqueInt(configIndex);}
+        if (fscanf(configFile, "%d", &configIndex) != 1) {
+            enqueErrstr("cannot scan config\n"); return Reque;}
+        enqueCommand(0); enqueEvent(Fill); enqueInt(configIndex);}
     if (strcmp(configCommand,"--hollow") == 0) {
-        if (!configScan && fscanf(configFile, "%d", &configIndex) != 1) {
-            enqueErrstr("cannot scan config\n"); return Reque;} configScan = 1;
-        configScan = 0; enqueCommand(0); enqueEvent(Hollow); enqueInt(configIndex);}
+        if (fscanf(configFile, "%d", &configIndex) != 1) {
+            enqueErrstr("cannot scan config\n"); return Reque;}
+        enqueCommand(0); enqueEvent(Hollow); enqueInt(configIndex);}
     return Reque;
 }
 
@@ -2076,12 +2070,10 @@ void process()
         enqueMsgstr("-I <file> follow file for readonly polytope\n");
         enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
         enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
-        enqueMsgstr("-p <name> replace current polytope by builtin polytope\n");
-        enqueMsgstr("-P <name> change current polytope to one from history\n");
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");
         enqueMsgstr("-o optimize away unused boundarie\n");
-        enqueMsgstr("-O split polytopes into disjoint covering subpolytope\n");
+        enqueMsgstr("-O truncate file to minimal commands for current polytope\n");
         enqueMsgstr("-t run sanity check\n");
         enqueMsgstr("-T run thorough tests\n");}
     else if (strcmp(headOption(), "-i") == 0) {
@@ -2763,6 +2755,7 @@ char *event()
     if (!validEvent()) return (char *)"";
     enum Event event = headEvent(); dequeEvent();
     SWITCH(event,Plane) return (char *)"Plane";
+    CASE(Classify) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
     CASE(Fill) return (char *)"Fill";
     CASE(Hollow) return (char *)"Hollow";

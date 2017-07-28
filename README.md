@@ -10,12 +10,10 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -B \<file> append changes to make current same as given file  
   * -f \<file> load polytope in format indicated by file extension  
   * -F \<file> save polytope in format indicated by file extension  
-  * -p \<name> replace current polytope by builtin polytope  
-  * -P \<name> change current polytope to one from history  
   * -s resample current space to planes with same sidedness  
   * -S resample current polytope to space and planes  
   * -o optimize away unused boundaries
-  * -O split polytopes into disjoint covering subpolytopes
+  * -O truncate file to minimal commands for current polytope  
   * -d display space and regions  
   * -D display polyants  
   * -t run sanity check 
@@ -41,6 +39,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
 Configuration/history files consist of commands. Append commands, schedule commands, and user input to -i file that is at eof, append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
   * --plane takes three scalars  
+  * --refine initializes representation from prior planes  
   * --inflate initializes to facets between inside and outside regions  
   * --fill takes face subscript, removes it and adds those of its outside region
   * --hollow takes face subscript, removes it and adds those of its inside region    
