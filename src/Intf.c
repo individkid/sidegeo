@@ -1990,7 +1990,7 @@ enum Action loadFile()
         configScan = 1; if (loadBuffer(&planeBuf,1,buffer) != 1) return Defer;
         if (loadBuffer(&planeOk,1,valid) != 1) return Defer;
         configScan = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(configIndex);}
-    if (strcmp(configCommand,"--refine") == 0) {
+    if (strcmp(configCommand,"--classify") == 0) {
         MAYBE(classify,Classify)
         configScan = 1; if (sideBuf.done < sideSub.done) return Defer;
         configScan = 0; enqueCommand(0); enqueEvent(Classify);}

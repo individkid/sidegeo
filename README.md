@@ -39,7 +39,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
 Configuration/history files consist of commands. Append commands, schedule commands, and user input to -i file that is at eof, append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
   * --plane takes three scalars  
-  * --refine initializes representation from prior planes  
+  * --classify initializes representation from prior planes  
   * --inflate initializes to facets between inside and outside regions  
   * --fill takes face subscript, removes it and adds those of its outside region
   * --hollow takes face subscript, removes it and adds those of its inside region    
