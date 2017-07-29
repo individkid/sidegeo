@@ -36,6 +36,7 @@ extern void __stginit_Main(void);
 #include <termios.h>
 #include <signal.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #ifdef __linux__
 #include <GL/glew.h>
@@ -104,6 +105,17 @@ pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 struct Strings filenames = {0}; // for config files
+struct File {
+    int handle;
+    enum {Open,Read,Wait} state;
+    enum {Append,Monitor}  mode;};
+struct Files {DECLARE_QUEUE(struct File)} files = {0};
+int configFile = 0; // file being processed by config
+int configScan = 0; // whether arguments scanned
+char configCommand[20]; // --command from file
+int configIndex = 0; // scanned argument
+float configScalar[3]; // scanned arguments
+int classifyDone = 0; // number of points classifed
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
@@ -248,12 +260,6 @@ struct Buffer sideSub = {0}; // per vertex prior planes
 struct Buffer halfSub = {0}; // per plane prior vertices
 struct Buffer planeOk = {0}; // per-plane valid flag
 struct Buffer faceOk = {0}; // per-face valid flag
-int classifyDone = 0; // number of points classifed
-FILE *configFile = 0; // for appending generic deltas
-int configScan = 0; // whether arguments scanned
-char configCommand[20]; // --command from file
-int configIndex = 0; // scanned argument
-float configScalar[3]; // scanned arguments
 struct Render {
     int draw; // waiting for shader
     int vertex; // number of input buffers que
@@ -265,9 +271,7 @@ struct Render {
     const char *name;
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
-enum ConfigureState {ConfigureIdle,ConfigureEnqued,ConfigureReset,
-    ConfigureOpen,ConfigureLoad,ConfigureInit,ConfigureClose,
-    ConfigureReopen,ConfigureWaitLoad,ConfigureWaitInit} configureState = ConfigureIdle;
+enum ConfigureState {ConfigureIdle,ConfigureEnqued} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 enum ClassifyState {ClassifyIdle,ClassifyEnqued} classifyState = ClassifyIdle;
 int sequenceNumber = 0;
@@ -470,6 +474,8 @@ void exitErrstr(const char *fmt, ...)
 ACCESS_QUEUE(Option,char *,options)
 
 ACCESS_QUEUE(Filename,char *,filenames)
+
+ACCESS_QUEUE(File,struct File,files)
 
 ACCESS_QUEUE(Line,enum Menu,lines)
 
@@ -1743,9 +1749,9 @@ void finalize()
         if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
-    if (configFile) {fclose(configFile); configFile = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (filenames.base) {struct Strings initial = {0}; free(filenames.base); filenames = initial;}
+    if (files.base) {struct Files initial = {0}; free(files.base); files = initial;}
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (generics.base) {struct Ints initial = {0}; free(generics.base); generics = initial;}
@@ -1961,7 +1967,7 @@ enum Action bringup()
     if (faceOk.done < NUM_FACES) return Reque;
     return Advance;
 }
-#endif
+#else
 
 int loadBuffer(struct Buffer *buffer, int todo, void *data)
 {
@@ -1977,9 +1983,6 @@ int loadBuffer(struct Buffer *buffer, int todo, void *data)
 
 enum Action loadFile()
 {
-#ifdef BRINGUP
-    return bringup();
-#endif
     int retval = 0;
     if (!configScan && (retval = fscanf(configFile," %19s",configCommand)) != 1) {
         if (retval != EOF) enqueMsgstr("cannot scan config\n"); return Reque;}
@@ -2010,53 +2013,19 @@ enum Action loadFile()
         enqueCommand(0); enqueEvent(Hollow); enqueInt(configIndex);}
     return Reque;
 }
-
-enum Action initFile()
-{
-#ifdef BRINGUP
-    return bringup();
 #endif
-}
 
 void transformRight();
 void configure()
 {
     CHECK(configure,Configure)
+#ifdef BRINGUP
     SWITCH(configureState,ConfigureEnqued) {
-        if (ready[dishader] || ready[pershader]) {reset[dishader] = 1; reset[pershader] = 1;}
-        configureState = ConfigureReset;}
-    BRANCH(ConfigureReset) {
-        if (ready[dishader] || ready[pershader]) {REQUE(configure)}
-        if (configFile && fclose(configFile) != 0) enqueErrstr("invalid path for close: %s\n", strerror(errno));
-        if (!validFilename()) exitErrstr("no filename\n");
-        planeBuf.done = 0; versorBuf.done = 0; faceSub.done = 0; planeSub.done = 0;
-        pointBuf.done = 0; frameSub.done = 0; pointSub.done = 0;
-        sideBuf.done = 0; sideSub.done = 0; halfSub.done = 0;
-        reset[dishader] = 0; reset[pershader] = 0;
-        configureState = ConfigureOpen;}
-    BRANCH(ConfigureOpen) {
-        char *filename = headFilename();
-        if ((configFile = fopen(filename, "r"))) configureState = ConfigureLoad;
-        else if (errno == ENOENT && (configFile = fopen(filename, "w"))) configureState = ConfigureInit;
-        else enqueErrstr("invalid path for config: %s: %s\n", filename, strerror(errno));}
-    BRANCH(ConfigureLoad) {
-        SWITCH(loadFile(),Reque) {REQUE(configure)}
-        CASE(Advance) configureState = ConfigureClose;
-        DEFAULT(exitErrstr("invalid load status\n");)}
-    BRANCH(ConfigureInit) {
-        SWITCH(initFile(),Reque) {REQUE(configure)}
-        CASE(Advance) configureState = ConfigureClose;
-        DEFAULT(exitErrstr("invalid init status\n");)}
-    BRANCH(ConfigureClose) {
-        char *filename = headFilename();
-        if (sizeFilename() > 1) {dequeFilename(); configureState = ConfigureEnqued;}
-        else configureState = ConfigureReopen;}
-    BRANCH(ConfigureReopen) {
-        char *filename = headFilename(); dequeFilename();
-        if (!(configFile = fopen(filename,"a"))) enqueErrstr("invalid path for append: %s: %s\n", filename, strerror(errno));
-        enqueShader(dishader);
-        transformRight();}
+        SWITCH(bringup(),Reque) {REQUE(configure)}
+        CASE(Advance) {enqueShader(dishader); transformRight();}
+        DEFAULT(exitErrstr("invalid bringup status\n");)}
     DEFAULT(exitErrstr("invalid configure state\n");)
+#endif
     DEQUE(configure,Configure)
 }
 
