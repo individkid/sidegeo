@@ -106,11 +106,12 @@ struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 struct File {
     int handle;
+    char buffer[128];
+    int size;
     enum {Open,Read,Wait} state;
     enum {Append,Monitor}  mode;};
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
 int configFile = 0; // file being processed by config
-int configScan = 0; // whether arguments scanned
 char configCommand[20]; // --command from file
 float configScalar[3]; // scanned arguments
 int classifyDone = 0; // number of points classifed
@@ -1965,6 +1966,12 @@ enum Action bringup()
     if (faceOk.done < NUM_FACES) return Reque;
     return Advance;
 }
+
+void configure();
+void openFile(const char *filename)
+{
+    MAYBE(configure,Configure)
+}
 #else
 
 enum Action bufferFile(struct Buffer *buffer, int todo, void *data)
@@ -1979,71 +1986,39 @@ enum Action bufferFile(struct Buffer *buffer, int todo, void *data)
     return Advance;
 }
 
-enum Action errorFile(const char *message)
-{
-    enqueMsgstr(message); return Restart;
-}
-
-enum Action scanFile(const char *format, int expect, ...)
-{
+enum Action scanFile(const char *format, int *size, ...) {
     va_list args = 0;
     int retval = 0;
-    // TODO: get read lock, use low level read, use string scan
-    va_start(args, format);
-    retval = fscanf(configFile,format,args);
-    va_end(args);
-    if (retval == EOF) return Restart;
-    if (retval == expect) return Advance;
-    return Except;
+    struct File *file = arrayFile()+configFile;
+    // TODO: use F_GETLK to read up to the write lock
+    retval = read(file->handle, file->buffer, 128-handle->size-1);
+    if (retval < 0) {file->handle = 0; return Except;}
+    file->size += retval; file->buffer[file->size] = 0;
+    va_start(args, size); retval = vsscanf(file->buffer,format,args); va_end(args);
+    memmove(file->buffer,file->buffer+*size,file->size-*size);
+    if (retval == 0) return Reque;
+    if (retval < expect) {file->handle = 0; return Except;}
+    return Advance;
 }
 
 enum Action chooseFile()
 {
+    // TODO: set configFile
 }
 
-enum Action openFile()
+void configure();
+void openFile(char *filename)
 {
+    struct File file = {0}; file.state = Open; file.state = Append;
+    file.handle = open(filename,O_RDONLY); dequeOption();
+    if (file.handle < 0) enqueErrstr("invalid file argument\n");
+    enqueFile(file); MAYBE(configure,Configure)
 }
 
-enum Action reopenFile()
+void reopenFile()
 {
+    // TODO: reopen and get write lock
 }
-
-enum Action loadFile()
-{
-    if (configScan == 0)
-        SWITCH(scanFile(" %19s",1,configCommand),Advance) configScan++;
-        CASE(Restart) return reopenFile();
-        DEFAULT(return errorFile("cannot scan config\n");)
-    if (strcmp(configCommand,"--plane") == 0) {
-        GLfloat buffer[3];
-        GLuint valid[1];
-        if (configScan == 1)
-            SWITCH(scanFile("%f %f %f", configScalar+0, configScalar+1, configScalar+2),Advance) configScan++;
-            DEFAULT(return errorFile("cannot scan config\n");)
-        for (int i = 0; i < 3; i++) buffer[i] = configScalar[i]; valid[0] = 1;
-        if (configScan == 2)
-            SWITCH(bufferFile(&planeBuf,1,buffer),Defer) return Defer;
-            CASE(Advance) configScan++;
-            DEFAULT(return errorFile("cannot buffer data\n");)
-        if (configScan == 3)
-            SWITCH(bufferFile(&planeOk,1,valid),Defer) return Defer;
-            CASE(Advance) configScan++;
-            DEFAULT(return errorFile("cannot buffer valid\n");)
-        enqueCommand(0); enqueEvent(Plane); enqueInt(configFile);}
-    if (strcmp(configCommand,"--classify") == 0) {
-        if (configScan == 1) {configScan++; MAYBE(classify,Classify)}
-        if (configScan == 2) {if (sideBuf.done < sideSub.done) return Defer; else configScan++;}
-        enqueCommand(0); enqueEvent(Classify);}
-    if (strcmp(configCommand,"--inflate") == 0) {
-        enqueCommand(0); enqueEvent(Inflate); enqueInt(configFile);}
-    if (strcmp(configCommand,"--fill") == 0) {
-        enqueCommand(0); enqueEvent(Fill); enqueInt(configFile);}
-    if (strcmp(configCommand,"--hollow") == 0) {
-        enqueCommand(0); enqueEvent(Hollow); enqueInt(configFile);}
-    return Restart;
-}
-
 #endif
 
 void transformRight();
@@ -2060,17 +2035,45 @@ void configure()
         CASE(Advance) enqueUpdate();
         DEFAULT(exitErrstr("invalid bringup status\n");)}
     DEFAULT(exitErrstr("invalid configure state\n");)
-#else
-    SWITCH(configureState,ConfigureEnqued) {
-        SWITCH(chooseFile(),Advance) {configScan = 0; configureState = ConfigureLoad;}
-        DEFAULT(exitErrstr("invalid choose status\n");)}
-    BRANCH(ConfigureLoad) {
-        SWITCH(loadFile(),Defer) {DEFER(configure)}
-        CASE(Restart) {configureState = ConfigureEnqued; REQUE(configure)}
-        DEFAULT(exitErrstr("invalid load status\n");)}
-    DEFAULT(exitErrstr("invalid configure state\n");)
-#endif
     DEQUE(configure,Configure)
+#else
+    int localState = ConfigureEnqued;
+    if (configureState == ConfigureEnqued) {
+        SWITCH(chooseFile(),Advance) configureState++;
+        CASE(Deque) {DEQUE(configure,Configure)}
+        DEFAULT(exitErrstr("invalid choose status\n");)}
+    if (configureState == ++localState) {
+        SWITCH(scanFile(" %19s",1,configCommand),Advance) configureState++;
+        CASE(Reque) {reopenFile(); *configCommand = 0;}
+        DEFAULT(enqueErrstr("cannot scan config\n");)
+    if (strcmp(configCommand,"--plane") == 0) {
+        GLfloat buffer[3];
+        GLuint valid[1];
+        if (configureState == ++localState)
+            SWITCH(scanFile("%f %f %f", configScalar+0, configScalar+1, configScalar+2),Advance) configureState++;
+            DEFAULT(enqueErrstr("cannot scan config\n");)
+        for (int i = 0; i < 3; i++) buffer[i] = configScalar[i]; valid[0] = 1;
+        if (configureState == ++localState)
+            SWITCH(bufferFile(&planeBuf,1,buffer),Defer) {DEFER(configure)}
+            CASE(Advance) configureState++;
+            DEFAULT(enqueErrstr("cannot buffer data\n");)
+        if (configureState == ++localState)
+            SWITCH(bufferFile(&planeOk,1,valid),Defer) {DEFER(configure)}
+            CASE(Advance) configureState++;
+            DEFAULT(enqueErrstr("cannot buffer valid\n");)
+        enqueCommand(0); enqueEvent(Plane); enqueInt(configFile);}
+    if (strcmp(configCommand,"--classify") == 0) {
+        if (configureState == ++localState) {configureState++; MAYBE(classify,Classify)}
+        if (configureState == ++localState) {if (sideBuf.done < sideSub.done) {DEFER(configure)} else configureState++;}
+        enqueCommand(0); enqueEvent(Classify);}
+    if (strcmp(configCommand,"--inflate") == 0) {
+        enqueCommand(0); enqueEvent(Inflate); enqueInt(configFile);}
+    if (strcmp(configCommand,"--fill") == 0) {
+        enqueCommand(0); enqueEvent(Fill); enqueInt(configFile);}
+    if (strcmp(configCommand,"--hollow") == 0) {
+        enqueCommand(0); enqueEvent(Hollow); enqueInt(configFile);}
+    configureState = ConfigureEnqued; REQUE(configure)
+#endif
 }
 
 void process()
@@ -2092,12 +2095,9 @@ void process()
         enqueMsgstr("-t run sanity check\n");
         enqueMsgstr("-T run thorough tests\n");}
     else if (strcmp(headOption(), "-i") == 0) {
-        struct File file = {0}; file.state = Open; file.state = Append;
         dequeOption();
         if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
-        file.handle = open(headOption(),O_RDWR); dequeOption();
-        if (file.handle < 0) {enqueErrstr("invalid file argument\n"); REQUE(process)}
-        enqueFile(file); MAYBE(configure,Configure)}
+        openFile(headOption());}
     dequeOption(); REQUE(process)
 }
 
