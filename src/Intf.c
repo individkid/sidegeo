@@ -1992,51 +1992,73 @@ void openFile(char *filename)
     file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
 }
 
+void rdlckFile(struct File *file)
+{
+    struct flock lock = {0};
+    lock.l_type = F_RDLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+    if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+}
+
+void wrlckFile(struct File *file)
+{
+    struct flock lock = {0};
+    lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+    if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+}
+
+void unlckFile(struct File *file)
+{
+    struct flock lock = {0};
+    lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+    if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+}
+
+int isrdlckFile(struct File *file)
+{
+    struct flock lock = {0};
+    lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+    if (fcntl(file->handle, F_GETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+    return (lock.l_type == F_RDLCK && lock.l_pid == getpid());
+}
+
+int iswrlckFile(struct File *file)
+{
+    struct flock lock = {0};
+    lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+    if (fcntl(file->handle, F_GETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+    return (lock.l_type == F_WRLCK && lock.l_pid == getpid());
+}
+
 void configure()
 {
     int state = -1;
-    struct File file = headFile(); dequeFile();
+    struct File *file = arrayFile();
 #ifdef BRINGUP
-    SWITCH(bringup(),Reque) {enqueFile(file); REQUE(configure)}
+    SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
     CASE(Advance) {enqueShader(dishader); enqueCommand(transformRight);}
     DEFAULT(exitErrstr("invalid bringup status\n");)
 #else
-    struct flock lock = {0};
     float plane[3];
     int location;
     char filename[256];
     int changed = 0;
-    if (validIndex() && headIndex() == file->index && file->size == 0) {
-        lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-        if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
-    if ((!validIndex() || headIndex() != file->index) && file->size == 0) {
-        lock.l_type = F_RDLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-        if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
-    lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-    if (fcntl(file->handle, F_GETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
-    if ((lock.l_type == F_RDLCK || lock.l_type == F_WRLCK) && lock.l_pid == getpid()) {
+    if (validIndex() && headIndex() == file->index && file->size == 0) wrlckFile(file);
+    if ((!validIndex() || headIndex() != file->index) && file->size == 0) rdlckFile(file);
+    if (isrdlckFile(file) || iswrlckFile(file)) {
         char size[2];
         int retval = read(file->handle,size,2);
         if (retval != 0 && retval != 2) exitErrstr("file error\n");
-        if (retval == 0 && lock.l_type == F_RDLCK) {
-            lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-            if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
+        if (retval == 0 && isrdlckFile(file)) unlckFile(file);
         if (retval == 2) {
-            changed = 1;
             file->size = size[0]*16 + size[1];
             if (file->size >= 256) exitErrstr("file error\n");
             if (read(file->handle,file->buffer,file->size) != file->size) exitErrstr("file error\n");
-            file->buffer[file->size] = 0;}
-            lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-            if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}}
-    if (lock.l_type == F_WRLCK && lock.l_pid == getpid()) {
+            changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
+    if (iswrlckFile(file)) {
         int index = headIndex();
         int size = arrayConfigure()[0]*16 + arrayConfigure()[1];
-        changed = 1;
         if (write(file->handle, arrayConfigure(), size+2) != size+2) exitErrstr("write error\n");
-        dequeIndex(); delocConfigure(size+2);
-        lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-        if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
+        changed = 1; dequeIndex(); delocConfigure(size+2); unlckFile(file);}
     if (validIndex && headIndex() == file->index) {
         int size = arrayConfigure()[0]*16 + arrayConfigure()[1];
         requeIndex(); relocConfigure(size+2);}
@@ -2062,8 +2084,7 @@ void configure()
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
     else exitErrstr("file error\n");
-    if (changed) {enqueFile(file); REQUE(configure)}
-    else {enqueFile(file); DEFER(configure)}
+    requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 #endif
 }
 
