@@ -4,8 +4,8 @@ Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regi
 
 Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The following command line arguments are processed in order.
 
-  * -i \<file> load and append to configuration file  
-  * -I \<file> follow file for readonly polytope  
+  * -i \<file> load polytope and adjust view  
+  * -I \<file> load polytope and ignore view changes  
   * -b \<file> start new file with reference to disabled jump  
   * -B \<file> append changes to make current same as given file  
   * -f \<file> load polytope in format indicated by file extension  

@@ -105,15 +105,14 @@ pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 struct File {
+    int index;
     int handle;
-    char buffer[128];
+    char buffer[256];
     int size;
-    enum {Open,Read,Wait} state;
-    enum {Append,Monitor}  mode;};
+    int capital;};
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
-int configFile = 0; // file being processed by config
-char configCommand[20]; // --command from file
-float configScalar[3]; // scanned arguments
+struct Chars {DECLARE_QUEUE(char)} configures = {0};
+struct Ints {DECLARE_QUEUE(int)} indices = {0};
 int classifyDone = 0; // number of points classifed
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
@@ -199,7 +198,7 @@ struct Item { // per-menu-line info
     {Rollers,Roller,2,"Drive","move picture plane forward or back"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
-struct Ints {DECLARE_QUEUE(int)} matchs = {0};
+struct Ints matchs = {0};
  // index into item[line].name for console undo
 float affineMat[16]; // transformation state at click time
 float affineMata[16]; // left transformation state
@@ -271,7 +270,6 @@ struct Render {
     const char *name;
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
-enum ConfigureState {ConfigureIdle,ConfigureEnqued} configureState = ConfigureIdle;
 enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
 enum ClassifyState {ClassifyIdle,ClassifyEnqued} classifyState = ClassifyIdle;
 int sequenceNumber = 0;
@@ -283,7 +281,7 @@ struct Commands {DECLARE_QUEUE(Command)} commands = {0};
 enum Event {Initialize,Plane,Classify,Inflate,Fill,Hollow,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-struct Chars {DECLARE_QUEUE(char)} chars = {0};
+struct Chars chars = {0};
  // for scratchpad and arguments
 struct Ints ints = {0};
  // for scratchpad and arguments
@@ -474,6 +472,10 @@ void exitErrstr(const char *fmt, ...)
 ACCESS_QUEUE(Option,char *,options)
 
 ACCESS_QUEUE(File,struct File,files)
+
+ACCESS_QUEUE(Configure,char,configures)
+
+ACCESS_QUEUE(Index,int,indices)
 
 ACCESS_QUEUE(Line,enum Menu,lines)
 
@@ -1847,7 +1849,9 @@ void flush(enum Shader shader)
     if (ready[shader] && reset[shader]) {glFlush(); ready[shader] = 0;}
 }
 
+void configure();
 void enqueShader(enum Shader);
+void transformRight();
 void classify()
 {
     CHECK(classify,Classify)
@@ -1966,113 +1970,100 @@ enum Action bringup()
     if (faceOk.done < NUM_FACES) return Reque;
     return Advance;
 }
+#endif
 
-void configure();
-void openFile(const char *filename)
+int bufferFile(struct Buffer *buffer, int todo, void *data)
 {
-    MAYBE(configure,Configure)
-}
-#else
-
-enum Action bufferFile(struct Buffer *buffer, int todo, void *data)
-{
-    if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return Defer;}
+    if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return 1;}
     if (buffer->done+todo <= buffer->room) {
         int size = buffer->dimn*bufferType(buffer->type);
         glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
         glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
         glBindBuffer(GL_ARRAY_BUFFER,0);
         buffer->done += todo;}
-    return Advance;
+    return 0;
 }
 
-enum Action scanFile(const char *format, int *size, ...) {
-    va_list args = 0;
-    int retval = 0;
-    struct File *file = arrayFile()+configFile;
-    // TODO: use F_GETLK to read up to the write lock
-    retval = read(file->handle, file->buffer, 128-handle->size-1);
-    if (retval < 0) {file->handle = 0; return Except;}
-    file->size += retval; file->buffer[file->size] = 0;
-    va_start(args, size); retval = vsscanf(file->buffer,format,args); va_end(args);
-    memmove(file->buffer,file->buffer+*size,file->size-*size);
-    if (retval == 0) return Reque;
-    if (retval < expect) {file->handle = 0; return Except;}
-    return Advance;
-}
-
-enum Action chooseFile()
-{
-    // TODO: set configFile
-}
-
-void configure();
 void openFile(char *filename)
 {
-    struct File file = {0}; file.state = Open; file.state = Append;
-    file.handle = open(filename,O_RDONLY); dequeOption();
+    struct File file = {0};
+    file.handle = open(filename,O_RDWR);
     if (file.handle < 0) enqueErrstr("invalid file argument\n");
-    enqueFile(file); MAYBE(configure,Configure)
-}
-
-void reopenFile()
-{
-    // TODO: reopen and get write lock
-}
-#endif
-
-void transformRight();
-void enqueUpdate() {
-    enqueShader(dishader); enqueCommand(transformRight);
+    file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
 }
 
 void configure()
 {
-    CHECK(configure,Configure)
+    int state = -1;
+    struct File file = headFile(); dequeFile();
 #ifdef BRINGUP
-    SWITCH(configureState,ConfigureEnqued) {
-        SWITCH(bringup(),Reque) {REQUE(configure)}
-        CASE(Advance) enqueUpdate();
-        DEFAULT(exitErrstr("invalid bringup status\n");)}
-    DEFAULT(exitErrstr("invalid configure state\n");)
-    DEQUE(configure,Configure)
+    SWITCH(bringup(),Reque) {enqueFile(file); REQUE(configure)}
+    CASE(Advance) {enqueShader(dishader); enqueCommand(transformRight);}
+    DEFAULT(exitErrstr("invalid bringup status\n");)
 #else
-    int localState = ConfigureEnqued;
-    if (configureState == ConfigureEnqued) {
-        SWITCH(chooseFile(),Advance) configureState++;
-        CASE(Deque) {DEQUE(configure,Configure)}
-        DEFAULT(exitErrstr("invalid choose status\n");)}
-    if (configureState == ++localState) {
-        SWITCH(scanFile(" %19s",1,configCommand),Advance) configureState++;
-        CASE(Reque) {reopenFile(); *configCommand = 0;}
-        DEFAULT(enqueErrstr("cannot scan config\n");)
-    if (strcmp(configCommand,"--plane") == 0) {
+    struct flock lock = {0};
+    float plane[3];
+    int location;
+    char filename[256];
+    int changed = 0;
+    if (validIndex() && headIndex() == file->index && file->size == 0) {
+        lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+        if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
+    if ((!validIndex() || headIndex() != file->index) && file->size == 0) {
+        lock.l_type = F_RDLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+        if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
+    lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+    if (fcntl(file->handle, F_GETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+    if ((lock.l_type == F_RDLCK || lock.l_type == F_WRLCK) && lock.l_pid == getpid()) {
+        char size[2];
+        int retval = read(file->handle,size,2);
+        if (retval != 0 && retval != 2) exitErrstr("file error\n");
+        if (retval == 0 && lock.l_type == F_RDLCK) {
+            lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+            if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
+        if (retval == 2) {
+            changed = 1;
+            file->size = size[0]*16 + size[1];
+            if (file->size >= 256) exitErrstr("file error\n");
+            if (read(file->handle,file->buffer,file->size) != file->size) exitErrstr("file error\n");
+            file->buffer[file->size] = 0;}
+            lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+            if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}}
+    if (lock.l_type == F_WRLCK && lock.l_pid == getpid()) {
+        int index = headIndex();
+        int size = arrayConfigure()[0]*16 + arrayConfigure()[1];
+        changed = 1;
+        if (write(file->handle, arrayConfigure(), size+2) != size+2) exitErrstr("write error\n");
+        dequeIndex(); delocConfigure(size+2);
+        lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
+        if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");}
+    if (validIndex && headIndex() == file->index) {
+        int size = arrayConfigure()[0]*16 + arrayConfigure()[1];
+        requeIndex(); relocConfigure(size+2);}
+    if (sscanf(file->buffer," --plane %f %f %f", plane+0, plane+1, plane+2) == 3) {
         GLfloat buffer[3];
         GLuint valid[1];
-        if (configureState == ++localState)
-            SWITCH(scanFile("%f %f %f", configScalar+0, configScalar+1, configScalar+2),Advance) configureState++;
-            DEFAULT(enqueErrstr("cannot scan config\n");)
-        for (int i = 0; i < 3; i++) buffer[i] = configScalar[i]; valid[0] = 1;
-        if (configureState == ++localState)
-            SWITCH(bufferFile(&planeBuf,1,buffer),Defer) {DEFER(configure)}
-            CASE(Advance) configureState++;
-            DEFAULT(enqueErrstr("cannot buffer data\n");)
-        if (configureState == ++localState)
-            SWITCH(bufferFile(&planeOk,1,valid),Defer) {DEFER(configure)}
-            CASE(Advance) configureState++;
-            DEFAULT(enqueErrstr("cannot buffer valid\n");)
-        enqueCommand(0); enqueEvent(Plane); enqueInt(configFile);}
-    if (strcmp(configCommand,"--classify") == 0) {
-        if (configureState == ++localState) {configureState++; MAYBE(classify,Classify)}
-        if (configureState == ++localState) {if (sideBuf.done < sideSub.done) {DEFER(configure)} else configureState++;}
-        enqueCommand(0); enqueEvent(Classify);}
-    if (strcmp(configCommand,"--inflate") == 0) {
-        enqueCommand(0); enqueEvent(Inflate); enqueInt(configFile);}
-    if (strcmp(configCommand,"--fill") == 0) {
-        enqueCommand(0); enqueEvent(Fill); enqueInt(configFile);}
-    if (strcmp(configCommand,"--hollow") == 0) {
-        enqueCommand(0); enqueEvent(Hollow); enqueInt(configFile);}
-    configureState = ConfigureEnqued; REQUE(configure)
+        int retval = 0;
+        for (int i = 0; i < 3; i++) buffer[i] = plane[i]; valid[0] = 1;
+        retval |= bufferFile(&planeBuf,1,buffer);
+        retval |= bufferFile(&planeOk,1,valid);
+        if (retval == 0) {changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
+    else if (sscanf(file->buffer," --classify") == 0) {
+        MAYBE(classify,Classify)
+        if (sideBuf.done >= sideSub.done) {changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Classify);}}
+    else if (sscanf(file->buffer," --inflate") == 0) {
+        enqueShader(dishader); enqueCommand(transformRight);
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
+    else if (sscanf(file->buffer," --fill") == 0) {
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Fill); enqueInt(file->index);}
+    else if (sscanf(file->buffer," --hollow") == 0) {
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Hollow); enqueInt(file->index);}
+    else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
+        // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
+    }
+    else exitErrstr("file error\n");
+    if (changed) {enqueFile(file); REQUE(configure)}
+    else {enqueFile(file); DEFER(configure)}
 #endif
 }
 
@@ -2080,7 +2071,6 @@ void process()
 {
     CHECK(process,Process)
     if (!validOption()) {DEQUE(process,Process)}
-    if (configureState != ConfigureIdle) {DEFER(process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print this message\n");
         enqueMsgstr("-H print manual page\n");
