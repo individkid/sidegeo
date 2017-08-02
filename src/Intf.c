@@ -2035,6 +2035,7 @@ int iswrlckFile(struct File *file)
     return (lock.l_type == F_WRLCK && lock.l_pid == getpid());
 }
 
+#define ERRORFile(MSG) enqueMsgstr(MSG); close(file->handle); dequeFile(); return;
 void configure()
 {
     struct File *file = arrayFile();
@@ -2053,19 +2054,19 @@ void configure()
     if (isrdlckFile(file) || iswrlckFile(file)) {
         char size[3] = {0};
         int retval = read(file->handle,size,2);
-        if (retval != 0 && retval != 2) {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
+        if (retval != 0 && retval != 2) {ERRORFile("file error\n")}
         if (retval == 0 && isrdlckFile(file)) unlckFile(file);
         if (retval == 2) {
             file->size = strtol(size,NULL,16);
-            if (file->size >= 256) {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
-            if (read(file->handle,file->buffer,file->size) != file->size) {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
+            if (file->size >= 256) {ERRORFile("file error\n")}
+            if (read(file->handle,file->buffer,file->size) != file->size) {ERRORFile("file error\n")}
             changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
         int index = headIndex();
         char header[3] = {0};
         int size;
         header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
-        if (write(file->handle, arrayConfigure(), size+2) != size+2) {enqueMsgstr("write error\n"); close(file->handle); dequeFile(); return;}
+        if (write(file->handle, arrayConfigure(), size+2) != size+2) {ERRORFile("write error\n")}
         changed = 1; dequeIndex(); delocConfigure(size+2); unlckFile(file);}
     if (validIndex() && headIndex() == file->index) {
         char header[3] = {0};
@@ -2093,7 +2094,7 @@ void configure()
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
+    else {ERRORFile("file error\n")}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 }
 
