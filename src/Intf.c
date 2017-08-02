@@ -105,6 +105,9 @@ pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 struct File {
+#ifdef BRINGUP
+    int debug;
+#endif
     int index;
     int handle;
     char buffer[256];
@@ -1987,6 +1990,9 @@ int bufferFile(struct Buffer *buffer, int todo, void *data)
 void openFile(char *filename)
 {
     struct File file = {0};
+#ifdef BRINGUP
+    file.debug = 1;
+#endif
     file.handle = open(filename,O_RDWR);
     if (file.handle < 0) enqueErrstr("invalid file argument\n");
     file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
@@ -2032,35 +2038,36 @@ int iswrlckFile(struct File *file)
 void configure()
 {
     struct File *file = arrayFile();
-#ifdef BRINGUP
-    SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
-    CASE(Advance) {enqueShader(dishader); enqueCommand(transformRight);}
-    DEFAULT(exitErrstr("invalid bringup status\n");)
-#else
     float plane[3];
     int location;
     char filename[256];
     int changed = 0;
+#ifdef BRINGUP
+    if (file->debug == 1) {
+        SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
+        CASE(Advance) {file->debug = 0; enqueShader(dishader); enqueCommand(transformRight);}
+        DEFAULT(exitErrstr("invalid bringup status\n");)}
+#endif
     if (validIndex() && headIndex() == file->index && file->size == 0) wrlckFile(file);
     if ((!validIndex() || headIndex() != file->index) && file->size == 0) rdlckFile(file);
     if (isrdlckFile(file) || iswrlckFile(file)) {
         char size[3] = {0};
         int retval = read(file->handle,size,2);
-        if (retval != 0 && retval != 2) {enqueErrstr("file error\n"); close(file->handle); return;}
+        if (retval != 0 && retval != 2) {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
         if (retval == 0 && isrdlckFile(file)) unlckFile(file);
         if (retval == 2) {
             file->size = strtol(size,NULL,16);
-            if (file->size >= 256) {enqueErrstr("file error\n"); close(file->handle); return;}
-            if (read(file->handle,file->buffer,file->size) != file->size) {enqueErrstr("file error\n"); close(file->handle); return;}
+            if (file->size >= 256) {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
+            if (read(file->handle,file->buffer,file->size) != file->size) {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
             changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
         int index = headIndex();
         char header[3] = {0};
         int size;
         header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
-        if (write(file->handle, arrayConfigure(), size+2) != size+2) {enqueErrstr("write error\n"); close(file->handle); return;}
+        if (write(file->handle, arrayConfigure(), size+2) != size+2) {enqueMsgstr("write error\n"); close(file->handle); dequeFile(); return;}
         changed = 1; dequeIndex(); delocConfigure(size+2); unlckFile(file);}
-    if (validIndex && headIndex() == file->index) {
+    if (validIndex() && headIndex() == file->index) {
         char header[3] = {0};
         int size;
         header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
@@ -2086,9 +2093,8 @@ void configure()
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else {enqueErrstr("file error\n"); close(file->handle); return;}
+    else {enqueMsgstr("file error\n"); close(file->handle); dequeFile(); return;}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
-#endif
 }
 
 void process()
