@@ -2031,7 +2031,6 @@ int iswrlckFile(struct File *file)
 
 void configure()
 {
-    int state = -1;
     struct File *file = arrayFile();
 #ifdef BRINGUP
     SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
@@ -2045,22 +2044,26 @@ void configure()
     if (validIndex() && headIndex() == file->index && file->size == 0) wrlckFile(file);
     if ((!validIndex() || headIndex() != file->index) && file->size == 0) rdlckFile(file);
     if (isrdlckFile(file) || iswrlckFile(file)) {
-        char size[2];
+        char size[3] = {0};
         int retval = read(file->handle,size,2);
-        if (retval != 0 && retval != 2) exitErrstr("file error\n");
+        if (retval != 0 && retval != 2) {enqueErrstr("file error\n"); close(file->handle); return;}
         if (retval == 0 && isrdlckFile(file)) unlckFile(file);
         if (retval == 2) {
-            file->size = size[0]*16 + size[1];
-            if (file->size >= 256) exitErrstr("file error\n");
-            if (read(file->handle,file->buffer,file->size) != file->size) exitErrstr("file error\n");
+            file->size = strtol(size,NULL,16);
+            if (file->size >= 256) {enqueErrstr("file error\n"); close(file->handle); return;}
+            if (read(file->handle,file->buffer,file->size) != file->size) {enqueErrstr("file error\n"); close(file->handle); return;}
             changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
         int index = headIndex();
-        int size = arrayConfigure()[0]*16 + arrayConfigure()[1];
-        if (write(file->handle, arrayConfigure(), size+2) != size+2) exitErrstr("write error\n");
+        char header[3] = {0};
+        int size;
+        header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
+        if (write(file->handle, arrayConfigure(), size+2) != size+2) {enqueErrstr("write error\n"); close(file->handle); return;}
         changed = 1; dequeIndex(); delocConfigure(size+2); unlckFile(file);}
     if (validIndex && headIndex() == file->index) {
-        int size = arrayConfigure()[0]*16 + arrayConfigure()[1];
+        char header[3] = {0};
+        int size;
+        header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
         requeIndex(); relocConfigure(size+2);}
     if (sscanf(file->buffer," --plane %f %f %f", plane+0, plane+1, plane+2) == 3) {
         GLfloat buffer[3];
@@ -2083,7 +2086,7 @@ void configure()
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else exitErrstr("file error\n");
+    else {enqueErrstr("file error\n"); close(file->handle); return;}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 #endif
 }
