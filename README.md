@@ -37,7 +37,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
 
-Configuration/history files consist of commands. Append commands, schedule commands, and user input to -i file that is at eof, append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
+Configuration/history files consist of commands. Append commands, schedule commands, and user input append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
   * --plane takes three scalars  
   * --classify initializes representation from prior planes  

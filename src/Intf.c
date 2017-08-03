@@ -281,7 +281,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Initialize,Plane,Classify,Inflate,Fill,Hollow,Error,Done};
+enum Event {Initialize,Plane,Classify,Inflate,Fill,Hollow,Remove,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 struct Chars chars = {0};
@@ -458,10 +458,6 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 #define BRANCH(VAL) continue; case(VAL):
 #define DEFAULT(SMT) break; default: SMT break;} break;}
 
-/*
- * fifo stack mutex message
- */
-
 void exitErrstr(const char *fmt, ...)
 {
     if (validTermios) {
@@ -539,10 +535,6 @@ void enqueEscape(int val)
 {
     enquePrint(27); enquePrint(val); enquePrint('\n');
 }
-
-/*
- * helpers for arithmetic
- */
 
 float dotvec(float *u, float *v, int n)
 {
@@ -682,10 +674,6 @@ float *invmat(float *u, int n)
     for (int i = 0; i < m; i++) u[i] = v[i]/det;
     return u;
 }
-
-/*
- * thread for console
- */
 
 void handler(int sig)
 {
@@ -892,10 +880,6 @@ void *console(void *arg)
     tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
     return 0;
 }
-
-/*
- * functions called by top level Haskell
- */
 
 void menu()
 {
@@ -1745,7 +1729,6 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
-    // save transformation matrices
     enqueEscape(0);
     while (validPrint()) {
         int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
@@ -1778,9 +1761,9 @@ void finalize()
     if (menus.base) {struct Chars initial = {0}; free(menus.base); menus = initial;}
 }
 
-/*
- * functions put on command queue
- */
+void configure();
+void enqueShader(enum Shader);
+void transformRight();
 
 void exitErrbuf(struct Buffer *buf, const char *str)
 {
@@ -1852,9 +1835,6 @@ void flush(enum Shader shader)
     if (ready[shader] && reset[shader]) {glFlush(); ready[shader] = 0;}
 }
 
-void configure();
-void enqueShader(enum Shader);
-void transformRight();
 void classify()
 {
     CHECK(classify,Classify)
@@ -2035,13 +2015,14 @@ int iswrlckFile(struct File *file)
     return (lock.l_type == F_WRLCK && lock.l_pid == getpid());
 }
 
-#define ERRORFile(MSG) enqueMsgstr(MSG); close(file->handle); dequeFile(); return;
+#define ERRORFILE(MSG) enqueMsgstr(MSG); close(file->handle); dequeFile(); return;
 void configure()
 {
     struct File *file = arrayFile();
-    float plane[3];
-    int location;
-    char filename[256];
+    float plane[3] = {0};
+    int location = 0;
+    int index = 0;
+    char filename[256] = {0};
     int changed = 0;
 #ifdef BRINGUP
     if (file->debug == 1) {
@@ -2054,19 +2035,19 @@ void configure()
     if (isrdlckFile(file) || iswrlckFile(file)) {
         char size[3] = {0};
         int retval = read(file->handle,size,2);
-        if (retval != 0 && retval != 2) {ERRORFile("file error\n")}
+        if (retval != 0 && retval != 2) {ERRORFILE("file error\n")}
         if (retval == 0 && isrdlckFile(file)) unlckFile(file);
         if (retval == 2) {
             file->size = strtol(size,NULL,16);
-            if (file->size >= 256) {ERRORFile("file error\n")}
-            if (read(file->handle,file->buffer,file->size) != file->size) {ERRORFile("file error\n")}
+            if (file->size >= 256) {ERRORFILE("file error\n")}
+            if (read(file->handle,file->buffer,file->size) != file->size) {ERRORFILE("file error\n")}
             changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
         int index = headIndex();
         char header[3] = {0};
         int size;
         header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
-        if (write(file->handle, arrayConfigure(), size+2) != size+2) {ERRORFile("write error\n")}
+        if (write(file->handle, arrayConfigure(), size+2) != size+2) {ERRORFILE("write error\n")}
         changed = 1; dequeIndex(); delocConfigure(size+2); unlckFile(file);}
     if (validIndex() && headIndex() == file->index) {
         char header[3] = {0};
@@ -2091,10 +2072,14 @@ void configure()
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Fill); enqueInt(file->index);}
     else if (sscanf(file->buffer," --hollow") == 0) {
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Hollow); enqueInt(file->index);}
+    else if (sscanf(file->buffer," --remov face %d", &index) == 0) {
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove); enqueInt(file->index); enqueInt(index);}
+    else if (sscanf(file->buffer," --remov plane %d", &index) == 0) {
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove); enqueInt(file->index); enqueInt(index);}
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else {ERRORFile("file error\n")}
+    else {ERRORFILE("file error\n")}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 }
 
@@ -2301,10 +2286,6 @@ void enqueShader(enum Shader shader)
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
     enqueCommand(render); started[shader]++;
 }
-
-/*
- * callbacks triggered by user actions
- */
 
 void leftAdditive()
 {
@@ -2865,6 +2846,7 @@ char *event()
     CASE(Inflate) return (char *)"Inflate";
     CASE(Fill) return (char *)"Fill";
     CASE(Hollow) return (char *)"Hollow";
+    CASE(Remove) return (char *)"Remove";
     CASE(Error) return (char *)"Error";
     CASE(Done) return (char *)"Done";
     DEFAULT({exitErrstr("invalid event\n");})
