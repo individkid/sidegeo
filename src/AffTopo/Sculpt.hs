@@ -32,6 +32,8 @@ type Sideband = ([[Int]],[Int],Int,Int,Int,Int,Int)
 foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
+foreign import ccall "boundary" boundaryC :: CInt -> IO (Ptr CInt)
+foreign import ccall "offset" offsetC :: CInt -> IO (Ptr CInt)
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaceOk" readFaceOkC :: IO (Ptr CInt)
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
@@ -141,19 +143,18 @@ readSideband index =
  return (take index (boundary `append` (repeat [])),todo,done,base,limit,points,relates))
 
 readSidebandF :: IO Sideband
-readSidebandF = (sidebandC 0) >>= (\ptr -> jump (0::Int,ptr)
- chip >>= (\places -> jump places
- (peel places) >>= (\boundaries -> jump boundaries
- (onion boundaries) >>= (\boundary -> jump boundary
- chip >>= (\todos -> jump todos
- (peel todos) >>= (\todo -> jump todo
- chip >>= (\done -> jump done
- chip >>= (\base -> jump base
- chip >>= (\limit -> jump limit
- chip >>= (\points -> jump points
- chip >>= (\relates ->
+readSidebandF = (sidebandC 0) >>= \ptr -> jump (0::Int,ptr)
+ chip >>= \places -> jump places
+ (peel places) >>= \boundaries -> jump boundaries
+ (onion boundaries) >>= \boundary -> jump boundary
+ chip >>= \todos -> jump todos
+ (peel todos) >>= \todo -> jump todo
+ chip >>= \done -> jump done
+ chip >>= \base -> jump base
+ chip >>= \limit -> jump limit
+ chip >>= \points -> jump points
+ chip >>= \relates ->
  return ((fst boundary), (fst todo), (fst done), (fst base), (fst limit), (fst points), (fst relates))
- )))))))))))
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))

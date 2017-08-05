@@ -229,6 +229,8 @@ struct Ints generics = {0};
 struct Ints sidebands = {0};
 struct Ints pendings = {0};
 struct Ints correlates = {0};
+struct Ints boundaries = {0};
+struct Ints offsets = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -485,6 +487,10 @@ ACCESS_QUEUE(Generic,int,generics)
 ACCESS_QUEUE(Sideband,int,sidebands)
 
 ACCESS_QUEUE(Correlate,int,correlates)
+
+ACCESS_QUEUE(Boundary,int,boundaries)
+
+ACCESS_QUEUE(Offset,int,offsets)
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -1744,6 +1750,8 @@ void finalize()
     if (generics.base) {struct Ints initial = {0}; free(generics.base); generics = initial;}
     if (sidebands.base) {struct Ints initial = {0}; free(sidebands.base); sidebands = initial;}
     if (correlates.base) {struct Ints initial = {0}; free(correlates.base); correlates = initial;}
+    if (boundaries.base) {struct Ints initial = {0}; free(boundaries.base); boundaries = initial;}
+    if (offsets.base) {struct Ints initial = {0}; free(offsets.base); offsets = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -2752,6 +2760,24 @@ int *correlate(int size)
     if (size > sizeCorrelate()) enlocCorrelate(size-sizeCorrelate());
     if (size < sizeCorrelate()) unlocCorrelate(sizeCorrelate()-size);
     return arrayCorrelate();
+}
+
+int *boundary(int size)
+{
+    // if size is not zero, resize boundary
+    if (size == 0) size = sizeBoundary();
+    if (size > sizeBoundary()) enlocBoundary(size-sizeBoundary());
+    if (size < sizeBoundary()) unlocBoundary(sizeBoundary()-size);
+    return arrayBoundary();
+}
+
+int *offset(int size)
+{
+    // if size is not zero, resize offset
+    if (size == 0) size = sizeOffset();
+    if (size > sizeOffset()) enlocOffset(size-sizeOffset());
+    if (size < sizeOffset()) unlocOffset(sizeOffset()-size);
+    return arrayOffset();
 }
 
 int *getBuffer(struct Buffer *buffer)
