@@ -138,15 +138,15 @@ readGenericG :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
 readGenericG a b c = (a,[b,c])
 
 readSideband :: Int -> IO Sideband
-readSideband index =
- readSidebandF >>= (\(boundary,todo,done,base,limit,points,relates) ->
- return (take index (boundary `append` (repeat [])),todo,done,base,limit,points,relates))
+readSideband index = readSidebandF >>= \(boundary,todo,done,base,limit,points,relates) ->
+ return (take index (boundary `append` (repeat [])),todo,done,base,limit,points,relates)
 
 readSidebandF :: IO Sideband
-readSidebandF = (sidebandC 0) >>= \ptr -> jump (0::Int,ptr)
+readSidebandF = (boundaryC 0) >>= \ptr0 -> jump (0::Int,ptr0)
  chip >>= \places -> jump places
  (peel places) >>= \boundaries -> jump boundaries
- (onion boundaries) >>= \boundary -> jump boundary
+ (onion boundaries) >>= \boundary ->
+ (sidebandC 0) >>= \ptr1 -> jump (0::Int,ptr1)
  chip >>= \todos -> jump todos
  (peel todos) >>= \todo -> jump todo
  chip >>= \done -> jump done
@@ -155,6 +155,7 @@ readSidebandF = (sidebandC 0) >>= \ptr -> jump (0::Int,ptr)
  chip >>= \points -> jump points
  chip >>= \relates ->
  return ((fst boundary), (fst todo), (fst done), (fst base), (fst limit), (fst points), (fst relates))
+
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))
@@ -210,11 +211,13 @@ writeSideband (a,b,c,d,e,f,g) = let
  places = length a
  boundaries = map length a
  todos = length b
- size = 7 + (length boundaries) + (length2 a) + (length b)
- in (sidebandC (fromIntegral size)) >>=
+ size0 = 1 + (length boundaries) + (length2 a)
+ size1 = 6 + (length b)
+ in (boundaryC (fromIntegral size0)) >>=
  (paste places) >>=
  (cover boundaries) >>=
- (layer a) >>=
+ (layer a) >>
+ (sidebandC (fromIntegral size1)) >>=
  (paste todos) >>=
  (cover b) >>=
  (paste c) >>=
