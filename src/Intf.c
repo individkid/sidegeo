@@ -228,7 +228,7 @@ float aspect = 0;
 struct Metas {DECLARE_QUEUE(struct Ints)} generics = {0};
 struct Ints sidebands = {0};
 struct Ints correlates = {0};
-struct Metas boundaries = {0};
+struct Metas boundarys = {0};
 struct Ints *metas = 0;
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
@@ -487,7 +487,7 @@ ACCESS_QUEUE(Sideband,int,sidebands)
 
 ACCESS_QUEUE(Correlate,int,correlates)
 
-ACCESS_QUEUE(Boundary,struct Ints,boundaries)
+ACCESS_QUEUE(Boundary,struct Ints,boundarys)
 
 ACCESS_QUEUE(Meta,int,(*metas))
 
@@ -1749,7 +1749,7 @@ void finalize()
     if (generics.base) {struct Metas initial = {0}; free(generics.base); generics = initial;}
     if (sidebands.base) {struct Ints initial = {0}; free(sidebands.base); sidebands = initial;}
     if (correlates.base) {struct Ints initial = {0}; free(correlates.base); correlates = initial;}
-    if (boundaries.base) {struct Metas initial = {0}; free(boundaries.base); boundaries = initial;}
+    if (boundarys.base) {struct Metas initial = {0}; free(boundarys.base); boundarys = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -2766,6 +2766,13 @@ int *boundary(int index, int size)
     while (sizeBoundary() <= index) {struct Ints initial = {0}; enqueBoundary(initial);}
     metas = arrayBoundary()+index;
     return accessQueue(size);
+}
+
+int boundaries(int index)
+{
+    while (sizeBoundary() <= index) {struct Ints initial = {0}; enqueBoundary(initial);}
+    metas = arrayBoundary()+index;
+    return sizeMeta();
 }
 
 int *getBuffer(struct Buffer *buffer)

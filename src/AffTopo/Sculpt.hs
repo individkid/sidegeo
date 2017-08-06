@@ -26,13 +26,14 @@ import Foreign.Marshal.Array
 import Foreign.C.String
 import AffTopo.Naive
 
-type Generic = [(Place,[Region])]
-type Sideband = ([[Int]],[Int],Int,Int,Int,Int,Int)
+type Generic = (Place,[Region])
+type Sideband = ([Int],Int,Int,Int,Int,Int)
 
 foreign import ccall "generic" genericC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
 foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaceOk" readFaceOkC :: IO (Ptr CInt)
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
@@ -112,40 +113,26 @@ jump a f = f a
 
 readGeneric :: Int -> IO Generic
 readGeneric index =
- readGenericF >>= (\x -> return (take index (x `append` (repeat ([],[])))))
+ (boundariesC (fromIntegral index)) >>= \boundaries ->
+ (readBoundary (fromIntegral index)) >>= \boundary ->
+ (genericC (fromIntegral index) 0) >>= \ptr -> jump (0::Int,ptr)
+ (peel ((fromIntegral boundaries),ptr)) >>= \firsts -> jump firsts
+ (peel ((fromIntegral boundaries),ptr)) >>= \seconds -> jump seconds
+ (onion firsts) >>= \first -> jump first
+ (onion seconds) >>= \second -> jump second
+ chip >>= \embeds -> jump embeds
+ (peel embeds) >>= \embed -> let
+ x = map2 Region (fst first)
+ y = map2 Region (fst second)
+ z = map Region (fst embed)
+ in return ((zipWith3 readGenericF boundary x y), z)
 
-readGenericF :: IO Generic
-readGenericF = (genericC 0 0) >>= \ptr -> jump (0::Int,ptr)
- chip >>= \places -> jump places
- (peel places) >>= \boundaries -> jump boundaries
- (peel places) >>= \regions -> jump regions
- (onion boundaries) >>= \boundary -> jump boundary
- (onion regions) >>= \region -> jump region
- (onion boundaries) >>= \firsts -> jump firsts
- (onion boundaries) >>= \seconds -> jump seconds
- (patch firsts) >>= \first -> jump first
- (patch seconds) >>= \second -> jump second
- (peel places) >>= \embeds -> jump embeds
- (onion embeds) >>= \embed -> let
- w = map2 Boundary (fst boundary)
- x = map3 Region (fst first)
- y = map3 Region (fst second)
- z = map2 Region (fst embed)
- in return (zip (zipWith3 (zipWith3 readGenericG) w x y) z)
+readGenericF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
+readGenericF a b c = (a,[b,c])
 
-readGenericG :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
-readGenericG a b c = (a,[b,c])
-
-readSideband :: Int -> IO Sideband
-readSideband index = readSidebandF >>= \(boundary,todo,done,base,limit,points,relates) ->
- return (take index (boundary `append` (repeat [])),todo,done,base,limit,points,relates)
-
-readSidebandF :: IO Sideband
-readSidebandF = (boundaryC 0 0) >>= \ptr0 -> jump (0::Int,ptr0)
- chip >>= \places -> jump places
- (peel places) >>= \boundaries -> jump boundaries
- (onion boundaries) >>= \boundary ->
- (sidebandC 0) >>= \ptr1 -> jump (0::Int,ptr1)
+readSideband :: IO Sideband
+readSideband =
+ (sidebandC 0) >>= \ptr -> jump (0::Int,ptr)
  chip >>= \todos -> jump todos
  (peel todos) >>= \todo -> jump todo
  chip >>= \done -> jump done
@@ -153,8 +140,14 @@ readSidebandF = (boundaryC 0 0) >>= \ptr0 -> jump (0::Int,ptr0)
  chip >>= \limit -> jump limit
  chip >>= \points -> jump points
  chip >>= \relates ->
- return ((fst boundary), (fst todo), (fst done), (fst base), (fst limit), (fst points), (fst relates))
+ return ((fst todo), (fst done), (fst base), (fst limit), (fst points), (fst relates))
 
+readBoundary :: Int -> IO [Boundary]
+readBoundary index =
+ boundariesC (fromIntegral index) >>= \boundaries ->
+ boundaryC (fromIntegral index) 0 >>=
+ peekArray (fromIntegral boundaries) >>= \boundary ->
+ return (map (Boundary . fromIntegral) boundary)
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))
@@ -168,62 +161,45 @@ layer len ptr = fold' (\x y -> y >>= (\z -> cover x z)) len (return ptr)
 hoard :: [[[Int]]] -> Ptr CInt -> IO (Ptr CInt)
 hoard len ptr = fold' (\x y -> y >>= (\z -> layer x z)) len (return ptr)
 
-writeGeneric :: Generic -> IO (Ptr CInt)
-writeGeneric a = let
- places = length a
- boundaries = map (length . boundariesOfPlace) (domain a)
- regions = map (length . regionsOfPlace) (domain a)
- boundary = map boundariesOfPlace (domain a)
- region = map regionsOfPlace (domain a)
- firsts = map ((map (length . head)) . range) (domain a)
- seconds = map ((map (length . head . tail)) . range) (domain a)
- first = map ((map head) . range) (domain a)
- second = map ((map (head . tail)) . range) (domain a)
- embeds = map length (range a)
- embed = range a
- size0 = 1 + places + places + (writeGenericF boundary) + (writeGenericF region)
- size1 = (writeGenericF firsts) + (writeGenericF seconds)
- size2 = (writeGenericG first) + (writeGenericG second)
- size3 = places + (writeGenericF embed)
- size = size0 + size1 + size2 + size3
- in (genericC 0 (fromIntegral size)) >>=
- (paste places) >>=
- (cover boundaries) >>=
- (cover regions) >>=
- (layer (map2 (\(Boundary x) -> x) boundary)) >>=
- (layer (map2 (\(Region x) -> x) region)) >>=
- (layer firsts) >>=
- (layer seconds) >>=
- (hoard (map3 (\(Region x) -> x) first)) >>=
- (hoard (map3 (\(Region x) -> x) second)) >>=
- (cover embeds) >>=
- (layer (map2 (\(Region x) -> x) embed))
+writeGeneric :: Int -> Generic -> IO ()
+writeGeneric index a = let
+ boundary = boundariesOfPlace (fst a)
+ firsts = map (length . head) (range (fst a))
+ seconds = map (length . last) (range (fst a))
+ first = map head (range (fst a))
+ second = map last (range (fst a))
+ embeds = length (snd a)
+ embed = snd a
+ size = (length firsts) + (length seconds) + (length2 first) + (length2 second) + 1 + (length embed)
+ in writeBoundary index boundary >>
+ (genericC (fromIntegral index) (fromIntegral size)) >>=
+ (cover firsts) >>=
+ (cover seconds) >>=
+ (layer (map2 (\(Region x) -> x) first)) >>=
+ (layer (map2 (\(Region x) -> x) second)) >>=
+ (paste embeds) >>=
+ (cover (map (\(Region x) -> x) embed)) >>
+ return ()
 
-writeGenericF :: [[a]] -> Int
-writeGenericF a = fold' (+) (map length a) 0
-
-writeGenericG :: [[[a]]] -> Int
-writeGenericG a = fold' (+) (map writeGenericF a) 0
-
-writeSideband :: Sideband -> IO (Ptr CInt)
-writeSideband (a,b,c,d,e,f,g) = let
- places = length a
- boundaries = map length a
+writeSideband :: Sideband -> IO ()
+writeSideband (b,c,d,e,f,g) = let
  todos = length b
- size0 = 1 + (length boundaries) + (length2 a)
- size1 = 6 + (length b)
- in (boundaryC 0 (fromIntegral size0)) >>=
- (paste places) >>=
- (cover boundaries) >>=
- (layer a) >>
- (sidebandC (fromIntegral size1)) >>=
+ size = 6 + todos
+ in (sidebandC (fromIntegral size)) >>=
  (paste todos) >>=
  (cover b) >>=
  (paste c) >>=
  (paste d) >>=
  (paste e) >>=
  (paste f) >>=
- (paste g)
+ (paste g) >>
+ return ()
+
+writeBoundary :: Int -> [Boundary] -> IO ()
+writeBoundary index boundary =
+ (boundaryC (fromIntegral index) (fromIntegral (length boundary))) >>=
+ (cover (map (\(Boundary x) -> x) boundary)) >>
+ return ()
 
 handleEvent :: IO Bool
 handleEvent = do
@@ -247,53 +223,47 @@ handleEventF = intArgumentC >>= (return . fromIntegral)
 
 handleInitialize :: IO ()
 handleInitialize =
- writeSideband ([],[],0,0,0,0,0) >>
+ writeSideband ([],0,0,0,0,0) >>
  return ()
 
 handlePlane :: Int -> IO ()
 handlePlane index =
- readSideband index >>= \(boundary,todo,done,base,limit,points,relates) -> let
- inboundary = boundary !! index
- inboundaries = length inboundary
- point = map (done :) (subsets 2 inboundary)
- classify = map (inboundary \\) point
- relate = recurseF (inboundaries +) base (length point)
- newBoundary = replace index (inboundary `append` [done]) boundary
+ readSideband >>= \(todo,done,base,limit,points,relates) ->
+ readBoundary index >>= \boundary -> let
+ boundaries = length boundary
+ point = map ((Boundary done) :) (subsets 2 boundary)
+ classify = map (boundary \\) point
+ relate = recurseF (boundaries +) base (length point)
+ newBoundary = boundary `append` [Boundary done]
  newLimit = find' ((last relate) ==) [limit + (length2 classify)]
  newPoints = points + (length2 point)
  newRelates = relates + (length relate)
  newTodo = todo `append` [index]
- in writePointSubC (fromIntegral points) (fromIntegral newPoints) >>= writeBuffer (map fromIntegral (concat point)) >>
- writeSideSubC (fromIntegral limit) (fromIntegral newLimit) >>= writeBuffer (map fromIntegral (concat classify)) >>
+ in writePointSubC (fromIntegral points) (fromIntegral newPoints) >>=
+ writeBuffer (map (\(Boundary x) -> fromIntegral x) (concat point)) >>
+ writeSideSubC (fromIntegral limit) (fromIntegral newLimit) >>=
+ writeBuffer (map (\(Boundary x) -> fromIntegral x) (concat classify)) >>
  correlateC (fromIntegral newRelates) >>= (\x -> writeBuffer (map fromIntegral relate) (plusPtr' x relates)) >>
- writeSideband (newBoundary,newTodo,done,base,newLimit,newPoints,newRelates) >>
+ writeSideband (newTodo,done,base,newLimit,newPoints,newRelates) >>
+ writeBoundary index newBoundary >>
  return ()
 
 handleClassify :: IO ()
-handleClassify =
- readGenericF >>= \generic ->
- readSidebandF >>= \(boundary,todo,done,base,limit,points,relates) ->
- readSideBufC >>= readBuffer base limit >>= \side -> let
- -- add boundaries accoriding to sidedness
- (_,_,generic1) = fold' handleClassifyF (zip (iterate (1+) done) todo) (boundary, side, generic)
- done1 = done + (length todo)
- -- maintain boundary lists in sideband
- boundary1 = map (boundariesOfPlace . fst) generic1
- boundary2 = map2 (\(Boundary x) -> x) boundary1
- in writeGeneric generic1 >>
- writeSideband (boundary2,[],done1,limit,limit,points,relates) >>
- return ()
+handleClassify = readSideband >>= handleClassifyF >>= writeSideband
 
-handleClassifyF :: (Int, Int) -> ([[Int]], [Int], Generic) -> ([[Int]], [Int], Generic)
-handleClassifyF (done, todo) (boundary, sidedness, generic) = let
- inboundary = map Boundary (boundary !! todo)
- boundaried = Boundary done
- inboundaried = map (\(Boundary x) -> x) (inboundary `append` [boundaried])
- pair = subsets 2 inboundary
- wrt = map (inboundary \\) pair
+handleClassifyF :: Sideband -> IO Sideband
+handleClassifyF (index:todo,done,base,limit,points,relates) =
+ readGeneric index >>= \generic ->
+ readSideBufC >>= readBuffer base limit >>= \sidedness -> let
+ boundary = boundariesOfPlace (fst generic)
+ -- add boundaries accoriding to sidedness
+ pair = subsets 2 boundary
+ wrt = map (boundary \\) pair
  polyant = map2 (\(x,y) -> (x, Side y)) (handleClassifyG sidedness wrt)
- ingeneric = handleClassifyH boundaried polyant (generic !! todo)
- in (replace todo inboundaried boundary, drop (length2 polyant) sidedness, replace todo ingeneric generic)
+ generic1 = handleClassifyH (Boundary done) polyant generic
+ in writeGeneric index generic1 >>
+ return (todo,done+1,base+(length2 polyant),limit,points,relates)
+handleClassifyF sideband = return sideband
 
 handleClassifyG :: [Int] -> [[Boundary]] -> [[(Boundary,Int)]]
 handleClassifyG a b = map (\(x,y) -> zip x y) (zip b (split a (map length b)))
@@ -313,33 +283,33 @@ handleInflate index =
  readFaceOkC >>= readBuffer 0 0 >>= \valid ->
  readFaceSubC >>= readBuffer 0 0 >>= \face -> let
  -- replace embed for indicated place by all inside regions
- (inplace1,_) = generic !! index
- (inboundary1,inspace1) = unzipPlace inplace1
- inboundary2 = map (\(Boundary x) -> x) inboundary1
- inregions1 = regionsOfSpace inspace1
- inembed1 = filter (\x -> not (oppositeOfRegionExists inboundary1 x inspace1)) inregions1
- generic1 = replace index (inplace1,inembed1) generic
+ (place,_) = generic
+ (boundary,space) = unzipPlace place
+ boundaried = map (\(Boundary x) -> x) boundary
+ regions = regionsOfSpace space
+ embed = filter (\x -> not (oppositeOfRegionExists boundary x space)) regions
+ generic1 = (place,embed)
  -- find boundaries between inside and outside regions
- attached1 = concat (map (\r -> map (\x -> (x, r, oppositeOfRegion [x] r inspace1)) (attachedBoundaries r inspace1)) inembed1)
- attached2 = filter (\(_,_,y) -> not (elem y inembed1)) attached1
+ attached1 = concat (map (\r -> map (\x -> (x, r, oppositeOfRegion [x] r space)) (attachedBoundaries r space)) embed)
+ attached2 = filter (\(_,_,y) -> not (elem y embed)) attached1
  -- choose vertex per found boundary
- attached3 = map (\(x,r,_) -> (x, r, choose (filter (\w -> elem x w) (attachedFacets 3 r inspace1)))) attached2
+ attached3 = map (\(x,r,_) -> (x, r, choose (filter (\w -> elem x w) (attachedFacets 3 r space)))) attached2
  -- find all edges per boundary
- attached4 = map (\(x,r,y) -> (x, r, y, filter (\w -> elem x w) (attachedFacets 2 r inspace1))) attached3
+ attached4 = map (\(x,r,y) -> (x, r, y, filter (\w -> elem x w) (attachedFacets 2 r space))) attached3
  -- find vertex pair per found edge
- attached5 = map (\(x,r,y,z) -> (x, y, map (\w -> (w, filter (\v -> all (\u -> elem u v) w) (attachedFacets 3 r inspace1))) z)) attached4
+ attached5 = map (\(x,r,y,z) -> (x, y, map (\w -> (w, filter (\v -> all (\u -> elem u v) w) (attachedFacets 3 r space))) z)) attached4
  -- construct face from base vertex and edge
  face1 = map (\(x,y,z) -> (x, filter (/=x) y, map (\(w,v) -> (filter (/=x) w, map (\u -> filter (/=x) u) v)) z)) attached5
  face2 = map (\(x,y,z) -> (x, y, map (\(w,v) -> (w, map (\u -> u \\ w) v)) z)) face1
  face3 = concat (concat (map (\(x,y,z) -> map (\(w,v) -> concat [[x],w,(concat v),y]) z) face2))
- face4 = map (\(Boundary x) -> x) (zipBoundaries face3 inboundary1)
+ face4 = map (\(Boundary x) -> x) (zipBoundaries face3 boundary)
  -- remove faces of indexed place
- valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) inboundary2)) then 1 else 0) (zip valid (split face (repeat 6)))
+ valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) boundaried)) then 1 else 0) (zip valid (split face (repeat 6)))
  -- indicate new faces are valid
  valid2 :: [Int]
  valid2 = valid1 `append` (replicate (quot (length face4) 6) 1)
  -- append found faces
- in writeGeneric generic1 >>
+ in writeGeneric index generic1 >>
  writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
  writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer (map fromIntegral face4) >>
  return ()
