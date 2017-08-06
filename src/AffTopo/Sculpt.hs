@@ -29,11 +29,10 @@ import AffTopo.Naive
 type Generic = [(Place,[Region])]
 type Sideband = ([[Int]],[Int],Int,Int,Int,Int,Int)
 
-foreign import ccall "generic" genericC :: CInt -> IO (Ptr CInt)
+foreign import ccall "generic" genericC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
-foreign import ccall "boundary" boundaryC :: CInt -> IO (Ptr CInt)
-foreign import ccall "offset" offsetC :: CInt -> IO (Ptr CInt)
+foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaceOk" readFaceOkC :: IO (Ptr CInt)
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
@@ -116,7 +115,7 @@ readGeneric index =
  readGenericF >>= (\x -> return (take index (x `append` (repeat ([],[])))))
 
 readGenericF :: IO Generic
-readGenericF = (genericC 0) >>= \ptr -> jump (0::Int,ptr)
+readGenericF = (genericC 0 0) >>= \ptr -> jump (0::Int,ptr)
  chip >>= \places -> jump places
  (peel places) >>= \boundaries -> jump boundaries
  (peel places) >>= \regions -> jump regions
@@ -142,7 +141,7 @@ readSideband index = readSidebandF >>= \(boundary,todo,done,base,limit,points,re
  return (take index (boundary `append` (repeat [])),todo,done,base,limit,points,relates)
 
 readSidebandF :: IO Sideband
-readSidebandF = (boundaryC 0) >>= \ptr0 -> jump (0::Int,ptr0)
+readSidebandF = (boundaryC 0 0) >>= \ptr0 -> jump (0::Int,ptr0)
  chip >>= \places -> jump places
  (peel places) >>= \boundaries -> jump boundaries
  (onion boundaries) >>= \boundary ->
@@ -187,7 +186,7 @@ writeGeneric a = let
  size2 = (writeGenericG first) + (writeGenericG second)
  size3 = places + (writeGenericF embed)
  size = size0 + size1 + size2 + size3
- in (genericC (fromIntegral size)) >>=
+ in (genericC 0 (fromIntegral size)) >>=
  (paste places) >>=
  (cover boundaries) >>=
  (cover regions) >>=
@@ -213,7 +212,7 @@ writeSideband (a,b,c,d,e,f,g) = let
  todos = length b
  size0 = 1 + (length boundaries) + (length2 a)
  size1 = 6 + (length b)
- in (boundaryC (fromIntegral size0)) >>=
+ in (boundaryC 0 (fromIntegral size0)) >>=
  (paste places) >>=
  (cover boundaries) >>=
  (layer a) >>

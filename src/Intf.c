@@ -225,12 +225,11 @@ int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
-struct Ints generics = {0};
+struct Metas {DECLARE_QUEUE(struct Ints)} generics = {0};
 struct Ints sidebands = {0};
-struct Ints pendings = {0};
 struct Ints correlates = {0};
-struct Ints boundaries = {0};
-struct Ints offsets = {0};
+struct Metas boundaries = {0};
+struct Ints *metas = 0;
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -482,15 +481,15 @@ ACCESS_QUEUE(Line,enum Menu,lines)
 
 ACCESS_QUEUE(Match,int,matchs)
 
-ACCESS_QUEUE(Generic,int,generics)
+ACCESS_QUEUE(Generic,struct Ints,generics)
 
 ACCESS_QUEUE(Sideband,int,sidebands)
 
 ACCESS_QUEUE(Correlate,int,correlates)
 
-ACCESS_QUEUE(Boundary,int,boundaries)
+ACCESS_QUEUE(Boundary,struct Ints,boundaries)
 
-ACCESS_QUEUE(Offset,int,offsets)
+ACCESS_QUEUE(Meta,int,(*metas))
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -1747,11 +1746,10 @@ void finalize()
     if (files.base) {struct Files initial = {0}; free(files.base); files = initial;}
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
-    if (generics.base) {struct Ints initial = {0}; free(generics.base); generics = initial;}
+    if (generics.base) {struct Metas initial = {0}; free(generics.base); generics = initial;}
     if (sidebands.base) {struct Ints initial = {0}; free(sidebands.base); sidebands = initial;}
     if (correlates.base) {struct Ints initial = {0}; free(correlates.base); correlates = initial;}
-    if (boundaries.base) {struct Ints initial = {0}; free(boundaries.base); boundaries = initial;}
-    if (offsets.base) {struct Ints initial = {0}; free(offsets.base); offsets = initial;}
+    if (boundaries.base) {struct Metas initial = {0}; free(boundaries.base); boundaries = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -2735,49 +2733,39 @@ void displayRefresh(GLFWwindow *window)
  * accessors for Haskell to read and modify state
  */
 
-int *generic(int size)
+int *accessQueue(int size)
 {
     // if size is not zero, resize generic data
-    if (size == 0) size = sizeGeneric();
-    if (size > sizeGeneric()) enlocGeneric(size-sizeGeneric());
-    if (size < sizeGeneric()) unlocGeneric(sizeGeneric()-size);
-    return arrayGeneric();
+    if (size == 0) size = sizeMeta();
+    if (size > sizeMeta()) enlocMeta(size-sizeMeta());
+    if (size < sizeMeta()) unlocMeta(sizeMeta()-size);
+    return arrayMeta();
+}
+
+int *generic(int index, int size)
+{
+    while (sizeGeneric() <= index) {struct Ints initial = {0}; enqueGeneric(initial);}
+    metas = arrayGeneric()+index;
+    return accessQueue(size);
 }
 
 int *sideband(int size)
 {
-    // if size is not zero, resize sideband data
-    if (size == 0) size = sizeSideband();
-    if (size > sizeSideband()) enlocSideband(size-sizeSideband());
-    if (size < sizeSideband()) unlocSideband(sizeSideband()-size);
-    return arraySideband();
+    metas = &sidebands;
+    return accessQueue(size);
 }
 
 int *correlate(int size)
 {
-    // if size is not zero, resize correlate data
-    if (size == 0) size = sizeCorrelate();
-    if (size > sizeCorrelate()) enlocCorrelate(size-sizeCorrelate());
-    if (size < sizeCorrelate()) unlocCorrelate(sizeCorrelate()-size);
-    return arrayCorrelate();
+    metas = &correlates;
+    return accessQueue(size);
 }
 
-int *boundary(int size)
+int *boundary(int index, int size)
 {
-    // if size is not zero, resize boundary
-    if (size == 0) size = sizeBoundary();
-    if (size > sizeBoundary()) enlocBoundary(size-sizeBoundary());
-    if (size < sizeBoundary()) unlocBoundary(sizeBoundary()-size);
-    return arrayBoundary();
-}
-
-int *offset(int size)
-{
-    // if size is not zero, resize offset
-    if (size == 0) size = sizeOffset();
-    if (size > sizeOffset()) enlocOffset(size-sizeOffset());
-    if (size < sizeOffset()) unlocOffset(sizeOffset()-size);
-    return arrayOffset();
+    while (sizeBoundary() <= index) {struct Ints initial = {0}; enqueBoundary(initial);}
+    metas = arrayBoundary()+index;
+    return accessQueue(size);
 }
 
 int *getBuffer(struct Buffer *buffer)
