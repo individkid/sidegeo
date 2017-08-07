@@ -2755,10 +2755,10 @@ int *sideband(int size)
     return accessQueue(size);
 }
 
-int *correlate(int size)
+int *correlate(int start, int count)
 {
     metas = &correlates;
-    return accessQueue(size);
+    return accessQueue(start+count)+start;
 }
 
 int *boundary(int index, int size)
@@ -2796,6 +2796,11 @@ int *readFaceSub()
 int *readFaceOk()
 {
     return getBuffer(&faceOk);
+}
+
+int readFaces()
+{
+    return faceOk.done;
 }
 
 int *readSideBuf()

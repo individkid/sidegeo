@@ -31,11 +31,12 @@ type Sideband = ([Int],Int,Int,Int,Int,Int)
 
 foreign import ccall "generic" genericC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
-foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
+foreign import ccall "correlate" correlateC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaceOk" readFaceOkC :: IO (Ptr CInt)
+foreign import ccall "readFaces" readFacesC :: IO CInt
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
 foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writePointSub" writePointSubC :: CInt -> CInt -> IO (Ptr CInt)
@@ -88,8 +89,8 @@ recurse2G f a b c = drop 1 (recurse2F f a b (c+1))
 readBuffer :: Int -> Int -> Ptr CInt -> IO [Int]
 readBuffer base limit ptr = peekArray (limit-base) (plusPtr' ptr base) >>= return . (map fromIntegral)
 
-writeBuffer :: [CInt] -> Ptr CInt -> IO ()
-writeBuffer list ptr = pokeArray ptr list
+writeBuffer :: [Int] -> Ptr CInt -> IO ()
+writeBuffer list ptr = pokeArray ptr (map fromIntegral list)
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr' ptr 1))
@@ -230,20 +231,21 @@ handlePlane :: Int -> IO ()
 handlePlane index =
  readSideband >>= \(todo,done,base,limit,points,relates) ->
  readBoundary index >>= \boundary -> let
- boundaries = length boundary
  point = map ((Boundary done) :) (subsets 2 boundary)
  classify = map (boundary \\) point
+ boundaries = (length boundary) - 2
  relate = recurseF (boundaries +) base (length point)
+ count = length relate
  newBoundary = boundary `append` [Boundary done]
  newLimit = find' ((last relate) ==) [limit + (length2 classify)]
  newPoints = points + (length2 point)
- newRelates = relates + (length relate)
+ newRelates = relates + relates
  newTodo = todo `append` [index]
  in writePointSubC (fromIntegral points) (fromIntegral newPoints) >>=
- writeBuffer (map (\(Boundary x) -> fromIntegral x) (concat point)) >>
+ writeBuffer (map (\(Boundary x) -> x) (concat point)) >>
  writeSideSubC (fromIntegral limit) (fromIntegral newLimit) >>=
- writeBuffer (map (\(Boundary x) -> fromIntegral x) (concat classify)) >>
- correlateC (fromIntegral newRelates) >>= (\x -> writeBuffer (map fromIntegral relate) (plusPtr' x relates)) >>
+ writeBuffer (map (\(Boundary x) -> x) (concat classify)) >>
+ correlateC (fromIntegral relates) (fromIntegral count) >>= writeBuffer relate >>
  writeSideband (newTodo,done,base,newLimit,newPoints,newRelates) >>
  writeBoundary index newBoundary >>
  return ()
@@ -280,8 +282,9 @@ handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y
 handleInflate :: Int -> IO ()
 handleInflate index =
  readGeneric index >>= \generic ->
- readFaceOkC >>= readBuffer 0 0 >>= \valid ->
- readFaceSubC >>= readBuffer 0 0 >>= \face -> let
+ readFacesC >>= \faces ->
+ readFaceOkC >>= readBuffer 0 (fromIntegral faces) >>= \valid ->
+ readFaceSubC >>= readBuffer 0 ((fromIntegral faces) * 6) >>= \face -> let
  -- replace embed for indicated place by all inside regions
  (place,_) = generic
  (boundary,space) = unzipPlace place
@@ -310,8 +313,8 @@ handleInflate index =
  valid2 = valid1 `append` (replicate (quot (length face4) 6) 1)
  -- append found faces
  in writeGeneric index generic1 >>
- writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer (map fromIntegral valid2) >>
- writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer (map fromIntegral face4) >>
+ writeFaceOkC 0 (fromIntegral (length valid2)) >>= writeBuffer valid2 >>
+ writeFaceSubC (fromIntegral (length face)) (fromIntegral (length face4)) >>= writeBuffer face4 >>
  return ()
 
 handleFill :: Int -> IO ()
