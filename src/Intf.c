@@ -225,11 +225,14 @@ int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
-struct Metas {DECLARE_QUEUE(struct Ints)} generics = {0};
-struct Ints sidebands = {0};
-struct Ints correlates = {0};
+struct Metas {DECLARE_QUEUE(struct Ints)} places = {0};
+struct Metas embedings = {0};
+struct Ints todos = {0};
+struct Ints relates = {0};
 struct Metas boundarys = {0};
 struct Ints *metas = 0;
+int sideDone = 0;
+int planeDone = 0;
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -282,7 +285,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Initialize,Plane,Classify,Inflate,Fill,Hollow,Remove,Error,Done};
+enum Event {Plane,Classify,Inflate,Fill,Hollow,Remove,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 struct Chars chars = {0};
@@ -481,11 +484,13 @@ ACCESS_QUEUE(Line,enum Menu,lines)
 
 ACCESS_QUEUE(Match,int,matchs)
 
-ACCESS_QUEUE(Generic,struct Ints,generics)
+ACCESS_QUEUE(Place,struct Ints,places)
 
-ACCESS_QUEUE(Sideband,int,sidebands)
+ACCESS_QUEUE(Embed,struct Ints,embedings)
 
-ACCESS_QUEUE(Correlate,int,correlates)
+ACCESS_QUEUE(Sideband,int,todos)
+
+ACCESS_QUEUE(Correlate,int,relates)
 
 ACCESS_QUEUE(Boundary,struct Ints,boundarys)
 
@@ -1728,7 +1733,6 @@ void initialize(int argc, char **argv)
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
-    enqueCommand(0); enqueEvent(Initialize);
     ENQUE(process,Process)
 }
 
@@ -1746,9 +1750,10 @@ void finalize()
     if (files.base) {struct Files initial = {0}; free(files.base); files = initial;}
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
-    if (generics.base) {struct Metas initial = {0}; free(generics.base); generics = initial;}
-    if (sidebands.base) {struct Ints initial = {0}; free(sidebands.base); sidebands = initial;}
-    if (correlates.base) {struct Ints initial = {0}; free(correlates.base); correlates = initial;}
+    if (places.base) {struct Metas initial = {0}; free(places.base); places = initial;}
+    if (embedings.base) {struct Metas initial = {0}; free(embedings.base); embedings = initial;}
+    if (todos.base) {struct Ints initial = {0}; free(todos.base); todos = initial;}
+    if (relates.base) {struct Ints initial = {0}; free(relates.base); relates = initial;}
     if (boundarys.base) {struct Metas initial = {0}; free(boundarys.base); boundarys = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
@@ -2735,30 +2740,55 @@ void displayRefresh(GLFWwindow *window)
 
 int *accessQueue(int size)
 {
-    // if size is not zero, resize generic data
+    // if size is not zero, resize data
     if (size == 0) size = sizeMeta();
     if (size > sizeMeta()) enlocMeta(size-sizeMeta());
     if (size < sizeMeta()) unlocMeta(sizeMeta()-size);
     return arrayMeta();
 }
 
-int *generic(int index, int size)
+int *place(int index, int size)
 {
-    while (sizeGeneric() <= index) {struct Ints initial = {0}; enqueGeneric(initial);}
-    metas = arrayGeneric()+index;
+    while (sizePlace() <= index) {struct Ints initial = {0}; enquePlace(initial);}
+    metas = arrayPlace()+index;
     return accessQueue(size);
+}
+
+int *embed(int index, int size)
+{
+    while (sizeEmbed() <= index) {struct Ints initial = {0}; enqueEmbed(initial);}
+    metas = arrayEmbed()+index;
+    return accessQueue(size);
+}
+
+int embeds(int index)
+{
+    while (sizeEmbed() <= index) {struct Ints initial = {0}; enqueEmbed(initial);}
+    metas = arrayEmbed()+index;
+    return sizeMeta();
 }
 
 int *sideband(int size)
 {
-    metas = &sidebands;
+    metas = &todos;
     return accessQueue(size);
 }
 
-int *correlate(int start, int count)
+int sidebands()
 {
-    metas = &correlates;
-    return accessQueue(start+count)+start;
+    return sizeSideband();
+}
+
+int *correlate(int size)
+{
+    int done = sizeCorrelate();
+    metas = &relates;
+    return accessQueue(done+size)+done;
+}
+
+int correlates()
+{
+    return sizeCorrelate();
 }
 
 int *boundary(int index, int size)
@@ -2805,7 +2835,18 @@ int readFaces()
 
 int *readSideBuf()
 {
-    return getBuffer(&sideBuf);
+    int done = sideDone; sideDone = sideBuf.done;
+    return getBuffer(&sideBuf) + done;
+}
+
+int readSides()
+{
+    return sideBuf.done-sideDone;
+}
+
+int readPlanes()
+{
+    return planeDone;
 }
 
 void putBuffer()
@@ -2832,29 +2873,34 @@ int *setupBuffer(int start, int count, struct Buffer *buffer)
     enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count); return enlocInt(count);
 }
 
-int *writeFaceSub(int start, int count)
+int *writeFaceSub(int count)
 {
-    return setupBuffer(start,count,&faceSub);
+    return setupBuffer(faceSub.done,count,&faceSub);
 }
 
-int *writePointSub(int start, int count)
+int *writePointSub(int count)
 {
-    return setupBuffer(start,count,&pointSub);
+    return setupBuffer(pointSub.done,count,&pointSub);
 }
 
-int *writeSideSub(int start, int count)
+int *writeSideSub(int count)
 {
-    return setupBuffer(start,count,&sideSub);
+    return setupBuffer(sideSub.done,count,&sideSub);
 }
 
-int *writePlaneOk(int start, int count)
+int *writePlaneOk(int count)
 {
-    return setupBuffer(start,count,&planeOk);
+    return setupBuffer(0,count,&planeOk);
 }
 
-int *writeFaceOk(int start, int count)
+int *writeFaceOk(int count)
 {
-    return setupBuffer(start,count,&faceOk);
+    return setupBuffer(0,count,&faceOk);
+}
+
+void writePlanes(int done)
+{
+    planeDone = done;
 }
 
 char *print(int size)
@@ -2866,8 +2912,7 @@ char *event()
 {
     if (!validEvent()) return (char *)"";
     enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Initialize) return (char *)"Initialize";
-    CASE(Plane) return (char *)"Plane";
+    SWITCH(event,Plane) return (char *)"Plane";
     CASE(Classify) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
     CASE(Fill) return (char *)"Fill";
