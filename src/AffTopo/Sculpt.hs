@@ -113,9 +113,6 @@ onion (len,_) (_,ptr) = cook (map (\x -> peel (x,ptr) (x,ptr)) len)
 patch :: ([[Int]], Ptr CInt) -> (a, Ptr CInt) -> IO ([[[Int]]], Ptr CInt)
 patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 
-jump :: a -> (a -> b) -> b
-jump a f = f a
-
 prejump :: Ptr CInt -> IO (Int,Ptr CInt)
 prejump a = return (0::Int,a)
 
@@ -124,13 +121,13 @@ nojump a = return (fromIntegral a, nullPtr)
 
 readPlace :: Int -> IO Place
 readPlace index = let indexC = fromIntegral index in
- (boundariesC indexC) >>= nojump >>= \boundaries ->
- (readBoundary index) >>= \boundary ->
- (placeC indexC 0) >>= prejump >>=
- (peel boundaries) >>= \firsts -> jump firsts
- (peel boundaries) >>= \seconds -> jump seconds
- (onion firsts) >>= \first -> jump first
- (onion seconds) >>= \second -> let
+ boundariesC indexC >>= nojump >>= \boundaries ->
+ readBoundary index >>= \boundary ->
+ placeC indexC 0 >>= prejump >>=
+ peel boundaries >>= \firsts -> return firsts >>=
+ peel boundaries >>= \seconds -> return seconds >>=
+ onion firsts >>= \first -> return first >>=
+ onion seconds >>= \second -> let
  x = map2 Region (fst first)
  y = map2 Region (fst second)
  in return (zipWith3 readPlaceF boundary x y)
@@ -221,9 +218,9 @@ handlePlane :: Int -> IO ()
 handlePlane index =
  readSideband >>= \todo ->
  readBoundary index >>= \boundary ->
- readPlanesC >>= \doneC -> (return . Boundary . fromIntegral) doneC >>= \done ->
- correlatesC >>= return . fromIntegral >>= \relates ->
- correlateC 0 >>= (flip peekElemOff) (relates-1) >>= return . fromIntegral >>= \base -> let
+ readPlanesC >>= handlePlaneF >>= \(doneC,done) ->
+ correlatesC >>= handlePlaneG >>= \relates ->
+ correlateC 0 >>= handlePlaneH (relates-1) >>= \base -> let
  point = map (done :) (subsets 2 boundary)
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
@@ -240,9 +237,20 @@ handlePlane index =
  writePlanesC (doneC + 1) >>
  return ()
 
+handlePlaneF :: CInt -> IO (CInt,Boundary)
+handlePlaneF a = return (a, Boundary . fromIntegral $ a)
+
+handlePlaneG :: CInt -> IO Int
+handlePlaneG = return . fromIntegral
+
+handlePlaneH :: Int -> Ptr CInt -> IO Int
+handlePlaneH a b = peekElemOff b a >>= handlePlaneG
+
 handleClassify :: IO ()
-handleClassify = readPlanesC >>= \doneC -> sidebandsC >>= \todosC ->
- readSideband >>= handleClassifyF ((fromIntegral doneC) - (fromIntegral todosC)) >>= writeSideband
+handleClassify =
+ readPlanesC >>= handlePlaneG >>= \done ->
+ sidebandsC >>= handlePlaneG >>= \todos ->
+ readSideband >>= handleClassifyF (done - todos) >>= writeSideband
 
 handleClassifyF :: Int -> [Int] -> IO [Int]
 handleClassifyF done (index:todo) =
@@ -290,27 +298,15 @@ handleInflate index =
  embed3 r = attachedBoundaries r space
  embed4 r = map (embed2 r) (embed3 r)
  embed5 = map embed4 embed
- -- [(base,inside,opposite)]
- attached1 :: [(Boundary,Region,Region)]
  attached1 = concat embed5
- -- [(base,inside,outside)]
- attached2 :: [(Boundary,Region,Region)]
  attached2 = filter (\(_,_,y) -> not (elem y embed)) attached1
  -- choose vertex per found boundary
- -- [(base,inside,chosen)]
- attached3 :: [(Boundary,Region,[Boundary])]
  attached3 = map (\(x,r,_) -> (x, r, choose (filter (\w -> elem x w) (attachedFacets 3 r space)))) attached2
  -- find all edges per boundary
- -- [(base,inside,chosen,[edge])]
- attached4 :: [(Boundary,Region,[Boundary],[[Boundary]])]
  attached4 = map (\(x,r,y) -> (x, r, y, filter (\w -> elem x w) (attachedFacets 2 r space))) attached3
  -- find vertex pair per found edge
- -- [(base,chosen,[(edge,endpoint)])]
- attached5 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
  attached5 = map (\(x,r,y,z) -> (x, y, map (\w -> (w, filter (\v -> all (\u -> elem u v) w) (attachedFacets 3 r space))) z)) attached4
  -- remove edges containg chosen vertex
- -- [(base,chosen,[(edge,[endpoint])])]
- attached6 :: [(Boundary,[Boundary],[([Boundary],[[Boundary]])])]
  attached6 = map (\(x,y,z) -> (x, y, filter (\(_,v) -> all (any (\u -> not (elem u y))) v) z)) attached5
  -- construct face from base vertex and edge
  face1 = map (\(x,y,z) -> (x, filter (/=x) y, map (\(w,v) -> (filter (/=x) w, map (\u -> filter (/=x) u) v)) z)) attached6
