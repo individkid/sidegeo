@@ -6,18 +6,18 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
 
   * -i \<file> load polytope and adjust view  
   * -I \<file> load polytope and ignore view changes  
-  * -b \<file> start new file with reference to disabled jump  
-  * -B \<file> append changes to make current same as given file  
-  * -f \<file> load polytope in format indicated by file extension  
-  * -F \<file> save polytope in format indicated by file extension  
+  * -b \<file> start file with reference to disabled jump  
+  * -B \<file> append changes to make current same as given  
+  * -f \<form> load from format indicated by file extension  
+  * -F \<form> save to format indicated by file extension  
+  * -o \<ext> backup and delete unused boundaries in files  
+  * -O \<ext> backup and truncate files to minimal commands  
   * -s resample current space to planes with same sidedness  
   * -S resample current polytope to space and planes  
-  * -o optimize away unused boundaries
-  * -O truncate file to minimal commands for current polytope  
   * -d display space and regions  
   * -D display polyants  
-  * -t run sanity check 
-  * -T run thorough tests 
+  * -t run sanity check  
+  * -T run thorough tests  
 
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console.
 

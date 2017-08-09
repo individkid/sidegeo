@@ -288,6 +288,9 @@ struct Commands {DECLARE_QUEUE(Command)} commands = {0};
 enum Event {Plane,Classify,Inflate,Fill,Hollow,Remove,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
+enum Kind {Boundary,Face};
+struct Kinds {DECLARE_QUEUE(enum Kind)} kinds = {0};
+ // argument for remove command
 struct Chars chars = {0};
  // for scratchpad and arguments
 struct Ints ints = {0};
@@ -503,6 +506,8 @@ ACCESS_QUEUE(Defer,int,defers)
 ACCESS_QUEUE(Command,Command,commands)
 
 ACCESS_QUEUE(Event,enum Event,events)
+
+ACCESS_QUEUE(Kind,enum Kind,kinds)
 
 ACCESS_QUEUE(Char,char,chars)
 
@@ -1759,6 +1764,7 @@ void finalize()
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
     if (events.base) {struct Events initial = {0}; free(events.base); events = initial;}
+    if (kinds.base) {struct Kinds initial = {0}; free(kinds.base); kinds = initial;}
     if (chars.base) {struct Chars initial = {0}; free(chars.base); chars = initial;}
     if (ints.base) {struct Ints initial = {0}; free(ints.base); ints = initial;}
     if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
@@ -1773,100 +1779,47 @@ void finalize()
 }
 
 void configure();
-void enqueShader(enum Shader);
+
+void openFile(char *filename)
+{
+    struct File file = {0};
+#ifdef BRINGUP
+    file.debug = 1;
+#endif
+    file.handle = open(filename,O_RDWR);
+    if (file.handle < 0) enqueErrstr("invalid file argument\n");
+    file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
+}
+
+void process()
+{
+    CHECK(process,Process)
+    if (!validOption()) {DEQUE(process,Process)}
+    if (strcmp(headOption(), "-h") == 0) {
+        enqueMsgstr("-h print this message\n");
+        enqueMsgstr("-H print manual page\n");
+        enqueMsgstr("-i <file> load and append to configuration file\n");
+        enqueMsgstr("-I <file> follow file for readonly polytope\n");
+        enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
+        enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
+        enqueMsgstr("-s resample current space to planes with same sidedness\n");
+        enqueMsgstr("-S resample current polytope to space and planes\n");
+        enqueMsgstr("-o optimize away unused boundarie\n");
+        enqueMsgstr("-O truncate file to minimal commands for current polytope\n");
+        enqueMsgstr("-t run sanity check\n");
+        enqueMsgstr("-T run thorough tests\n");}
+    else if (strcmp(headOption(), "-i") == 0) {
+        dequeOption();
+        if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
+        openFile(headOption());}
+    dequeOption(); REQUE(process)
+}
+
+void enqueWrap(struct Buffer *buffer, int room);
+size_t bufferType(int size);
+void enqueShader(enum Shader shader);
 void transformRight();
-
-void exitErrbuf(struct Buffer *buf, const char *str)
-{
-    if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
-}
-
-size_t bufferType(int size)
-{
-    size_t retval = 0;
-    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
-    CASE(GL_FLOAT) retval = sizeof(GLfloat);
-    DEFAULT(exitErrstr("unknown render type\n");)
-    return retval;
-}
-
-int bufferPrimitive(int size)
-{
-    int retval = 0;
-    SWITCH(size,GL_POINTS) retval = 1;
-    CASE(GL_TRIANGLES) retval = 3;
-    CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
-    DEFAULT(exitErrstr("unknown render primitive\n");)
-    return retval;
-}
-
-void wrap()
-{
-    struct Buffer *buffer = headBuffer();
-    size_t size = buffer->dimn*bufferType(buffer->type);
-    if (buffer->room) {
-        glGenBuffers(1,&buffer->copy);
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
-        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, buffer->copy);
-        glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-        glBindBuffer(GL_COPY_READ_BUFFER, 0);
-        glDeleteBuffers(1,&buffer->handle);
-        buffer->handle = buffer->copy; buffer->copy = 0;}
-    else {
-        if (!buffer->handle) glGenBuffers(1,&buffer->handle);
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER,0);}
-    if (buffer->loc != INVALID_LOCATION) {
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
-        CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
-        DEFAULT(enqueMsgstr("unknown type\n");)
-        glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    buffer->room = buffer->wrap; buffer->wrap = 0;
-    dequeBuffer();
-}
-
-void enqueWrap(struct Buffer *buffer, int room)
-{
-    if (buffer->wrap > 0) return;
-    buffer->wrap = buffer->room;
-    if (buffer->wrap == 0) buffer->wrap = 1;
-    while (room > buffer->wrap) buffer->wrap *= 2;
-    enqueBuffer(buffer); enqueCommand(wrap);
-}
-
-void flush(enum Shader shader)
-{
-    if (!ready[shader] && !reset[shader]) {glFlush(); ready[shader] = 1;}
-    if (ready[shader] && reset[shader]) {glFlush(); ready[shader] = 0;}
-}
-
-void classify()
-{
-    CHECK(classify,Classify)
-    if (pointBuf.done < pointSub.done) enqueShader(Coplane);
-    if (classifyDone < pointBuf.done && !started[Adplane]) {
-        GLfloat buffer[pointBuf.dimn];
-        int size = pointBuf.dimn*bufferType(pointBuf.type);
-        if (sideBuf.done >= sideSub.done) exitErrstr("classify too done\n");
-        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, buffer);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glUseProgram(program[Adplane]);
-        glUniform3f(uniform[Adplane][Feather],buffer[0],buffer[1],buffer[2]);
-        glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
-        glUseProgram(0);
-        limit[Adplane] = arrayCorrelate()[classifyDone];
-        enqueShader(Adplane);
-        classifyDone++;}
-    if (sideBuf.done < sideSub.done) {DEFER(classify)}
-    flush(Adplane); DEQUE(classify,Classify)
-}
+void classify();
 
 #ifdef BRINGUP
 void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
@@ -1978,17 +1931,6 @@ int bufferFile(struct Buffer *buffer, int todo, void *data)
     return 0;
 }
 
-void openFile(char *filename)
-{
-    struct File file = {0};
-#ifdef BRINGUP
-    file.debug = 1;
-#endif
-    file.handle = open(filename,O_RDWR);
-    if (file.handle < 0) enqueErrstr("invalid file argument\n");
-    file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
-}
-
 void rdlckFile(struct File *file)
 {
     struct flock lock = {0};
@@ -2054,7 +1996,6 @@ void configure()
             if (read(file->handle,file->buffer,file->size) != file->size) {ERRORFILE("file error\n")}
             changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
-        int index = headIndex();
         char header[3] = {0};
         int size;
         header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
@@ -2065,13 +2006,15 @@ void configure()
         int size;
         header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
         requeIndex(); relocConfigure(size+2);}
-    if (sscanf(file->buffer," --plane %f %f %f", plane+0, plane+1, plane+2) == 3) {
+    if (sscanf(file->buffer," --plane %d %f %f %f", &index, plane+0, plane+1, plane+2) == 3) {
         GLfloat buffer[3];
         GLuint valid[1];
+        GLuint versor[1];
         int retval = 0;
-        for (int i = 0; i < 3; i++) buffer[i] = plane[i]; valid[0] = 1;
+        for (int i = 0; i < 3; i++) buffer[i] = plane[i]; valid[0] = 1; versor[0] = index;
         retval |= bufferFile(&planeBuf,1,buffer);
         retval |= bufferFile(&planeOk,1,valid);
+        retval |= bufferFile(&versorBuf,1,versor);
         if (retval == 0) {changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
     else if (sscanf(file->buffer," --classify") == 0) {
         MAYBE(classify,Classify)
@@ -2094,28 +2037,96 @@ void configure()
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 }
 
-void process()
+void flush(enum Shader shader)
 {
-    CHECK(process,Process)
-    if (!validOption()) {DEQUE(process,Process)}
-    if (strcmp(headOption(), "-h") == 0) {
-        enqueMsgstr("-h print this message\n");
-        enqueMsgstr("-H print manual page\n");
-        enqueMsgstr("-i <file> load and append to configuration file\n");
-        enqueMsgstr("-I <file> follow file for readonly polytope\n");
-        enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
-        enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
-        enqueMsgstr("-s resample current space to planes with same sidedness\n");
-        enqueMsgstr("-S resample current polytope to space and planes\n");
-        enqueMsgstr("-o optimize away unused boundarie\n");
-        enqueMsgstr("-O truncate file to minimal commands for current polytope\n");
-        enqueMsgstr("-t run sanity check\n");
-        enqueMsgstr("-T run thorough tests\n");}
-    else if (strcmp(headOption(), "-i") == 0) {
-        dequeOption();
-        if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
-        openFile(headOption());}
-    dequeOption(); REQUE(process)
+    if (!ready[shader] && !reset[shader]) {glFlush(); ready[shader] = 1;}
+    if (ready[shader] && reset[shader]) {glFlush(); ready[shader] = 0;}
+}
+
+void classify()
+{
+    CHECK(classify,Classify)
+    if (pointBuf.done < pointSub.done) enqueShader(Coplane);
+    if (classifyDone < pointBuf.done && !started[Adplane]) {
+        GLfloat buffer[pointBuf.dimn];
+        int size = pointBuf.dimn*bufferType(pointBuf.type);
+        if (sideBuf.done >= sideSub.done) exitErrstr("classify too done\n");
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
+        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, buffer);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glUseProgram(program[Adplane]);
+        glUniform3f(uniform[Adplane][Feather],buffer[0],buffer[1],buffer[2]);
+        glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
+        glUseProgram(0);
+        limit[Adplane] = arrayCorrelate()[classifyDone];
+        enqueShader(Adplane);
+        classifyDone++;}
+    if (sideBuf.done < sideSub.done) {DEFER(classify)}
+    flush(Adplane); DEQUE(classify,Classify)
+}
+
+void wrap()
+{
+    struct Buffer *buffer = headBuffer();
+    size_t size = buffer->dimn*bufferType(buffer->type);
+    if (buffer->room) {
+        glGenBuffers(1,&buffer->copy);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
+        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, buffer->copy);
+        glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        glBindBuffer(GL_COPY_READ_BUFFER, 0);
+        glDeleteBuffers(1,&buffer->handle);
+        buffer->handle = buffer->copy; buffer->copy = 0;}
+    else {
+        if (!buffer->handle) glGenBuffers(1,&buffer->handle);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+        glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);}
+    if (buffer->loc != INVALID_LOCATION) {
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+        SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
+        CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
+        DEFAULT(enqueMsgstr("unknown type\n");)
+        glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    buffer->room = buffer->wrap; buffer->wrap = 0;
+    dequeBuffer();
+}
+
+void enqueWrap(struct Buffer *buffer, int room)
+{
+    if (buffer->wrap > 0) return;
+    buffer->wrap = buffer->room;
+    if (buffer->wrap == 0) buffer->wrap = 1;
+    while (room > buffer->wrap) buffer->wrap *= 2;
+    enqueBuffer(buffer); enqueCommand(wrap);
+}
+
+void exitErrbuf(struct Buffer *buf, const char *str)
+{
+    if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
+}
+
+size_t bufferType(int size)
+{
+    size_t retval = 0;
+    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
+    CASE(GL_FLOAT) retval = sizeof(GLfloat);
+    DEFAULT(exitErrstr("unknown render type\n");)
+    return retval;
+}
+
+int bufferPrimitive(int size)
+{
+    int retval = 0;
+    SWITCH(size,GL_POINTS) retval = 1;
+    CASE(GL_TRIANGLES) retval = 3;
+    CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
+    DEFAULT(exitErrstr("unknown render primitive\n");)
+    return retval;
 }
 
 enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
@@ -2734,10 +2745,6 @@ void displayRefresh(GLFWwindow *window)
     enqueShader(dishader);
 }
 
-/*
- * accessors for Haskell to read and modify state
- */
-
 int *accessQueue(int size)
 {
     // if size is not zero, resize data
@@ -2815,6 +2822,11 @@ int *getBuffer(struct Buffer *buffer)
     int *buf = enlocInt(count); unlocInt(count);
     for (int i = 0; i < count; i++) buf[i] = temp[i];
     return buf;
+}
+
+int *readPlaneOk()
+{
+    return getBuffer(&planeOk);
 }
 
 int *readFaceSub()
@@ -2919,7 +2931,17 @@ char *event()
     CASE(Remove) return (char *)"Remove";
     CASE(Error) return (char *)"Error";
     CASE(Done) return (char *)"Done";
-    DEFAULT({exitErrstr("invalid event\n");})
+    DEFAULT(exitErrstr("invalid event\n");)
+    return (char *)"";
+}
+
+char *stringArgument()
+{
+    if (!validKind()) return (char *)"";
+    enum Kind kind = headKind(); dequeKind();
+    SWITCH(kind,Boundary) return (char *)"Boundary";
+    CASE(Face) return (char *)"Face";
+    DEFAULT(exitErrstr("invalid kind\n");)
     return (char *)"";
 }
 

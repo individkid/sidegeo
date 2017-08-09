@@ -35,6 +35,7 @@ foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlates" correlatesC :: IO CInt
 foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
+foreign import ccall "readPlaneOk" readPlaneOkC :: IO (Ptr CInt)
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaceOk" readFaceOkC :: IO (Ptr CInt)
 foreign import ccall "readFaces" readFacesC :: IO CInt
@@ -49,6 +50,7 @@ foreign import ccall "writeFaceOk" writeFaceOkC :: CInt -> IO (Ptr CInt)
 foreign import ccall "writePlanes" writePlanesC :: CInt -> IO ()
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO (Ptr CChar)
+foreign import ccall "stringArgument" stringArgumentC :: IO (Ptr CChar)
 foreign import ccall "intArgument" intArgumentC :: IO CInt
 
 printStr :: [Char] -> IO ()
@@ -108,9 +110,11 @@ cook [elm] = elm >>= (\(x,y) -> return ([x],y))
 cook [] = return undefined
 
 onion :: ([Int], Ptr CInt) -> (a, Ptr CInt) -> IO ([[Int]], Ptr CInt)
+onion ([],_) (_,ptr) = return ([],ptr)
 onion (len,_) (_,ptr) = cook (map (\x -> peel (x,ptr) (x,ptr)) len)
 
 patch :: ([[Int]], Ptr CInt) -> (a, Ptr CInt) -> IO ([[[Int]]], Ptr CInt)
+patch ([],_) (_,ptr) = return ([],ptr)
 patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
 
 prejump :: Ptr CInt -> IO (Int,Ptr CInt)
@@ -138,16 +142,15 @@ readPlaceF a b c = (a,[b,c])
 readEmbed :: Int -> IO [Region]
 readEmbed index = let indexC = fromIntegral index in
  embedsC indexC >>= \embeds -> embedC indexC 0 >>=
- peekArray (fromIntegral embeds) >>= \embed -> return (map (Region . fromIntegral) embed)
+ readBuffer embeds >>= return . (map Region)
 
 readSideband :: IO [Int]
-readSideband = sidebandsC >>= \todosC -> (sidebandC todosC) >>=
- peekArray (fromIntegral todosC) >>= \todoC -> return (map fromIntegral todoC)
+readSideband = sidebandsC >>= \todosC -> (sidebandC todosC) >>= readBuffer todosC
 
 readBoundary :: Int -> IO [Boundary]
 readBoundary index = let indexC = fromIntegral index in
  boundariesC indexC >>= \boundaries -> boundaryC indexC 0 >>=
- peekArray (fromIntegral boundaries) >>= \boundary -> return (map (Boundary . fromIntegral) boundary)
+ readBuffer boundaries >>= return . (map Boundary)
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))
@@ -204,7 +207,7 @@ handleEvent = do
   "Inflate" -> handleEventF >>= handleInflate >> return False
   "Fill" -> handleEventF >>= handleFill >> return False
   "Hollow" -> handleEventF >>= handleHollow >> return False
-  "Remove" -> handleEventF >>= \index -> handleEventF >>= handleRemove index >> return False
+  "Remove" -> handleEventG >>= \kind -> handleEventF >>= handleRemove kind >> return False
   "Error" -> return True
   "Done" -> return True
   _ ->
@@ -213,6 +216,9 @@ handleEvent = do
 
 handleEventF :: IO Int
 handleEventF = intArgumentC >>= (return . fromIntegral)
+
+handleEventG :: IO String
+handleEventG = stringArgumentC >>= peekCString
 
 handlePlane :: Int -> IO ()
 handlePlane index =
@@ -230,7 +236,7 @@ handlePlane index =
  writeBuffer (map (\(Boundary x) -> x) (concat point)) >>
  writeSideSubC (fromIntegral (length classify)) >>=
  writeBuffer (map (\(Boundary x) -> x) (concat classify)) >>
- correlateC sizeC >>= return . ((flip plusPtr) relates) >>=
+ correlateC sizeC >>= handlePlaneI relates >>=
  writeBuffer relate >>
  writeSideband (todo `append` [index]) >>
  writeBoundary index (boundary `append` [done]) >>
@@ -245,6 +251,9 @@ handlePlaneG = return . fromIntegral
 
 handlePlaneH :: Int -> Ptr CInt -> IO Int
 handlePlaneH a b = peekElemOff b a >>= handlePlaneG
+
+handlePlaneI :: Int -> Ptr CInt -> IO (Ptr CInt)
+handlePlaneI a b = return (plusPtr' b a)
 
 handleClassify :: IO ()
 handleClassify =
@@ -330,5 +339,5 @@ handleFill = undefined
 handleHollow :: Int -> IO ()
 handleHollow = undefined
 
-handleRemove :: Int -> Int -> IO ()
+handleRemove :: String -> Int -> IO ()
 handleRemove = undefined
