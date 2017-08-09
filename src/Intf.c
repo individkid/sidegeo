@@ -690,6 +690,10 @@ float *invmat(float *u, int n)
     return u;
 }
 
+/*
+ * thread for menu in user console
+ */
+
 void handler(int sig)
 {
 }
@@ -907,6 +911,10 @@ void menu()
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocMenu(len+1);
 }
+
+/*
+ * command queue and top level
+ */
 
 void waitForEvent()
 {
@@ -1778,6 +1786,10 @@ void finalize()
     if (menus.base) {struct Chars initial = {0}; free(menus.base); menus = initial;}
 }
 
+/*
+ * parse and obey user writable input
+ */
+
 void configure();
 
 void openFile(char *filename)
@@ -2036,6 +2048,10 @@ void configure()
     else {ERRORFILE("file error\n")}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 }
+
+/*
+ * offload work to graphics engines
+ */
 
 void flush(enum Shader shader)
 {
@@ -2308,6 +2324,10 @@ void enqueShader(enum Shader shader)
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
     enqueCommand(render); started[shader]++;
 }
+
+/*
+ * react immediately to user action
+ */
 
 void leftAdditive()
 {
@@ -2753,6 +2773,10 @@ int *accessQueue(int size)
     if (size < sizeMeta()) unlocMeta(sizeMeta()-size);
     return arrayMeta();
 }
+
+/*
+ * provide access to state
+ */
 
 int *place(int index, int size)
 {
