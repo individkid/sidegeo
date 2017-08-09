@@ -221,19 +221,19 @@ handlePlane :: Int -> IO ()
 handlePlane index =
  readSideband >>= \todo ->
  readBoundary index >>= \boundary ->
- readPlanesC >>= \doneC ->
- correlatesC >>= \relatesC -> let
- done = Boundary (fromIntegral doneC)
- relates = fromIntegral relatesC
+ readPlanesC >>= \doneC -> (return . Boundary . fromIntegral) doneC >>= \done ->
+ correlatesC >>= return . fromIntegral >>= \relates ->
+ correlateC 0 >>= (flip peekElemOff) (relates-1) >>= return . fromIntegral >>= \base -> let
  point = map (done :) (subsets 2 boundary)
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
- relate = recurseF (boundaries +) relates (length point)
+ relate = recurseF (boundaries +) base (length point)
+ sizeC = fromIntegral (relates + (length relate))
  in writePointSubC (fromIntegral (length point)) >>=
  writeBuffer (map (\(Boundary x) -> x) (concat point)) >>
  writeSideSubC (fromIntegral (length classify)) >>=
  writeBuffer (map (\(Boundary x) -> x) (concat classify)) >>
- correlateC (fromIntegral (length relate)) >>=
+ correlateC sizeC >>= return . ((flip plusPtr) relates) >>=
  writeBuffer relate >>
  writeSideband (todo `append` [index]) >>
  writeBoundary index (boundary `append` [done]) >>

@@ -2781,9 +2781,8 @@ int sidebands()
 
 int *correlate(int size)
 {
-    int done = sizeCorrelate();
     metas = &relates;
-    return accessQueue(done+size)+done;
+    return accessQueue(size);
 }
 
 int correlates()
