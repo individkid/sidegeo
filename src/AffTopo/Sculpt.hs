@@ -205,7 +205,7 @@ handleEvent = do
   "Plane" -> handleEventF >>= handlePlane >> return False
   "Classify" -> handleClassify >> return False
   "Inflate" -> handleEventF >>= handleInflate >> return False
-  "Pierce" -> handleEventF >>= \index -> handleEventF >>= handlePierce index >> return False
+  "Point" -> handleEventF >>= handlePoint >> return False
   "Fill" -> handleEventF >>= handleFill >> return False
   "Hollow" -> handleEventF >>= handleHollow >> return False
   "Remove" -> handleEventG >>= \kind -> handleEventF >>= handleRemove kind >> return False
@@ -334,8 +334,8 @@ handleInflate index =
  writeFaceSubC (fromIntegral (length face4)) >>= writeBuffer face4 >>
  return ()
 
-handlePierce :: Int -> Int -> IO ()
-handlePierce = undefined
+handlePoint :: Int -> IO ()
+handlePoint = undefined
 
 handleFill :: Int -> IO ()
 handleFill = undefined

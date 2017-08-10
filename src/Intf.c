@@ -104,6 +104,8 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
+enum FileState {FileIdle,FilePlane,FilePoint,FileWait} fileState = 0;
+int fileOwner = 0;
 struct File {
 #ifdef BRINGUP
     int debug;
@@ -1935,14 +1937,14 @@ enum Action bringup()
 
 int bufferFile(struct Buffer *buffer, int todo, void *data)
 {
-    if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return 1;}
+    if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return 0;}
     if (buffer->done+todo <= buffer->room) {
         int size = buffer->dimn*bufferType(buffer->type);
         glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
         glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
         glBindBuffer(GL_ARRAY_BUFFER,0);
         buffer->done += todo;}
-    return 0;
+    return 1;
 }
 
 void rdlckFile(struct File *file)
@@ -1983,6 +1985,22 @@ int iswrlckFile(struct File *file)
 }
 
 #define ERRORFILE(MSG) enqueMsgstr(MSG); close(file->handle); dequeFile(); return;
+
+void filePoint(struct File *file, enum Event event, int *changed, float *vector)
+{
+    int state = 0;
+    if (fileState == FilePlane && fileOwner == file->index) {ERRORFILE("file error\n")}
+    if (state++ == file->state && fileState == FileIdle) {
+        fileState = FilePoint; fileOwner = file->index; file->state++;}
+    if (state++ == file->state) {
+        *changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); state--; file->state++;}
+    if (state++ == file->state) {
+        GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
+        limit[Adplane] = -1; enqueLocate(buffer); file->state++;}
+    if (state++ == file->state && sideBuf.done >= sideSub.done) {
+        *changed = 1; file->state = 0; file->size = 0; enqueCommand(0); enqueEvent(event); enqueInt(file->index);}    
+}
+
 void configure()
 {
     struct File *file = arrayFile();
@@ -1991,6 +2009,7 @@ void configure()
     int index = 0;
     char filename[256] = {0};
     int changed = 0;
+    char suffix = 0;
 #ifdef BRINGUP
     if (file->debug == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
@@ -2024,35 +2043,34 @@ void configure()
         GLfloat buffer[3];
         GLuint valid[1];
         GLuint versor[1];
-        int retval = 0;
-        // TODO: defer to other files using sideSub, and abort unused pierces
+        int state = 0;
         for (int i = 0; i < 3; i++) buffer[i] = vector[i]; valid[0] = 1; versor[0] = index;
-        retval |= bufferFile(&planeBuf,1,buffer);
-        retval |= bufferFile(&planeOk,1,valid);
-        retval |= bufferFile(&versorBuf,1,versor);
-        if (retval == 0) {changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
-    else if (sscanf(file->buffer," --classify") == 0) {
-        MAYBE(classify,Classify)
-        if (sideBuf.done >= sideSub.done) {changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Classify);}}
-    else if (sscanf(file->buffer," --inflate") == 0) {
+        if (fileState == FilePoint && fileOwner == file->index) exitErrstr("file error\n");
+        if (fileState == FileWait && fileOwner == file->index) exitErrstr("file error\n");
+        if (state++ == file->state && fileState == FileIdle) {
+            fileState = FilePlane; fileOwner = file->index; file->state++;}
+        if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) file->state++;
+        if (state++ == file->state && bufferFile(&planeOk,1,valid)) file->state++;
+        if (state++ == file->state && bufferFile(&versorBuf,1,versor)) file->state++;
+        if (state++ == file->state) {
+            changed = 1; file->state = 0; file->size = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
+    else if (sscanf(file->buffer," --classif%c", &suffix) == 1 && suffix == 'y') {
+        if (fileState == FilePlane) {fileState = FileWait; ENQUE(classify,Classify)}
+        if (sideBuf.done >= sideSub.done) {
+            changed = 1; fileState = FileIdle; file->size = 0; enqueCommand(0); enqueEvent(Classify);}}
+    else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e') {
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --pierce %d", &index) == 1) {
-        // TODO: defer to other files using sideSub, and abort unclassified planes
-        file->state = 1;
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); enqueInt(index);}
     else if (sscanf(file->buffer," --fill %f %f %f", vector+0, vector+1, vector+2) == 3) {
-        if (file->state) {
-            GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
-            file->state = 1; limit[Adplane] = -1; enqueLocate(buffer);} file->state = 0;
-        if (sideBuf.done >= sideSub.done) {
-            changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Fill); enqueInt(file->index);}}
+        filePoint(file,Fill,&changed,vector);}
     else if (sscanf(file->buffer," --hollow %f %f %f", vector+0, vector+1, vector+2) == 3) {
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Hollow); enqueInt(file->index);}
+        filePoint(file,Hollow,&changed,vector);}
     else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove); enqueInt(file->index); enqueInt(index);}
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove);
+        enqueInt(file->index); enqueKind(Face); enqueInt(index);}
     else if (sscanf(file->buffer," --remove plane %d", &index) == 1) {
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove); enqueInt(file->index); enqueInt(index);}
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove);
+        enqueInt(file->index); enqueKind(Boundary); enqueInt(index);}
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
@@ -2966,6 +2984,7 @@ char *event()
     SWITCH(event,Plane) return (char *)"Plane";
     CASE(Classify) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
+    CASE(Pierce) return (char *)"Point";
     CASE(Fill) return (char *)"Fill";
     CASE(Hollow) return (char *)"Hollow";
     CASE(Remove) return (char *)"Remove";

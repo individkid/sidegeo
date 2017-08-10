@@ -42,7 +42,6 @@ Configuration/history files consist of commands. Append commands, schedule comma
   * --plane takes three scalars to set up for classify  
   * --classify initializes representation from prior planes  
   * --inflate initializes to facets between inside and outside regions  
-  * --pierce takes plane identifier to set up for fill or hollow  
   * --fill takes pierce point, removes face and adds outside faces  
   * --hollow takes pierce point, removes face and adds inside faces  
   * --remove takes buffer type and subscript to invalidate  
