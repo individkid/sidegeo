@@ -112,7 +112,8 @@ struct File {
     int handle;
     char buffer[256];
     int size;
-    int capital;};
+    int capital;
+    int state;};
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
 struct Chars {DECLARE_QUEUE(char)} configures = {0};
 struct Ints {DECLARE_QUEUE(int)} indices = {0};
@@ -285,7 +286,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Plane,Classify,Inflate,Fill,Hollow,Remove,Error,Done};
+enum Event {Plane,Classify,Inflate,Pierce,Fill,Hollow,Remove,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 enum Kind {Boundary,Face};
@@ -900,6 +901,10 @@ void *console(void *arg)
     return 0;
 }
 
+/*
+ * command queue and top level
+ */
+
 void menu()
 {
     char *buf = arrayMenu();
@@ -911,10 +916,6 @@ void menu()
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocMenu(len+1);
 }
-
-/*
- * command queue and top level
- */
 
 void waitForEvent()
 {
@@ -1832,6 +1833,7 @@ size_t bufferType(int size);
 void enqueShader(enum Shader shader);
 void transformRight();
 void classify();
+void enqueLocate(GLfloat *point);
 
 #ifdef BRINGUP
 void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
@@ -1984,7 +1986,7 @@ int iswrlckFile(struct File *file)
 void configure()
 {
     struct File *file = arrayFile();
-    float plane[3] = {0};
+    float vector[3] = {0};
     int location = 0;
     int index = 0;
     char filename[256] = {0};
@@ -2018,12 +2020,13 @@ void configure()
         int size;
         header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
         requeIndex(); relocConfigure(size+2);}
-    if (sscanf(file->buffer," --plane %d %f %f %f", &index, plane+0, plane+1, plane+2) == 3) {
+    if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
         GLfloat buffer[3];
         GLuint valid[1];
         GLuint versor[1];
         int retval = 0;
-        for (int i = 0; i < 3; i++) buffer[i] = plane[i]; valid[0] = 1; versor[0] = index;
+        // TODO: defer to other files using sideSub, and abort unused pierces
+        for (int i = 0; i < 3; i++) buffer[i] = vector[i]; valid[0] = 1; versor[0] = index;
         retval |= bufferFile(&planeBuf,1,buffer);
         retval |= bufferFile(&planeOk,1,valid);
         retval |= bufferFile(&versorBuf,1,versor);
@@ -2034,13 +2037,21 @@ void configure()
     else if (sscanf(file->buffer," --inflate") == 0) {
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --fill") == 0) {
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Fill); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --hollow") == 0) {
+    else if (sscanf(file->buffer," --pierce %d", &index) == 1) {
+        // TODO: defer to other files using sideSub, and abort unclassified planes
+        file->state = 1;
+        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); enqueInt(index);}
+    else if (sscanf(file->buffer," --fill %f %f %f", vector+0, vector+1, vector+2) == 3) {
+        if (file->state) {
+            GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
+            file->state = 1; limit[Adplane] = -1; enqueLocate(buffer);} file->state = 0;
+        if (sideBuf.done >= sideSub.done) {
+            changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Fill); enqueInt(file->index);}}
+    else if (sscanf(file->buffer," --hollow %f %f %f", vector+0, vector+1, vector+2) == 3) {
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Hollow); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --remov face %d", &index) == 0) {
+    else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove); enqueInt(file->index); enqueInt(index);}
-    else if (sscanf(file->buffer," --remov plane %d", &index) == 0) {
+    else if (sscanf(file->buffer," --remove plane %d", &index) == 1) {
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove); enqueInt(file->index); enqueInt(index);}
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
@@ -2059,6 +2070,16 @@ void flush(enum Shader shader)
     if (ready[shader] && reset[shader]) {glFlush(); ready[shader] = 0;}
 }
 
+void enqueLocate(GLfloat *point)
+{
+    glUseProgram(program[Adplane]);
+    glUniform3f(uniform[Adplane][Feather],point[0],point[1],point[2]);
+    glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
+    glUseProgram(0);
+    enqueShader(Adplane);
+
+}
+
 void classify()
 {
     CHECK(classify,Classify)
@@ -2070,12 +2091,7 @@ void classify()
         glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
         glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, buffer);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glUseProgram(program[Adplane]);
-        glUniform3f(uniform[Adplane][Feather],buffer[0],buffer[1],buffer[2]);
-        glUniform3f(uniform[Adplane][Arrow],0.0,0.0,1.0);
-        glUseProgram(0);
-        limit[Adplane] = arrayCorrelate()[classifyDone];
-        enqueShader(Adplane);
+        limit[Adplane] = arrayCorrelate()[classifyDone]; enqueLocate(buffer);
         classifyDone++;}
     if (sideBuf.done < sideSub.done) {DEFER(classify)}
     flush(Adplane); DEQUE(classify,Classify)
@@ -2765,6 +2781,10 @@ void displayRefresh(GLFWwindow *window)
     enqueShader(dishader);
 }
 
+/*
+ * provide access to state
+ */
+
 int *accessQueue(int size)
 {
     // if size is not zero, resize data
@@ -2773,10 +2793,6 @@ int *accessQueue(int size)
     if (size < sizeMeta()) unlocMeta(sizeMeta()-size);
     return arrayMeta();
 }
-
-/*
- * provide access to state
- */
 
 int *place(int index, int size)
 {
