@@ -117,7 +117,7 @@ struct File {
     int capital;
     int state;};
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
-struct Chars {DECLARE_QUEUE(char)} configures = {0};
+struct Chars {DECLARE_QUEUE(char)} configs = {0};
 struct Ints {DECLARE_QUEUE(int)} indices = {0};
 int classifyDone = 0; // number of points classifed
 enum Click { // mode changed by mouse buttons
@@ -482,7 +482,7 @@ ACCESS_QUEUE(Option,char *,options)
 
 ACCESS_QUEUE(File,struct File,files)
 
-ACCESS_QUEUE(Configure,char,configures)
+ACCESS_QUEUE(Config,char,configs)
 
 ACCESS_QUEUE(Index,int,indices)
 
@@ -1764,6 +1764,8 @@ void finalize()
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (files.base) {struct Files initial = {0}; free(files.base); files = initial;}
+    if (configs.base) {struct Chars initial = {0}; free(configs.base); configs = initial;}
+    if (indices.base) {struct Ints initial = {0}; free(indices.base); indices = initial;}
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
     if (places.base) {struct Metas initial = {0}; free(places.base); places = initial;}
@@ -1793,18 +1795,7 @@ void finalize()
  * parse and obey user writable input
  */
 
-void configure();
-
-void openFile(char *filename)
-{
-    struct File file = {0};
-#ifdef BRINGUP
-    file.debug = 1;
-#endif
-    file.handle = open(filename,O_RDWR);
-    if (file.handle < 0) enqueErrstr("invalid file argument\n");
-    file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
-}
+void openFile(char *filename);
 
 void process()
 {
@@ -1984,23 +1975,30 @@ int iswrlckFile(struct File *file)
     return (lock.l_type == F_WRLCK && lock.l_pid == getpid());
 }
 
-#define ERRORFILE(MSG) enqueMsgstr(MSG); close(file->handle); dequeFile(); return;
+void fileError(struct File *file, const char *msg) {
+    enqueMsgstr(msg); close(file->handle);
+    // TODO: clear out messages in indices and configs
+    // TODO: enque event to invalidate place boundaries faces planes for file->index
+}
 
-void filePoint(struct File *file, enum Event event, int *changed, float *vector)
+int filePoint(struct File *file, enum Event event, int *changed, float *vector)
 {
     int state = 0;
-    if (fileState == FilePlane && fileOwner == file->index) {ERRORFILE("file error\n")}
+    if (fileState == FilePlane && fileOwner == file->index) return 0;
     if (state++ == file->state && fileState == FileIdle) {
         fileState = FilePoint; fileOwner = file->index; file->state++;}
     if (state++ == file->state) {
         *changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); state--; file->state++;}
     if (state++ == file->state) {
         GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
-        limit[Adplane] = -1; enqueLocate(buffer); file->state++;}
+        limit[Adplane] = 0; enqueLocate(buffer); file->state++;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        *changed = 1; file->state = 0; file->size = 0; enqueCommand(0); enqueEvent(event); enqueInt(file->index);}    
+        *changed = 1; file->state = 0; file->size = 0; fileState = FileIdle;
+        enqueCommand(0); enqueEvent(event); enqueInt(file->index);}
+    return 1;
 }
 
+#define FILEERROR(MSG) fileError(file,MSG); dequeFile(); return;
 void configure()
 {
     struct File *file = arrayFile();
@@ -2021,24 +2019,27 @@ void configure()
     if (isrdlckFile(file) || iswrlckFile(file)) {
         char size[3] = {0};
         int retval = read(file->handle,size,2);
-        if (retval != 0 && retval != 2) {ERRORFILE("file error\n")}
+        if (retval != 0 && retval != 2) {FILEERROR("file error\n")}
         if (retval == 0 && isrdlckFile(file)) unlckFile(file);
         if (retval == 2) {
             file->size = strtol(size,NULL,16);
-            if (file->size >= 256) {ERRORFILE("file error\n")}
-            if (read(file->handle,file->buffer,file->size) != file->size) {ERRORFILE("file error\n")}
+            if (file->size >= 256) {FILEERROR("file error\n")}
+            if (read(file->handle,file->buffer,file->size) != file->size) {FILEERROR("file error\n")}
             changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
         char header[3] = {0};
-        int size;
-        header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
-        if (write(file->handle, arrayConfigure(), size+2) != size+2) {ERRORFILE("write error\n")}
-        changed = 1; dequeIndex(); delocConfigure(size+2); unlckFile(file);}
+        int size = 0;
+        header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
+        if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
+        memcpy(file->buffer,arrayConfig()+2,size); file->buffer[size] = 0; file->size = size;
+        if (write(file->handle, arrayConfig(), size+2) != size+2) {FILEERROR("write error\n")}
+        changed = 1; dequeIndex(); delocConfig(size+2); unlckFile(file);}
     if (validIndex() && headIndex() == file->index) {
         char header[3] = {0};
-        int size;
-        header[0] = arrayConfigure()[0]; header[1] = arrayConfigure()[1]; header[2] = 0; size = strtol(header,NULL,16);
-        requeIndex(); relocConfigure(size+2);}
+        int size = 0;
+        header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
+        if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
+        requeIndex(); relocConfig(size+2);}
     if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
         GLfloat buffer[3];
         GLuint valid[1];
@@ -2055,6 +2056,8 @@ void configure()
         if (state++ == file->state) {
             changed = 1; file->state = 0; file->size = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
     else if (sscanf(file->buffer," --classif%c", &suffix) == 1 && suffix == 'y') {
+        if (fileState != FilePlane && fileState != FileWait) {FILEERROR("file error\n")}
+        if (fileOwner != file->index) {FILEERROR("file error\n")}
         if (fileState == FilePlane) {fileState = FileWait; ENQUE(classify,Classify)}
         if (sideBuf.done >= sideSub.done) {
             changed = 1; fileState = FileIdle; file->size = 0; enqueCommand(0); enqueEvent(Classify);}}
@@ -2062,9 +2065,9 @@ void configure()
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
     else if (sscanf(file->buffer," --fill %f %f %f", vector+0, vector+1, vector+2) == 3) {
-        filePoint(file,Fill,&changed,vector);}
+        if (!filePoint(file,Fill,&changed,vector)) {FILEERROR("file error\n")}}
     else if (sscanf(file->buffer," --hollow %f %f %f", vector+0, vector+1, vector+2) == 3) {
-        filePoint(file,Hollow,&changed,vector);}
+        if (!filePoint(file,Hollow,&changed,vector)) {FILEERROR("file error\n")}}
     else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove);
         enqueInt(file->index); enqueKind(Face); enqueInt(index);}
@@ -2074,8 +2077,19 @@ void configure()
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else {ERRORFILE("file error\n")}
+    else {FILEERROR("file error\n")}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
+}
+
+void openFile(char *filename)
+{
+    struct File file = {0};
+#ifdef BRINGUP
+    file.debug = 1;
+#endif
+    file.handle = open(filename,O_RDWR);
+    if (file.handle < 0) enqueErrstr("invalid file argument\n");
+    file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
 }
 
 /*

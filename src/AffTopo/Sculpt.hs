@@ -334,14 +334,23 @@ handleInflate index =
  writeFaceSubC (fromIntegral (length face4)) >>= writeBuffer face4 >>
  return ()
 
+-- fill sideSub with all boundaries from given place
 handlePoint :: Int -> IO ()
 handlePoint = undefined
 
+-- find region or embeded neighbor located by sideBuf
+-- clear faceOk for faces on found region
+-- add to faceSub faces between found region and other embedded regions
 handleFill :: Int -> IO ()
 handleFill = undefined
 
+-- find region or unembedded neighbor located by sideBuf
+-- clear faceOk for faces on found region
+-- add to faceSub faces between found region and other unembedded regions
 handleHollow :: Int -> IO ()
 handleHollow = undefined
 
+-- if string is Face, clear faceOk of faceSub with base of given boundary
+-- if string is Boundary, clear planeOk and faceOk of faceSub involving boundary
 handleRemove :: String -> Int -> IO ()
 handleRemove = undefined
