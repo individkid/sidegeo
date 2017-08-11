@@ -33,6 +33,10 @@ foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
 foreign import ccall "sidebands" sidebandsC :: IO CInt
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlates" correlatesC :: IO CInt
+foreign import ccall "faceToPlane" faceToPlaneC :: CInt -> IO (Ptr CInt)
+foreign import ccall "faceToPlanes" faceToPlanesC :: IO CInt
+foreign import ccall "planeToPlace" planeToPlaceC :: CInt -> IO (Ptr CInt)
+foreign import ccall "planeToPlaces" planeToPlacesC :: IO CInt
 foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
 foreign import ccall "readPlaneOk" readPlaneOkC :: IO (Ptr CInt)
@@ -206,9 +210,9 @@ handleEvent = do
   "Classify" -> handleClassify >> return False
   "Inflate" -> handleEventF >>= handleInflate >> return False
   "Pierce" -> handleEventF >>= handlePierce >> return False
-  "Fill" -> handleEventF >>= handleFill >> return False
-  "Hollow" -> handleEventF >>= handleHollow >> return False
-  "Remove" -> handleEventG >>= \kind -> handleEventF >>= handleRemove kind >> return False
+  "Fill" -> handleFill <$> handleEventF <*> handleEventF >> return False
+  "Hollow" -> handleHollow <$> handleEventF <*> handleEventF >> return False
+  "Remove" ->  handleRemove <$> handleEventG <*> handleEventF >> return False
   "Error" -> return True
   "Done" -> return True
   _ ->
@@ -332,6 +336,7 @@ handleInflate index =
  in writeEmbed index embed >>
  writeFaceOkC (fromIntegral (length valid2)) >>= writeBuffer valid2 >>
  writeFaceSubC (fromIntegral (length face4)) >>= writeBuffer face4 >>
+ -- TODO: fill in faceToPlane and planeToPlace
  return ()
 
 -- fill sideSub with all boundaries from given place
@@ -345,13 +350,13 @@ handlePierce index =
 -- find region or embeded neighbor located by sideBuf
 -- clear faceOk for faces on found region
 -- add to faceSub faces between found region and other embedded regions
-handleFill :: Int -> IO ()
+handleFill :: Int -> Int -> IO ()
 handleFill = undefined
 
 -- find region or unembedded neighbor located by sideBuf
 -- clear faceOk for faces on found region
 -- add to faceSub faces between found region and other unembedded regions
-handleHollow :: Int -> IO ()
+handleHollow :: Int -> Int -> IO ()
 handleHollow = undefined
 
 -- if string is Face, clear faceOk of faceSub with base of given boundary

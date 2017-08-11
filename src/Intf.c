@@ -236,6 +236,8 @@ struct Metas boundarys = {0};
 struct Ints *metas = 0;
 int sideDone = 0;
 int planeDone = 0;
+struct Ints face2planes = {0};
+struct Ints plane2places = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -501,6 +503,10 @@ ACCESS_QUEUE(Correlate,int,relates)
 ACCESS_QUEUE(Boundary,struct Ints,boundarys)
 
 ACCESS_QUEUE(Meta,int,(*metas))
+
+ACCESS_QUEUE(Face2Plane,int,face2planes)
+
+ACCESS_QUEUE(Plane2Place,int,plane2places)
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -1154,10 +1160,15 @@ void initialize(int argc, char **argv)
         vec3 diff1 = points[1]-points[0];\n\
         vec3 diff2 = points[2]-points[0];\n\
         switch (versor) {\n\
-            case (uint(0)): system = mat2(diff1.yz,diff2.yz); augment = diff0.yz; difference = vec2(diff1.x,diff2.x); origin = points[0].x; break;\n\
-            case (uint(1)): system = mat2(diff1.xz,diff2.xz); augment = diff0.xz; difference = vec2(diff1.y,diff2.y); origin = points[0].y; break;\n\
-            case (uint(2)): system = mat2(diff1.xy,diff2.xy); augment = diff0.xy; difference = vec2(diff1.z,diff2.z); origin = points[0].z; break;\n\
-            default: system = mat2(invalid[0],invalid[0],invalid[0],invalid[0]); augment = vec2(invalid[0],invalid[0]); difference = augment; origin = invalid[0]; break;}\n\
+            case (uint(0)): system = mat2(diff1.yz,diff2.yz); augment = diff0.yz;\n\
+                difference = vec2(diff1.x,diff2.x); origin = points[0].x; break;\n\
+            case (uint(1)): system = mat2(diff1.xz,diff2.xz); augment = diff0.xz;\n\
+                difference = vec2(diff1.y,diff2.y); origin = points[0].y; break;\n\
+            case (uint(2)): system = mat2(diff1.xy,diff2.xy); augment = diff0.xy;\n\
+                difference = vec2(diff1.z,diff2.z); origin = points[0].z; break;\n\
+            default: system = mat2(invalid[0],invalid[0],invalid[0],invalid[0]);\n\
+                augment = vec2(invalid[0],invalid[0]);\n\
+                difference = augment; origin = invalid[0]; break;}\n\
         vec2 solution = inverse(system)*augment;\n\
         outp = dot(solution,difference) + origin;\n\
         float det = determinant(system);\n\
@@ -1696,16 +1707,26 @@ void initialize(int argc, char **argv)
     }\n";
     const GLchar *repointFragment = 0;
 
-    {const char *buf[0] = {}; program[Diplane] = compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,"diplane",Diplane,0,buf);}
-    {const char *buf[0] = {}; program[Dipoint] = compileProgram(dipointVertex,dipointGeometry,dipointFragment,"dipoint",Dipoint,0,buf);}
-    {const char *buf[1] = {"vector"}; program[Coplane] = compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,"coplane",Coplane,1,buf);}
-    {const char *buf[2] = {"vector","index"}; program[Copoint] = compileProgram(copointVertex,copointGeometry,copointFragment,"copoint",Copoint,2,buf);}
-    {const char *buf[1] = {"scalar"}; program[Adplane] = compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,"adplane",Adplane,1,buf);}
-    {const char *buf[1] = {"scalar"}; program[Adpoint] = compileProgram(adpointVertex,adpointGeometry,adpointFragment,"adpoint",Adpoint,1,buf);}
-    {const char *buf[1] = {"vector"}; program[Perplane] = compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,"perplane",Perplane,1,buf);}
-    {const char *buf[1] = {"vector"}; program[Perpoint] = compileProgram(perpointVertex,perpointGeometry,perpointFragment,"perpoint",Perpoint,1,buf);}
-    {const char *buf[1] = {"vector"}; program[Replane] = compileProgram(replaneVertex,replaneGeometry,replaneFragment,"replane",Replane,1,buf);}
-    {const char *buf[2] = {"vector","index"}; program[Repoint] = compileProgram(repointVertex,repointGeometry,repointFragment,"repoint",Repoint,2,buf);}
+    {const char *buf[0] = {}; program[Diplane] =
+        compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,"diplane",Diplane,0,buf);}
+    {const char *buf[0] = {}; program[Dipoint] =
+        compileProgram(dipointVertex,dipointGeometry,dipointFragment,"dipoint",Dipoint,0,buf);}
+    {const char *buf[1] = {"vector"}; program[Coplane] =
+        compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,"coplane",Coplane,1,buf);}
+    {const char *buf[2] = {"vector","index"}; program[Copoint] =
+        compileProgram(copointVertex,copointGeometry,copointFragment,"copoint",Copoint,2,buf);}
+    {const char *buf[1] = {"scalar"}; program[Adplane] =
+        compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,"adplane",Adplane,1,buf);}
+    {const char *buf[1] = {"scalar"}; program[Adpoint] =
+        compileProgram(adpointVertex,adpointGeometry,adpointFragment,"adpoint",Adpoint,1,buf);}
+    {const char *buf[1] = {"vector"}; program[Perplane] =
+        compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,"perplane",Perplane,1,buf);}
+    {const char *buf[1] = {"vector"}; program[Perpoint] =
+        compileProgram(perpointVertex,perpointGeometry,perpointFragment,"perpoint",Perpoint,1,buf);}
+    {const char *buf[1] = {"vector"}; program[Replane] =
+        compileProgram(replaneVertex,replaneGeometry,replaneFragment,"replane",Replane,1,buf);}
+    {const char *buf[2] = {"vector","index"}; program[Repoint] =
+        compileProgram(repointVertex,repointGeometry,repointFragment,"repoint",Repoint,2,buf);}
 
     for (int i = 0; i < 27; i++) {
         int versor = i / 9;
@@ -1773,6 +1794,8 @@ void finalize()
     if (todos.base) {struct Ints initial = {0}; free(todos.base); todos = initial;}
     if (relates.base) {struct Ints initial = {0}; free(relates.base); relates = initial;}
     if (boundarys.base) {struct Metas initial = {0}; free(boundarys.base); boundarys = initial;}
+    if (face2planes.base) {struct Ints initial = {0}; free(face2planes.base); face2planes = initial;}
+    if (plane2places.base) {struct Ints initial = {0}; free(plane2places.base); plane2places = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -1988,7 +2011,8 @@ int filePoint(struct File *file, enum Event event, int *changed, int index, floa
     if (state++ == file->state && fileState == FileIdle) {
         fileState = FilePoint; fileOwner = file->index; file->state++;}
     if (state++ == file->state) {
-        *changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); state--; file->state++;}
+        *changed = 1; file->size = 0; state--; file->state++;
+        enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index);}
     if (state++ == file->state) {
         GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
         limit[Adplane] = 0; enqueLocate(buffer); file->state++;}
@@ -2881,6 +2905,28 @@ int boundaries(int index)
     while (sizeBoundary() <= index) {struct Ints initial = {0}; enqueBoundary(initial);}
     metas = arrayBoundary()+index;
     return sizeMeta();
+}
+
+int *faceToPlane(int size)
+{
+    metas = &face2planes;
+    return accessQueue(size);
+}
+
+int faceToPlanes()
+{
+    return sizeFace2Plane();
+}
+
+int *planeToPlace(int size)
+{
+    metas = &plane2places;
+    return accessQueue(size);
+}
+
+int planeToPlaces()
+{
+    return sizePlane2Place();
 }
 
 int *getBuffer(struct Buffer *buffer)
