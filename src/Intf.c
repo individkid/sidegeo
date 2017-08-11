@@ -1981,7 +1981,7 @@ void fileError(struct File *file, const char *msg) {
     // TODO: enque event to invalidate place boundaries faces planes for file->index
 }
 
-int filePoint(struct File *file, enum Event event, int *changed, float *vector)
+int filePoint(struct File *file, enum Event event, int *changed, int index, float *vector)
 {
     int state = 0;
     if (fileState == FilePlane && fileOwner == file->index) return 0;
@@ -1994,7 +1994,7 @@ int filePoint(struct File *file, enum Event event, int *changed, float *vector)
         limit[Adplane] = 0; enqueLocate(buffer); file->state++;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
         *changed = 1; file->state = 0; file->size = 0; fileState = FileIdle;
-        enqueCommand(0); enqueEvent(event); enqueInt(file->index);}
+        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(index);}
     return 1;
 }
 
@@ -2064,10 +2064,10 @@ void configure()
     else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e') {
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --fill %f %f %f", vector+0, vector+1, vector+2) == 3) {
-        if (!filePoint(file,Fill,&changed,vector)) {FILEERROR("file error\n")}}
-    else if (sscanf(file->buffer," --hollow %f %f %f", vector+0, vector+1, vector+2) == 3) {
-        if (!filePoint(file,Hollow,&changed,vector)) {FILEERROR("file error\n")}}
+    else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
+        if (!filePoint(file,Fill,&changed,index,vector)) {FILEERROR("file error\n")}}
+    else if (sscanf(file->buffer," --hollow %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
+        if (!filePoint(file,Hollow,&changed,index,vector)) {FILEERROR("file error\n")}}
     else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
         changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove);
         enqueInt(file->index); enqueKind(Face); enqueInt(index);}
@@ -2998,7 +2998,7 @@ char *event()
     SWITCH(event,Plane) return (char *)"Plane";
     CASE(Classify) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
-    CASE(Pierce) return (char *)"Point";
+    CASE(Pierce) return (char *)"Pierce";
     CASE(Fill) return (char *)"Fill";
     CASE(Hollow) return (char *)"Hollow";
     CASE(Remove) return (char *)"Remove";

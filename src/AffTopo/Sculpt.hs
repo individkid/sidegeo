@@ -205,7 +205,7 @@ handleEvent = do
   "Plane" -> handleEventF >>= handlePlane >> return False
   "Classify" -> handleClassify >> return False
   "Inflate" -> handleEventF >>= handleInflate >> return False
-  "Point" -> handleEventF >>= handlePoint >> return False
+  "Pierce" -> handleEventF >>= handlePierce >> return False
   "Fill" -> handleEventF >>= handleFill >> return False
   "Hollow" -> handleEventF >>= handleHollow >> return False
   "Remove" -> handleEventG >>= \kind -> handleEventF >>= handleRemove kind >> return False
@@ -233,9 +233,9 @@ handlePlane index =
  boundaries = (length boundary) - 2
  relate = recurseF (boundaries +) base (length point)
  sizeC = fromIntegral (relates + (length relate))
- in writePointSubC (fromIntegral (length point)) >>=
+ in writePointSubC (fromIntegral (length2 point)) >>=
  writeBuffer (map (\(Boundary x) -> x) (concat point)) >>
- writeSideSubC (fromIntegral (length classify)) >>=
+ writeSideSubC (fromIntegral (length2 classify)) >>=
  writeBuffer (map (\(Boundary x) -> x) (concat classify)) >>
  correlateC sizeC >>= handlePlaneI relates >>=
  writeBuffer relate >>
@@ -335,8 +335,12 @@ handleInflate index =
  return ()
 
 -- fill sideSub with all boundaries from given place
-handlePoint :: Int -> IO ()
-handlePoint = undefined
+handlePierce :: Int -> IO ()
+handlePierce index =
+ readPlace index >>= return . boundariesOfPlace >>= \boundary ->
+ writeSideSubC (fromIntegral (length boundary)) >>=
+ writeBuffer (map (\(Boundary x) -> x) boundary) >>
+ return ()
 
 -- find region or embeded neighbor located by sideBuf
 -- clear faceOk for faces on found region
