@@ -246,6 +246,7 @@ handlePlane index =
  writeSideband (todo `append` [index]) >>
  writeBoundary index (boundary `append` [done]) >>
  writePlanesC (doneC + 1) >>
+ -- TODO: fill in planeToPlace
  return ()
 
 handlePlaneF :: CInt -> IO (CInt,Boundary)
@@ -336,7 +337,7 @@ handleInflate index =
  in writeEmbed index embed >>
  writeFaceOkC (fromIntegral (length valid2)) >>= writeBuffer valid2 >>
  writeFaceSubC (fromIntegral (length face4)) >>= writeBuffer face4 >>
- -- TODO: fill in faceToPlane and planeToPlace
+ -- TODO: fill in faceToPlane
  return ()
 
 -- fill sideSub with all boundaries from given place

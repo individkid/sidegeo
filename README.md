@@ -8,10 +8,10 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -I \<file> load polytope and ignore view changes  
   * -b \<file> start file with reference to disabled jump  
   * -B \<file> append changes to make current same as given  
-  * -f \<form> load from format indicated by file extension  
-  * -F \<form> save to format indicated by file extension  
-  * -o \<ext> backup and delete unused boundaries in files  
-  * -O \<ext> backup and truncate files to minimal commands  
+  * -f \<file> load from format indicated by file extension  
+  * -F \<ext> save to format indicated by file extension  
+  * -o pack out garbage in graphics buffers  
+  * -O \<ext> save minimal commands to produce polytopes  
   * -s resample current space to planes with same sidedness  
   * -S resample current polytope to space and planes  
   * -d display space and regions  
@@ -45,7 +45,10 @@ Configuration/history files consist of commands. Append commands, schedule comma
   * --fill takes pierce point, removes face and adds outside faces  
   * --hollow takes pierce point, removes face and adds inside faces  
   * --remove takes buffer type and subscript to invalidate  
-  * --sample takes sidednesses to sample  
+  * --sample takes sidednesses to sample with similar embed  
+  * --polyant specifies corner for subsequent commands  
+  * --embed interprets polyants as regions in polytope  
+  * --polytope interprets polyants as significant facets  
   * --source takes sound file or source  
   * --filter takes plane subscript, per area equalization of tempo, dynamic, tone  
   * --color takes plane subscript and decoration  
