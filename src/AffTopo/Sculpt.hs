@@ -27,6 +27,7 @@ import Foreign.C.String
 import AffTopo.Naive
 
 foreign import ccall "place" placeC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "places" placesC :: CInt -> IO CInt
 foreign import ccall "embed" embedC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "embeds" embedsC :: CInt -> IO CInt
 foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
@@ -49,6 +50,7 @@ foreign import ccall "appendPointSub" appendPointSubC :: CInt -> IO (Ptr CInt)
 foreign import ccall "appendSideSub" appendSideSubC :: CInt -> IO (Ptr CInt)
 foreign import ccall "writePlanes" writePlanesC :: CInt -> IO ()
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
+foreign import ccall "error" errorC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO (Ptr CChar)
 foreign import ccall "stringArgument" stringArgumentC :: IO (Ptr CChar)
 foreign import ccall "intArgument" intArgumentC :: IO CInt
@@ -56,6 +58,11 @@ foreign import ccall "intArgument" intArgumentC :: IO CInt
 printStr :: [Char] -> IO ()
 printStr str = do
  ptr <- printC (fromIntegral (length str))
+ pokeArray ptr (map castCharToCChar str)
+
+errorStr :: [Char] -> IO ()
+errorStr str = do
+ ptr <- errorC (fromIntegral (length str))
  pokeArray ptr (map castCharToCChar str)
 
 plusPtr' :: Ptr CInt -> Int -> Ptr CInt
@@ -92,113 +99,41 @@ recurse2F f a b c = drop 1 (recurse2 f a b (c+1))
 recurse2G :: (a -> a -> a) -> a -> a -> Int -> [a]
 recurse2G f a b c = drop 1 (recurse2F f a b (c+1))
 
-readBuffer :: (IO CInt) -> (IO (Ptr CInt)) -> IO [Int]
-readBuffer size ptr = size >>= \sizeC -> ptr >>= \ptrC -> peekArray (fromIntegral sizeC) ptrC >>= return . (map fromIntegral)
+readBuffer :: IO CInt -> IO (Ptr CInt) -> IO [Int]
+readBuffer size ptr = size >>= \sizeC -> ptr >>= peekArray (fromIntegral sizeC) >>= return . (map fromIntegral)
+
+peekBuffer :: IO CInt -> IO (Ptr CInt) -> IO Int
+peekBuffer offset ptr = offset >>= \offsetC -> ptr >>= \ptrC -> peek (plusPtr' ptrC (fromIntegral offsetC)) >>= return . fromIntegral
+
+readSize :: IO CInt -> IO Int
+readSize size = size >>= return . fromIntegral
 
 writeBuffer :: (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
 writeBuffer fun list = fun (fromIntegral (length list)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
 
-appendQueue :: (IO CInt) -> (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
-appendQueue size fun list = size >>= \sizeC -> fun (sizeC + (fromIntegral (length list))) >>= \base ->
- return (plusPtr' base (fromIntegral sizeC)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
+writeSize :: Int -> (CInt -> IO ()) -> IO ()
+writeSize size fun = fun (fromIntegral size)
 
-chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
-chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr' ptr 1))
+appendQueue :: (CInt -> IO (Ptr CInt)) -> [Int] -> CInt -> IO ()
+appendQueue fun list size = fun (size + (fromIntegral (length list))) >>= \base ->
+ return (plusPtr' base (fromIntegral size)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
 
-peel :: (Int, Ptr CInt) -> (a, Ptr CInt) -> IO ([Int], Ptr CInt)
-peel (len,_) (_,ptr) = (peekArray len ptr) >>= (\x -> return (map fromIntegral x, plusPtr' ptr len))
+decodePlace :: Int -> [Int] -> [Boundary] -> Place
+decodePlace size list boundary = let
+ (firsts,list1) = splitAt size list
+ (seconds,list2) = splitAt size list1
+ (list3,list4) = splitAt (sum firsts) list2
+ first = map2 Region (split list3 firsts)
+ second = map2 Region (split list4 seconds)
+ in zipWith3 (\x y z -> (x,[y,z])) boundary first second
 
-cook :: [IO (a, Ptr CInt)] -> IO ([a], Ptr CInt)
-cook (elm:mid:lst) = elm >>= (\(x,_) -> (cook (mid:lst)) >>= (\(y,z) -> return (x:y,z)))
-cook [elm] = elm >>= (\(x,y) -> return ([x],y))
-cook [] = return undefined
-
-onion :: ([Int], Ptr CInt) -> (a, Ptr CInt) -> IO ([[Int]], Ptr CInt)
-onion ([],_) (_,ptr) = return ([],ptr)
-onion (len,_) (_,ptr) = cook (map (\x -> peel (x,ptr) (x,ptr)) len)
-
-patch :: ([[Int]], Ptr CInt) -> (a, Ptr CInt) -> IO ([[[Int]]], Ptr CInt)
-patch ([],_) (_,ptr) = return ([],ptr)
-patch (len,_) (_,ptr) = cook (map (\x -> onion (x,ptr) (x,ptr)) len)
-
-prejump :: Ptr CInt -> IO (Int,Ptr CInt)
-prejump a = return (0::Int,a)
-
-nojump :: CInt -> IO (Int, Ptr CInt)
-nojump a = return (fromIntegral a, nullPtr)
-
-readPlace :: Int -> IO Place
-readPlace index = let indexC = fromIntegral index in
- boundariesC indexC >>= nojump >>= \boundaries ->
- readBoundary index >>= \boundary ->
- placeC indexC 0 >>= prejump >>=
- peel boundaries >>= \firsts -> return firsts >>=
- peel boundaries >>= \seconds -> return seconds >>=
- onion firsts >>= \first -> return first >>=
- onion seconds >>= \second -> let
- x = map2 Region (fst first)
- y = map2 Region (fst second)
- in return (zipWith3 readPlaceF boundary x y)
-
-readPlaceF :: Boundary -> [Region] -> [Region] -> (Boundary,[[Region]])
-readPlaceF a b c = (a,[b,c])
-
-readEmbed :: Int -> IO [Region]
-readEmbed index = let indexC = fromIntegral index in
- readBuffer (embedsC indexC) (embedC indexC 0) >>= return . (map Region)
-
-readSideband :: IO [Int]
-readSideband = readBuffer sidebandsC (sidebandC 0)
-
-readBoundary :: Int -> IO [Boundary]
-readBoundary index = let indexC = fromIntegral index in
- readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= return . (map Boundary)
-
-paste :: Int -> Ptr CInt -> IO (Ptr CInt)
-paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))
-
-cover :: [Int] -> Ptr CInt -> IO (Ptr CInt)
-cover len ptr = pokeArray ptr (map fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr (length len))))
-
-layer :: [[Int]] -> Ptr CInt -> IO (Ptr CInt)
-layer len ptr = fold' (\x y -> y >>= (\z -> cover x z)) len (return ptr)
-
-hoard :: [[[Int]]] -> Ptr CInt -> IO (Ptr CInt)
-hoard len ptr = fold' (\x y -> y >>= (\z -> layer x z)) len (return ptr)
-
-writePlace :: Int -> Place -> IO ()
-writePlace index place = let
- indexC = fromIntegral index
- boundary = boundariesOfPlace place
+encodePlace :: Place -> [Int]
+encodePlace place = let
  firsts = map (length . head) (range place)
  seconds = map (length . last) (range place)
- first = map head (range place)
- second = map last (range place)
- sizeC = fromIntegral ((length firsts) + (length seconds) + (length2 first) + (length2 second))
- in writeBoundary index boundary >>
- placeC indexC sizeC >>=
- cover firsts >>=
- cover seconds >>=
- layer (map2 (\(Region x) -> x) first) >>=
- layer (map2 (\(Region x) -> x) second) >>
- return ()
-
-writeEmbed :: Int -> [Region] -> IO ()
-writeEmbed index region =
- embedC (fromIntegral index) (fromIntegral (length region)) >>=
- cover (map (\(Region x) -> x) region) >>
- return ()
-
-writeSideband :: [Int] -> IO ()
-writeSideband todo = let
- todosC = fromIntegral (length todo)
- in sidebandC todosC >>= cover todo >> return ()
-
-writeBoundary :: Int -> [Boundary] -> IO ()
-writeBoundary index boundary =
- (boundaryC (fromIntegral index) (fromIntegral (length boundary))) >>=
- (cover (map (\(Boundary x) -> x) boundary)) >>
- return ()
+ first = concat (map head (range place))
+ second = concat (map last (range place))
+ in concat [firsts, seconds, map (\(Region x) -> x) first, map (\(Region x) -> x) second]
 
 handleEvent :: IO Bool
 handleEvent = do
@@ -222,56 +157,48 @@ handleEventG :: IO String
 handleEventG = stringArgumentC >>= peekCString
 
 handlePlane :: Int -> IO ()
-handlePlane index =
- readSideband >>= \todo ->
- readBoundary index >>= \boundary ->
- readPlanesC >>= handlePlaneF >>= \(doneC,done) ->
- correlatesC >>= handlePlaneG >>= \relates ->
- correlateC 0 >>= handlePlaneH (relates-1) >>= \base -> let
- point = map (done :) (subsets 2 boundary)
+handlePlane index = let indexC = fromIntegral index in
+ readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= return . (map Boundary) >>= \boundary ->
+ readSize readPlanesC >>= \done ->
+ peekBuffer (fmap ((negate 1) +) correlatesC) (correlateC 0) >>= \base -> let
+ point = map ((Boundary done) :) (subsets 2 boundary)
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
  relate = recurseF (boundaries +) base (length point)
  in writeBuffer appendPointSubC (map (\(Boundary x) -> x) (concat point)) >>
  writeBuffer appendSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
- appendQueue correlatesC correlateC relate >>
- writeSideband (todo `append` [index]) >>
- writeBoundary index (boundary `append` [done]) >>
- writePlanesC (doneC + 1) >>
+ appendQueue correlateC relate <$> correlatesC >>
+ appendQueue sidebandC [index] <$> sidebandsC >>
+ appendQueue (boundaryC indexC) [done] <$> (boundariesC indexC) >>
+ writeSize (done + 1) writePlanesC >>
  -- TODO: fill in planeToPlace
  return ()
 
-handlePlaneF :: CInt -> IO (CInt,Boundary)
-handlePlaneF a = return (a, Boundary . fromIntegral $ a)
-
-handlePlaneG :: CInt -> IO Int
-handlePlaneG = return . fromIntegral
-
-handlePlaneH :: Int -> Ptr CInt -> IO Int
-handlePlaneH a b = peekElemOff b a >>= handlePlaneG
-
-handlePlaneI :: Int -> Ptr CInt -> IO (Ptr CInt)
-handlePlaneI a b = return (plusPtr' b a)
-
 handleClassify :: IO ()
 handleClassify =
- readPlanesC >>= handlePlaneG >>= \done ->
- sidebandsC >>= handlePlaneG >>= \todos ->
- readSideband >>= handleClassifyF (done - todos) >>= writeSideband
+ readSize readPlanesC >>= \done ->
+ readSize sidebandsC >>= \todos ->
+ readBuffer sidebandsC (sidebandC 0) >>=
+ handleClassifyF (done - todos) >>=
+ writeBuffer sidebandC
 
 handleClassifyF :: Int -> [Int] -> IO [Int]
-handleClassifyF done (index:todo) =
- readPlace index >>= \place ->
- readEmbed index >>= \embed ->
- readBuffer consumeSidesC consumeSideBufC >>= \side -> let
- boundary = boundariesOfPlace place
+handleClassifyF done (index:todo) = let indexC = fromIntegral index in
+ readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
+ readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
+ readBuffer consumeSidesC consumeSideBufC >>= \side ->
+ readSize (boundariesC indexC) >>= \boundaries ->
+ readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
+ boundary = map Boundary boundaryI
+ place = decodePlace boundaries placeI boundary
+ embed = map Region embedI
  -- add boundaries accoriding to sidedness
  pair = subsets 2 boundary
  wrt = map (boundary \\) pair
  polyant = map2 (\(x,y) -> (x, Side y)) (handleClassifyG side wrt)
  (place1,embed1) = handleClassifyH (Boundary done) polyant place embed
- in writePlace index place1 >>
- writeEmbed index embed1 >>
+ in writeBuffer (placeC indexC) (encodePlace place1) >>
+ writeBuffer (embedC indexC) (map (\(Region x) -> x) embed1) >>
  handleClassifyF (done+1) todo
 handleClassifyF _ todo = return todo
 
@@ -288,9 +215,12 @@ handleClassifyI :: Place -> [(Boundary,Side)] -> [Region]
 handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
 
 handleInflate :: Int -> IO ()
-handleInflate index =
- readPlace index >>= \place ->
- readBuffer readFacesC readFaceSubC >>= \face -> let
+handleInflate index = let indexC = fromIntegral index in
+ readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
+ readBuffer readFacesC readFaceSubC >>= \face ->
+ readSize (boundariesC indexC) >>= \boundaries ->
+ readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
+ place = decodePlace boundaries placeI (map Boundary boundaryI)
  -- replace embed for indicated place by all inside regions
  (boundary,space) = unzipPlace place
  boundaried = map (\(Boundary x) -> x) boundary
@@ -324,17 +254,15 @@ handleInflate index =
  valid2 :: [Int]
  valid2 = (concat valid1) `append` face4
  -- append found faces
- in writeEmbed index embed >>
+ in writeBuffer (embedC indexC) (map (\(Region x) -> x) embed) >>
  writeBuffer writeFaceSubC valid2 >>
  -- TODO: fill in faceToPlane
  return ()
 
 -- fill sideSub with all boundaries from given place
 handlePierce :: Int -> IO ()
-handlePierce index =
- readPlace index >>= return . boundariesOfPlace >>= \boundary ->
- writeBuffer appendSideSubC (map (\(Boundary x) -> x) boundary) >>
- return ()
+handlePierce index = let indexC = fromIntegral index in
+ readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= writeBuffer appendSideSubC >> return ()
 
 -- find region or embeded neighbor located by sideBuf
 -- filter faceSub of faces on found region
@@ -349,7 +277,7 @@ handleHollow :: Int -> Int -> IO ()
 handleHollow = undefined
 
 -- if string is Face, invalidate faceSub with base of given boundary
--- if string is Boundary, invalidate planeBuf and faceSub involving boundary
+-- if string is Boundary, invalidate faceSub involving boundary
 handleRemove :: String -> Int -> IO ()
 handleRemove "Face" index =
  readBuffer readFacesC readFaceSubC >>= \face -> let
@@ -362,5 +290,6 @@ handleRemove "Boundary" index =
  face1 = filter (\x -> not (any (index ==) x)) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
+ -- TODO: remove boundary from place embed boundary
  return ()
-handleRemove kind _ = printStr (concat ["unknown kind ",kind,"\n"])
+handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])

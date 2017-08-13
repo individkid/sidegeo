@@ -225,7 +225,7 @@ int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
-struct Metas {DECLARE_QUEUE(struct Ints)} places = {0};
+struct Metas {DECLARE_QUEUE(struct Ints)} placings = {0};
 struct Metas embedings = {0};
 struct Ints todos = {0};
 struct Ints relates = {0};
@@ -487,7 +487,7 @@ ACCESS_QUEUE(Line,enum Menu,lines)
 
 ACCESS_QUEUE(Match,int,matchs)
 
-ACCESS_QUEUE(Place,struct Ints,places)
+ACCESS_QUEUE(Place,struct Ints,placings)
 
 ACCESS_QUEUE(Embed,struct Ints,embedings)
 
@@ -1782,7 +1782,7 @@ void finalize()
     if (indices.base) {struct Ints initial = {0}; free(indices.base); indices = initial;}
     if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
     if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
-    if (places.base) {struct Metas initial = {0}; free(places.base); places = initial;}
+    if (placings.base) {struct Metas initial = {0}; free(placings.base); placings = initial;}
     if (embedings.base) {struct Metas initial = {0}; free(embedings.base); embedings = initial;}
     if (todos.base) {struct Ints initial = {0}; free(todos.base); todos = initial;}
     if (relates.base) {struct Ints initial = {0}; free(relates.base); relates = initial;}
@@ -2841,6 +2841,13 @@ int *place(int index, int size)
     return accessQueue(size);
 }
 
+int places(int index)
+{
+    while (sizePlace() <= index) {struct Ints initial = {0}; enquePlace(initial);}
+    metas = arrayPlace()+index;
+    return sizeMeta();
+}
+
 int *embed(int index, int size)
 {
     while (sizeEmbed() <= index) {struct Ints initial = {0}; enqueEmbed(initial);}
@@ -2998,6 +3005,12 @@ void writePlanes(int done)
 
 char *print(int size)
 {
+    return enlocPrint(size);
+}
+
+char *error(int size)
+{
+    enqueEvent(Error); enqueCommand(0);
     return enlocPrint(size);
 }
 
