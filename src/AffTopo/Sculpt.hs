@@ -39,18 +39,14 @@ foreign import ccall "planeToPlace" planeToPlaceC :: CInt -> IO (Ptr CInt)
 foreign import ccall "planeToPlaces" planeToPlacesC :: IO CInt
 foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
-foreign import ccall "readPlaneOk" readPlaneOkC :: IO (Ptr CInt)
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
-foreign import ccall "readFaceOk" readFaceOkC :: IO (Ptr CInt)
 foreign import ccall "readFaces" readFacesC :: IO CInt
-foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
-foreign import ccall "readSides" readSidesC :: IO CInt
+foreign import ccall "consumeSideBuf" consumeSideBufC :: IO (Ptr CInt)
+foreign import ccall "consumeSides" consumeSidesC :: IO CInt
 foreign import ccall "readPlanes" readPlanesC :: IO CInt
 foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> IO (Ptr CInt)
-foreign import ccall "writePointSub" writePointSubC :: CInt -> IO (Ptr CInt)
-foreign import ccall "writeSideSub" writeSideSubC :: CInt -> IO (Ptr CInt)
-foreign import ccall "writePlaneOk" writePlaneOkC :: CInt -> IO (Ptr CInt)
-foreign import ccall "writeFaceOk" writeFaceOkC :: CInt -> IO (Ptr CInt)
+foreign import ccall "appendPointSub" appendPointSubC :: CInt -> IO (Ptr CInt)
+foreign import ccall "appendSideSub" appendSideSubC :: CInt -> IO (Ptr CInt)
 foreign import ccall "writePlanes" writePlanesC :: CInt -> IO ()
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO (Ptr CChar)
@@ -96,11 +92,15 @@ recurse2F f a b c = drop 1 (recurse2 f a b (c+1))
 recurse2G :: (a -> a -> a) -> a -> a -> Int -> [a]
 recurse2G f a b c = drop 1 (recurse2F f a b (c+1))
 
-readBuffer :: CInt -> Ptr CInt -> IO [Int]
-readBuffer size ptr = peekArray (fromIntegral size) ptr >>= return . (map fromIntegral)
+readBuffer :: (IO CInt) -> (IO (Ptr CInt)) -> IO [Int]
+readBuffer size ptr = size >>= \sizeC -> ptr >>= \ptrC -> peekArray (fromIntegral sizeC) ptrC >>= return . (map fromIntegral)
 
-writeBuffer :: [Int] -> Ptr CInt -> IO ()
-writeBuffer list ptr = pokeArray ptr (map fromIntegral list)
+writeBuffer :: (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
+writeBuffer fun list = fun (fromIntegral (length list)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
+
+appendQueue :: (IO CInt) -> (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
+appendQueue size fun list = size >>= \sizeC -> fun (sizeC + (fromIntegral (length list))) >>= \base ->
+ return (plusPtr' base (fromIntegral sizeC)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
 
 chip :: (a, Ptr CInt) -> IO (Int, Ptr CInt)
 chip (_,ptr) = (peek ptr) >>= (\x -> return (fromIntegral x, plusPtr' ptr 1))
@@ -145,16 +145,14 @@ readPlaceF a b c = (a,[b,c])
 
 readEmbed :: Int -> IO [Region]
 readEmbed index = let indexC = fromIntegral index in
- embedsC indexC >>= \embeds -> embedC indexC 0 >>=
- readBuffer embeds >>= return . (map Region)
+ readBuffer (embedsC indexC) (embedC indexC 0) >>= return . (map Region)
 
 readSideband :: IO [Int]
-readSideband = sidebandsC >>= \todosC -> (sidebandC todosC) >>= readBuffer todosC
+readSideband = readBuffer sidebandsC (sidebandC 0)
 
 readBoundary :: Int -> IO [Boundary]
 readBoundary index = let indexC = fromIntegral index in
- boundariesC indexC >>= \boundaries -> boundaryC indexC 0 >>=
- readBuffer boundaries >>= return . (map Boundary)
+ readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= return . (map Boundary)
 
 paste :: Int -> Ptr CInt -> IO (Ptr CInt)
 paste len ptr = poke ptr (fromIntegral len) >>= (\x -> seq x (return (plusPtr' ptr 1)))
@@ -215,9 +213,7 @@ handleEvent = do
   "Remove" ->  handleRemove <$> handleEventG <*> handleEventF >> return False
   "Error" -> return True
   "Done" -> return True
-  _ ->
-   printStr (concat ["unknown event ",(show event),"\n"]) >>
-   return True
+  _ -> printStr (concat ["unknown event ",(show event),"\n"]) >> return True
 
 handleEventF :: IO Int
 handleEventF = intArgumentC >>= (return . fromIntegral)
@@ -236,13 +232,9 @@ handlePlane index =
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
  relate = recurseF (boundaries +) base (length point)
- sizeC = fromIntegral (relates + (length relate))
- in writePointSubC (fromIntegral (length2 point)) >>=
- writeBuffer (map (\(Boundary x) -> x) (concat point)) >>
- writeSideSubC (fromIntegral (length2 classify)) >>=
- writeBuffer (map (\(Boundary x) -> x) (concat classify)) >>
- correlateC sizeC >>= handlePlaneI relates >>=
- writeBuffer relate >>
+ in writeBuffer appendPointSubC (map (\(Boundary x) -> x) (concat point)) >>
+ writeBuffer appendSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
+ appendQueue correlatesC correlateC relate >>
  writeSideband (todo `append` [index]) >>
  writeBoundary index (boundary `append` [done]) >>
  writePlanesC (doneC + 1) >>
@@ -271,8 +263,7 @@ handleClassifyF :: Int -> [Int] -> IO [Int]
 handleClassifyF done (index:todo) =
  readPlace index >>= \place ->
  readEmbed index >>= \embed ->
- readSidesC >>= \sidesC ->
- readSideBufC >>= readBuffer sidesC >>= \side -> let
+ readBuffer consumeSidesC consumeSideBufC >>= \side -> let
  boundary = boundariesOfPlace place
  -- add boundaries accoriding to sidedness
  pair = subsets 2 boundary
@@ -299,9 +290,7 @@ handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y
 handleInflate :: Int -> IO ()
 handleInflate index =
  readPlace index >>= \place ->
- readFacesC >>= \faces ->
- readFaceOkC >>= readBuffer faces >>= \valid ->
- readFaceSubC >>= readBuffer (faces * 6) >>= \face -> let
+ readBuffer readFacesC readFaceSubC >>= \face -> let
  -- replace embed for indicated place by all inside regions
  (boundary,space) = unzipPlace place
  boundaried = map (\(Boundary x) -> x) boundary
@@ -329,14 +318,14 @@ handleInflate index =
  face3 = concat (concat (map (\(x,y,z) -> map (\(w,v) -> concat [[x],w,(concat v),y]) z) face2))
  face4 = map (\(Boundary x) -> x) (zipBoundaries face3 boundary)
  -- remove faces of indexed place
- valid1 = map (\(x,y) -> if (x /= 0) && (not (elem (head y) boundaried)) then 1 else 0) (zip valid (split face (repeat 6)))
+ valid1 :: [[Int]]
+ valid1 = filter (\x -> not (elem (head x) boundaried)) (split face (repeat 6))
  -- indicate new faces are valid
  valid2 :: [Int]
- valid2 = valid1 `append` (replicate (quot (length face4) 6) 1)
+ valid2 = (concat valid1) `append` face4
  -- append found faces
  in writeEmbed index embed >>
- writeFaceOkC (fromIntegral (length valid2)) >>= writeBuffer valid2 >>
- writeFaceSubC (fromIntegral (length face4)) >>= writeBuffer face4 >>
+ writeBuffer writeFaceSubC valid2 >>
  -- TODO: fill in faceToPlane
  return ()
 
@@ -344,23 +333,34 @@ handleInflate index =
 handlePierce :: Int -> IO ()
 handlePierce index =
  readPlace index >>= return . boundariesOfPlace >>= \boundary ->
- writeSideSubC (fromIntegral (length boundary)) >>=
- writeBuffer (map (\(Boundary x) -> x) boundary) >>
+ writeBuffer appendSideSubC (map (\(Boundary x) -> x) boundary) >>
  return ()
 
 -- find region or embeded neighbor located by sideBuf
--- clear faceOk for faces on found region
+-- filter faceSub of faces on found region
 -- add to faceSub faces between found region and other embedded regions
 handleFill :: Int -> Int -> IO ()
 handleFill = undefined
 
 -- find region or unembedded neighbor located by sideBuf
--- clear faceOk for faces on found region
+-- filter faceSub of faces on found region
 -- add to faceSub faces between found region and other unembedded regions
 handleHollow :: Int -> Int -> IO ()
 handleHollow = undefined
 
--- if string is Face, clear faceOk of faceSub with base of given boundary
--- if string is Boundary, clear planeOk and faceOk of faceSub involving boundary
+-- if string is Face, invalidate faceSub with base of given boundary
+-- if string is Boundary, invalidate planeBuf and faceSub involving boundary
 handleRemove :: String -> Int -> IO ()
-handleRemove = undefined
+handleRemove "Face" index =
+ readBuffer readFacesC readFaceSubC >>= \face -> let
+ face1 = filter (\x -> not ((head x) == index)) (split face (repeat 6))
+ face2 = concat face1
+ in writeBuffer writeFaceSubC face2 >>
+ return ()
+handleRemove "Boundary" index =
+ readBuffer readFacesC readFaceSubC >>= \face -> let
+ face1 = filter (\x -> not (any (index ==) x)) (split face (repeat 6))
+ face2 = concat face1
+ in writeBuffer writeFaceSubC face2 >>
+ return ()
+handleRemove kind _ = printStr (concat ["unknown kind ",kind,"\n"])

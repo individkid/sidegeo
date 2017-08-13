@@ -71,9 +71,7 @@ extern void __stginit_Main(void);
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
-#define OK_LOCATION 3
-#define VALID_LOCATION 4
-#define INVALID_LOCATION 5
+#define INVALID_LOCATION 3
 #define POLL_DELAY 0.1
 #define MAX_ROTATE 0.999
 #define ROLLER_GRANULARITY 30.0
@@ -113,7 +111,6 @@ struct File {
     int index;
     int handle;
     char buffer[256];
-    int size;
     int capital;
     int state;};
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
@@ -269,8 +266,6 @@ struct Buffer pointSub = {0}; // every triple of planes
 struct Buffer planeSub = {0}; // per plane triple of points
 struct Buffer sideSub = {0}; // per vertex prior planes
 struct Buffer halfSub = {0}; // per plane prior vertices
-struct Buffer planeOk = {0}; // per-plane valid flag
-struct Buffer faceOk = {0}; // per-face valid flag
 struct Render {
     int draw; // waiting for shader
     int vertex; // number of input buffers que
@@ -1120,8 +1115,6 @@ void initialize(int argc, char **argv)
     buffer(&planeSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
     buffer(&sideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
     buffer(&halfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-    buffer(&planeOk,"ok",OK_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-    buffer(&faceOk,"valid",VALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 
     uniformCode = "\
     #version 330 core\n\
@@ -1924,27 +1917,17 @@ enum Action bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
-    GLuint ok[NUM_PLANES*ELEMENT_DIMENSIONS] = {
-        1,1,1,1,
-    };
-    GLuint valid[NUM_FACES*ELEMENT_DIMENSIONS] = {
-        1,1,1,
-    };
     bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
     bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
     bringupBuffer(&faceSub,1,NUM_FACES,face);
     bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
-    bringupBuffer(&planeOk,1,NUM_PLANES,ok);
-    bringupBuffer(&faceOk,1,NUM_FACES,valid);
  
     if (planeBuf.done < NUM_PLANES) return Reque;
     if (versorBuf.done < NUM_PLANES) return Reque;
     if (faceSub.done < NUM_FACES) return Reque;
     if (pointSub.done < NUM_POINTS) return Reque;
     if (sideSub.done < NUM_SIDES) return Reque;
-    if (planeOk.done < NUM_PLANES) return Reque;
-    if (faceOk.done < NUM_FACES) return Reque;
     return Advance;
 }
 #endif
@@ -1999,9 +1982,11 @@ int iswrlckFile(struct File *file)
 }
 
 void fileError(struct File *file, const char *msg) {
+    struct File initial = {0};
     enqueMsgstr(msg); close(file->handle);
     // TODO: clear out messages in indices and configs
     // TODO: enque event to invalidate place boundaries faces planes for file->index
+    *file = initial;
 }
 
 int filePoint(struct File *file, enum Event event, int *changed, int index, float *vector)
@@ -2011,13 +1996,13 @@ int filePoint(struct File *file, enum Event event, int *changed, int index, floa
     if (state++ == file->state && fileState == FileIdle) {
         fileState = FilePoint; fileOwner = file->index; file->state++;}
     if (state++ == file->state) {
-        *changed = 1; file->size = 0; state--; file->state++;
+        *changed = 1; *file->buffer = 0; state--; file->state++;
         enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index);}
     if (state++ == file->state) {
         GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
         limit[Adplane] = 0; enqueLocate(buffer); file->state++;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        *changed = 1; file->state = 0; file->size = 0; fileState = FileIdle;
+        *changed = 1; file->state = 0; *file->buffer = 0; fileState = FileIdle;
         enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(index);}
     return 1;
 }
@@ -2038,24 +2023,25 @@ void configure()
         CASE(Advance) {file->debug = 0; enqueShader(dishader); enqueCommand(transformRight);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
 #endif
-    if (validIndex() && headIndex() == file->index && file->size == 0) wrlckFile(file);
-    if ((!validIndex() || headIndex() != file->index) && file->size == 0) rdlckFile(file);
+    if (validIndex() && headIndex() == file->index && *file->buffer == 0) wrlckFile(file);
+    if ((!validIndex() || headIndex() != file->index) && *file->buffer == 0) rdlckFile(file);
     if (isrdlckFile(file) || iswrlckFile(file)) {
-        char size[3] = {0};
-        int retval = read(file->handle,size,2);
+        char header[3] = {0};
+        int size = 0;
+        int retval = read(file->handle,header,2);
         if (retval != 0 && retval != 2) {FILEERROR("file error\n")}
         if (retval == 0 && isrdlckFile(file)) unlckFile(file);
         if (retval == 2) {
-            file->size = strtol(size,NULL,16);
-            if (file->size >= 256) {FILEERROR("file error\n")}
-            if (read(file->handle,file->buffer,file->size) != file->size) {FILEERROR("file error\n")}
-            changed = 1; file->buffer[file->size] = 0; unlckFile(file);}}
+            size = strtol(header,NULL,16);
+            if (size >= 256) {FILEERROR("file error\n")}
+            if (read(file->handle,file->buffer,size) != size) {FILEERROR("file error\n")}
+            changed = 1; file->buffer[size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
         char header[3] = {0};
         int size = 0;
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
-        memcpy(file->buffer,arrayConfig()+2,size); file->buffer[size] = 0; file->size = size;
+        memcpy(file->buffer,arrayConfig()+2,size); file->buffer[size] = 0;
         if (write(file->handle, arrayConfig(), size+2) != size+2) {FILEERROR("write error\n")}
         changed = 1; dequeIndex(); delocConfig(size+2); unlckFile(file);}
     if (validIndex() && headIndex() == file->index) {
@@ -2066,42 +2052,40 @@ void configure()
         requeIndex(); relocConfig(size+2);}
     if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
         GLfloat buffer[3];
-        GLuint valid[1];
         GLuint versor[1];
         int state = 0;
-        for (int i = 0; i < 3; i++) buffer[i] = vector[i]; valid[0] = 1; versor[0] = index;
+        for (int i = 0; i < 3; i++) buffer[i] = vector[i]; versor[0] = index;
         if (fileState == FilePoint && fileOwner == file->index) exitErrstr("file error\n");
         if (fileState == FileWait && fileOwner == file->index) exitErrstr("file error\n");
         if (state++ == file->state && fileState == FileIdle) {
             fileState = FilePlane; fileOwner = file->index; file->state++;}
         if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) file->state++;
-        if (state++ == file->state && bufferFile(&planeOk,1,valid)) file->state++;
         if (state++ == file->state && bufferFile(&versorBuf,1,versor)) file->state++;
         if (state++ == file->state) {
-            changed = 1; file->state = 0; file->size = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
+            changed = 1; file->state = 0; *file->buffer = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
     else if (sscanf(file->buffer," --classif%c", &suffix) == 1 && suffix == 'y') {
         if (fileState != FilePlane && fileState != FileWait) {FILEERROR("file error\n")}
         if (fileOwner != file->index) {FILEERROR("file error\n")}
         if (fileState == FilePlane) {fileState = FileWait; ENQUE(classify,Classify)}
         if (sideBuf.done >= sideSub.done) {
-            changed = 1; fileState = FileIdle; file->size = 0; enqueCommand(0); enqueEvent(Classify);}}
+            changed = 1; fileState = FileIdle; *file->buffer = 0; enqueCommand(0); enqueEvent(Classify);}}
     else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e') {
         enqueShader(dishader); enqueCommand(transformRight);
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
+        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
+    else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4) {
         if (!filePoint(file,Fill,&changed,index,vector)) {FILEERROR("file error\n")}}
-    else if (sscanf(file->buffer," --hollow %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
+    else if (sscanf(file->buffer," --hollow %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4) {
         if (!filePoint(file,Hollow,&changed,index,vector)) {FILEERROR("file error\n")}}
     else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove);
+        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueInt(file->index); enqueKind(Face); enqueInt(index);}
     else if (sscanf(file->buffer," --remove plane %d", &index) == 1) {
-        changed = 1; file->size = 0; enqueCommand(0); enqueEvent(Remove);
+        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueInt(file->index); enqueKind(Boundary); enqueInt(index);}
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else {FILEERROR("file error\n")}
+    else if (*file->buffer) {FILEERROR("file error\n")}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 }
 
@@ -2942,33 +2926,23 @@ int *getBuffer(struct Buffer *buffer)
     return buf;
 }
 
-int *readPlaneOk()
-{
-    return getBuffer(&planeOk);
-}
-
 int *readFaceSub()
 {
     return getBuffer(&faceSub);
 }
 
-int *readFaceOk()
-{
-    return getBuffer(&faceOk);
-}
-
 int readFaces()
 {
-    return faceOk.done;
+    return (faceSub.done/faceSub.dimn)*faceSub.dimn;
 }
 
-int *readSideBuf()
+int *consumeSideBuf()
 {
     int done = sideDone; sideDone = sideBuf.done;
     return getBuffer(&sideBuf) + done;
 }
 
-int readSides()
+int consumeSides()
 {
     return sideBuf.done-sideDone;
 }
@@ -3004,27 +2978,17 @@ int *setupBuffer(int start, int count, struct Buffer *buffer)
 
 int *writeFaceSub(int count)
 {
-    return setupBuffer(faceSub.done,count,&faceSub);
+    return setupBuffer(0,count,&faceSub);
 }
 
-int *writePointSub(int count)
+int *appendPointSub(int count)
 {
     return setupBuffer(pointSub.done,count,&pointSub);
 }
 
-int *writeSideSub(int count)
+int *appendSideSub(int count)
 {
     return setupBuffer(sideSub.done,count,&sideSub);
-}
-
-int *writePlaneOk(int count)
-{
-    return setupBuffer(0,count,&planeOk);
-}
-
-int *writeFaceOk(int count)
-{
-    return setupBuffer(0,count,&faceOk);
 }
 
 void writePlanes(int done)
