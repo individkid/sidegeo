@@ -232,6 +232,7 @@ handleInflate index = let indexC = fromIntegral index in
  -- indicate new faces are valid
  valid2 :: [Int]
  valid2 = (concat valid1) `append` face4
+ -- map faces to base boundaries
  valid3 :: [Int]
  valid3 = map head (split face4 (repeat 6))
  -- append found faces
@@ -249,7 +250,25 @@ handlePierce index = let indexC = fromIntegral index in
 -- filter faceSub of faces on found region
 -- add to faceSub faces between found region and other embedded regions
 handleFill :: Int -> Int -> IO ()
-handleFill = undefined
+handleFill index boundI = let
+ indexC = fromIntegral index
+ bound = Boundary boundI
+ in readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
+ readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
+ readBuffer consumeSidesC consumeSideBufC >>= \sideI ->
+ readSize (boundariesC indexC) >>= \boundaries -> let
+ place = decodePlace boundaries placeI boundary
+ embed = map Region embedI
+ side = map Side sideI
+ (boundary,space) = unzipPlace place
+ region = regionOfSides side space
+ opposite = oppositeOfRegion [unzipBoundary bound boundary] region space
+ both = [region,opposite]
+ inside = find' (\x -> elem x embed) both
+ outside = find' (\x -> not (elem x embed)) both
+ in return inside >>
+ return outside >>
+ return ()
 
 -- find region or unembedded neighbor located by sideBuf
 -- filter faceSub of faces on found region
