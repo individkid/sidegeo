@@ -44,11 +44,9 @@ foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaces" readFacesC :: IO CInt
 foreign import ccall "consumeSideBuf" consumeSideBufC :: IO (Ptr CInt)
 foreign import ccall "consumeSides" consumeSidesC :: IO CInt
-foreign import ccall "readPlanes" readPlanesC :: IO CInt
 foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> IO (Ptr CInt)
 foreign import ccall "appendPointSub" appendPointSubC :: CInt -> IO (Ptr CInt)
 foreign import ccall "appendSideSub" appendSideSubC :: CInt -> IO (Ptr CInt)
-foreign import ccall "writePlanes" writePlanesC :: CInt -> IO ()
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "error" errorC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO (Ptr CChar)
@@ -65,8 +63,8 @@ errorStr str = do
  ptr <- errorC (fromIntegral (length str))
  pokeArray ptr (map castCharToCChar str)
 
-plusPtr' :: Ptr CInt -> Int -> Ptr CInt
-plusPtr' ptr offset = let
+plusPtr' :: Int -> Ptr CInt -> Ptr CInt
+plusPtr' offset ptr = let
  dummy :: Int
  dummy = 0
  dummyC :: CInt
@@ -81,29 +79,11 @@ split [] _ = []
 split _ [] = []
 split a (b:c) = (take b a):(split (drop b a) c)
 
-recurse :: (a -> a) -> a -> Int -> [a]
-recurse f a b = take b (iterate f a)
-
-recurseF :: (a -> a) -> a -> Int -> [a]
-recurseF f a b = drop 1 (recurse f a (b+1))
-
-iterate2 :: (a -> a -> a) -> a -> a -> [a]
-iterate2 f a b = a:(iterate2 f b (f a b))
-
-recurse2 :: (a -> a -> a) -> a -> a -> Int -> [a]
-recurse2 f a b c = take c (iterate2 f a b)
-
-recurse2F :: (a -> a -> a) -> a -> a -> Int -> [a]
-recurse2F f a b c = drop 1 (recurse2 f a b (c+1))
-
-recurse2G :: (a -> a -> a) -> a -> a -> Int -> [a]
-recurse2G f a b c = drop 1 (recurse2F f a b (c+1))
-
 readBuffer :: IO CInt -> IO (Ptr CInt) -> IO [Int]
 readBuffer size ptr = size >>= \sizeC -> ptr >>= peekArray (fromIntegral sizeC) >>= return . (map fromIntegral)
 
 peekBuffer :: IO CInt -> IO (Ptr CInt) -> IO Int
-peekBuffer offset ptr = offset >>= \offsetC -> ptr >>= \ptrC -> peek (plusPtr' ptrC (fromIntegral offsetC)) >>= return . fromIntegral
+peekBuffer offset ptr = offset >>= \offsetC -> ptr >>= peek . (plusPtr' (fromIntegral offsetC)) >>= return . fromIntegral
 
 readSize :: IO CInt -> IO Int
 readSize size = size >>= return . fromIntegral
@@ -114,9 +94,9 @@ writeBuffer fun list = fun (fromIntegral (length list)) >>= \ptr -> pokeArray pt
 writeSize :: Int -> (CInt -> IO ()) -> IO ()
 writeSize size fun = fun (fromIntegral size)
 
-appendQueue :: (CInt -> IO (Ptr CInt)) -> [Int] -> CInt -> IO ()
-appendQueue fun list size = fun (size + (fromIntegral (length list))) >>= \base ->
- return (plusPtr' base (fromIntegral size)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
+appendQueue :: IO CInt -> (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
+appendQueue size fun list = size >>= \sizeC -> fun (sizeC + (fromIntegral (length list))) >>=
+ return . (plusPtr' (fromIntegral sizeC)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
 
 decodePlace :: Int -> [Int] -> [Boundary] -> Place
 decodePlace size list boundary = let
@@ -159,24 +139,23 @@ handleEventG = stringArgumentC >>= peekCString
 handlePlane :: Int -> IO ()
 handlePlane index = let indexC = fromIntegral index in
  readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= return . (map Boundary) >>= \boundary ->
- readSize readPlanesC >>= \done ->
+ readSize planeToPlacesC >>= \done ->
  peekBuffer (fmap ((negate 1) +) correlatesC) (correlateC 0) >>= \base -> let
  point = map ((Boundary done) :) (subsets 2 boundary)
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
- relate = recurseF (boundaries +) base (length point)
+ relate = map (\x -> base + (boundaries * (1 + x))) (indices (length point))
  in writeBuffer appendPointSubC (map (\(Boundary x) -> x) (concat point)) >>
  writeBuffer appendSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
- appendQueue correlateC relate <$> correlatesC >>
- appendQueue sidebandC [index] <$> sidebandsC >>
- appendQueue (boundaryC indexC) [done] <$> (boundariesC indexC) >>
- writeSize (done + 1) writePlanesC >>
- -- TODO: fill in planeToPlace
+ appendQueue correlatesC correlateC relate >>
+ appendQueue sidebandsC sidebandC [index] >>
+ appendQueue (boundariesC indexC) (boundaryC indexC) [done] >>
+ appendQueue planeToPlacesC planeToPlaceC [index] >>
  return ()
 
 handleClassify :: IO ()
 handleClassify =
- readSize readPlanesC >>= \done ->
+ readSize planeToPlacesC >>= \done ->
  readSize sidebandsC >>= \todos ->
  readBuffer sidebandsC (sidebandC 0) >>=
  handleClassifyF (done - todos) >>=
@@ -253,10 +232,12 @@ handleInflate index = let indexC = fromIntegral index in
  -- indicate new faces are valid
  valid2 :: [Int]
  valid2 = (concat valid1) `append` face4
+ valid3 :: [Int]
+ valid3 = map head (split face4 (repeat 6))
  -- append found faces
  in writeBuffer (embedC indexC) (map (\(Region x) -> x) embed) >>
  writeBuffer writeFaceSubC valid2 >>
- -- TODO: fill in faceToPlane
+ appendQueue faceToPlanesC faceToPlaneC valid3 >>
  return ()
 
 -- fill sideSub with all boundaries from given place
