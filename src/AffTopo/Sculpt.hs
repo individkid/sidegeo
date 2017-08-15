@@ -35,7 +35,6 @@ foreign import ccall "sidebands" sidebandsC :: IO CInt
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlates" correlatesC :: IO CInt
 foreign import ccall "faceToPlane" faceToPlaneC :: CInt -> IO (Ptr CInt)
-foreign import ccall "faceToPlanes" faceToPlanesC :: IO CInt
 foreign import ccall "planeToPlace" planeToPlaceC :: CInt -> IO (Ptr CInt)
 foreign import ccall "planeToPlaces" planeToPlacesC :: IO CInt
 foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
@@ -191,10 +190,10 @@ handleClassifyI :: Place -> [(Boundary,Side)] -> [Region]
 handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
 
 handleInflate :: Int -> IO ()
-handleInflate index = handleInflateF index handleInflateG
+handleInflate index = handleInflateF handleInflateG index
 
-handleInflateF :: Int -> (Place -> [Region]) -> IO ()
-handleInflateF index fun = let
+handleInflateF :: (Place -> [Region]) -> Int -> IO ()
+handleInflateF fun index = let
  indexC = fromIntegral index in
  readBuffer readFacesC readFaceSubC >>= \face ->
  readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
@@ -234,11 +233,11 @@ handleInflateF index fun = let
  valid2 = (concat valid1) `append` face4
  -- map faces to base boundaries
  valid3 :: [Int]
- valid3 = map head (split face4 (repeat 6))
+ valid3 = map head (split valid2 (repeat 6))
  -- append found faces
  in writeBuffer (embedC indexC) (map (\(Region x) -> x) embed) >>
  writeBuffer writeFaceSubC valid2 >>
- appendQueue faceToPlanesC faceToPlaneC valid3 >>
+ writeBuffer faceToPlaneC valid3 >>
  return ()
 
 handleInflateG :: Place -> [Region]
@@ -263,7 +262,7 @@ handleFillF fun index boundI = let
  readBuffer consumeSidesC consumeSideBufC >>= \sideI -> let
  embed = map Region embedI
  side = map Side sideI
- in handleInflateF index (handleFillG fun bound embed side)
+ in handleInflateF (handleFillG fun bound embed side) index
 
 handleFillG :: ([Region] -> [Region] -> [Region]) -> Boundary -> [Region] -> [Side] -> Place -> [Region]
 handleFillG fun bound embed side place = let

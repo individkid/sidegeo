@@ -2903,11 +2903,6 @@ int *faceToPlane(int size)
     return accessQueue(size);
 }
 
-int faceToPlanes()
-{
-    return sizeFace2Plane();
-}
-
 int *planeToPlace(int size)
 {
     metas = &plane2places;
