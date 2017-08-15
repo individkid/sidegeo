@@ -191,7 +191,11 @@ handleClassifyI :: Place -> [(Boundary,Side)] -> [Region]
 handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y) b) (regionsOfPlace a)
 
 handleInflate :: Int -> IO ()
-handleInflate index = let indexC = fromIntegral index in
+handleInflate index = handleInflateF index handleInflateG
+
+handleInflateF :: Int -> (Place -> [Region]) -> IO ()
+handleInflateF index fun = let
+ indexC = fromIntegral index in
  readBuffer readFacesC readFaceSubC >>= \face ->
  readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
  readSize (boundariesC indexC) >>= \boundaries ->
@@ -199,16 +203,9 @@ handleInflate index = let indexC = fromIntegral index in
  place = decodePlace boundaries placeI (map Boundary boundaryI)
  -- replace embed for indicated place by all inside regions
  (boundary,space) = unzipPlace place
- regions = regionsOfSpace space
- embed = filter (\x -> not (oppositeOfRegionExists boundary x space)) regions
- in handleInflateF index face embed place
-
-handleInflateF :: Int -> [Int] -> [Region] -> Place -> IO ()
-handleInflateF index face embed place = let
- indexC = fromIntegral index
- (boundary,space) = unzipPlace place
  boundaried = map (\(Boundary x) -> x) boundary
  -- find boundaries between inside and outside regions
+ embed = fun place
  embed1 r x = oppositeOfRegion [x] r space
  embed2 r x = (x, r, embed1 r x)
  embed3 r = attachedBoundaries r space
@@ -244,37 +241,40 @@ handleInflateF index face embed place = let
  appendQueue faceToPlanesC faceToPlaneC valid3 >>
  return ()
 
+handleInflateG :: Place -> [Region]
+handleInflateG place = let
+ (boundary,space) = unzipPlace place
+ in filter (\x -> not (oppositeOfRegionExists boundary x space)) (regionsOfSpace space)
+
+
 -- fill sideSub with all boundaries from given place
 handlePierce :: Int -> IO ()
 handlePierce index = let indexC = fromIntegral index in
  readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= writeBuffer appendSideSubC >> return ()
 
 handleFill :: Int -> Int -> IO ()
-handleFill = handleFillF fst
+handleFill = handleFillF (++)
 
-handleFillF :: ((Region,Region) -> Region) -> Int -> Int -> IO ()
+handleFillF :: ([Region] -> [Region] -> [Region]) -> Int -> Int -> IO ()
 handleFillF fun index boundI = let
  indexC = fromIntegral index
  bound = Boundary boundI in
- readBuffer readFacesC readFaceSubC >>= \face ->
- readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
  readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
- readBuffer consumeSidesC consumeSideBufC >>= \sideI ->
- readSize (boundariesC indexC) >>= \boundaries -> let
- place = decodePlace boundaries placeI boundary
+ readBuffer consumeSidesC consumeSideBufC >>= \sideI -> let
  embed = map Region embedI
  side = map Side sideI
+ in handleInflateF index (handleFillG fun bound embed side)
+
+handleFillG :: ([Region] -> [Region] -> [Region]) -> Boundary -> [Region] -> [Side] -> Place -> [Region]
+handleFillG fun bound embed side place = let
  (boundary,space) = unzipPlace place
  region = regionOfSides side space
  opposite = oppositeOfRegion [unzipBoundary bound boundary] region space
  both = [region,opposite]
- inside = find' (\x -> elem x embed) both
- outside = find' (\x -> not (elem x embed)) both
- fill = [(fun (inside,outside))] ++ (embed \\ both)
- in handleInflateF index face fill place
+ in fun embed both
 
 handleHollow :: Int -> Int -> IO ()
-handleHollow = handleFillF snd
+handleHollow = handleFillF (\\)
 
 -- if string is Face, invalidate faceSub with base of given boundary
 -- if string is Boundary, invalidate faceSub involving boundary
