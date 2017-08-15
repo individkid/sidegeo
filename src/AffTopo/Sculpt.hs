@@ -112,10 +112,6 @@ encodePlace place = let
  second = concat (map last (range place))
  in concat [firsts, seconds, map (\(Region x) -> x) first, map (\(Region x) -> x) second]
 
-encodeFace :: [Region] -> Place -> [Int]
-encodeFace = undefined
-
-
 handleEvent :: IO Bool
 handleEvent = do
  event <- (eventC >>= peekCString)
@@ -196,16 +192,22 @@ handleClassifyI a b = fold' (+\) (map (\(x, Side y) -> (head (image [x] a)) !! y
 
 handleInflate :: Int -> IO ()
 handleInflate index = let indexC = fromIntegral index in
- readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
  readBuffer readFacesC readFaceSubC >>= \face ->
+ readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
  readSize (boundariesC indexC) >>= \boundaries ->
  readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
  place = decodePlace boundaries placeI (map Boundary boundaryI)
  -- replace embed for indicated place by all inside regions
  (boundary,space) = unzipPlace place
- boundaried = map (\(Boundary x) -> x) boundary
  regions = regionsOfSpace space
  embed = filter (\x -> not (oppositeOfRegionExists boundary x space)) regions
+ in handleInflateF index face embed place
+
+handleInflateF :: Int -> [Int] -> [Region] -> Place -> IO ()
+handleInflateF index face embed place = let
+ indexC = fromIntegral index
+ (boundary,space) = unzipPlace place
+ boundaried = map (\(Boundary x) -> x) boundary
  -- find boundaries between inside and outside regions
  embed1 r x = oppositeOfRegion [x] r space
  embed2 r x = (x, r, embed1 r x)
@@ -253,8 +255,9 @@ handleFill = handleFillF fst
 handleFillF :: ((Region,Region) -> Region) -> Int -> Int -> IO ()
 handleFillF fun index boundI = let
  indexC = fromIntegral index
- bound = Boundary boundI
- in readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
+ bound = Boundary boundI in
+ readBuffer readFacesC readFaceSubC >>= \face ->
+ readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
  readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
  readBuffer consumeSidesC consumeSideBufC >>= \sideI ->
  readSize (boundariesC indexC) >>= \boundaries -> let
@@ -267,10 +270,8 @@ handleFillF fun index boundI = let
  both = [region,opposite]
  inside = find' (\x -> elem x embed) both
  outside = find' (\x -> not (elem x embed)) both
- fill = (fun (inside,outside)) : embed
- in writeBuffer writeFaceSubC (encodeFace fill place) >>
- writeBuffer (embedC indexC) (map (\(Region x) -> x) fill) >>
- return ()
+ fill = [(fun (inside,outside))] ++ (embed \\ both)
+ in handleInflateF index face fill place
 
 handleHollow :: Int -> Int -> IO ()
 handleHollow = handleFillF snd
