@@ -91,9 +91,6 @@ readSize size = size >>= return . fromIntegral
 writeBuffer :: (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
 writeBuffer fun list = fun (fromIntegral (length list)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
 
-writeSize :: Int -> (CInt -> IO ()) -> IO ()
-writeSize size fun = fun (fromIntegral size)
-
 appendQueue :: IO CInt -> (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
 appendQueue size fun list = size >>= \sizeC -> fun (sizeC + (fromIntegral (length list))) >>=
  return . (plusPtr' (fromIntegral sizeC)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
@@ -114,6 +111,10 @@ encodePlace place = let
  first = concat (map head (range place))
  second = concat (map last (range place))
  in concat [firsts, seconds, map (\(Region x) -> x) first, map (\(Region x) -> x) second]
+
+encodeFace :: [Region] -> Place -> [Int]
+encodeFace = undefined
+
 
 handleEvent :: IO Bool
 handleEvent = do
@@ -246,11 +247,11 @@ handlePierce :: Int -> IO ()
 handlePierce index = let indexC = fromIntegral index in
  readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= writeBuffer appendSideSubC >> return ()
 
--- find region or embeded neighbor located by sideBuf
--- filter faceSub of faces on found region
--- add to faceSub faces between found region and other embedded regions
 handleFill :: Int -> Int -> IO ()
-handleFill index boundI = let
+handleFill = handleFillF fst
+
+handleFillF :: ((Region,Region) -> Region) -> Int -> Int -> IO ()
+handleFillF fun index boundI = let
  indexC = fromIntegral index
  bound = Boundary boundI
  in readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
@@ -266,15 +267,13 @@ handleFill index boundI = let
  both = [region,opposite]
  inside = find' (\x -> elem x embed) both
  outside = find' (\x -> not (elem x embed)) both
- in return inside >>
- return outside >>
+ fill = (fun (inside,outside)) : embed
+ in writeBuffer writeFaceSubC (encodeFace fill place) >>
+ writeBuffer (embedC indexC) (map (\(Region x) -> x) fill) >>
  return ()
 
--- find region or unembedded neighbor located by sideBuf
--- filter faceSub of faces on found region
--- add to faceSub faces between found region and other unembedded regions
 handleHollow :: Int -> Int -> IO ()
-handleHollow = undefined
+handleHollow = handleFillF snd
 
 -- if string is Face, invalidate faceSub with base of given boundary
 -- if string is Boundary, invalidate faceSub involving boundary
