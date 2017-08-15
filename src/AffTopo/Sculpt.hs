@@ -94,8 +94,10 @@ appendQueue :: IO CInt -> (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
 appendQueue size fun list = size >>= \sizeC -> fun (sizeC + (fromIntegral (length list))) >>=
  return . (plusPtr' (fromIntegral sizeC)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
 
-decodePlace :: Int -> [Int] -> [Boundary] -> Place
-decodePlace size list boundary = let
+decodePlace :: [Int] -> [Int] -> Place
+decodePlace boundaryI list = let
+ size = length boundaryI
+ boundary = map Boundary boundaryI
  (firsts,list1) = splitAt size list
  (seconds,list2) = splitAt size list1
  (list3,list4) = splitAt (sum firsts) list2
@@ -162,10 +164,9 @@ handleClassifyF done (index:todo) = let indexC = fromIntegral index in
  readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
  readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
  readBuffer consumeSidesC consumeSideBufC >>= \side ->
- readSize (boundariesC indexC) >>= \boundaries ->
  readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
  boundary = map Boundary boundaryI
- place = decodePlace boundaries placeI boundary
+ place = decodePlace boundaryI placeI
  embed = map Region embedI
  -- add boundaries accoriding to sidedness
  pair = subsets 2 boundary
@@ -197,9 +198,8 @@ handleInflateF fun index = let
  indexC = fromIntegral index in
  readBuffer readFacesC readFaceSubC >>= \face ->
  readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
- readSize (boundariesC indexC) >>= \boundaries ->
  readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
- place = decodePlace boundaries placeI (map Boundary boundaryI)
+ place = decodePlace boundaryI placeI
  -- replace embed for indicated place by all inside regions
  (boundary,space) = unzipPlace place
  boundaried = map (\(Boundary x) -> x) boundary
@@ -244,7 +244,6 @@ handleInflateG :: Place -> [Region]
 handleInflateG place = let
  (boundary,space) = unzipPlace place
  in filter (\x -> not (oppositeOfRegionExists boundary x space)) (regionsOfSpace space)
-
 
 -- fill sideSub with all boundaries from given place
 handlePierce :: Int -> IO ()
