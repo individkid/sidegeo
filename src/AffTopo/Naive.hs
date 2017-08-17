@@ -229,17 +229,10 @@ isLinear n s
  | n < 0 = undefined
  | (n == 0) || (null s) = (length (regionsOfSpace s)) == 1
  | n == 1 = let
-  halves = concatMap (\(x,y) -> map (\z -> (z,x)) y) place
-  ends = filter (\(x,_) -> (length x) == 1) halves
-  filters = map (\(x,_) -> filter (\(y,_) -> null (x \\ y)) halves) ends
-  pairs = map2 (\(x,y) -> (length x, y)) filters
-  sorts = map sort pairs
-  domains = map domain sorts
-  ranges = map range sorts
-  indexes = indices (length s)
-  valid [x,y] = x == (reverse y)
-  valid _ = False
-  in (valid ranges) && (all (\(x,y) -> x == y) (zip (repeat indexes) domains))
+  boundaries = length s
+  regions = map Region (indices (succ boundaries))
+  sample = map (isLinearG regions) (indices boundaries)
+  in (equivSpace sample) == (equivSpace s)
  | otherwise = let
   bounds = boundariesOfPlace place
   subs = power bounds
@@ -252,6 +245,12 @@ isLinearF n s b = let
  regions = regionsOfPlace subspace
  boundaries = boundariesOfPlace subspace
  in (defineLinear n (length boundaries)) == (length regions)
+
+isLinearG :: [Region] -> Int -> [[Region]]
+isLinearG regions index = let
+ half = map Region (indices (succ index))
+ other = regions \\ half
+ in [half,other]
 
 -- return all boundaries in space
 boundariesOfSpace :: Space -> [Boundary]
@@ -720,13 +719,9 @@ snakeSpace p q n s t u
 snakeSpaceF :: Place -> Place -> Place -> Bool
 snakeSpaceF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
--- return all extensions by boundaries
-superSpaces :: [Boundary] -> Place -> [Place]
+-- return all extensions by boundary
+superSpaces :: Boundary -> Place -> [Place]
 superSpaces = undefined
- -- find paths from some outside region
- -- add to paths and eliminate possible division points
- -- by dividing each path in each place
- -- uniquefy by equivalence
 
 -- optimize this
 equivPerm :: Perm p => p -> p
