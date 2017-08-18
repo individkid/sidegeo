@@ -102,8 +102,7 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
-enum FileState {FileIdle,FilePlane,FilePoint,FileWait} fileState = 0;
-int fileOwner = 0;
+enum Atomic {None,Only};
 struct File {
 #ifdef BRINGUP
     int debug;
@@ -112,7 +111,9 @@ struct File {
     int handle;
     char buffer[256];
     int capital;
-    int state;};
+    int state;
+    enum Atomic mode;};
+struct File *fileOwner = 0;
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
 struct Chars {DECLARE_QUEUE(char)} configs = {0};
 struct Ints {DECLARE_QUEUE(int)} indices = {0};
@@ -136,7 +137,6 @@ enum Shader { // one value per shader; state for bringup
     Repoint, // reconstruct from versor 0
     Shaders};
 enum Shader dishader = Diplane;
-enum Shader coshader = Coplane;
 enum Shader pershader = Perplane;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
@@ -1931,18 +1931,6 @@ enum Action bringup()
 }
 #endif
 
-int bufferFile(struct Buffer *buffer, int todo, void *data)
-{
-    if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return 0;}
-    if (buffer->done+todo <= buffer->room) {
-        int size = buffer->dimn*bufferType(buffer->type);
-        glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-        glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        buffer->done += todo;}
-    return 1;
-}
-
 void rdlckFile(struct File *file)
 {
     struct flock lock = {0};
@@ -1988,22 +1976,57 @@ void fileError(struct File *file, const char *msg) {
     *file = initial;
 }
 
-int filePoint(struct File *file, enum Event event, int *changed, int index, float *vector)
+int bufferFile(struct Buffer *buffer, int todo, void *data)
+{
+    if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return 0;}
+    if (buffer->done+todo <= buffer->room) {
+        int size = buffer->dimn*bufferType(buffer->type);
+        glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+        glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        buffer->done += todo;}
+    return 1;
+}
+
+enum Action filePlane(struct File *file, int index, float *vector)
+{
+    GLfloat buffer[3];
+    GLuint versor[1];
+    int state = 0;
+    for (int i = 0; i < 3; i++) buffer[i] = vector[i]; versor[0] = index;
+    if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) file->state++;
+    if (state++ == file->state && bufferFile(&versorBuf,1,versor)) file->state++;
+    if (state++ == file->state) {
+        enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);
+        return Advance;}
+    return Defer;
+}
+
+enum Action fileClassify(struct File *file)
 {
     int state = 0;
-    if (fileState == FilePlane && fileOwner == file->index) return 0;
-    if (state++ == file->state && fileState == FileIdle) {
-        fileState = FilePoint; fileOwner = file->index; file->state++;}
+    if (state++ == file->state) {file->state++; ENQUE(classify,Classify)}
+    if (state++ == file->state && sideBuf.done >= sideSub.done) {
+        enqueCommand(0); enqueEvent(Classify);
+        file->state++; return Reque;}
+    if (state++ == file->state) {file->state = 0; return Advance;}
+    return Defer;
+}
+
+enum Action filePoint(struct File *file, enum Event event, int index, float *vector)
+{
+    int state = 0;
     if (state++ == file->state) {
-        *changed = 1; *file->buffer = 0; state--; file->state++;
-        enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index);}
+        enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index);
+        file->state++;}
     if (state++ == file->state) {
         GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
         limit[Adplane] = 0; enqueLocate(buffer); file->state++;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        *changed = 1; file->state = 0; *file->buffer = 0; fileState = FileIdle;
-        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(index);}
-    return 1;
+        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(index);
+        file->state++; return Reque;}
+    if (state++ == file->state) {file->state = 0; return Advance;}
+    return Defer;
 }
 
 #define FILEERROR(MSG) fileError(file,MSG); dequeFile(); return;
@@ -2049,32 +2072,39 @@ void configure()
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
-    if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
-        GLfloat buffer[3];
-        GLuint versor[1];
-        int state = 0;
-        for (int i = 0; i < 3; i++) buffer[i] = vector[i]; versor[0] = index;
-        if (fileState == FilePoint && fileOwner == file->index) exitErrstr("file error\n");
-        if (fileState == FileWait && fileOwner == file->index) exitErrstr("file error\n");
-        if (state++ == file->state && fileState == FileIdle) {
-            fileState = FilePlane; fileOwner = file->index; file->state++;}
-        if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) file->state++;
-        if (state++ == file->state && bufferFile(&versorBuf,1,versor)) file->state++;
-        if (state++ == file->state) {
-            changed = 1; file->state = 0; *file->buffer = 0; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);}}
-    else if (sscanf(file->buffer," --classif%c", &suffix) == 1 && suffix == 'y') {
-        if (fileState != FilePlane && fileState != FileWait) {FILEERROR("file error\n")}
-        if (fileOwner != file->index) {FILEERROR("file error\n")}
-        if (fileState == FilePlane) {fileState = FileWait; ENQUE(classify,Classify)}
-        if (sideBuf.done >= sideSub.done) {
-            changed = 1; fileState = FileIdle; *file->buffer = 0; enqueCommand(0); enqueEvent(Classify);}}
+    if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3 &&
+        fileOwner != 0 && fileOwner != file) {changed = 1;}
+    else if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
+        fileOwner = file;
+        SWITCH(filePlane(file,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; file->mode = Only;}
+        CASE(Reque) changed = 1;
+        CASE(Defer) changed = 0;
+        DEFAULT(FILEERROR("file error\n"))}
+    else if (file->mode == Only && fileOwner != file) exitErrstr("config too atomic\n");
+    else if (file->mode == Only) {
+        SWITCH(fileClassify(file),Advance) {changed = 1; file->state = 0; file->mode = None; fileOwner = 0;}
+        CASE(Reque) changed = 1;
+        CASE(Defer) changed = 0;
+        DEFAULT(FILEERROR("file error\n"))}
     else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e') {
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
+    else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4 &&
+        fileOwner != 0 && fileOwner != file) {changed = 1;}
     else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4) {
-        if (!filePoint(file,Fill,&changed,index,vector)) {FILEERROR("file error\n")}}
+        fileOwner = file;
+        SWITCH(filePoint(file,Fill,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; fileOwner = 0;}
+        CASE(Reque) changed = 1;
+        CASE(Defer) changed = 0;
+        DEFAULT(FILEERROR("file error\n"))}
+    else if (sscanf(file->buffer," --hollow %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4 &&
+        fileOwner != 0 && fileOwner != file) {changed = 1;}
     else if (sscanf(file->buffer," --hollow %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4) {
-        if (!filePoint(file,Hollow,&changed,index,vector)) {FILEERROR("file error\n")}}
+        fileOwner = file;
+        SWITCH(filePoint(file,Hollow,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; fileOwner = 0;}
+        CASE(Reque) changed = 1;
+        CASE(Defer) changed = 0;
+        DEFAULT(FILEERROR("file error\n"))}
     else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueInt(file->index); enqueKind(Face); enqueInt(index);}
