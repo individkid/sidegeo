@@ -41,11 +41,11 @@ foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaces" readFacesC :: IO CInt
-foreign import ccall "consumeSideBuf" consumeSideBufC :: IO (Ptr CInt)
-foreign import ccall "consumeSides" consumeSidesC :: IO CInt
+foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
+foreign import ccall "readSides" readSidesC :: IO CInt
 foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> IO (Ptr CInt)
 foreign import ccall "appendPointSub" appendPointSubC :: CInt -> IO (Ptr CInt)
-foreign import ccall "appendSideSub" appendSideSubC :: CInt -> IO (Ptr CInt)
+foreign import ccall "writeSideSub" writeSideSubC :: CInt -> IO (Ptr CInt)
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "error" errorC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO (Ptr CChar)
@@ -144,7 +144,7 @@ handlePlane index = let indexC = fromIntegral index in
  boundaries = (length boundary) - 2
  relate = map (\x -> base + (boundaries * (1 + x))) (indices (length point))
  in writeBuffer appendPointSubC (map (\(Boundary x) -> x) (concat point)) >>
- writeBuffer appendSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
+ writeBuffer writeSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
  appendQueue correlatesC correlateC relate >>
  appendQueue sidebandsC sidebandC [index] >>
  appendQueue (boundariesC indexC) (boundaryC indexC) [done] >>
@@ -163,7 +163,7 @@ handleClassifyF :: Int -> [Int] -> IO [Int]
 handleClassifyF done (index:todo) = let indexC = fromIntegral index in
  readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
  readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
- readBuffer consumeSidesC consumeSideBufC >>= \side ->
+ readBuffer readSidesC readSideBufC >>= \side ->
  readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
  boundary = map Boundary boundaryI
  place = decodePlace boundaryI placeI
@@ -248,7 +248,7 @@ handleInflateG place = let
 -- fill sideSub with all boundaries from given place
 handlePierce :: Int -> IO ()
 handlePierce index = let indexC = fromIntegral index in
- readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= writeBuffer appendSideSubC >> return ()
+ readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= writeBuffer writeSideSubC >> return ()
 
 handleFill :: Int -> Int -> IO ()
 handleFill = handleFillF (++)
@@ -258,7 +258,7 @@ handleFillF fun index boundI = let
  indexC = fromIntegral index
  bound = Boundary boundI in
  readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
- readBuffer consumeSidesC consumeSideBufC >>= \sideI -> let
+ readBuffer readSidesC readSideBufC >>= \sideI -> let
  embed = map Region embedI
  side = map Side sideI
  in handleInflateF (handleFillG fun bound embed side) index

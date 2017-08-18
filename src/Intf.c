@@ -231,7 +231,6 @@ struct Ints todos = {0};
 struct Ints relates = {0};
 struct Metas boundarys = {0};
 struct Ints *metas = 0;
-int sideDone = 0;
 struct Ints face2planes = {0};
 struct Ints plane2places = {0};
  // sized formatted packets of bytes
@@ -2974,15 +2973,14 @@ int readFaces()
     return faceSub.done*faceSub.dimn;
 }
 
-int *consumeSideBuf()
+int *readSideBuf()
 {
-    int done = sideDone; sideDone = sideBuf.done;
-    return getBuffer(&sideBuf) + done;
+    return getBuffer(&sideBuf);
 }
 
-int consumeSides()
+int readSides()
 {
-    return sideBuf.done-sideDone;
+    return sideBuf.done*sideBuf.dimn;
 }
 
 void putBuffer()
@@ -3019,9 +3017,9 @@ int *appendPointSub(int count)
     return setupBuffer(pointSub.done,count,&pointSub);
 }
 
-int *appendSideSub(int count)
+int *writeSideSub(int count)
 {
-    return setupBuffer(sideSub.done,count,&sideSub);
+    return setupBuffer(0,count,&sideSub);
 }
 
 char *print(int size)
