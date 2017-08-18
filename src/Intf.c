@@ -287,7 +287,7 @@ struct Commands {DECLARE_QUEUE(Command)} commands = {0};
 enum Event {Plane,Classify,Inflate,Pierce,Fill,Hollow,Remove,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-enum Kind {Boundary,Face};
+enum Kind {Place,Boundary,Face};
 struct Kinds {DECLARE_QUEUE(enum Kind)} kinds = {0};
  // argument for remove command
 struct Chars chars = {0};
@@ -1970,9 +1970,10 @@ int iswrlckFile(struct File *file)
 
 void fileError(struct File *file, const char *msg) {
     struct File initial = {0};
-    enqueMsgstr(msg); close(file->handle);
-    // TODO: clear out messages in indices and configs
-    // TODO: enque event to invalidate place boundaries faces planes for file->index
+    enqueCommand(0); enqueEvent(Remove); enqueKind(Place); enqueInt(file->index);
+    enqueMsgstr(msg);
+    close(file->handle);
+    if (fileOwner == file) fileOwner = 0;
     *file = initial;
 }
 
@@ -2080,15 +2081,16 @@ void configure()
         CASE(Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if (file->mode == Only && fileOwner != file) exitErrstr("config too atomic\n");
     else if (file->mode == Only) {
+        if (fileOwner != file) exitErrstr("config too atomic\n");
         SWITCH(fileClassify(file),Advance) {changed = 1; file->state = 0; file->mode = None; fileOwner = 0;}
         CASE(Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
     else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e') {
+        enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);
-        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);}
+        changed = 1; *file->buffer = 0;}
     else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4 &&
         fileOwner != 0 && fileOwner != file) {changed = 1;}
     else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4) {
@@ -2105,12 +2107,17 @@ void configure()
         CASE(Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
+    else if (sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e') {
+        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
+        enqueKind(Place); enqueInt(file->index);}
     else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
+        if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
-        enqueInt(file->index); enqueKind(Face); enqueInt(index);}
+        enqueKind(Face); enqueInt(index);}
     else if (sscanf(file->buffer," --remove plane %d", &index) == 1) {
+        if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
-        enqueInt(file->index); enqueKind(Boundary); enqueInt(index);}
+        enqueKind(Boundary); enqueInt(index);}
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
@@ -3049,7 +3056,8 @@ char *stringArgument()
 {
     if (!validKind()) return (char *)"";
     enum Kind kind = headKind(); dequeKind();
-    SWITCH(kind,Boundary) return (char *)"Boundary";
+    SWITCH(kind,Place) return (char *)"Place";
+    CASE(Boundary) return (char *)"Boundary";
     CASE(Face) return (char *)"Face";
     DEFAULT(exitErrstr("invalid kind\n");)
     return (char *)"";

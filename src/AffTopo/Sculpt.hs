@@ -277,6 +277,13 @@ handleHollow = handleFillF (\\)
 -- if string is Face, invalidate faceSub with base of given boundary
 -- if string is Boundary, invalidate faceSub involving boundary
 handleRemove :: String -> Int -> IO ()
+handleRemove "Place" index =
+ readBuffer readFacesC readFaceSubC >>= \face ->
+  readBuffer planeToPlacesC (planeToPlaceC 0) >>= \place -> let
+  face1 = filter (\x -> (place !! (head x)) /= index) (split face (repeat 6))
+  face2 = concat face1
+  in writeBuffer writeFaceSubC face2 >>
+  return ()
 handleRemove "Face" index =
  readBuffer readFacesC readFaceSubC >>= \face -> let
  face1 = filter (\x -> not ((head x) == index)) (split face (repeat 6))
