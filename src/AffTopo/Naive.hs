@@ -719,10 +719,6 @@ snakeSpace p q n s t u
 snakeSpaceF :: Place -> Place -> Place -> Bool
 snakeSpaceF s t u = (isSectionSpace u s) && (isSectionSpace u t)
 
--- return all extensions by boundary
-superSpaces :: Boundary -> Place -> [Place]
-superSpaces = undefined
-
 -- optimize this
 equivPerm :: Perm p => p -> p
 equivPerm p = equivPermF p (refinePerm p)

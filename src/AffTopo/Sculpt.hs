@@ -41,11 +41,16 @@ foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaces" readFacesC :: IO CInt
+foreign import ccall "readFrameSub" readFrameSubC :: IO (Ptr CInt)
+foreign import ccall "readFrames" readFramesC :: IO CInt
+foreign import ccall "readPointSub" readPointSubC :: IO (Ptr CInt)
+foreign import ccall "readPoints" readPointsC :: IO CInt
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
 foreign import ccall "readSides" readSidesC :: IO CInt
-foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> IO (Ptr CInt)
-foreign import ccall "appendPointSub" appendPointSubC :: CInt -> IO (Ptr CInt)
-foreign import ccall "writeSideSub" writeSideSubC :: CInt -> IO (Ptr CInt)
+foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writeFrameSub" writeFrameSubC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writePointSub" writePointSubC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writeSideSub" writeSideSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "error" errorC :: CInt -> IO (Ptr CChar)
 foreign import ccall "event" eventC :: IO (Ptr CChar)
@@ -87,8 +92,15 @@ peekBuffer offset ptr = offset >>= \offsetC -> ptr >>= peek . (plusPtr' (fromInt
 readSize :: IO CInt -> IO Int
 readSize size = size >>= return . fromIntegral
 
-writeBuffer :: (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
-writeBuffer fun list = fun (fromIntegral (length list)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
+writeBuffer :: (CInt -> CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
+writeBuffer fun list = fun 0 (fromIntegral (length list)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
+
+writeQueue :: (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
+writeQueue fun list = fun (fromIntegral (length list)) >>= \ptr -> pokeArray ptr (map fromIntegral list)
+
+appendBuffer :: IO CInt -> (CInt -> CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
+appendBuffer size fun list = size >>= \sizeC -> fun sizeC (fromIntegral (length list)) >>= \ptr ->
+ pokeArray ptr (map fromIntegral list)
 
 appendQueue :: IO CInt -> (CInt -> IO (Ptr CInt)) -> [Int] -> IO ()
 appendQueue size fun list = size >>= \sizeC -> fun (sizeC + (fromIntegral (length list))) >>=
@@ -143,8 +155,8 @@ handlePlane index = let indexC = fromIntegral index in
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
  relate = map (\x -> base + (boundaries * (1 + x))) (indices (length point))
- in writeBuffer appendPointSubC (map (\(Boundary x) -> x) (concat point)) >>
- writeBuffer writeSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
+ in writeBuffer writeSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
+ appendBuffer readPointsC writePointSubC (map (\(Boundary x) -> x) (concat point)) >>
  appendQueue correlatesC correlateC relate >>
  appendQueue sidebandsC sidebandC [index] >>
  appendQueue (boundariesC indexC) (boundaryC indexC) [done] >>
@@ -157,7 +169,7 @@ handleClassify =
  readSize sidebandsC >>= \todos ->
  readBuffer sidebandsC (sidebandC 0) >>=
  handleClassifyF (done - todos) >>=
- writeBuffer sidebandC
+ writeQueue sidebandC
 
 handleClassifyF :: Int -> [Int] -> IO [Int]
 handleClassifyF done (index:todo) = let indexC = fromIntegral index in
@@ -173,8 +185,8 @@ handleClassifyF done (index:todo) = let indexC = fromIntegral index in
  wrt = map (boundary \\) pair
  polyant = map2 (\(x,y) -> (x, Side y)) (handleClassifyG side wrt)
  (place1,embed1) = handleClassifyH (Boundary done) polyant place embed
- in writeBuffer (placeC indexC) (encodePlace place1) >>
- writeBuffer (embedC indexC) (map (\(Region x) -> x) embed1) >>
+ in writeQueue (placeC indexC) (encodePlace place1) >>
+ writeQueue (embedC indexC) (map (\(Region x) -> x) embed1) >>
  handleClassifyF (done+1) todo
 handleClassifyF _ todo = return todo
 
@@ -235,9 +247,9 @@ handleInflateF fun index = let
  valid3 :: [Int]
  valid3 = map head (split valid2 (repeat 6))
  -- append found faces
- in writeBuffer (embedC indexC) (map (\(Region x) -> x) embed) >>
+ in writeQueue (embedC indexC) (map (\(Region x) -> x) embed) >>
  writeBuffer writeFaceSubC valid2 >>
- writeBuffer faceToPlaneC valid3 >>
+ writeQueue faceToPlaneC valid3 >>
  return ()
 
 handleInflateG :: Place -> [Region]

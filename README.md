@@ -40,12 +40,13 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
 Configuration/history files consist of commands. Append commands, schedule commands, and user input append to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
   * --plane takes three scalars to set up for classify  
-  * --classify initializes representation from prior planes  
+  * --point takes vector for construct and classify  
   * --inflate initializes to facets between inside and outside regions  
   * --fill takes pierce point, removes face and adds outside faces  
   * --hollow takes pierce point, removes face and adds inside faces  
   * --remove takes buffer type and subscript to invalidate  
-  * --sample takes sidednesses to sample with similar embed  
+  * --sample takes per-boundary sidedness to sample with similar embed  
+  * --dual takes per-region sidedness to sample with similar embed  
   * --polyant specifies corner for subsequent commands  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  

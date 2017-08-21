@@ -102,7 +102,7 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
-enum Atomic {None,Only};
+enum Atomic {Multi,Only};
 struct File {
 #ifdef BRINGUP
     int debug;
@@ -2973,6 +2973,26 @@ int readFaces()
     return faceSub.done*faceSub.dimn;
 }
 
+int *readFrameSub()
+{
+    return getBuffer(&frameSub);
+}
+
+int readFrames()
+{
+    return frameSub.done*frameSub.dimn;
+}
+
+int *readPointSub()
+{
+    return getBuffer(&frameSub);
+}
+
+int readPoints()
+{
+    return pointSub.done*pointSub.dimn;
+}
+
 int *readSideBuf()
 {
     return getBuffer(&sideBuf);
@@ -3007,19 +3027,24 @@ int *setupBuffer(int start, int count, struct Buffer *buffer)
     enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count); return enlocInt(count);
 }
 
-int *writeFaceSub(int count)
+int *writeFaceSub(int start, int count)
 {
-    return setupBuffer(0,count,&faceSub);
+    return setupBuffer(start,count,&faceSub);
 }
 
-int *appendPointSub(int count)
+int *writeFrameSub(int start, int count)
 {
-    return setupBuffer(pointSub.done,count,&pointSub);
+    return setupBuffer(start,count,&frameSub);
 }
 
-int *writeSideSub(int count)
+int *writePointSub(int start, int count)
 {
-    return setupBuffer(0,count,&sideSub);
+    return setupBuffer(start,count,&pointSub);
+}
+
+int *writeSideSub(int start, int count)
+{
+    return setupBuffer(start,count,&sideSub);
 }
 
 char *print(int size)
