@@ -45,7 +45,6 @@ foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
 foreign import ccall "readFaces" readFacesC :: IO CInt
 foreign import ccall "readFrameSub" readFrameSubC :: IO (Ptr CInt)
 foreign import ccall "readFrames" readFramesC :: IO CInt
-foreign import ccall "readPointSub" readPointSubC :: IO (Ptr CInt)
 foreign import ccall "readPoints" readPointsC :: IO CInt
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
 foreign import ccall "readSides" readSidesC :: IO CInt
@@ -261,7 +260,7 @@ handleInflateF fun index = let
  in writeQueue (embedC indexC) (map (\(Region x) -> x) embed) >>
  writeBuffer writeFaceSubC valid2 >>
  writeQueue faceToPlaneC valid3 >>
- return ()
+ handleConform
 
 handleInflateG :: Place -> [Region]
 handleInflateG place = let
@@ -302,32 +301,42 @@ handleHollow = handleFillF (\\)
 handleRemove :: String -> Int -> IO ()
 handleRemove "Place" index =
  readBuffer readFacesC readFaceSubC >>= \face ->
-  readBuffer planeToPlacesC (planeToPlaceC 0) >>= \place -> let
-  face1 = filter (\x -> (place !! (head x)) /= index) (split face (repeat 6))
-  face2 = concat face1
-  in writeBuffer writeFaceSubC face2 >>
-  return ()
+ readBuffer planeToPlacesC (planeToPlaceC 0) >>= \place -> let
+ face1 = filter (\x -> (place !! (head x)) /= index) (split face (repeat 6))
+ face2 = concat face1
+ in writeBuffer writeFaceSubC face2 >>
+ -- TODO: remove from frameSub
+ return ()
 handleRemove "Face" index =
  readBuffer readFacesC readFaceSubC >>= \face -> let
  face1 = filter (\x -> not ((head x) == index)) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
+ -- TODO: remove from frameSub
  return ()
 handleRemove "Boundary" index =
  readBuffer readFacesC readFaceSubC >>= \face -> let
  face1 = filter (\x -> not (any (index ==) x)) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
- -- TODO: remove boundary from place embed boundary
+ -- TODO: remove boundary from place embed boundary planeToPlace planeToPoint
+ -- TODO: remove from frameSub
  return ()
 handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])
 
--- fill in frameSub
 handleConform :: IO ()
-handleConform = undefined
- -- read planeToPoint to get points on each plane
- -- read faceSub to get corners of frames
- -- intersect planeToPoint of corners to find subscript triples
- -- write subscript triples to frameSub
+handleConform =
+ readSize planeToPlacesC >>= \done ->
+ sequence (map (\x -> readQueue (planeToPointsC x) (planeToPointC x)) (indices done)) >>= \mapping ->
+ readBuffer readFacesC readFaceSubC >>= \face ->
+ writeBuffer writeFrameSubC (concat (handleConformF mapping (split face (repeat 6))))
 
-
+-- given per-boundary list of indices of vertices on the boundary
+-- given list of boundary 6-tuples [base,vertex,edge,endpoints]
+-- return triples ov vertex-indices [(0,1,2),(0,3,4),(0,3,5)]
+handleConformF :: [[Int]] -> [[Int]] -> [[Int]]
+handleConformF vertex boundary = let
+ tripled = map (\x -> [[x!!0,x!!1,x!!2],[x!!0,x!!3,x!!4],[x!!0,x!!3,x!!5]]) boundary
+ banged = map3 (\x -> vertex !! x) tripled
+ intersected = map2 (\x -> fold' (+\) (tail x) (head x)) banged
+ in map2 (\[x] -> x) intersected

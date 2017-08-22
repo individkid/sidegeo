@@ -233,8 +233,12 @@ struct Metas boundarys = {0};
 struct Ints *metas = 0;
 struct Ints face2planes = {0};
 struct Ints plane2places = {0};
-struct Ints plane2points = {0};
+struct Metas plane2points = {0};
  // sized formatted packets of bytes
+struct Ints faceSubs = {0};
+struct Ints frameSubs = {0};
+struct Arrays {DECLARE_QUEUE(int *)} arrays = {0};
+ // client copies of graphics arrays
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
     const char *name;
@@ -502,7 +506,13 @@ ACCESS_QUEUE(Face2Plane,int,face2planes)
 
 ACCESS_QUEUE(Plane2Place,int,plane2places)
 
-ACCESS_QUEUE(Plane2Point,int,plane2points)
+ACCESS_QUEUE(Plane2Point,struct Ints,plane2points)
+
+ACCESS_QUEUE(FaceSub,int,faceSubs)
+
+ACCESS_QUEUE(FrameSub,int,frameSubs)
+
+ACCESS_QUEUE(Array,int *,arrays)
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -1790,6 +1800,10 @@ void finalize()
     if (boundarys.base) {struct Metas initial = {0}; free(boundarys.base); boundarys = initial;}
     if (face2planes.base) {struct Ints initial = {0}; free(face2planes.base); face2planes = initial;}
     if (plane2places.base) {struct Ints initial = {0}; free(plane2places.base); plane2places = initial;}
+    if (plane2points.base) {struct Metas initial = {0}; free(plane2points.base); plane2points = initial;}
+    if (faceSubs.base) {struct Ints initial = {0}; free(faceSubs.base); faceSubs = initial;}
+    if (frameSubs.base) {struct Ints initial = {0}; free(frameSubs.base); frameSubs = initial;}
+    if (arrays.base) {struct Arrays initial = {0}; free(arrays.base); arrays = initial;}
     if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
     if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
     if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
@@ -2953,15 +2967,38 @@ int planeToPlaces()
     return sizePlane2Place();
 }
 
-int *planeToPoint(int size)
+int *planeToPoint(int index, int size)
 {
-    metas = &plane2points;
+    while (sizePlane2Point() <= index) {struct Ints initial = {0}; enquePlane2Point(initial);}
+    metas = arrayPlane2Point()+index;
     return accessQueue(size);
 }
 
-int planeToPoints()
+int planeToPoints(int index)
 {
-    return sizePlane2Point();
+    while (sizePlane2Point() <= index) {struct Ints initial = {0}; enquePlane2Point(initial);}
+    metas = arrayPlane2Point()+index;
+    return sizeMeta();
+}
+
+int *readFaceSub()
+{
+    return arrayFaceSub();
+}
+
+int readFaces()
+{
+    return sizeFaceSub();
+}
+
+int *readFrameSub()
+{
+    return arrayFrameSub();
+}
+
+int readFrames()
+{
+    return sizeFrameSub();
 }
 
 int *getBuffer(struct Buffer *buffer)
@@ -2975,31 +3012,6 @@ int *getBuffer(struct Buffer *buffer)
     int *buf = enlocInt(count); unlocInt(count);
     for (int i = 0; i < count; i++) buf[i] = temp[i];
     return buf;
-}
-
-int *readFaceSub()
-{
-    return getBuffer(&faceSub);
-}
-
-int readFaces()
-{
-    return faceSub.done*faceSub.dimn;
-}
-
-int *readFrameSub()
-{
-    return getBuffer(&frameSub);
-}
-
-int readFrames()
-{
-    return frameSub.done*frameSub.dimn;
-}
-
-int *readPointSub()
-{
-    return getBuffer(&frameSub);
 }
 
 int readPoints()
@@ -3022,43 +3034,48 @@ void putBuffer()
     struct Buffer *buffer = headBuffer();
     int start = arrayInt()[0];
     int count = arrayInt()[1];
-    int *buf = arrayInt()+2;
+    int extra = arrayInt()[2];
+    int *buf = headArray();
     int dimn = buffer->dimn;
     int type = buffer->type;
     int done = (start+count)/dimn;
     if ((start+count)%dimn) enqueErrstr("%s to mod\n",buffer->name);
     if (type != GL_UNSIGNED_INT) exitErrstr("%s too type\n",buffer->name);
-    if (done > buffer->room) {enqueWrap(buffer,done); requeBuffer(); relocInt(count+2); DEFER(putBuffer)}
+    if (done > buffer->room) {enqueWrap(buffer,done); requeBuffer(); relocInt(2+extra); requeArray(); DEFER(putBuffer)}
     GLuint temp[count]; for (int i = 0; i < count; i++) temp[i] = buf[i];
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
     glBufferSubData(GL_ARRAY_BUFFER,start*sizeof(GLuint),count*sizeof(GLuint),temp);
     glBindBuffer(GL_ARRAY_BUFFER,0);
-    buffer->done = done; dequeBuffer(); delocInt(count+2);
+    buffer->done = done; dequeBuffer(); delocInt(2+extra); dequeArray();
 }
 
-int *setupBuffer(int start, int count, struct Buffer *buffer)
+int *setupBuffer(int start, int count, struct Buffer *buffer, struct Ints *array)
 {
-    enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count); return enlocInt(count);
+    int *buf = 0;
+    enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count);
+    if (array) {metas = array; buf = accessQueue(start+count) + start; enqueInt(0);}
+    else {buf = enlocInt(count); enqueInt(count);}
+    enqueArray(buf); return buf;
 }
 
 int *writeFaceSub(int start, int count)
 {
-    return setupBuffer(start,count,&faceSub);
+    return setupBuffer(start,count,&faceSub,&faceSubs);
 }
 
 int *writeFrameSub(int start, int count)
 {
-    return setupBuffer(start,count,&frameSub);
+    return setupBuffer(start,count,&frameSub,&frameSubs);
 }
 
 int *writePointSub(int start, int count)
 {
-    return setupBuffer(start,count,&pointSub);
+    return setupBuffer(start,count,&pointSub,0);
 }
 
 int *writeSideSub(int start, int count)
 {
-    return setupBuffer(start,count,&sideSub);
+    return setupBuffer(start,count,&sideSub,0);
 }
 
 char *print(int size)
