@@ -37,6 +37,8 @@ foreign import ccall "correlates" correlatesC :: IO CInt
 foreign import ccall "faceToPlane" faceToPlaneC :: CInt -> IO (Ptr CInt)
 foreign import ccall "planeToPlace" planeToPlaceC :: CInt -> IO (Ptr CInt)
 foreign import ccall "planeToPlaces" planeToPlacesC :: IO CInt
+foreign import ccall "planeToPoint" planeToPointC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "planeToPoints" planeToPointsC :: CInt -> IO CInt
 foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
 foreign import ccall "readFaceSub" readFaceSubC :: IO (Ptr CInt)
@@ -85,6 +87,9 @@ split a (b:c) = (take b a):(split (drop b a) c)
 
 readBuffer :: IO CInt -> IO (Ptr CInt) -> IO [Int]
 readBuffer size ptr = size >>= \sizeC -> ptr >>= peekArray (fromIntegral sizeC) >>= return . (map fromIntegral)
+
+readQueue :: IO CInt -> (CInt -> IO (Ptr CInt)) -> IO [Int]
+readQueue size fun = size >>= \sizeC -> fun 0 >>= peekArray (fromIntegral sizeC) >>= return . (map fromIntegral)
 
 peekBuffer :: IO CInt -> IO (Ptr CInt) -> IO Int
 peekBuffer offset ptr = offset >>= \offsetC -> ptr >>= peek . (plusPtr' (fromIntegral offsetC)) >>= return . fromIntegral
@@ -136,6 +141,7 @@ handleEvent = do
   "Fill" -> handleFill <$> handleEventF <*> handleEventF >> return False
   "Hollow" -> handleHollow <$> handleEventF <*> handleEventF >> return False
   "Remove" ->  handleRemove <$> handleEventG <*> handleEventF >> return False
+  "Conform" -> handleConform >> return False
   "Error" -> return True
   "Done" -> return True
   _ -> printStr (concat ["unknown event ",(show event),"\n"]) >> return True
@@ -148,35 +154,40 @@ handleEventG = stringArgumentC >>= peekCString
 
 handlePlane :: Int -> IO ()
 handlePlane index = let indexC = fromIntegral index in
- readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= return . (map Boundary) >>= \boundary ->
+ readQueue (boundariesC indexC) (boundaryC indexC) >>= return . (map Boundary) >>= \boundary ->
  readSize planeToPlacesC >>= \done ->
- peekBuffer (fmap ((negate 1) +) correlatesC) (correlateC 0) >>= \base -> let
+ peekBuffer (fmap ((negate 1) +) correlatesC) (correlateC 0) >>= \base ->
+ readPointsC >>= \count -> let
  point = map ((Boundary done) :) (subsets 2 boundary)
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
  relate = map (\x -> base + (boundaries * (1 + x))) (indices (length point))
+ counts = map (count+) (indices (length point))
+ mapping = welldef (concat (map (\z -> zipWith (\x y -> (x !! z, y)) point counts) (indices 3)))
+ mapped = map (\(Boundary x, y) -> (fromIntegral x, map fromIntegral y)) mapping
  in writeBuffer writeSideSubC (map (\(Boundary x) -> x) (concat classify)) >>
  appendBuffer readPointsC writePointSubC (map (\(Boundary x) -> x) (concat point)) >>
  appendQueue correlatesC correlateC relate >>
  appendQueue sidebandsC sidebandC [index] >>
  appendQueue (boundariesC indexC) (boundaryC indexC) [done] >>
  appendQueue planeToPlacesC planeToPlaceC [index] >>
+ sequence_ (map (\(x,y) -> appendQueue (planeToPointsC x) (planeToPointC x) y) mapped) >>
  return ()
 
 handleClassify :: IO ()
 handleClassify =
  readSize planeToPlacesC >>= \done ->
  readSize sidebandsC >>= \todos ->
- readBuffer sidebandsC (sidebandC 0) >>=
+ readQueue sidebandsC sidebandC >>=
  handleClassifyF (done - todos) >>=
  writeQueue sidebandC
 
 handleClassifyF :: Int -> [Int] -> IO [Int]
 handleClassifyF done (index:todo) = let indexC = fromIntegral index in
- readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
- readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
+ readQueue (placesC indexC) (placeC indexC) >>= \placeI ->
+ readQueue (embedsC indexC) (embedC indexC) >>= \embedI ->
  readBuffer readSidesC readSideBufC >>= \side ->
- readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
+ readQueue (boundariesC indexC) (boundaryC indexC) >>= \boundaryI -> let
  boundary = map Boundary boundaryI
  place = decodePlace boundaryI placeI
  embed = map Region embedI
@@ -209,8 +220,8 @@ handleInflateF :: (Place -> [Region]) -> Int -> IO ()
 handleInflateF fun index = let
  indexC = fromIntegral index in
  readBuffer readFacesC readFaceSubC >>= \face ->
- readBuffer (placesC indexC) (placeC indexC 0) >>= \placeI ->
- readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= \boundaryI -> let
+ readQueue (placesC indexC) (placeC indexC) >>= \placeI ->
+ readQueue (boundariesC indexC) (boundaryC indexC) >>= \boundaryI -> let
  place = decodePlace boundaryI placeI
  -- replace embed for indicated place by all inside regions
  (boundary,space) = unzipPlace place
@@ -260,7 +271,7 @@ handleInflateG place = let
 -- fill sideSub with all boundaries from given place
 handlePierce :: Int -> IO ()
 handlePierce index = let indexC = fromIntegral index in
- readBuffer (boundariesC indexC) (boundaryC indexC 0) >>= writeBuffer writeSideSubC >> return ()
+ readQueue (boundariesC indexC) (boundaryC indexC) >>= writeBuffer writeSideSubC >> return ()
 
 handleFill :: Int -> Int -> IO ()
 handleFill = handleFillF (++)
@@ -269,7 +280,7 @@ handleFillF :: ([Region] -> [Region] -> [Region]) -> Int -> Int -> IO ()
 handleFillF fun index boundI = let
  indexC = fromIntegral index
  bound = Boundary boundI in
- readBuffer (embedsC indexC) (embedC indexC 0) >>= \embedI ->
+ readQueue (embedsC indexC) (embedC indexC) >>= \embedI ->
  readBuffer readSidesC readSideBufC >>= \sideI -> let
  embed = map Region embedI
  side = map Side sideI
@@ -310,3 +321,13 @@ handleRemove "Boundary" index =
  -- TODO: remove boundary from place embed boundary
  return ()
 handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])
+
+-- fill in frameSub
+handleConform :: IO ()
+handleConform = undefined
+ -- read planeToPoint to get points on each plane
+ -- read faceSub to get corners of frames
+ -- intersect planeToPoint of corners to find subscript triples
+ -- write subscript triples to frameSub
+
+

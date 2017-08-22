@@ -233,6 +233,7 @@ struct Metas boundarys = {0};
 struct Ints *metas = 0;
 struct Ints face2planes = {0};
 struct Ints plane2places = {0};
+struct Ints plane2points = {0};
  // sized formatted packets of bytes
 enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
 struct Buffer {
@@ -283,7 +284,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Plane,Classify,Inflate,Pierce,Fill,Hollow,Remove,Error,Done};
+enum Event {Plane,Conform,Inflate,Pierce,Fill,Hollow,Remove,Classify,Error,Done};
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 enum Kind {Place,Boundary,Face};
@@ -500,6 +501,8 @@ ACCESS_QUEUE(Meta,int,(*metas))
 ACCESS_QUEUE(Face2Plane,int,face2planes)
 
 ACCESS_QUEUE(Plane2Place,int,plane2places)
+
+ACCESS_QUEUE(Plane2Point,int,plane2points)
 
 ACCESS_QUEUE(Render,struct Render,renders)
 
@@ -2082,7 +2085,7 @@ void configure()
         DEFAULT(FILEERROR("file error\n"))}
     else if (file->mode == Only) {
         if (fileOwner != file) exitErrstr("config too atomic\n");
-        SWITCH(fileClassify(file),Advance) {changed = 1; file->state = 0; file->mode = None; fileOwner = 0;}
+        SWITCH(fileClassify(file),Advance) {changed = 1; file->state = 0; file->mode = Multi; fileOwner = 0;}
         CASE(Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
@@ -2948,6 +2951,17 @@ int *planeToPlace(int size)
 int planeToPlaces()
 {
     return sizePlane2Place();
+}
+
+int *planeToPoint(int size)
+{
+    metas = &plane2points;
+    return accessQueue(size);
+}
+
+int planeToPoints()
+{
+    return sizePlane2Point();
 }
 
 int *getBuffer(struct Buffer *buffer)

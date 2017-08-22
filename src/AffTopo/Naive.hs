@@ -116,6 +116,17 @@ domain m = map fst m
 range :: [(a,b)] -> [b]
 range m = map snd m
 
+welldef :: Ord a => Ord b => [(a,b)] -> [(a,[b])]
+welldef a = welldefF (checkSort a)
+
+welldefF :: Eq a => [(a,b)] -> [(a,[b])]
+welldefF ((a0,b0):(a1,b1):c2)
+ | a0 == a1 = (a0,b0:b2):c3
+ | otherwise = (a0,[b0]):(a2,b2):c3 where
+ (a2,b2):c3 = welldefF ((a1,b1):c2)
+welldefF [(a,b)] = [(a,[b])]
+welldefF [] = []
+
 -- ++ is as in Data.List except welldef
 (++) :: Ord a => [a] -> [a] -> [a]
 a ++ b = a `append` (b \\ a)
