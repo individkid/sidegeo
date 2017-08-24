@@ -111,7 +111,7 @@ struct File {
     int handle;
     char buffer[256];
     int versor[4];
-    int vector[4];
+    float vector[4];
     int capital;
     int state;
     enum Atomic mode;};
@@ -120,12 +120,15 @@ struct Files {DECLARE_QUEUE(struct File)} files = {0};
 struct Chars {DECLARE_QUEUE(char)} configs = {0};
 struct Ints {DECLARE_QUEUE(int)} indices = {0};
 int classifyDone = 0; // number of points classifed
-enum Click { // mode changed by mouse buttons
-    Init, // no pierce point; no saved position
-    Left, // pierce point calculated; no saved position
-    Matrix, // before matrix in play
-    Right, // pierce point calculated; position saved
-    Clicks} click = Init;
+enum Action { // return values for command helpers
+    Defer, // reque the command to wait
+    Reque, // yield to other commands
+    Restart, // change state and continue
+    Advance, // advance state and yield
+    Continue, // retain state and yield
+    Deque, // reset state and finish
+    Except, // reset state and abort
+    Actions};
 enum Shader { // one value per shader; state for bringup
     Diplane, // display planes
     Dipoint, // display points
@@ -140,15 +143,6 @@ enum Shader { // one value per shader; state for bringup
     Shaders};
 enum Shader dishader = Diplane;
 enum Shader pershader = Perplane;
-enum Action { // return values for command helpers
-    Defer, // reque the command to wait
-    Reque, // yield to other commands
-    Restart, // change state and continue
-    Advance, // advance state and yield
-    Continue, // retain state and yield
-    Deque, // reset state and finish
-    Except, // reset state and abort
-    Actions};
 enum Uniform { // one value per uniform; no associated state
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin
@@ -169,6 +163,12 @@ int restart[Shaders] = {0};
 int ready[Shaders] = {0};
 int reset[Shaders] = {0};
 GLfloat invalid[2] = {1.0e38,1.0e37};
+enum Click { // mode changed by mouse buttons
+    Init, // no pierce point; no saved position
+    Left, // pierce point calculated; no saved position
+    Matrix, // before matrix in play
+    Right, // pierce point calculated; position saved
+    Clicks} click = Init;
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Transform,Modify,Manipulate,
     Mouses,Rotate,Translate,Look,
@@ -292,7 +292,16 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
-enum Event {Plane,Conform,Inflate,Pierce,Fill,Hollow,Remove,Classify,Error,Done};
+enum Event {
+    Plane, // fill in pointSub and sideSub
+    Classify, // update symbolic representation
+    Inflate, // fill in faceSub and frameSub
+    Pierce, // repurpose sideSub for pierce point
+    Fill, // alter embed and refill faceSub and frameSub
+    Hollow, // alter embed and refill faceSub and frameSub
+    Remove, // pack out from faceSub and frameSub
+    Error, // terminate with prejudice
+    Done}; // terminate normally
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 enum Kind {Place,Boundary,Face};

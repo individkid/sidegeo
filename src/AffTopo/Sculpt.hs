@@ -141,7 +141,6 @@ handleEvent = do
   "Fill" -> handleFill <$> handleEventF <*> handleEventF >> return False
   "Hollow" -> handleHollow <$> handleEventF <*> handleEventF >> return False
   "Remove" ->  handleRemove <$> handleEventG <*> handleEventF >> return False
-  "Conform" -> handleConform >> return False
   "Error" -> return True
   "Done" -> return True
   _ -> printStr (concat ["unknown event ",(show event),"\n"]) >> return True
@@ -261,12 +260,29 @@ handleInflateF fun index = let
  in writeQueue (embedC indexC) (map (\(Region x) -> x) embed) >>
  writeBuffer writeFaceSubC valid2 >>
  writeQueue faceToPlaneC valid3 >>
- handleConform
+ handleInflateH
 
 handleInflateG :: Place -> [Region]
 handleInflateG place = let
  (boundary,space) = unzipPlace place
  in filter (\x -> not (oppositeOfRegionExists boundary x space)) (regionsOfSpace space)
+
+handleInflateH :: IO ()
+handleInflateH =
+ readSize planeToPlacesC >>= \done ->
+ sequence (map (\x -> readQueue (planeToPointsC x) (planeToPointC x)) (indices done)) >>= \mapping ->
+ readBuffer readFacesC readFaceSubC >>= \face ->
+ writeBuffer writeFrameSubC (concat (handleInflateI mapping (split face (repeat 6))))
+
+-- given per-boundary list of indices of vertices on the boundary
+-- given list of boundary 6-tuples [base,vertex,edge,endpoints]
+-- return triples of vertex-indices [(0,1,2),(0,3,4),(0,3,5)]
+handleInflateI :: [[Int]] -> [[Int]] -> [[Int]]
+handleInflateI vertex boundary = let
+ tripled = map (\x -> [[x!!0,x!!1,x!!2],[x!!0,x!!3,x!!4],[x!!0,x!!3,x!!5]]) boundary
+ banged = map3 (\x -> vertex !! x) tripled
+ intersected = map2 (\x -> fold' (+\) (tail x) (head x)) banged
+ in map2 (\[x] -> x) intersected
 
 -- fill sideSub with all boundaries from given place
 handlePierce :: Int -> IO ()
@@ -306,34 +322,17 @@ handleRemove "Place" index =
  face1 = filter (\x -> (place !! (head x)) /= index) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
- handleConform
+ handleInflateH
 handleRemove "Boundary" index =
  readBuffer readFacesC readFaceSubC >>= \face -> let
  face1 = filter (\x -> not (any (index ==) x)) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
- handleConform
+ handleInflateH
 handleRemove "Face" index =
  readBuffer readFacesC readFaceSubC >>= \face -> let
  face1 = filter (\x -> not ((head x) == index)) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
- handleConform
+ handleInflateH
 handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])
-
-handleConform :: IO ()
-handleConform =
- readSize planeToPlacesC >>= \done ->
- sequence (map (\x -> readQueue (planeToPointsC x) (planeToPointC x)) (indices done)) >>= \mapping ->
- readBuffer readFacesC readFaceSubC >>= \face ->
- writeBuffer writeFrameSubC (concat (handleConformF mapping (split face (repeat 6))))
-
--- given per-boundary list of indices of vertices on the boundary
--- given list of boundary 6-tuples [base,vertex,edge,endpoints]
--- return triples of vertex-indices [(0,1,2),(0,3,4),(0,3,5)]
-handleConformF :: [[Int]] -> [[Int]] -> [[Int]]
-handleConformF vertex boundary = let
- tripled = map (\x -> [[x!!0,x!!1,x!!2],[x!!0,x!!3,x!!4],[x!!0,x!!3,x!!5]]) boundary
- banged = map3 (\x -> vertex !! x) tripled
- intersected = map2 (\x -> fold' (+\) (tail x) (head x)) banged
- in map2 (\[x] -> x) intersected
