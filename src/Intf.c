@@ -110,6 +110,8 @@ struct File {
     int index;
     int handle;
     char buffer[256];
+    int versor[4];
+    int vector[4];
     int capital;
     int state;
     enum Atomic mode;};
@@ -143,6 +145,7 @@ enum Action { // return values for command helpers
     Reque, // yield to other commands
     Restart, // change state and continue
     Advance, // advance state and yield
+    Continue, // retain state and yield
     Deque, // reset state and finish
     Except, // reset state and abort
     Actions};
@@ -2012,12 +2015,12 @@ plane configuration sends Plane event to initilize pointSub and sideSub for one 
 just before next nonplane configuration, atomic configuration takes over
 */
 
-enum Action filePlane(struct File *file, int index, float *vector)
+enum Action filePlane(struct File *file, enum Event event)
 {
     GLfloat buffer[3];
     GLuint versor[1];
     int state = 0;
-    for (int i = 0; i < 3; i++) buffer[i] = vector[i]; versor[0] = index;
+    for (int i = 0; i < 3; i++) buffer[i] = file->vector[i]; versor[0] = file->versor[0];
     if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) return Restart;
     if (state++ == file->state && bufferFile(&versorBuf,1,versor)) return Restart;
     if (state++ == file->state) {
@@ -2033,15 +2036,16 @@ roll back pointBuf before sending Plane event to initializes pointSub and sideSu
 just before next nonpoint configuration, atomic configuration takes over
 */
 
-enum Action filePoint(struct File *file, int dummy, float *vector)
+enum Action filePoint(struct File *file, enum Event event)
 {
     GLfloat buffer[3];
     GLuint index[3];
     int state = 0;
-    for (int i = 0; i < 3; i++) buffer[i] = vector[i];
+    for (int i = 0; i < 3; i++) buffer[i] = file->vector[i];
     for (int i = 0; i < 3; i++) index[i] = pointSub.done-3+i;
-    if (state++ == file->state && bufferFile(&pointBuf,1,buffer))
-        return (pointBuf.done % 3 ? Advance : Restart);
+    if (state++ == file->state && bufferFile(&pointBuf,1,buffer)) return Continue;
+    if (state++ == file->state && bufferFile(&pointBuf,1,buffer)) return Continue;
+    if (state++ == file->state && bufferFile(&pointBuf,1,buffer)) return Restart;
     if (state++ == file->state && bufferFile(&planeSub,1,index)) return Restart;
     if (state++ == file->state) {ENQUE(construct,Construct) return Restart;}
     if (state++ == file->state && planeBuf.done >= planeSub.done) {
@@ -2056,7 +2060,7 @@ then classify fills sideBuf for one point at a time with the Adplane shader
 then Classify event encodes state from sideBuf
 */
 
-enum Action fileClassify(struct File *file)
+enum Action fileClassify(struct File *file, enum Event event)
 {
     int state = 0;
     if (state++ == file->state) {ENQUE(classify,Classify) return Restart;}
@@ -2076,71 +2080,62 @@ then the configuration fills sideBuf for the pierce point with the Adplane shade
 then the Fill or Hollow event changes embed and refills faceSub and frameSub
 */
 
-enum Action filePierce(struct File *file, enum Event event, int index, float *vector)
+enum Action filePierce(struct File *file, enum Event event)
 {
     int state = 0;
     if (state++ == file->state) {
         enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); return Restart;}
     if (state++ == file->state) {
-        GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
+        GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = file->vector[i];
         limit[Adplane] = 0; enqueLocate(buffer); return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(index); return Reque;}
+        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(file->versor[0]); return Reque;}
     if (state++ == file->state) return Advance;
     return Defer;
 }
 
-typedef enum Action (*fileModeFP0)(struct File *file, int index, float *vector);
-typedef enum Action (*fileModeFP1)(struct File *file);
-enum Action fileMode(struct File *file, const char *name, enum Atomic atomic, fileModeFP0 func0, fileModeFP1 func1)
+enum Action fileAdvance(struct File *file, enum Event event)
 {
-    int index = 0;
-    float vector[3] = {0};
-    int changed = 0;
-    const char *prefix = " --";
-    const char *postfix = " %d %f %f %f";
-    char format[strlen(prefix)+strlen(postfix)+strlen(name)+1];
-    format[0] = 0; strcat(strcat(strcat(format,prefix),name),postfix);
-    if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4 &&
-        fileOwner != 0 && fileOwner != file) changed = 0;
-    else if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4 &&
-        (file->mode == Multi || file->mode == atomic)) {
-        fileOwner = file; file->mode = atomic;
-        SWITCH(func0(file,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0;}
-        CASE(Restart) file->state++;
-        BRANCH(Reque) {file->state++; changed = 1;}
-        CASE(Defer) changed = 0;
-        DEFAULT(return Except;)}
-    else if (file->mode == atomic) {
-        if (fileOwner != file) exitErrstr("config too atomic\n");
-        SWITCH(func1(file),Advance) {changed = 1; file->state = 0; file->mode = Multi; fileOwner = 0;}
-        CASE(Restart) file->state++;
-        BRANCH(Reque) {file->state++; changed = 1;}
-        CASE(Defer) changed = 0;
-        DEFAULT(return Except;)}
-    else return Advance;
-    return (changed ? Reque : Defer);
+    return Advance;
 }
 
-typedef enum Action (*fileOwnFP)(struct File *file, enum Event event, int index, float *vector);
-enum Action fileOwn(struct File *file, const char *name, enum Event event, fileOwnFP func)
+int fileScan(struct File *file, const char *name, int ints, int floats)
 {
-    int index = 0;
-    float vector[3] = {0};
-    int changed = 0;
+    int result = 0;
     const char *prefix = " --";
-    const char *postfix = " %d %f %f %f";
-    char format[strlen(prefix)+strlen(postfix)+strlen(name)+1];
-    format[0] = 0; strcat(strcat(strcat(format,prefix),name),postfix);
-    if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4 &&
-        fileOwner != 0 && fileOwner != file) changed = 0;
-    else if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4) {
-        fileOwner = file;
-        SWITCH(func(file,event,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; fileOwner = 0;}
-        CASE(Restart) file->state++;
-        BRANCH(Reque) {file->state++; changed = 1;}
-        CASE(Defer) changed = 0;
-        DEFAULT(return Except;)}
+    const char *intfix = " %d%n";
+    const char *floatfix = " %f%n";
+    const char *suffix = "%c%n";
+    char check = 0;
+    int pos = 0;
+    int offset = 0;
+    char format[strlen(prefix)+strlen(name)-1+strlen(suffix)+1];
+    format[0] = 0; strcat(strcat(format,prefix),name);
+    format[strlen(format)-1] = 0; strcat(format,suffix);
+    if (sscanf(file->buffer,format,&check,&pos) == 1 && check == name[strlen(name)-1]) offset += pos; else return 0;
+    for (int i = 0; i < ints; i++) if (sscanf(file->buffer+offset,intfix,file->versor+i,&pos) == 1) offset += pos; else return 0;
+    for (int i = 0; i < floats; i++) if (sscanf(file->buffer+offset,floatfix,file->vector+i,&pos) == 1) offset += pos; else return 0;
+    return 1;
+}
+
+#define FILESWITCH(FUNC,EVENT,ADVANCE) \
+    SWITCH(FUNC(file,EVENT),Advance) {changed = 1; file->state = 0; ADVANCE} \
+    CASE(Continue) {changed = 1; file->state++; *file->buffer = 0;} \
+    CASE(Restart) file->state++; \
+    BRANCH(Reque) {changed = 1; file->state++;} \
+    CASE(Defer) changed = 0; \
+    DEFAULT(return Except;)
+typedef enum Action (*fileModeFP)(struct File *file, enum Event event);
+enum Action fileMode(struct File *file, const char *name, int ints, int floats,
+    enum Atomic atomic, enum Event event, fileModeFP func0, fileModeFP func1)
+{
+    int changed = 0;
+    if (fileScan(file,name,ints,floats) && fileOwner != 0 && fileOwner != file) changed = 0;
+    else if (fileScan(file,name,ints,floats) && (file->mode == Multi || file->mode == atomic)) {
+        fileOwner = file; file->mode = atomic;
+        FILESWITCH(func0,event,*file->buffer = 0;)}
+    else if (fileOwner == file && file->mode == atomic) {
+        FILESWITCH(func1,event,file->mode = Multi; fileOwner = 0;)}
     else return Advance;
     return (changed ? Reque : Defer);
 }
@@ -2188,11 +2183,11 @@ void configure()
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
-    if ((action = fileMode(file,"plane",Only1,filePlane,fileClassify)) != Advance) {
+    if ((action = fileMode(file,"plane",1,3,Only1,Plane,filePlane,fileClassify)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if ((action = fileMode(file,"point",Only2,filePoint,fileClassify)) != Advance) {
+    else if ((action = fileMode(file,"point",0,3,Only2,Plane,filePoint,fileClassify)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
@@ -2200,11 +2195,11 @@ void configure()
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; *file->buffer = 0;}
-    else if ((action = fileOwn(file,"fill",Fill,filePierce)) != Advance) {
+    else if ((action = fileMode(file,"fill",1,3,Multi,Fill,filePierce,fileAdvance)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if ((action = fileOwn(file,"hollow",Hollow,filePierce)) != Advance) {
+    else if ((action = fileMode(file,"hollow",1,3,Multi,Hollow,filePierce,fileAdvance)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
