@@ -102,10 +102,10 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
-enum Atomic {Multi,Only};
+enum Atomic {Multi,Only1,Only2};
 struct File {
 #ifdef BRINGUP
-    int debug;
+    int bringup;
 #endif
     int index;
     int handle;
@@ -141,7 +141,7 @@ enum Shader pershader = Perplane;
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
     Reque, // yield to other commands
-    Restart, // change state and yield
+    Restart, // change state and continue
     Advance, // advance state and yield
     Deque, // reset state and finish
     Except, // reset state and abort
@@ -280,8 +280,9 @@ struct Render {
     const char *name;
 }; // argument to render functions
 struct Renders {DECLARE_QUEUE(struct Render)} renders = {0};
-enum ProcessState {ProcessIdle,ProcessEnqued} processState = ProcessIdle;
-enum ClassifyState {ClassifyIdle,ClassifyEnqued} classifyState = ClassifyIdle;
+enum ProcessState {ProcessIdle,ProcessEnqued} processState = 0;
+enum ClassifyState {ClassifyIdle,ClassifyEnqued} classifyState = 0;
+enum ConstructState {ConstructIdle,ConstructEnqued} constructState = 0;
 int sequenceNumber = 0;
 struct Ints defers = {0};
  // sequence numbers of commands that are polling
@@ -1857,6 +1858,7 @@ size_t bufferType(int size);
 void enqueShader(enum Shader shader);
 void transformRight();
 void classify();
+void construct();
 void enqueLocate(GLfloat *point);
 
 #ifdef BRINGUP
@@ -2005,61 +2007,158 @@ int bufferFile(struct Buffer *buffer, int todo, void *data)
     return 1;
 }
 
+/*
+plane configuration sends Plane event to initilize pointSub and sideSub for one new boundary
+just before next nonplane configuration, atomic configuration takes over
+*/
+
 enum Action filePlane(struct File *file, int index, float *vector)
 {
     GLfloat buffer[3];
     GLuint versor[1];
     int state = 0;
     for (int i = 0; i < 3; i++) buffer[i] = vector[i]; versor[0] = index;
-    if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) file->state++;
-    if (state++ == file->state && bufferFile(&versorBuf,1,versor)) file->state++;
+    if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) return Restart;
+    if (state++ == file->state && bufferFile(&versorBuf,1,versor)) return Restart;
     if (state++ == file->state) {
-        enqueCommand(0); enqueEvent(Plane); enqueInt(file->index);
-        return Advance;}
+        enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
     return Defer;
 }
+
+/*
+point configuration appends to pointBuf
+if pointBuf is modulus 3, fill in planeSub, issue construct command and then Plane event
+construct command processes pointBuf and planeSub into planeBuf and versorBuf with Copoint shader
+roll back pointBuf before sending Plane event to initializes pointSub and sideSub
+just before next nonpoint configuration, atomic configuration takes over
+*/
+
+enum Action filePoint(struct File *file, int dummy, float *vector)
+{
+    GLfloat buffer[3];
+    GLuint index[3];
+    int state = 0;
+    for (int i = 0; i < 3; i++) buffer[i] = vector[i];
+    for (int i = 0; i < 3; i++) index[i] = pointSub.done-3+i;
+    if (state++ == file->state && bufferFile(&pointBuf,1,buffer))
+        return (pointBuf.done % 3 ? Advance : Restart);
+    if (state++ == file->state && bufferFile(&planeSub,1,index)) return Restart;
+    if (state++ == file->state) {ENQUE(construct,Construct) return Restart;}
+    if (state++ == file->state && planeBuf.done >= planeSub.done) {
+        pointBuf.done -= 3; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
+    return Defer;
+}
+
+/*
+atomic configuration picks up where plane and point configurations left off
+classify command processes planeBuf versorBuf and pointSub into pointBuf with Coplane shader
+then classify fills sideBuf for one point at a time with the Adplane shader
+then Classify event encodes state from sideBuf
+*/
 
 enum Action fileClassify(struct File *file)
 {
     int state = 0;
-    if (state++ == file->state) {file->state++; ENQUE(classify,Classify)}
+    if (state++ == file->state) {ENQUE(classify,Classify) return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(Classify);
-        file->state++; return Reque;}
-    if (state++ == file->state) {file->state = 0; return Advance;}
+        enqueCommand(0); enqueEvent(Classify); return Reque;}
+    if (state++ == file->state) return Advance;
     return Defer;
 }
 
-enum Action filePoint(struct File *file, enum Event event, int index, float *vector)
+/*
+inflate configuration sends Inflate event to initializes embed and fills faceSub and frameSub
+*/
+
+/*
+fill or hollow configuration sends Pierce event to initialize sideSub for all boundaries
+then the configuration fills sideBuf for the pierce point with the Adplane shader
+then the Fill or Hollow event changes embed and refills faceSub and frameSub
+*/
+
+enum Action filePierce(struct File *file, enum Event event, int index, float *vector)
 {
     int state = 0;
     if (state++ == file->state) {
-        enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index);
-        file->state++;}
+        enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); return Restart;}
     if (state++ == file->state) {
         GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = vector[i];
-        limit[Adplane] = 0; enqueLocate(buffer); file->state++;}
+        limit[Adplane] = 0; enqueLocate(buffer); return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(index);
-        file->state++; return Reque;}
-    if (state++ == file->state) {file->state = 0; return Advance;}
+        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(index); return Reque;}
+    if (state++ == file->state) return Advance;
     return Defer;
+}
+
+typedef enum Action (*fileModeFP0)(struct File *file, int index, float *vector);
+typedef enum Action (*fileModeFP1)(struct File *file);
+enum Action fileMode(struct File *file, const char *name, enum Atomic atomic, fileModeFP0 func0, fileModeFP1 func1)
+{
+    int index = 0;
+    float vector[3] = {0};
+    int changed = 0;
+    const char *prefix = " --";
+    const char *postfix = " %d %f %f %f";
+    char format[strlen(prefix)+strlen(postfix)+strlen(name)+1];
+    format[0] = 0; strcat(strcat(strcat(format,prefix),name),postfix);
+    if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4 &&
+        fileOwner != 0 && fileOwner != file) changed = 0;
+    else if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4 &&
+        (file->mode == Multi || file->mode == atomic)) {
+        fileOwner = file; file->mode = atomic;
+        SWITCH(func0(file,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0;}
+        CASE(Restart) file->state++;
+        BRANCH(Reque) {file->state++; changed = 1;}
+        CASE(Defer) changed = 0;
+        DEFAULT(return Except;)}
+    else if (file->mode == atomic) {
+        if (fileOwner != file) exitErrstr("config too atomic\n");
+        SWITCH(func1(file),Advance) {changed = 1; file->state = 0; file->mode = Multi; fileOwner = 0;}
+        CASE(Restart) file->state++;
+        BRANCH(Reque) {file->state++; changed = 1;}
+        CASE(Defer) changed = 0;
+        DEFAULT(return Except;)}
+    else return Advance;
+    return (changed ? Reque : Defer);
+}
+
+typedef enum Action (*fileOwnFP)(struct File *file, enum Event event, int index, float *vector);
+enum Action fileOwn(struct File *file, const char *name, enum Event event, fileOwnFP func)
+{
+    int index = 0;
+    float vector[3] = {0};
+    int changed = 0;
+    const char *prefix = " --";
+    const char *postfix = " %d %f %f %f";
+    char format[strlen(prefix)+strlen(postfix)+strlen(name)+1];
+    format[0] = 0; strcat(strcat(strcat(format,prefix),name),postfix);
+    if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4 &&
+        fileOwner != 0 && fileOwner != file) changed = 0;
+    else if (sscanf(file->buffer,format, &index, vector+0, vector+1, vector+2) == 4) {
+        fileOwner = file;
+        SWITCH(func(file,event,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; fileOwner = 0;}
+        CASE(Restart) file->state++;
+        BRANCH(Reque) {file->state++; changed = 1;}
+        CASE(Defer) changed = 0;
+        DEFAULT(return Except;)}
+    else return Advance;
+    return (changed ? Reque : Defer);
 }
 
 #define FILEERROR(MSG) fileError(file,MSG); dequeFile(); return;
 void configure()
 {
     struct File *file = arrayFile();
-    float vector[3] = {0};
     int location = 0;
-    int index = 0;
     char filename[256] = {0};
     int changed = 0;
     char suffix = 0;
+    int index = 0;
+    enum Action action = 0;
 #ifdef BRINGUP
-    if (file->debug == 1) {
+    if (file->bringup == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
-        CASE(Advance) {file->debug = 0; enqueShader(dishader); enqueCommand(transformRight);}
+        CASE(Advance) {file->bringup = 0; enqueShader(dishader); enqueCommand(transformRight);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
 #endif
     if (validIndex() && headIndex() == file->index && *file->buffer == 0) wrlckFile(file);
@@ -2089,38 +2188,24 @@ void configure()
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
-    if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3 &&
-        fileOwner != 0 && fileOwner != file) {changed = 1;}
-    else if (sscanf(file->buffer," --plane %d %f %f %f", &index, vector+0, vector+1, vector+2) == 3) {
-        fileOwner = file;
-        SWITCH(filePlane(file,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; file->mode = Only;}
-        CASE(Reque) changed = 1;
+    if ((action = fileMode(file,"plane",Only1,filePlane,fileClassify)) != Advance) {
+        SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if (file->mode == Only) {
-        if (fileOwner != file) exitErrstr("config too atomic\n");
-        SWITCH(fileClassify(file),Advance) {changed = 1; file->state = 0; file->mode = Multi; fileOwner = 0;}
-        CASE(Reque) changed = 1;
+    else if ((action = fileMode(file,"point",Only2,filePoint,fileClassify)) != Advance) {
+        SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
     else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e') {
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; *file->buffer = 0;}
-    else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4 &&
-        fileOwner != 0 && fileOwner != file) {changed = 1;}
-    else if (sscanf(file->buffer," --fill %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4) {
-        fileOwner = file;
-        SWITCH(filePoint(file,Fill,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; fileOwner = 0;}
-        CASE(Reque) changed = 1;
+    else if ((action = fileOwn(file,"fill",Fill,filePierce)) != Advance) {
+        SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if (sscanf(file->buffer," --hollow %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4 &&
-        fileOwner != 0 && fileOwner != file) {changed = 1;}
-    else if (sscanf(file->buffer," --hollow %d %f %f %f", &index, vector+0, vector+1, vector+2) == 4) {
-        fileOwner = file;
-        SWITCH(filePoint(file,Hollow,index,vector),Advance) {changed = 1; file->state = 0; *file->buffer = 0; fileOwner = 0;}
-        CASE(Reque) changed = 1;
+    else if ((action = fileOwn(file,"hollow",Hollow,filePierce)) != Advance) {
+        SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
     else if (sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e') {
@@ -2145,7 +2230,7 @@ void openFile(char *filename)
 {
     struct File file = {0};
 #ifdef BRINGUP
-    file.debug = 1;
+    file.bringup = 1;
 #endif
     file.handle = open(filename,O_RDWR);
     if (file.handle < 0) enqueErrstr("invalid file argument\n");
@@ -2181,12 +2266,19 @@ void classify()
         int size = pointBuf.dimn*bufferType(pointBuf.type);
         if (sideBuf.done >= sideSub.done) exitErrstr("classify too done\n");
         glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-        glGetBufferSubData(GL_ARRAY_BUFFER, (pointSub.done-1)*size, size, buffer);
+        glGetBufferSubData(GL_ARRAY_BUFFER, classifyDone*size, size, buffer);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         limit[Adplane] = arrayCorrelate()[classifyDone]; enqueLocate(buffer);
         classifyDone++;}
     if (sideBuf.done < sideSub.done) {DEFER(classify)}
     flush(Adplane); DEQUE(classify,Classify)
+}
+
+void construct()
+{
+    CHECK(construct,Construct)
+    if (planeBuf.done < planeSub.done) {enqueShader(Copoint); DEFER(construct)}
+    DEQUE(classify,Classify)
 }
 
 void wrap()
@@ -2327,8 +2419,8 @@ enum Action renderWait(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (feedback[0]->done+count < arg->draw) return Defer;
     if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = arg->draw;
-    if (arg->element && arg->draw < element[0]->done) return Restart;
-    if (!arg->element && arg->draw < vertex[0]->done) return Restart;
+    if (arg->element && arg->draw < element[0]->done) return Reque;
+    if (!arg->element && arg->draw < vertex[0]->done) return Reque;
     return Advance;
 }
 
@@ -2348,7 +2440,7 @@ void render()
         CASE(Advance) arg->state = RenderWait;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
-        SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Restart) {
+        SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
             arg->state = RenderEnqued;
             requeRender(); relocBuffer(size); REQUE(render)}
         CASE(Defer) {
@@ -3041,12 +3133,12 @@ void putBuffer()
     int done = (start+count)/dimn;
     if ((start+count)%dimn) enqueErrstr("%s to mod\n",buffer->name);
     if (type != GL_UNSIGNED_INT) exitErrstr("%s too type\n",buffer->name);
-    if (done > buffer->room) {enqueWrap(buffer,done); requeBuffer(); relocInt(2+extra); requeArray(); DEFER(putBuffer)}
+    if (done > buffer->room) {enqueWrap(buffer,done); requeBuffer(); relocInt(3+extra); requeArray(); DEFER(putBuffer)}
     GLuint temp[count]; for (int i = 0; i < count; i++) temp[i] = buf[i];
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
     glBufferSubData(GL_ARRAY_BUFFER,start*sizeof(GLuint),count*sizeof(GLuint),temp);
     glBindBuffer(GL_ARRAY_BUFFER,0);
-    buffer->done = done; dequeBuffer(); delocInt(2+extra); dequeArray();
+    buffer->done = done; dequeBuffer(); delocInt(3+extra); dequeArray();
 }
 
 int *setupBuffer(int start, int count, struct Buffer *buffer, struct Ints *array)

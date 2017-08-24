@@ -91,7 +91,8 @@ readQueue :: IO CInt -> (CInt -> IO (Ptr CInt)) -> IO [Int]
 readQueue size fun = size >>= \sizeC -> fun 0 >>= peekArray (fromIntegral sizeC) >>= return . (map fromIntegral)
 
 peekBuffer :: IO CInt -> IO (Ptr CInt) -> IO Int
-peekBuffer offset ptr = offset >>= \offsetC -> ptr >>= peek . (plusPtr' (fromIntegral offsetC)) >>= return . fromIntegral
+peekBuffer offset ptr = offset >>= \offsetC -> let offsetI = fromIntegral offsetC in
+ if offsetI < 0 then return 0 else ptr >>= peek . (plusPtr' offsetI) >>= return . fromIntegral
 
 readSize :: IO CInt -> IO Int
 readSize size = size >>= return . fromIntegral
@@ -305,23 +306,19 @@ handleRemove "Place" index =
  face1 = filter (\x -> (place !! (head x)) /= index) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
- -- TODO: remove from frameSub
- return ()
-handleRemove "Face" index =
- readBuffer readFacesC readFaceSubC >>= \face -> let
- face1 = filter (\x -> not ((head x) == index)) (split face (repeat 6))
- face2 = concat face1
- in writeBuffer writeFaceSubC face2 >>
- -- TODO: remove from frameSub
- return ()
+ handleConform
 handleRemove "Boundary" index =
  readBuffer readFacesC readFaceSubC >>= \face -> let
  face1 = filter (\x -> not (any (index ==) x)) (split face (repeat 6))
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
- -- TODO: remove boundary from place embed boundary planeToPlace planeToPoint
- -- TODO: remove from frameSub
- return ()
+ handleConform
+handleRemove "Face" index =
+ readBuffer readFacesC readFaceSubC >>= \face -> let
+ face1 = filter (\x -> not ((head x) == index)) (split face (repeat 6))
+ face2 = concat face1
+ in writeBuffer writeFaceSubC face2 >>
+ handleConform
 handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])
 
 handleConform :: IO ()
@@ -333,7 +330,7 @@ handleConform =
 
 -- given per-boundary list of indices of vertices on the boundary
 -- given list of boundary 6-tuples [base,vertex,edge,endpoints]
--- return triples ov vertex-indices [(0,1,2),(0,3,4),(0,3,5)]
+-- return triples of vertex-indices [(0,1,2),(0,3,4),(0,3,5)]
 handleConformF :: [[Int]] -> [[Int]] -> [[Int]]
 handleConformF vertex boundary = let
  tripled = map (\x -> [[x!!0,x!!1,x!!2],[x!!0,x!!3,x!!4],[x!!0,x!!3,x!!5]]) boundary
