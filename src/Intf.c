@@ -1848,14 +1848,18 @@ void process()
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print this message\n");
         enqueMsgstr("-H print manual page\n");
-        enqueMsgstr("-i <file> load and append to configuration file\n");
-        enqueMsgstr("-I <file> follow file for readonly polytope\n");
-        enqueMsgstr("-f <file> load polytope in format indicated by file extension\n");
-        enqueMsgstr("-F <file> save polytope in format indicated by file extension\n");
+        enqueMsgstr("-i <file> load polytope and adjust view\n");
+        enqueMsgstr("-I <file> load polytope and ignore view changes\n");
+        enqueMsgstr("-b <file> start file with reference to disabled jump\n");
+        enqueMsgstr("-B <file> append changes to make current same as given\n");
+        enqueMsgstr("-f <file> load from format indicated by file extension\n");
+        enqueMsgstr("-F <ext> save to format indicated by file extension\n");
+        enqueMsgstr("-o pack out garbage in graphics buffers\n");
+        enqueMsgstr("-O <ext> save minimal commands to produce polytopes\n");
         enqueMsgstr("-s resample current space to planes with same sidedness\n");
         enqueMsgstr("-S resample current polytope to space and planes\n");
-        enqueMsgstr("-o optimize away unused boundarie\n");
-        enqueMsgstr("-O truncate file to minimal commands for current polytope\n");
+        enqueMsgstr("-d display space and regions\n");
+        enqueMsgstr("-D display polyants\n");
         enqueMsgstr("-t run sanity check\n");
         enqueMsgstr("-T run thorough tests\n");}
     else if (strcmp(headOption(), "-i") == 0) {
