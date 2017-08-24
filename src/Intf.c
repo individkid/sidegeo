@@ -102,7 +102,6 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
-enum Atomic {Multi,Only1,Only2};
 struct File {
 #ifdef BRINGUP
     int bringup;
@@ -114,7 +113,7 @@ struct File {
     float vector[4];
     int capital;
     int state;
-    enum Atomic mode;};
+    const char *mode;};
 struct File *fileOwner = 0;
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
 struct Chars {DECLARE_QUEUE(char)} configs = {0};
@@ -2139,16 +2138,16 @@ int fileScan(struct File *file, const char *name, int ints, int floats)
     CASE(Defer) changed = 0; \
     DEFAULT(return Except;)
 typedef enum Action (*fileModeFP)(struct File *file, enum Event event);
-enum Action fileMode(struct File *file, const char *name, int ints, int floats,
-    enum Atomic atomic, enum Event event, fileModeFP func0, fileModeFP func1)
+enum Action fileMode(struct File *file, const char *name, int ints, int floats, enum Event event, fileModeFP func0, fileModeFP func1)
 {
     int changed = 0;
     if (fileScan(file,name,ints,floats) && fileOwner != 0 && fileOwner != file) changed = 0;
-    else if (fileScan(file,name,ints,floats) && (file->mode == Multi || file->mode == atomic)) {
-        fileOwner = file; file->mode = atomic;
+    else if (fileScan(file,name,ints,floats) && file->mode != 0 && file->mode != name) return Advance;
+    else if (fileScan(file,name,ints,floats)) {
+        fileOwner = file; file->mode = name;
         FILESWITCH(func0,event,*file->buffer = 0;)}
-    else if (fileOwner == file && file->mode == atomic) {
-        FILESWITCH(func1,event,file->mode = Multi; fileOwner = 0;)}
+    else if (file->mode == name) {
+        FILESWITCH(func1,event,file->mode = 0; fileOwner = 0;)}
     else return Advance;
     return (changed ? Reque : Defer);
 }
@@ -2196,38 +2195,38 @@ void configure()
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
-    if ((action = fileMode(file,"plane",1,3,Only1,Plane,filePlane,fileClassify)) != Advance) {
+    if ((action = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if ((action = fileMode(file,"point",0,3,Only2,Plane,filePoint,fileClassify)) != Advance) {
+    else if ((action = fileMode(file,"point",0,3,Plane,filePoint,fileClassify)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e') {
+    else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; *file->buffer = 0;}
-    else if ((action = fileMode(file,"fill",1,3,Multi,Fill,filePierce,fileAdvance)) != Advance) {
+    else if ((action = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if ((action = fileMode(file,"hollow",1,3,Multi,Hollow,filePierce,fileAdvance)) != Advance) {
+    else if ((action = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance)) != Advance) {
         SWITCH(action,Reque) changed = 1;
         CASE(Defer) changed = 0;
         DEFAULT(FILEERROR("file error\n"))}
-    else if (sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e') {
+    else if (sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueKind(Place); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --remove face %d", &index) == 1) {
+    else if (sscanf(file->buffer," --remove face %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueKind(Face); enqueInt(index);}
-    else if (sscanf(file->buffer," --remove plane %d", &index) == 1) {
+    else if (sscanf(file->buffer," --remove plane %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueKind(Boundary); enqueInt(index);}
-    else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2) {
+    else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2 && file->mode == 0) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
     else if (*file->buffer) {FILEERROR("file error\n")}
