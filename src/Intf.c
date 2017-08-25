@@ -234,6 +234,7 @@ struct Ints relates = {0};
 struct Metas boundarys = {0};
 struct Ints *metas = 0;
 struct Ints face2planes = {0};
+struct Ints frame2planes = {0};
 struct Ints plane2places = {0};
 struct Metas plane2points = {0};
  // sized formatted packets of bytes
@@ -515,6 +516,8 @@ ACCESS_QUEUE(Boundary,struct Ints,boundarys)
 ACCESS_QUEUE(Meta,int,(*metas))
 
 ACCESS_QUEUE(Face2Plane,int,face2planes)
+
+ACCESS_QUEUE(Frame2Plane,int,frame2planes)
 
 ACCESS_QUEUE(Plane2Place,int,plane2places)
 
@@ -1811,6 +1814,7 @@ void finalize()
     if (relates.base) {struct Ints initial = {0}; free(relates.base); relates = initial;}
     if (boundarys.base) {struct Metas initial = {0}; free(boundarys.base); boundarys = initial;}
     if (face2planes.base) {struct Ints initial = {0}; free(face2planes.base); face2planes = initial;}
+    if (frame2planes.base) {struct Ints initial = {0}; free(frame2planes.base); frame2planes = initial;}
     if (plane2places.base) {struct Ints initial = {0}; free(plane2places.base); plane2places = initial;}
     if (plane2points.base) {struct Metas initial = {0}; free(plane2points.base); plane2points = initial;}
     if (faceSubs.base) {struct Ints initial = {0}; free(faceSubs.base); faceSubs = initial;}
@@ -2010,7 +2014,7 @@ void fileError(struct File *file, const char *msg) {
     *file = initial;
 }
 
-int bufferFile(struct Buffer *buffer, int todo, void *data)
+int fileBuffer(struct Buffer *buffer, int todo, void *data)
 {
     if (buffer->room < buffer->done+todo) {enqueWrap(buffer,buffer->done+todo); return 0;}
     if (buffer->done+todo <= buffer->room) {
@@ -2033,8 +2037,8 @@ enum Action filePlane(struct File *file, enum Event event)
     GLuint versor[1];
     int state = 0;
     for (int i = 0; i < 3; i++) buffer[i] = file->vector[i]; versor[0] = file->versor[0];
-    if (state++ == file->state && bufferFile(&planeBuf,1,buffer)) return Restart;
-    if (state++ == file->state && bufferFile(&versorBuf,1,versor)) return Restart;
+    if (state++ == file->state && fileBuffer(&planeBuf,1,buffer)) return Restart;
+    if (state++ == file->state && fileBuffer(&versorBuf,1,versor)) return Restart;
     if (state++ == file->state) {
         enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
     return Defer;
@@ -2054,11 +2058,11 @@ enum Action filePoint(struct File *file, enum Event event)
     GLuint index[3];
     int state = 0;
     for (int i = 0; i < 3; i++) buffer[i] = file->vector[i];
-    for (int i = 0; i < 3; i++) index[i] = pointSub.done-3+i;
-    if (state++ == file->state && bufferFile(&pointBuf,1,buffer)) return Continue;
-    if (state++ == file->state && bufferFile(&pointBuf,1,buffer)) return Continue;
-    if (state++ == file->state && bufferFile(&pointBuf,1,buffer)) return Restart;
-    if (state++ == file->state && bufferFile(&planeSub,1,index)) return Restart;
+    for (int i = 0; i < 3; i++) index[i] = pointBuf.done-3+i;
+    if (state++ == file->state && fileBuffer(&pointBuf,1,buffer)) return Continue;
+    if (state++ == file->state && fileBuffer(&pointBuf,1,buffer)) return Continue;
+    if (state++ == file->state && fileBuffer(&pointBuf,1,buffer)) return Restart;
+    if (state++ == file->state && fileBuffer(&planeSub,1,index)) return Restart;
     if (state++ == file->state) {ENQUE(construct,Construct) return Restart;}
     if (state++ == file->state && planeBuf.done >= planeSub.done) {
         pointBuf.done -= 3; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
@@ -2101,8 +2105,7 @@ enum Action filePierce(struct File *file, enum Event event)
         GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = file->vector[i];
         limit[Adplane] = 0; enqueLocate(buffer); return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(file->versor[0]); return Reque;}
-    if (state++ == file->state) return Advance;
+        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(file->versor[0]); return Advance;}
     return Defer;
 }
 
@@ -3052,6 +3055,12 @@ int boundaries(int index)
 int *faceToPlane(int size)
 {
     metas = &face2planes;
+    return accessQueue(size);
+}
+
+int *frameToPlane(int size)
+{
+    metas = &frame2planes;
     return accessQueue(size);
 }
 

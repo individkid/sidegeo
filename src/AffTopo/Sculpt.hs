@@ -35,6 +35,7 @@ foreign import ccall "sidebands" sidebandsC :: IO CInt
 foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
 foreign import ccall "correlates" correlatesC :: IO CInt
 foreign import ccall "faceToPlane" faceToPlaneC :: CInt -> IO (Ptr CInt)
+foreign import ccall "frameToPlane" frameToPlaneC :: CInt -> IO (Ptr CInt)
 foreign import ccall "planeToPlace" planeToPlaceC :: CInt -> IO (Ptr CInt)
 foreign import ccall "planeToPlaces" planeToPlacesC :: IO CInt
 foreign import ccall "planeToPoint" planeToPointC :: CInt -> CInt -> IO (Ptr CInt)
@@ -272,6 +273,7 @@ handleInflateH =
  readSize planeToPlacesC >>= \done ->
  sequence (map (\x -> readQueue (planeToPointsC x) (planeToPointC x)) (indices done)) >>= \mapping ->
  readBuffer readFacesC readFaceSubC >>= \face ->
+ writeQueue frameToPlaneC (map head (split face (repeat 6))) >>
  writeBuffer writeFrameSubC (concat (handleInflateI mapping (split face (repeat 6))))
 
 -- given per-boundary list of indices of vertices on the boundary
