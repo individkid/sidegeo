@@ -2058,14 +2058,14 @@ enum Action filePoint(struct File *file, enum Event event)
     GLuint index[3];
     int state = 0;
     for (int i = 0; i < 3; i++) buffer[i] = file->vector[i];
-    for (int i = 0; i < 3; i++) index[i] = pointBuf.done-3+i;
-    if (state++ == file->state && fileBuffer(&pointBuf,1,buffer)) return Continue;
-    if (state++ == file->state && fileBuffer(&pointBuf,1,buffer)) return Continue;
-    if (state++ == file->state && fileBuffer(&pointBuf,1,buffer)) return Restart;
+    for (int i = 0; i < 3; i++) index[i] = pointBuf.done+i;
+    if (state++ == file->state && (pointBuf.done += 0, fileBuffer(&pointBuf,1,buffer))) {pointBuf.done -= 1; return Continue;}
+    if (state++ == file->state && (pointBuf.done += 1, fileBuffer(&pointBuf,1,buffer))) {pointBuf.done -= 2; return Continue;}
+    if (state++ == file->state && (pointBuf.done += 2, fileBuffer(&pointBuf,1,buffer))) return Restart;
     if (state++ == file->state && fileBuffer(&planeSub,1,index)) return Restart;
     if (state++ == file->state) {ENQUE(construct,Construct) return Restart;}
     if (state++ == file->state && planeBuf.done >= planeSub.done) {
-        pointBuf.done -= 3; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
+        pointBuf.done -= 3; planeSub.done -= 1; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
     return Defer;
 }
 
@@ -3127,6 +3127,11 @@ int readPoints()
     return pointSub.done*pointSub.dimn;
 }
 
+int readPlanes()
+{
+    return planeSub.done*planeSub.dimn;
+}
+
 int *readSideBuf()
 {
     return getBuffer(&sideBuf);
@@ -3179,6 +3184,11 @@ int *writeFrameSub(int start, int count)
 int *writePointSub(int start, int count)
 {
     return setupBuffer(start,count,&pointSub,0);
+}
+
+int *writePlaneSub(int start, int count)
+{
+    return setupBuffer(start,count,&planeSub,0);
 }
 
 int *writeSideSub(int start, int count)

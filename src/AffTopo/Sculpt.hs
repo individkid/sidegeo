@@ -47,11 +47,13 @@ foreign import ccall "readFaces" readFacesC :: IO CInt
 foreign import ccall "readFrameSub" readFrameSubC :: IO (Ptr CInt)
 foreign import ccall "readFrames" readFramesC :: IO CInt
 foreign import ccall "readPoints" readPointsC :: IO CInt
+foreign import ccall "readPlanes" readPlanesC :: IO CInt
 foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
 foreign import ccall "readSides" readSidesC :: IO CInt
 foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writeFrameSub" writeFrameSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writePointSub" writePointSubC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "writePlaneSub" writePlaneSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writeSideSub" writeSideSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
 foreign import ccall "error" errorC :: CInt -> IO (Ptr CChar)
@@ -157,7 +159,7 @@ handlePlane index = let indexC = fromIntegral index in
  readQueue (boundariesC indexC) (boundaryC indexC) >>= return . (map Boundary) >>= \boundary ->
  readSize planeToPlacesC >>= \done ->
  peekBuffer (fmap ((negate 1) +) correlatesC) (correlateC 0) >>= \base ->
- readPointsC >>= \count -> let
+ readPointsC >>= return . (\x -> div x 3) >>= \count -> let
  point = map ((Boundary done) :) (subsets 2 boundary)
  classify = map (boundary \\) point
  boundaries = (length boundary) - 2
@@ -172,7 +174,15 @@ handlePlane index = let indexC = fromIntegral index in
  appendQueue (boundariesC indexC) (boundaryC indexC) [done] >>
  appendQueue planeToPlacesC planeToPlaceC [index] >>
  sequence_ (map (\(x,y) -> appendQueue (planeToPointsC x) (planeToPointC x) y) mapped) >>
- return ()
+ readPlanesC >>= handlePlaneF
+
+handlePlaneF :: CInt -> IO ()
+handlePlaneF count
+ | count < 3 = return ()
+ | count == 3 = sequence (map (\x -> readQueue (planeToPointsC x) (planeToPointC x)) (indices 4)) >>=
+  (writeBuffer writePlaneSubC) . concat
+ | otherwise = readQueue (planeToPointsC count) (planeToPointC count) >>=
+  appendBuffer readPlanesC writePlaneSubC
 
 handleClassify :: IO ()
 handleClassify =
