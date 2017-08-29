@@ -7,7 +7,7 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -i \<file> load polytope and adjust view  
   * -I \<file> load polytope and ignore view changes  
   * -b \<file> start file with reference to disabled jump  
-  * -B \<file> <ext> backup and merge all to one (re)opened  
+  * -B \<file> \<ext> backup and merge all to one (re)opened  
   * -f \<file> load from format indicated by file extension  
   * -F \<ext> save to format indicated by file extension  
   * -o pack out garbage in graphics buffers  
