@@ -2063,7 +2063,7 @@ enum Action filePoint(struct File *file, enum Event event)
     if (state++ == file->state && (pointBuf.done += 1, fileBuffer(&pointBuf,1,buffer))) {pointBuf.done -= 2; return Continue;}
     if (state++ == file->state && (pointBuf.done += 2, fileBuffer(&pointBuf,1,buffer))) return Restart;
     if (state++ == file->state && fileBuffer(&planeSub,1,index)) return Restart;
-    if (state++ == file->state) {ENQUE(construct,Construct) return Restart;}
+    if (state++ == file->state) {enqueShader(Copoint); return Restart;}
     if (state++ == file->state && planeBuf.done >= planeSub.done) {
         pointBuf.done -= 3; planeSub.done -= 1; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
     return Defer;
@@ -2282,13 +2282,6 @@ void classify()
         classifyDone++;}
     if (sideBuf.done < sideSub.done) {DEFER(classify)}
     flush(Adplane); DEQUE(classify,Classify)
-}
-
-void construct()
-{
-    CHECK(construct,Construct)
-    if (planeBuf.done < planeSub.done) {enqueShader(Copoint); DEFER(construct)}
-    DEQUE(classify,Classify)
 }
 
 void wrap()
