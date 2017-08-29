@@ -1854,7 +1854,7 @@ void process()
         enqueMsgstr("-i <file> load polytope and adjust view\n");
         enqueMsgstr("-I <file> load polytope and ignore view changes\n");
         enqueMsgstr("-b <file> start file with reference to disabled jump\n");
-        enqueMsgstr("-B <file> append changes to make current same as given\n");
+        enqueMsgstr("-B <file> <ext> backup and merge all to one (re)opened\n");
         enqueMsgstr("-f <file> load from format indicated by file extension\n");
         enqueMsgstr("-F <ext> save to format indicated by file extension\n");
         enqueMsgstr("-o pack out garbage in graphics buffers\n");
