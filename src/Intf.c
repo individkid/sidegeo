@@ -159,8 +159,6 @@ int output[Shaders] = {0};
 int limit[Shaders] = {0};
 int started[Shaders] = {0};
 int restart[Shaders] = {0};
-int ready[Shaders] = {0};
-int reset[Shaders] = {0};
 GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
@@ -2168,6 +2166,7 @@ void configure()
 #ifdef BRINGUP
     if (file->bringup == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
+        CASE(Defer) {requeFile(); REQUE(configure)}
         CASE(Advance) {file->bringup = 0; enqueShader(dishader); enqueCommand(transformRight);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
 #endif
@@ -2251,12 +2250,6 @@ void openFile(char *filename)
  * offload work to graphics engines
  */
 
-void flush(enum Shader shader)
-{
-    if (!ready[shader] && !reset[shader]) {glFlush(); ready[shader] = 1;}
-    if (ready[shader] && reset[shader]) {glFlush(); ready[shader] = 0;}
-}
-
 void enqueLocate(GLfloat *point)
 {
     glUseProgram(program[Adplane]);
@@ -2281,7 +2274,7 @@ void classify()
         limit[Adplane] = arrayCorrelate()[classifyDone]; enqueLocate(buffer);
         classifyDone++;}
     if (sideBuf.done < sideSub.done) {DEFER(classify)}
-    flush(Adplane); DEQUE(classify,Classify)
+    DEQUE(classify,Classify)
 }
 
 void wrap()
@@ -2356,14 +2349,14 @@ enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (arg->element && element[0]->dimn != bufferPrimitive(input[arg->shader])) exitErrstr("%s too primitive\n",arg->name);
     if (!arg->element && bufferPrimitive(input[arg->shader]) != 1) exitErrstr("%s too primitive\n",arg->name);
     if (arg->feedback && bufferPrimitive(output[arg->shader]) != 1) exitErrstr("%s too primitive\n",arg->name);
-    int defer = 0;
+    int reque = 0;
     if (arg->element) for (int i = 0; i < arg->feedback; i++) {
         if (feedback[i]->done > element[0]->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < element[0]->done) {enqueWrap(feedback[i],element[0]->done); defer = 1;}}
+        if (feedback[i]->room < element[0]->done) {enqueWrap(feedback[i],element[0]->done); reque = 1;}}
     if (!arg->element) if (arg->vertex) for (int i = 0; i < arg->feedback; i++) {
         if (feedback[i]->done > vertex[0]->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < vertex[0]->done) {enqueWrap(feedback[i],vertex[0]->done); defer = 1;}}
-    return (defer?Defer:Advance);
+        if (feedback[i]->room < vertex[0]->done) {enqueWrap(feedback[i],vertex[0]->done); reque = 1;}}
+    return (reque?Reque:Advance);
 }
 
 enum Action renderDraw(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
@@ -2422,8 +2415,6 @@ enum Action renderWait(struct Render *arg, struct Buffer **vertex, struct Buffer
     if (feedback[0]->done+count < arg->draw) return Defer;
     if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = arg->draw;
-    if (arg->element && arg->draw < element[0]->done) return Reque;
-    if (!arg->element && arg->draw < vertex[0]->done) return Reque;
     return Advance;
 }
 
@@ -2433,25 +2424,19 @@ void render()
     struct Buffer **buf = arrayBuffer();
     int size = arg->vertex+arg->element+arg->feedback;
     SWITCH(arg->state,RenderEnqued) {
-        SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            requeRender(); relocBuffer(size); DEFER(render)}
+        SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
+            requeRender(); relocBuffer(size); REQUE(render)}
         CASE(Advance) arg->state = RenderDraw;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderDraw) {
-        SWITCH(renderDraw(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            requeRender(); relocBuffer(size); DEFER(render)}
-        CASE(Advance) arg->state = RenderWait;
+        SWITCH(renderDraw(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Advance) arg->state = RenderWait;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
-        SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
-            arg->state = RenderEnqued;
-            requeRender(); relocBuffer(size); REQUE(render)}
-        CASE(Defer) {
+        SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
             requeRender(); relocBuffer(size); DEFER(render)}
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
-    if (!arg->feedback) flush(arg->shader);
     if (arg->restart && restart[arg->shader]) {restart[arg->shader] = 0; enqueShader(arg->shader);}
     started[arg->shader]--; dequeRender(); delocBuffer(size);
 }
@@ -2473,7 +2458,7 @@ void pierce()
         if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
             xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
     if (zFound<invalid[1]) {xPos = xFound; yPos = yFound; zPos = zFound;}
-    flush(pershader); started[pershader]--;
+    started[pershader]--;
 }
 
 #ifdef DEBUG
@@ -2494,7 +2479,7 @@ void debug()
             if (debugBuf.dimn > 1) enqueMsgstr("\n");}
         if (prim > 1 && i < debugBuf.dimn-1) enqueMsgstr("\n");}\
     enqueMsgstr("---\n");
-    flush(DEBUGS); started[DEBUGS]--;
+    started[DEBUGS]--;
 }
 #endif
 
@@ -2815,8 +2800,6 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
-    if (!ready[pershader]) {enqueMsgstr("pershader not ready\n"); return;}
-    if (!ready[dishader]) {enqueMsgstr("dishader not ready\n"); return;}
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
@@ -2862,8 +2845,6 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
-    if (!ready[pershader]) return;
-    if (!ready[dishader]) return;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) 
@@ -2901,8 +2882,6 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     wPos = wPos + yoffset;
-    if (!ready[pershader]) return;
-    if (!ready[dishader]) return;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) {/*ignore*/}
@@ -2952,8 +2931,6 @@ void displaySize(GLFWwindow *window, int width, int height)
     glViewport(0, 0, xSiz, ySiz);
 #endif
     aspect = (float)ySiz/(float)xSiz;
-    if (!ready[pershader]) return;
-    if (!ready[dishader]) return;
     for (enum Shader i = 0; i < Shaders; i++) {
         glUseProgram(program[i]);
         glUniform1f(uniform[i][Aspect],aspect);}
@@ -2963,8 +2940,6 @@ void displaySize(GLFWwindow *window, int width, int height)
 
 void displayRefresh(GLFWwindow *window)
 {
-    if (!ready[pershader]) return;
-    if (!ready[dishader]) return;
     enqueShader(dishader);
 }
 
