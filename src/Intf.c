@@ -109,7 +109,7 @@ struct File {
     int index;
     int handle;
     char buffer[256];
-    int versor[4];
+    int versor[7];
     float vector[4];
     int capital;
     int state;
@@ -231,6 +231,7 @@ struct Ints todos = {0};
 struct Ints relates = {0};
 struct Metas boundarys = {0};
 struct Ints *metas = 0;
+struct Metas *metaptrs = 0;
 struct Ints face2planes = {0};
 struct Ints frame2planes = {0};
 struct Ints plane2places = {0};
@@ -512,6 +513,8 @@ ACCESS_QUEUE(Correlate,int,relates)
 ACCESS_QUEUE(Boundary,struct Ints,boundarys)
 
 ACCESS_QUEUE(Meta,int,(*metas))
+
+ACCESS_QUEUE(Metaptr,struct Ints,(*metaptrs))
 
 ACCESS_QUEUE(Face2Plane,int,face2planes)
 
@@ -2153,6 +2156,70 @@ enum Action fileMode(struct File *file, const char *name, int ints, int floats, 
     return (changed ? Reque : Defer);
 }
 
+enum Action fileTest(struct File *file, const char *name, struct Buffer *buffer)
+{
+    SWITCH(buffer->type,GL_FLOAT)
+    if (sizeof(file->vector)/sizeof(file->vector[0]) < buffer->dimn) exitErrstr("test too size");
+    if (fileScan(file, name, 1, buffer->dimn)) {
+        if (file->versor[0] < 0) exitErrstr("test too index\n");
+        if (buffer->done > file->versor[0]) {
+            GLfloat actual[buffer->dimn];
+            int size = buffer->dimn*bufferType(buffer->type);
+            glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+            glGetBufferSubData(GL_ARRAY_BUFFER, file->versor[0]*size, size, actual);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            for (int i = 0; i < buffer->dimn; i++) if (actual[i] != file->vector[i]) enqueErrstr("test too actual\n");}
+        else enqueErrstr("test too index\n");}
+    else return Advance;
+    CASE(GL_UNSIGNED_INT)
+    if (sizeof(file->versor)/sizeof(file->versor[0]) < 1+buffer->dimn) exitErrstr("test too size");
+    if (fileScan(file, name, 1+buffer->dimn, 0)) {
+        if (file->versor[0] < 0) exitErrstr("test too index\n");
+        if (buffer->done > file->versor[0]) {
+            GLuint actual[buffer->dimn];
+            int size = buffer->dimn*bufferType(buffer->type);
+            glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+            glGetBufferSubData(GL_ARRAY_BUFFER, file->versor[0]*size, size, actual);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            for (int i = 0; i < buffer->dimn; i++) if (actual[i] != file->versor[1+i]) enqueErrstr("test too actual\n");}
+        else enqueErrstr("test too index\n");}
+    else return Advance;
+    DEFAULT(exitErrstr("unknown buffer type\n");)
+    return Reque;
+}
+
+enum Action fileQueue(struct File *file, const char *name, struct Ints *queue)
+{
+    metas = queue;
+    if (fileScan(file, name, 2, 0)) {
+        if (file->versor[0] < 0) exitErrstr("test too index\n");
+        if (sizeMeta() > file->versor[0]) {
+            if (arrayMeta()[file->versor[0]] != file->versor[1]) enqueErrstr("test too actual\n");}
+        else enqueErrstr("test too index\n");}
+    else return Advance;
+    return Reque;
+}
+
+enum Action fileMeta(struct File *file, const char *name, struct Metas *queue)
+{
+    metaptrs = queue;
+    if (fileScan(file, name, 3, 0)) {
+        if (file->versor[0] < 0 || file->versor[1] < 0) exitErrstr("test too index\n");
+        if (sizeMetaptr() > file->versor[0]) {
+            metas = arrayMetaptr()+file->versor[0];
+            if (sizeMeta() > file->versor[1]) {
+                if (arrayMeta()[file->versor[1]] != file->versor[2]) enqueErrstr("test too actual\n");}
+            else enqueErrstr("test too index\n");}
+        else enqueErrstr("test too index\n");}
+    else return Advance;
+    return Reque;
+}
+
+#define FILEACTION(FUNC) \
+    ((action = FUNC) != Advance) { \
+        SWITCH(action,Reque) changed = 1; \
+        CASE(Defer) changed = 0; \
+        DEFAULT(FILEERROR("file error\n"))}
 #define FILEERROR(MSG) fileError(file,MSG); dequeFile(); return;
 void configure()
 {
@@ -2166,7 +2233,6 @@ void configure()
 #ifdef BRINGUP
     if (file->bringup == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
-        CASE(Defer) {requeFile(); REQUE(configure)}
         CASE(Advance) {file->bringup = 0; enqueShader(dishader); enqueCommand(transformRight);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
 #endif
@@ -2197,26 +2263,14 @@ void configure()
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
-    if ((action = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify)) != Advance) {
-        SWITCH(action,Reque) changed = 1;
-        CASE(Defer) changed = 0;
-        DEFAULT(FILEERROR("file error\n"))}
-    else if ((action = fileMode(file,"point",0,3,Plane,filePoint,fileClassify)) != Advance) {
-        SWITCH(action,Reque) changed = 1;
-        CASE(Defer) changed = 0;
-        DEFAULT(FILEERROR("file error\n"))}
+    if FILEACTION(fileMode(file,"plane",1,3,Plane,filePlane,fileClassify))
+    else if FILEACTION(fileMode(file,"point",0,3,Plane,filePoint,fileClassify))
     else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);
         changed = 1; *file->buffer = 0;}
-    else if ((action = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance)) != Advance) {
-        SWITCH(action,Reque) changed = 1;
-        CASE(Defer) changed = 0;
-        DEFAULT(FILEERROR("file error\n"))}
-    else if ((action = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance)) != Advance) {
-        SWITCH(action,Reque) changed = 1;
-        CASE(Defer) changed = 0;
-        DEFAULT(FILEERROR("file error\n"))}
+    else if FILEACTION(fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance))
+    else if FILEACTION(fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance))
     else if (sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueKind(Place); enqueInt(file->index);}
@@ -2231,6 +2285,16 @@ void configure()
     else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2 && file->mode == 0) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
+    else if FILEACTION(fileTest(file,"test plane",&planeBuf))
+    else if FILEACTION(fileTest(file,"test point",&pointBuf))
+    else if FILEACTION(fileTest(file,"test face",&faceSub))
+    else if FILEACTION(fileTest(file,"test frame",&frameSub))
+    else if FILEACTION(fileTest(file,"test intersect",&pointSub))
+    else if FILEACTION(fileTest(file,"test construct",&planeSub))
+    else if FILEACTION(fileTest(file,"test classify",&sideBuf))
+    else if FILEACTION(fileTest(file,"test side",&sideSub))
+    else if FILEACTION(fileQueue(file,"test todo",&todos))
+    else if FILEACTION(fileMeta(file,"test place",&placings))
     else if (*file->buffer) {FILEERROR("file error\n")}
     requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
 }
