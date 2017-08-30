@@ -2215,21 +2215,16 @@ enum Action fileMeta(struct File *file, const char *name, struct Metas *queue)
     return Reque;
 }
 
-#define FILEACTION(FUNC) \
-    ((action = FUNC) != Advance) { \
-        SWITCH(action,Reque) changed = 1; \
-        CASE(Defer) changed = 0; \
-        DEFAULT(FILEERROR("file error\n"))}
 #define FILEERROR(MSG) fileError(file,MSG); dequeFile(); return;
 void configure()
 {
     struct File *file = arrayFile();
     int location = 0;
     char filename[256] = {0};
-    int changed = 0;
     char suffix = 0;
     int index = 0;
-    enum Action action = 0;
+    enum Action action = Defer;
+    enum Action retval = Advance;
 #ifdef BRINGUP
     if (file->bringup == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
@@ -2248,7 +2243,7 @@ void configure()
             size = strtol(header,NULL,16);
             if (size >= 256) {FILEERROR("file error\n")}
             if (read(file->handle,file->buffer,size) != size) {FILEERROR("file error\n")}
-            changed = 1; file->buffer[size] = 0; unlckFile(file);}}
+            action = Reque; file->buffer[size] = 0; unlckFile(file);}}
     if (iswrlckFile(file)) {
         char header[3] = {0};
         int size = 0;
@@ -2256,47 +2251,51 @@ void configure()
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         memcpy(file->buffer,arrayConfig()+2,size); file->buffer[size] = 0;
         if (write(file->handle, arrayConfig(), size+2) != size+2) {FILEERROR("write error\n")}
-        changed = 1; dequeIndex(); delocConfig(size+2); unlckFile(file);}
+        action = Reque; dequeIndex(); delocConfig(size+2); unlckFile(file);}
     if (validIndex() && headIndex() == file->index) {
         char header[3] = {0};
         int size = 0;
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
-    if FILEACTION(fileMode(file,"plane",1,3,Plane,filePlane,fileClassify))
-    else if FILEACTION(fileMode(file,"point",0,3,Plane,filePoint,fileClassify))
-    else if (sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
+    if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
+    else if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
+    else if (retval == Advance && sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);
-        changed = 1; *file->buffer = 0;}
-    else if FILEACTION(fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance))
-    else if FILEACTION(fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance))
-    else if (sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
-        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
+        retval = Reque; *file->buffer = 0;}
+    else if (retval == Advance) {retval = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance);}
+    else if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
+    else if (retval == Advance && sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
+        retval = Reque; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueKind(Place); enqueInt(file->index);}
-    else if (sscanf(file->buffer," --remove face %d", &index) == 1 && file->mode == 0) {
+    else if (retval == Advance && sscanf(file->buffer," --remove face %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
-        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
+        retval = Reque; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueKind(Face); enqueInt(index);}
-    else if (sscanf(file->buffer," --remove plane %d", &index) == 1 && file->mode == 0) {
+    else if (retval == Advance && sscanf(file->buffer," --remove plane %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
-        changed = 1; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
+        retval = Reque; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
         enqueKind(Boundary); enqueInt(index);}
-    else if (sscanf(file->buffer," --branch %d %s", &location, filename) == 2 && file->mode == 0) {
+    else if (retval == Advance && sscanf(file->buffer," --branch %d %s", &location, filename) == 2 && file->mode == 0) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else if FILEACTION(fileTest(file,"test plane",&planeBuf))
-    else if FILEACTION(fileTest(file,"test point",&pointBuf))
-    else if FILEACTION(fileTest(file,"test face",&faceSub))
-    else if FILEACTION(fileTest(file,"test frame",&frameSub))
-    else if FILEACTION(fileTest(file,"test intersect",&pointSub))
-    else if FILEACTION(fileTest(file,"test construct",&planeSub))
-    else if FILEACTION(fileTest(file,"test classify",&sideBuf))
-    else if FILEACTION(fileTest(file,"test side",&sideSub))
-    else if FILEACTION(fileQueue(file,"test todo",&todos))
-    else if FILEACTION(fileMeta(file,"test place",&placings))
-    else if (*file->buffer) {FILEERROR("file error\n")}
-    requeFile(); if (changed) {REQUE(configure)} else {DEFER(configure)}
+    else if (retval == Advance) {retval = fileTest(file,"test plane",&planeBuf);}
+    else if (retval == Advance) {retval = fileTest(file,"test point",&pointBuf);}
+    else if (retval == Advance) {retval = fileTest(file,"test face",&faceSub);}
+    else if (retval == Advance) {retval = fileTest(file,"test frame",&frameSub);}
+    else if (retval == Advance) {retval = fileTest(file,"test intersect",&pointSub);}
+    else if (retval == Advance) {retval = fileTest(file,"test construct",&planeSub);}
+    else if (retval == Advance) {retval = fileTest(file,"test classify",&sideBuf);}
+    else if (retval == Advance) {retval = fileTest(file,"test side",&sideSub);}
+    else if (retval == Advance) {retval = fileQueue(file,"test todo",&todos);}
+    else if (retval == Advance) {retval = fileMeta(file,"test place",&placings);}
+    else if (retval == Advance && *file->buffer) {FILEERROR("file error\n")}
+    requeFile();
+    if (retval == Reque) action = Reque;
+    SWITCH(action,Reque) {REQUE(configure)}
+    CASE(Defer) {DEFER(configure)}
+    DEFAULT(exitErrstr("unknown file action\n");)
 }
 
 void openFile(char *filename)
