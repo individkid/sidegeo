@@ -102,12 +102,14 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 struct Strings {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
+enum Lock {Unlck,Rdlck,Wrlck};
 struct File {
 #ifdef BRINGUP
     int bringup;
 #endif
     int index;
     int handle;
+    enum Lock lock;
     char buffer[256];
     int versor[7];
     float vector[4];
@@ -1972,38 +1974,37 @@ enum Action bringup()
 void rdlckFile(struct File *file)
 {
     struct flock lock = {0};
+    int retval = 0;
     lock.l_type = F_RDLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-    if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+    if ((retval = fcntl(file->handle, F_SETLK, &lock)) < 0 && errno != EAGAIN) exitErrstr("fcntl error\n");
+    if (retval >= 0) file->lock = Rdlck;
 }
 
 void wrlckFile(struct File *file)
 {
     struct flock lock = {0};
+    int retval = 0;
     lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-    if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+    if ((retval = fcntl(file->handle, F_SETLK, &lock)) < 0 && errno != EAGAIN) exitErrstr("fcntl error\n");
+    if (retval >= 0) file->lock = Wrlck;
 }
 
 void unlckFile(struct File *file)
 {
     struct flock lock = {0};
     lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-    if (fcntl(file->handle, F_SETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
+    if (fcntl(file->handle, F_SETLK, &lock) < 0) exitErrstr("fcntl error\n");
+    file->lock = Unlck;
 }
 
 int isrdlckFile(struct File *file)
 {
-    struct flock lock = {0};
-    lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-    if (fcntl(file->handle, F_GETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
-    return (lock.l_type == F_RDLCK && lock.l_pid == getpid());
+    return (file->lock == Rdlck);
 }
 
 int iswrlckFile(struct File *file)
 {
-    struct flock lock = {0};
-    lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; lock.l_start = 0; lock.l_len = 2;
-    if (fcntl(file->handle, F_GETLK, &lock) < 0 && errno != EACCES && errno != EAGAIN) exitErrstr("fcntl error\n");
-    return (lock.l_type == F_WRLCK && lock.l_pid == getpid());
+    return (file->lock == Wrlck);
 }
 
 void fileError(struct File *file, const char *msg) {
@@ -2168,7 +2169,9 @@ enum Action fileTest(struct File *file, const char *name, struct Buffer *buffer)
             glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
             glGetBufferSubData(GL_ARRAY_BUFFER, file->versor[0]*size, size, actual);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
-            for (int i = 0; i < buffer->dimn; i++) if (actual[i] != file->vector[i]) enqueErrstr("test too actual\n");}
+            for (int i = 0; i < buffer->dimn; i++) {
+                if (fabs(actual[i] - file->vector[i]) > invalid[0]) enqueErrstr("test too actual %f /= %f\n",actual[i],file->vector[i]);
+                else enqueMsgstr("test just actual %f == %f\n",actual[i],file->vector[i]);}}
         else enqueErrstr("test too index\n");}
     else return Advance;
     CASE(GL_UNSIGNED_INT)
@@ -2181,11 +2184,13 @@ enum Action fileTest(struct File *file, const char *name, struct Buffer *buffer)
             glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
             glGetBufferSubData(GL_ARRAY_BUFFER, file->versor[0]*size, size, actual);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
-            for (int i = 0; i < buffer->dimn; i++) if (actual[i] != file->versor[1+i]) enqueErrstr("test too actual\n");}
+            for (int i = 0; i < buffer->dimn; i++) {
+                if (actual[i] != file->versor[1+i]) enqueErrstr("test too actual %d != %d\n",actual[i],file->vector[i]);
+                else enqueMsgstr("test just actual %d == %d\n",actual[i],file->vector[i]);}}
         else enqueErrstr("test too index\n");}
     else return Advance;
     DEFAULT(exitErrstr("unknown buffer type\n");)
-    return Reque;
+    *file->buffer = 0; return Reque;
 }
 
 enum Action fileQueue(struct File *file, const char *name, struct Ints *queue)
@@ -2259,38 +2264,38 @@ void configure()
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
-    else if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
-    else if (retval == Advance && sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
+    if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
+    if (retval == Advance && sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
+        retval = Reque; *file->buffer = 0;
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
-        enqueShader(dishader); enqueCommand(transformRight);
-        retval = Reque; *file->buffer = 0;}
-    else if (retval == Advance) {retval = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance);}
-    else if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
-    else if (retval == Advance && sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
-        retval = Reque; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
-        enqueKind(Place); enqueInt(file->index);}
-    else if (retval == Advance && sscanf(file->buffer," --remove face %d", &index) == 1 && file->mode == 0) {
+        enqueShader(dishader); enqueCommand(transformRight);}
+    if (retval == Advance) {retval = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance);}
+    if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
+    if (retval == Advance && sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
+        retval = Reque; *file->buffer = 0;
+        enqueCommand(0); enqueEvent(Remove); enqueKind(Place); enqueInt(file->index);}
+    if (retval == Advance && sscanf(file->buffer," --remove face %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
-        retval = Reque; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
-        enqueKind(Face); enqueInt(index);}
-    else if (retval == Advance && sscanf(file->buffer," --remove plane %d", &index) == 1 && file->mode == 0) {
+        retval = Reque; *file->buffer = 0;
+        enqueCommand(0); enqueEvent(Remove); enqueKind(Face); enqueInt(index);}
+    if (retval == Advance && sscanf(file->buffer," --remove plane %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
-        retval = Reque; *file->buffer = 0; enqueCommand(0); enqueEvent(Remove);
-        enqueKind(Boundary); enqueInt(index);}
-    else if (retval == Advance && sscanf(file->buffer," --branch %d %s", &location, filename) == 2 && file->mode == 0) {
+        retval = Reque; *file->buffer = 0;
+        enqueCommand(0); enqueEvent(Remove); enqueKind(Boundary); enqueInt(index);}
+    if (retval == Advance && sscanf(file->buffer," --branch %d %s", &location, filename) == 2 && file->mode == 0) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
-    else if (retval == Advance) {retval = fileTest(file,"test plane",&planeBuf);}
-    else if (retval == Advance) {retval = fileTest(file,"test point",&pointBuf);}
-    else if (retval == Advance) {retval = fileTest(file,"test face",&faceSub);}
-    else if (retval == Advance) {retval = fileTest(file,"test frame",&frameSub);}
-    else if (retval == Advance) {retval = fileTest(file,"test intersect",&pointSub);}
-    else if (retval == Advance) {retval = fileTest(file,"test construct",&planeSub);}
-    else if (retval == Advance) {retval = fileTest(file,"test classify",&sideBuf);}
-    else if (retval == Advance) {retval = fileTest(file,"test side",&sideSub);}
-    else if (retval == Advance) {retval = fileQueue(file,"test todo",&todos);}
-    else if (retval == Advance) {retval = fileMeta(file,"test place",&placings);}
-    else if (retval == Advance && *file->buffer) {FILEERROR("file error\n")}
+    if (retval == Advance) {retval = fileTest(file,"test plane",&planeBuf);}
+    if (retval == Advance) {retval = fileTest(file,"test point",&pointBuf);}
+    if (retval == Advance) {retval = fileTest(file,"test face",&faceSub);}
+    if (retval == Advance) {retval = fileTest(file,"test frame",&frameSub);}
+    if (retval == Advance) {retval = fileTest(file,"test intersect",&pointSub);}
+    if (retval == Advance) {retval = fileTest(file,"test construct",&planeSub);}
+    if (retval == Advance) {retval = fileTest(file,"test classify",&sideBuf);}
+    if (retval == Advance) {retval = fileTest(file,"test side",&sideSub);}
+    if (retval == Advance) {retval = fileQueue(file,"test todo",&todos);}
+    if (retval == Advance) {retval = fileMeta(file,"test place",&placings);}
+    if (retval == Advance && *file->buffer) {FILEERROR("file error\n")}
     requeFile();
     if (retval == Reque) action = Reque;
     SWITCH(action,Reque) {REQUE(configure)}
