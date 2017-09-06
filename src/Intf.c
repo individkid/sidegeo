@@ -116,7 +116,8 @@ struct File {
     int capital;
     int state;
     const char *mode;};
-struct File *fileOwner = 0;
+int fileOwner = 0;
+int fileCount = 0;
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
 struct Chars {DECLARE_QUEUE(char)} configs = {0};
 struct Ints {DECLARE_QUEUE(int)} indices = {0};
@@ -2012,7 +2013,7 @@ void fileError(struct File *file, const char *msg) {
     enqueCommand(0); enqueEvent(Remove); enqueKind(Place); enqueInt(file->index);
     enqueMsgstr(msg);
     close(file->handle);
-    if (fileOwner == file) fileOwner = 0;
+    if (fileOwner == file->index) fileOwner = fileCount;
     *file = initial;
 }
 
@@ -2146,13 +2147,15 @@ typedef enum Action (*fileModeFP)(struct File *file, enum Event event);
 enum Action fileMode(struct File *file, const char *name, int ints, int floats, enum Event event, fileModeFP func0, fileModeFP func1)
 {
     int changed = 0;
-    if (fileScan(file,name,ints,floats) && fileOwner != 0 && fileOwner != file) changed = 0;
-    else if (fileScan(file,name,ints,floats) && file->mode != 0 && file->mode != name) return Advance;
+    if (fileScan(file,name,ints,floats) && fileOwner < fileCount && fileOwner != file->index)
+        changed = 0;
+    else if (fileScan(file,name,ints,floats) && file->mode != 0 && file->mode != name)
+        return Advance;
     else if (fileScan(file,name,ints,floats)) {
-        fileOwner = file; file->mode = name;
+        fileOwner = file->index; file->mode = name;
         FILESWITCH(func0,event,*file->buffer = 0;)}
     else if (file->mode == name) {
-        FILESWITCH(func1,event,file->mode = 0; fileOwner = 0;)}
+        FILESWITCH(func1,event,file->mode = 0; fileOwner = fileCount;)}
     else return Advance;
     return (changed ? Reque : Defer);
 }
@@ -2263,6 +2266,7 @@ void configure()
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
+    if (*file->buffer) enqueMsgstr("configure %s\n",file->buffer);
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
     if (retval == Advance && sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
@@ -2311,7 +2315,8 @@ void openFile(char *filename)
 #endif
     file.handle = open(filename,O_RDWR);
     if (file.handle < 0) enqueErrstr("invalid file argument\n");
-    file.index = sizeFile(); enqueFile(file); enqueCommand(configure);
+    if (fileOwner == fileCount) fileOwner++; file.index = fileCount; fileCount++;
+    enqueFile(file); enqueCommand(configure);
 }
 
 /*
