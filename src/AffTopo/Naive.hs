@@ -642,7 +642,7 @@ allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
 allSpacesH [] done = done
 
 -- return superspace with given spaces as subspaces
--- given spaces have given dimension. subspaces by shared regions are equal
+-- given spaces have given dimension. subspaces by shared boundaries are equal
 superSpace :: Int -> Place -> Place -> Place
 superSpace n s t
  | n < 0 = undefined
@@ -681,14 +681,20 @@ rabbitSpace n s t
   tSup = concatMap (\x -> divideSpace sBound x t) sSup
   in choose (filter (rabbitSpaceF n s t) tSup)
  | n == 1 = let
+  -- must sort boundary sets because checkSort is shallow
   sDual = map2 sort (placeToDual (crossSpace s (powerSpace [tBound])))
   tDual = map2 sort (placeToDual (crossSpace t (powerSpace [sBound])))
   double = powerSpace [sBound, tBound]
-  regions = regionsOfPlace double
+  space = placeToSpace double
+  quad = regionsOfPlace double
+  -- regions = quad
+  regions = filter (\x -> not (outsideOfRegionExists x space)) quad
   cross = map (\x -> crossSpace place (degenSpace x double)) regions
   dual = map (\x -> map2 sort (placeToDual x)) cross
+  -- cross-spaces are from each perspective; intersection is all perspectives
   result = map (\x -> dualToPlace (sDual +\ tDual +\ x)) dual
-  in choose (filter (rabbitSpaceF n s t) result)
+  in choose result
+  -- in choose (filter (rabbitSpaceF n s t) result)
  | otherwise = undefined where
  sBounds = boundariesOfPlace s
  tBounds = boundariesOfPlace t

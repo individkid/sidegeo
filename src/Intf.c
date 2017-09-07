@@ -206,6 +206,7 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
  // index into item[line].name for console undo
+enum Special {Exit,Endline,Escape};
 float affineMat[16]; // transformation state at click time
 float affineMata[16]; // left transformation state
 float affineMatb[16]; // right transformation state
@@ -326,7 +327,7 @@ struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
-/*return pointer valid only until next call to enloc##NAME array##NAME enque##NAME entry##NAME */  \
+/*return pointer valid only until next call to enloc##NAME enque##NAME entry##NAME */  \
 TYPE *enloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
@@ -748,7 +749,7 @@ void writechr(int chr)
     while (1) {
         int val = write(STDOUT_FILENO, &chr, 1);
         if (val == 1) break;
-        if ((val < 0 && errno != EINTR) || val > 1) exitErrstr("write failed: %s\n", strerror(errno));}
+        if ((val < 0 && errno != EINTR) || val > 1 || val == 0) exitErrstr("write failed: %s\n", strerror(errno));}
 }
 
 void writestr(const char *str)
@@ -758,13 +759,16 @@ void writestr(const char *str)
 
 void writenum(int key)
 {
-    int len = snprintf(0,0,"<%d>",key);
+    int len = snprintf(0,0,"<%d>\n",key);
     if (len < 0) exitErrstr("snprintf failed\n");
     char *buf = enlocScan(len+1);
-    if (snprintf(buf,len+1,"<%d>",key) != len) exitErrstr("snprintf failed\n");
-    buf[len] = 0;
-    writestr(buf);
-    unlocScan(len+1);
+    if (snprintf(buf,len+1,"<%d>\n",key) != len) exitErrstr("snprintf failed\n");
+    unlocScan(1);
+}
+
+void writekey(const char *str)
+{
+    strcpy(enlocScan(strlen(str)),str);
 }
 
 void writeitem(enum Menu line, int match)
@@ -824,6 +828,8 @@ int isEndLine(char *chr)
     return (*chr == '\n');
 }
 
+// Scan -> Input(console) -> Input(main) -> Menu
+// Print -> Output(main) -> Output(console) -> Echo
 void *console(void *arg)
 {
     enqueLine(0); enqueMatch(0);
@@ -858,11 +864,11 @@ void *console(void *arg)
         while ((lenOut = detryOutput(enlocEcho(10),&isEndLine,10)) == 0) totOut += 10;
         if ((lenOut < 0 && totOut > 0) || sizeEcho() != totOut+10) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 0) {
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Exit) {
             delocEcho(10); break;}
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 1) {
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Endline) {
             enqueInject('\n'); delocEcho(10);}
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == 2) {
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Escape) {
             enqueInject(127); delocEcho(10);}
         else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] > 2) {
             enqueInject(arrayEcho()[1]); delocEcho(10);}
@@ -917,16 +923,16 @@ void *console(void *arg)
         else if (esc == 2 && key == 51) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
-        else if (esc == 2 && key == 65) {esc = 0; writestr("<up>\n");}
-        else if (esc == 2 && key == 66) {esc = 0; writestr("<down>\n");}
-        else if (esc == 2 && key == 67) {esc = 0; writestr("<right>\n");}
-        else if (esc == 2 && key == 68) {esc = 0; writestr("<left>\n");}
-        else if (esc == 2 && key == 70) {esc = 0; writestr("<end>\n");}
-        else if (esc == 2 && key == 72) {esc = 0; writestr("<room>\n");}
-        else if (esc == 3 && key == 126 && last[2] == 51) {esc = 0; writestr("<del>\n");}
-        else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; writestr("<pgup>\n");}
-        else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; writestr("<pgdn>\n");}
-        else {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writechr('\n'); esc = 0;}
+        else if (esc == 2 && key == 65) {esc = 0; writekey("<up>\n");}
+        else if (esc == 2 && key == 66) {esc = 0; writekey("<down>\n");}
+        else if (esc == 2 && key == 67) {esc = 0; writekey("<right>\n");}
+        else if (esc == 2 && key == 68) {esc = 0; writekey("<left>\n");}
+        else if (esc == 2 && key == 70) {esc = 0; writekey("<end>\n");}
+        else if (esc == 2 && key == 72) {esc = 0; writekey("<room>\n");}
+        else if (esc == 3 && key == 126 && last[2] == 51) {esc = 0; writekey("<del>\n");}
+        else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; writekey("<pgup>\n");}
+        else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; writekey("<pgdn>\n");}
+        else {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); esc = 0;}
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
 
@@ -1798,7 +1804,7 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
-    enqueEscape(0);
+    enqueEscape(Exit);
     while (validPrint()) {
         int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
         if (lenOut <= 0) exitErrstr("entryOutput failed\n");
@@ -2865,8 +2871,8 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action != GLFW_PRESS) return;
     SWITCH(key,GLFW_KEY_ESCAPE) {enqueEvent(Done); enqueCommand(0);}
-    CASE(GLFW_KEY_ENTER) enqueEscape(1);
-    CASE(GLFW_KEY_BACKSPACE) enqueEscape(2);
+    CASE(GLFW_KEY_ENTER) enqueEscape(Endline);
+    CASE(GLFW_KEY_BACKSPACE) enqueEscape(Escape);
     CASE(GLFW_KEY_SPACE) enqueEscape(' ');
     DEFAULT({if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) enqueEscape(key-GLFW_KEY_A+'a');})
 }

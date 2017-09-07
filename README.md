@@ -53,6 +53,7 @@ Configuration/history files consist of commands. Append commands, schedule comma
   * --source takes sound file or source  
   * --filter takes plane subscript, per area equalization of tempo, dynamic, tone  
   * --color takes plane subscript and decoration  
+  * --window takes plane subscript and file to decorate facets with
   * --matrix takes transformation of display  
   * --project takes slope and cutoff  
   * --configure takes autowarp, autorefine, autocolor, autofilter, autodelay, automatrix  
