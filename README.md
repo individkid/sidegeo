@@ -4,14 +4,16 @@ Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regi
 
 Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The following command line arguments are processed in order.
 
-  * -i \<file> load polytope and adjust view  
-  * -I \<file> load polytope and ignore view changes  
+  * -i \<file> load polytope and append changes  
+  * -I \<file> preprocess to add missing headers  
   * -b \<file> start file with reference to disabled jump  
   * -B \<file> \<ext> backup and merge all to one (re)opened  
   * -f \<file> load from format indicated by file extension  
   * -F \<ext> save to format indicated by file extension  
   * -o pack out garbage in graphics buffers  
   * -O \<ext> save minimal commands to produce polytopes  
+  * -l \<module> add import for call configures  
+  * -L \<path> add path for module files  
   * -s resample current space to planes with same sidedness  
   * -S resample current polytope to space and planes  
   * -d display space and regions  
@@ -54,16 +56,14 @@ Configuration/history files consist of commands. Append commands, schedule comma
   * --filter takes plane subscript, per area equalization of tempo, dynamic, tone  
   * --color takes plane subscript and decoration  
   * --window takes plane subscript and file to decorate facets with
-  * --matrix takes transformation of display  
-  * --project takes slope and cutoff  
+  * --matrix takes transformation of display, ignored if not first -i  
+  * --project takes slope and cutoff, ignored if not first -i  
   * --configure takes autowarp, autorefine, autocolor, autofilter, autodelay, automatrix  
   * --inject specifies user action to inject, ignored if not at eof  
   * --schedule appends at a wallclock time, ignored if not at eof  
   * --jump optionally causes playback to go to location in file  
-  * --branch takes file and location for starting state  
+  * --branch takes file and start stop locations for include  
   * --delay takes duration for playback, ignored if at eof  
-  * --append takes command for end of file, ignored if at eof  
-  * --call takes Haskell function of comment for commands to execute  
-  * --comment allows call action to record data for future use  
-  * --toggle changes jump option at given location  
-  * --replace changes comment at location with same size string  
+  * --call takes Haskell function of source to replace destination  
+
+Preprocess prepends body length to each line starting with --. For preprocess -I files, --- indicates continuation of multiline body. The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more.

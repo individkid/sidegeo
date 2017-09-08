@@ -759,11 +759,11 @@ void writestr(const char *str)
 
 void writenum(int key)
 {
-    int len = snprintf(0,0,"<%d>\n",key);
+    int len = snprintf(0,0,"<%d>",key);
+    char buf[len+1];
     if (len < 0) exitErrstr("snprintf failed\n");
-    char *buf = enlocScan(len+1);
-    if (snprintf(buf,len+1,"<%d>\n",key) != len) exitErrstr("snprintf failed\n");
-    unlocScan(1);
+    if (snprintf(buf,len+1,"<%d>",key) != len) exitErrstr("snprintf failed\n");
+    writestr(buf);
 }
 
 void writekey(const char *str)
@@ -855,6 +855,7 @@ void *console(void *arg)
 
     int last[4];
     int esc = 0;
+    writeitem(tailLine(),tailMatch());
     while (1) {
         int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
@@ -920,19 +921,26 @@ void *console(void *arg)
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 1 && key == 91) last[esc++] = key;
+        else if (esc == 2 && key == 50) last[esc++] = key;
         else if (esc == 2 && key == 51) last[esc++] = key;
+        else if (esc == 2 && key == 52) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
-        else if (esc == 2 && key == 65) {esc = 0; writekey("<up>\n");}
-        else if (esc == 2 && key == 66) {esc = 0; writekey("<down>\n");}
-        else if (esc == 2 && key == 67) {esc = 0; writekey("<right>\n");}
-        else if (esc == 2 && key == 68) {esc = 0; writekey("<left>\n");}
-        else if (esc == 2 && key == 70) {esc = 0; writekey("<end>\n");}
-        else if (esc == 2 && key == 72) {esc = 0; writekey("<room>\n");}
-        else if (esc == 3 && key == 126 && last[2] == 51) {esc = 0; writekey("<del>\n");}
-        else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; writekey("<pgup>\n");}
-        else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; writekey("<pgdn>\n");}
-        else {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); esc = 0;}
+        else if (esc == 2 && key == 65) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<up>\n"); esc = 0;}
+        else if (esc == 2 && key == 66) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<down>\n"); esc = 0;}
+        else if (esc == 2 && key == 67) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<right>\n"); esc = 0;}
+        else if (esc == 2 && key == 68) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<left>\n"); esc = 0;}
+        else if (esc == 2 && key == 69) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<cent>\n"); esc = 0;}
+        else if (esc == 2 && key == 70) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<end>\n"); esc = 0;}
+        else if (esc == 2 && key == 71) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<mid>  \n"); esc = 0;}
+        else if (esc == 2 && key == 72) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<home>\n"); esc = 0;}
+        else if (esc == 2 && key >= 64) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("\n"); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 50) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<ins>\n"); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 51) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<del>\n"); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 52) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<page>\n"); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 53) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<pgup>\n"); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 54) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<pgdn>\n"); esc = 0;}
+        else if (esc == 3 && key == 126) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("\n"); esc = 0;}
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
 
