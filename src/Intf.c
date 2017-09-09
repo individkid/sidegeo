@@ -1867,22 +1867,43 @@ void process()
     CHECK(process,Process)
     if (!validOption()) {DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
-        enqueMsgstr("-h print this message\n");
-        enqueMsgstr("-H print manual page\n");
-        enqueMsgstr("-i <file> load polytope and adjust view\n");
-        enqueMsgstr("-I <file> load polytope and ignore view changes\n");
-        enqueMsgstr("-b <file> start file with reference to disabled jump\n");
-        enqueMsgstr("-B <file> <ext> backup and merge all to one (re)opened\n");
-        enqueMsgstr("-f <file> load from format indicated by file extension\n");
-        enqueMsgstr("-F <ext> save to format indicated by file extension\n");
+        enqueMsgstr("-h print these options\n");
+        enqueMsgstr("-H print readme\n");
+        enqueMsgstr("-i <file> load polytope and append changes\n");
+        enqueMsgstr("-I <file> <file> preprocess to add missing headers\n");
         enqueMsgstr("-o pack out garbage in graphics buffers\n");
         enqueMsgstr("-O <ext> save minimal commands to produce polytopes\n");
-        enqueMsgstr("-s resample current space to planes with same sidedness\n");
-        enqueMsgstr("-S resample current polytope to space and planes\n");
-        enqueMsgstr("-d display space and regions\n");
-        enqueMsgstr("-D display polyants\n");
         enqueMsgstr("-t run sanity check\n");
         enqueMsgstr("-T run thorough tests\n");}
+    else if (strcmp(headOption(), "-I") == 0) {
+        FILE *source = 0;
+        FILE *dest = 0;
+        char body[256] = {0};
+        int length = 0;
+        char header[3] = {0};
+        dequeOption();
+        if (!validOption()) {enqueErrstr("missing source file\n"); DEQUE(process,Process)}
+        if ((source = fopen(headOption(),"r")) == 0) {enqueErrstr("cannot open source\n"); DEQUE(process,Process)}
+        dequeOption();
+        if (!validOption()) {enqueErrstr("missing dest file\n"); DEQUE(process,Process)}
+        if ((dest = fopen(headOption(),"r")) == 0) {enqueErrstr("cannot open dest\n"); DEQUE(process,Process)}
+        while (fgets(body+length,256-length,source)) {
+            if ((length > 0 && body[length] == '-' && body[length+1] == '-') ||
+                (length > 0 && isxdigit(body[length]) && isxdigit(body[length+1]) && body[length+2] == '-' && body[length+3] == '-')) {
+                char temp[256] = {0};
+                int len = strlen(body);
+                strncpy(temp,body,length);
+                fputs(temp,dest);
+                memmove(body,body,len-length+1);}
+            length = strlen(body);
+            if (length >= 2 && body[0] == '-' && body[1] == '-') {
+                memmove(body+2,body,length+1);
+                length += 2;
+                body[0] = '0';
+                body[1] = '1';}
+            snprintf(header,3,"%2x",length);
+            memcpy(body,header,2);}
+        if (fclose(source) != 0 || fclose(dest) != 0) {enqueErrstr("cannot close files\n"); DEQUE(process,Process)}}
     else if (strcmp(headOption(), "-i") == 0) {
         dequeOption();
         if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
@@ -1971,8 +1992,8 @@ enum Action bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
-    bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
-    bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
+    // bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
+    // bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
     bringupBuffer(&faceSub,1,NUM_FACES,face);
     bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
@@ -2134,7 +2155,7 @@ enum Action fileAdvance(struct File *file, enum Event event)
 int fileScan(struct File *file, const char *name, int ints, int floats)
 {
     int result = 0;
-    const char *prefix = " --";
+    const char *prefix = "--";
     const char *intfix = " %d%n";
     const char *floatfix = " %f%n";
     const char *suffix = "%c%n";
@@ -2283,24 +2304,24 @@ void configure()
     if (*file->buffer) enqueMsgstr("configure %s\n",file->buffer);
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
-    if (retval == Advance && sscanf(file->buffer," --inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
+    if (retval == Advance && sscanf(file->buffer,"--inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; *file->buffer = 0;
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);}
     if (retval == Advance) {retval = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance);}
     if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
-    if (retval == Advance && sscanf(file->buffer," --remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
+    if (retval == Advance && sscanf(file->buffer,"--remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; *file->buffer = 0;
         enqueCommand(0); enqueEvent(Remove); enqueKind(Place); enqueInt(file->index);}
-    if (retval == Advance && sscanf(file->buffer," --remove face %d", &index) == 1 && file->mode == 0) {
+    if (retval == Advance && sscanf(file->buffer,"--remove face %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         retval = Reque; *file->buffer = 0;
         enqueCommand(0); enqueEvent(Remove); enqueKind(Face); enqueInt(index);}
-    if (retval == Advance && sscanf(file->buffer," --remove plane %d", &index) == 1 && file->mode == 0) {
+    if (retval == Advance && sscanf(file->buffer,"--remove plane %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         retval = Reque; *file->buffer = 0;
         enqueCommand(0); enqueEvent(Remove); enqueKind(Boundary); enqueInt(index);}
-    if (retval == Advance && sscanf(file->buffer," --branch %d %s", &location, filename) == 2 && file->mode == 0) {
+    if (retval == Advance && sscanf(file->buffer,"--branch %d %s", &location, filename) == 2 && file->mode == 0) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
     if (retval == Advance) {retval = fileTest(file,"test plane",&planeBuf);}
@@ -2565,7 +2586,7 @@ void debug()
                     enqueMsgstr(" "DEBUGF, result[n]);}
             if (debugBuf.dimn > 1) enqueMsgstr("\n");}
         if (prim > 1 && i < debugBuf.dimn-1) enqueMsgstr("\n");}\
-    enqueMsgstr("---\n");
+    enqueMsgstr(" ---\n");
     started[DEBUGS]--;
 }
 #endif
