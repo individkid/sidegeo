@@ -207,6 +207,13 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
 struct Ints matchs = {0};
  // index into item[line].name for console undo
 enum Special {Exit,Endline,Escape};
+#define MOTION(FUNC) FUNC(Still) \
+    FUNC(North) FUNC(South) FUNC(West) FUNC(East) \
+    FUNC(Counter) FUNC(Wise) FUNC(Click) FUNC(Suspend)
+#define MOTIONF(NAME) NAME,
+#define MOTIONG(NAME) #NAME, 
+enum Motion {MOTION(MOTIONF)Motions};
+const char *MotionName[Motions] = {MOTION(MOTIONG)};
 float affineMat[16]; // transformation state at click time
 float affineMata[16]; // left transformation state
 float affineMatb[16]; // right transformation state
@@ -766,9 +773,18 @@ void writenum(int key)
     writestr(buf);
 }
 
-void writekey(const char *str)
+void writekey(int key)
 {
-    strcpy(enlocScan(strlen(str)),str);
+    if (key) {enqueScan(key); enqueScan('\n');}
+}
+
+void writeesc(int *esc, const char *str, int *last, int key, int code)
+{
+    for (int i = 0; i < *esc; i++) writenum(last[i]);
+    writenum(key);
+    writestr(str);
+    *esc = 0;
+    writekey(code);
 }
 
 void writeitem(enum Menu line, int match)
@@ -920,27 +936,29 @@ void *console(void *arg)
         else if (esc == 0 && key >= 'A' && key <= 'Z' && tailMatch() > 0) writematch(key-'A'+'a');
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
+        else if (esc == 0) writeesc(&esc,"<oops>\n",last,key,Still);
         else if (esc == 1 && key == 91) last[esc++] = key;
+        else if (esc == 1) writeesc(&esc,"<oops>\n",last,key,Still);
         else if (esc == 2 && key == 50) last[esc++] = key;
         else if (esc == 2 && key == 51) last[esc++] = key;
         else if (esc == 2 && key == 52) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
-        else if (esc == 2 && key == 65) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<up>\n"); esc = 0;}
-        else if (esc == 2 && key == 66) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<down>\n"); esc = 0;}
-        else if (esc == 2 && key == 67) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<right>\n"); esc = 0;}
-        else if (esc == 2 && key == 68) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<left>\n"); esc = 0;}
-        else if (esc == 2 && key == 69) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<cent>\n"); esc = 0;}
-        else if (esc == 2 && key == 70) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<end>\n"); esc = 0;}
-        else if (esc == 2 && key == 71) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<mid>  \n"); esc = 0;}
-        else if (esc == 2 && key == 72) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<home>\n"); esc = 0;}
-        else if (esc == 2 && key >= 64) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("\n"); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 50) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<ins>\n"); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 51) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<del>\n"); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 52) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<page>\n"); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 53) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<pgup>\n"); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 54) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("<pgdn>\n"); esc = 0;}
-        else if (esc == 3 && key == 126) {for (int i = 0; i < esc; i++) writenum(last[i]); writenum(key); writestr("\n"); esc = 0;}
+        else if (esc == 2 && key == 65) writeesc(&esc,"<up>\n",last,key,North);
+        else if (esc == 2 && key == 66) writeesc(&esc,"<down>\n",last,key,South);
+        else if (esc == 2 && key == 67) writeesc(&esc,"<right>\n",last,key,East);
+        else if (esc == 2 && key == 68) writeesc(&esc,"<left>\n",last,key,West);
+        else if (esc == 2 && key == 69) writeesc(&esc,"<cent>\n",last,key,Still);
+        else if (esc == 2 && key == 70) writeesc(&esc,"<end>\n",last,key,Suspend);
+        else if (esc == 2 && key == 71) writeesc(&esc,"<mid>\n",last,key,Still);
+        else if (esc == 2 && key == 72) writeesc(&esc,"<home>\n",last,key,Click);
+        else if (esc == 2) writeesc(&esc,"<oops>\n",last,key,Still);
+        else if (esc == 3 && key == 126 && last[2] == 50) writeesc(&esc,"<ins>\n",last,key,Still);
+        else if (esc == 3 && key == 126 && last[2] == 51) writeesc(&esc,"<del>\n",last,key,Still);
+        else if (esc == 3 && key == 126 && last[2] == 52) writeesc(&esc,"<page>\n",last,key,Still);
+        else if (esc == 3 && key == 126 && last[2] == 53) writeesc(&esc,"<pgup>\n",last,key,Counter);
+        else if (esc == 3 && key == 126 && last[2] == 54) writeesc(&esc,"<pgdn>\n",last,key,Wise);
+        else writeesc(&esc,"<oops>\n",last,key,Still);
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
 
@@ -959,6 +977,8 @@ void menu()
     if (len == 1 && buf[0] < 0) {
         enum Menu line = buf[0]+128;
         click = Init; mode[item[line].mode] = line;}
+    else if (len == 1 && buf[0] < Motions) {
+        enqueMsgstr("menu: %s\n", MotionName[buf[0]]);}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocMenu(len+1);
@@ -1992,8 +2012,8 @@ enum Action bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
-    // bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
-    // bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
+    bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
+    bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
     bringupBuffer(&faceSub,1,NUM_FACES,face);
     bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
