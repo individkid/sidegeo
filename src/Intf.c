@@ -209,7 +209,7 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
 struct Ints matchs = {0};
  // index into item[line].name for console undo
 enum Special {Exit,Endline,Backspace};
-#define MOTION(FUNC) FUNC(Still) FUNC(Escape) \
+#define MOTION(FUNC) FUNC(Escape) \
     FUNC(North) FUNC(South) FUNC(West) FUNC(East) \
     FUNC(Counter) FUNC(Wise) FUNC(Click) FUNC(Suspend)
 #define MOTIONF(NAME) NAME,
@@ -777,7 +777,7 @@ void writenum(int key)
 
 void writekey(int key)
 {
-    if (key) {enqueScan(key); enqueScan('\n');}
+    enqueScan(key); enqueScan('\n');
 }
 
 void writeesc(int *esc, const char *str, int *last, int key, int code)
@@ -938,9 +938,9 @@ void *console(void *arg)
         else if (esc == 0 && key >= 'A' && key <= 'Z' && tailMatch() > 0) writematch(key-'A'+'a');
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
-        else if (esc == 0) writeesc(&esc,"<oops>\n",last,key,Still);
+        else if (esc == 0) writeesc(&esc,"<oops>\n",last,key,Escape);
         else if (esc == 1 && key == 91) last[esc++] = key;
-        else if (esc == 1) writeesc(&esc,"<oops>\n",last,key,Still);
+        else if (esc == 1) writeesc(&esc,"<oops>\n",last,key,Escape);
         else if (esc == 2 && key == 50) last[esc++] = key;
         else if (esc == 2 && key == 51) last[esc++] = key;
         else if (esc == 2 && key == 52) last[esc++] = key;
@@ -952,15 +952,15 @@ void *console(void *arg)
         else if (esc == 2 && key == 68) writeesc(&esc,"<left>\n",last,key,West);
         else if (esc == 2 && key == 69) writeesc(&esc,"<cent>\n",last,key,Escape);
         else if (esc == 2 && key == 70) writeesc(&esc,"<end>\n",last,key,Suspend);
-        else if (esc == 2 && key == 71) writeesc(&esc,"<mid>\n",last,key,Still);
+        else if (esc == 2 && key == 71) writeesc(&esc,"<mid>\n",last,key,Escape);
         else if (esc == 2 && key == 72) writeesc(&esc,"<home>\n",last,key,Click);
-        else if (esc == 2) writeesc(&esc,"<oops>\n",last,key,Still);
+        else if (esc == 2) writeesc(&esc,"<oops>\n",last,key,Escape);
         else if (esc == 3 && key == 126 && last[2] == 50) writeesc(&esc,"<ins>\n",last,key,Escape);
         else if (esc == 3 && key == 126 && last[2] == 51) writeesc(&esc,"<del>\n",last,key,Escape);
-        else if (esc == 3 && key == 126 && last[2] == 52) writeesc(&esc,"<page>\n",last,key,Still);
+        else if (esc == 3 && key == 126 && last[2] == 52) writeesc(&esc,"<page>\n",last,key,Escape);
         else if (esc == 3 && key == 126 && last[2] == 53) writeesc(&esc,"<pgup>\n",last,key,Counter);
         else if (esc == 3 && key == 126 && last[2] == 54) writeesc(&esc,"<pgdn>\n",last,key,Wise);
-        else writeesc(&esc,"<oops>\n",last,key,Still);
+        else writeesc(&esc,"<oops>\n",last,key,Escape);
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
 
@@ -1002,7 +1002,8 @@ void compass(double xdelta, double ydelta) {
 void menu()
 {
     char *buf = arrayMenu();
-    int len = strstr(buf,"\n")-buf;
+    int len = 0;
+    while (buf[len] != '\n') len++;
     if (len == 1 && buf[0] < 0) {
         enum Menu line = buf[0]+128;
         click = Init; mode[item[line].mode] = line;}
