@@ -76,6 +76,8 @@ extern void __stginit_Main(void);
 #define MAX_ROTATE 0.999
 #define ROLLER_GRANULARITY 30.0
 #define NUM_FEEDBACK 3
+#define COMPASS_DELTA 10.0
+#define ROLLER_DELTA 1.0
 
 #ifdef DEBUG
 #define DEBUGS Diplane
@@ -206,8 +208,8 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
  // index into item[line].name for console undo
-enum Special {Exit,Endline,Escape};
-#define MOTION(FUNC) FUNC(Still) \
+enum Special {Exit,Endline,Backspace};
+#define MOTION(FUNC) FUNC(Still) FUNC(Escape) \
     FUNC(North) FUNC(South) FUNC(West) FUNC(East) \
     FUNC(Counter) FUNC(Wise) FUNC(Click) FUNC(Suspend)
 #define MOTIONF(NAME) NAME,
@@ -885,7 +887,7 @@ void *console(void *arg)
             delocEcho(10); break;}
         else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Endline) {
             enqueInject('\n'); delocEcho(10);}
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Escape) {
+        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Backspace) {
             enqueInject(127); delocEcho(10);}
         else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] > 2) {
             enqueInject(arrayEcho()[1]); delocEcho(10);}
@@ -948,13 +950,13 @@ void *console(void *arg)
         else if (esc == 2 && key == 66) writeesc(&esc,"<down>\n",last,key,South);
         else if (esc == 2 && key == 67) writeesc(&esc,"<right>\n",last,key,East);
         else if (esc == 2 && key == 68) writeesc(&esc,"<left>\n",last,key,West);
-        else if (esc == 2 && key == 69) writeesc(&esc,"<cent>\n",last,key,Still);
+        else if (esc == 2 && key == 69) writeesc(&esc,"<cent>\n",last,key,Escape);
         else if (esc == 2 && key == 70) writeesc(&esc,"<end>\n",last,key,Suspend);
         else if (esc == 2 && key == 71) writeesc(&esc,"<mid>\n",last,key,Still);
         else if (esc == 2 && key == 72) writeesc(&esc,"<home>\n",last,key,Click);
         else if (esc == 2) writeesc(&esc,"<oops>\n",last,key,Still);
-        else if (esc == 3 && key == 126 && last[2] == 50) writeesc(&esc,"<ins>\n",last,key,Still);
-        else if (esc == 3 && key == 126 && last[2] == 51) writeesc(&esc,"<del>\n",last,key,Still);
+        else if (esc == 3 && key == 126 && last[2] == 50) writeesc(&esc,"<ins>\n",last,key,Escape);
+        else if (esc == 3 && key == 126 && last[2] == 51) writeesc(&esc,"<del>\n",last,key,Escape);
         else if (esc == 3 && key == 126 && last[2] == 52) writeesc(&esc,"<page>\n",last,key,Still);
         else if (esc == 3 && key == 126 && last[2] == 53) writeesc(&esc,"<pgup>\n",last,key,Counter);
         else if (esc == 3 && key == 126 && last[2] == 54) writeesc(&esc,"<pgdn>\n",last,key,Wise);
@@ -970,6 +972,33 @@ void *console(void *arg)
  * command queue and top level
  */
 
+void displayCursor(GLFWwindow *window, double xpos, double ypos);
+void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
+void displayClick(GLFWwindow *window, int button, int action, int mods);
+
+void warp(double xwarp, double ywarp) {
+#ifdef __linux__
+    double xpos, ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
+#endif
+#ifdef __APPLE__
+    int xloc, yloc;
+    glfwGetWindowPos(windowHandle,&xloc,&yloc);
+    struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
+    CGWarpMouseCursorPosition(point);
+#endif
+}
+
+void compass(double xdelta, double ydelta) {
+    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
+    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
+    xwarp += xdelta;
+    ywarp += ydelta;
+    warp(xwarp,ywarp);
+    displayCursor(windowHandle,xwarp,ywarp); // TODO: why sometimes unnecessary
+}
+
 void menu()
 {
     char *buf = arrayMenu();
@@ -978,7 +1007,15 @@ void menu()
         enum Menu line = buf[0]+128;
         click = Init; mode[item[line].mode] = line;}
     else if (len == 1 && buf[0] < Motions) {
-        enqueMsgstr("menu: %s\n", MotionName[buf[0]]);}
+        SWITCH(buf[0],North) compass(0.0,-COMPASS_DELTA);
+        CASE(South) compass(0.0,COMPASS_DELTA);
+        CASE(West) compass(-COMPASS_DELTA,0.0);
+        CASE(East) compass(COMPASS_DELTA,0.0);
+        CASE(Counter) displayScroll(windowHandle,0.0,ROLLER_DELTA);
+        CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
+        CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
+        CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
+        DEFAULT(enqueEvent(Done); enqueCommand(0);)}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocMenu(len+1);
@@ -1094,9 +1131,6 @@ GLuint compileProgram(
 
 void displayClose(GLFWwindow* window);
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods);
-void displayClick(GLFWwindow *window, int button, int action, int mods);
-void displayCursor(GLFWwindow *window, double xpos, double ypos);
-void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
 void displayLocation(GLFWwindow *window, int xloc, int yloc);
 void displaySize(GLFWwindow *window, int width, int height);
 void displayRefresh(GLFWwindow *window);
@@ -2693,17 +2727,7 @@ void rightRight()
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
     double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
     double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
-#ifdef __linux__
-    double xpos, ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
-#endif
-#ifdef __APPLE__
-    int xloc, yloc;
-    glfwGetWindowPos(windowHandle,&xloc,&yloc);
-    struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
-    CGWarpMouseCursorPosition(point);
-#endif
+    warp(xwarp,ywarp);
     click = Left;
 }
 
@@ -2921,7 +2945,7 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
     if (action != GLFW_PRESS) return;
     SWITCH(key,GLFW_KEY_ESCAPE) {enqueEvent(Done); enqueCommand(0);}
     CASE(GLFW_KEY_ENTER) enqueEscape(Endline);
-    CASE(GLFW_KEY_BACKSPACE) enqueEscape(Escape);
+    CASE(GLFW_KEY_BACKSPACE) enqueEscape(Backspace);
     CASE(GLFW_KEY_SPACE) enqueEscape(' ');
     DEFAULT({if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) enqueEscape(key-GLFW_KEY_A+'a');})
 }
