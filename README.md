@@ -45,7 +45,6 @@ Configuration/history files consist of commands. User input appends to file. App
   * --remove takes buffer type and subscript to invalidate  
   * --sample takes per-boundary sidedness to sample with similar embed  
   * --dual takes per-region sidedness to sample with similar embed  
-  * --polyant specifies corner for subsequent commands  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
   * --source takes sound file or source  
@@ -53,7 +52,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --color takes plane subscript and decoration  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
-  * --mirror is like window except region is fixed  
+  * --mirror is like window except tetrahedron is fixed  
   * --matrix takes transformation of display, ignored if not first file  
   * --project takes slope and cutoff, ignored if not first file  
   * --configure warp, refine, color, filter, delay, matrix, arrow, display  
