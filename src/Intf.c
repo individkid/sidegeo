@@ -208,14 +208,14 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
  // index into item[line].name for console undo
-enum Special {Exit,Endline,Backspace};
-#define MOTION(FUNC) FUNC(Escape) \
+#define MOTION(FUNC) FUNC(Escape) FUNC(Exit) FUNC(Enter) FUNC(Back) FUNC(Space) \
     FUNC(North) FUNC(South) FUNC(West) FUNC(East) \
     FUNC(Counter) FUNC(Wise) FUNC(Click) FUNC(Suspend)
 #define MOTIONF(NAME) NAME,
 #define MOTIONG(NAME) #NAME, 
 enum Motion {MOTION(MOTIONF)Motions};
 const char *MotionName[Motions] = {MOTION(MOTIONG)};
+int escape = 0; // escape sequence from OpenGL
 float affineMat[16]; // transformation state at click time
 float affineMata[16]; // left transformation state
 float affineMatb[16]; // right transformation state
@@ -590,11 +590,6 @@ void enqueErrstr(const char *fmt, ...)
     enqueEvent(Error); enqueCommand(0);
 }
 
-void enqueEscape(int val)
-{
-    enquePrint(27); enquePrint(val); enquePrint('\n');
-}
-
 float dotvec(float *u, float *v, int n)
 {
     float w = 0;
@@ -777,7 +772,7 @@ void writenum(int key)
 
 void writekey(int key)
 {
-    enqueScan(key); enqueScan('\n');
+    if (key != Escape) {enqueScan(key+128); enqueScan('\n');}
 }
 
 void writeesc(int *esc, const char *str, int *last, int key, int code)
@@ -848,6 +843,11 @@ int isEndLine(char *chr)
 
 // Scan -> Input(console) -> Input(main) -> Menu
 // Print -> Output(main) -> Output(console) -> Echo
+// console regular key, space, backspace highlights menu
+// console enter sends highlight to main as 128+Motions+
+// console special-key, escape-enter sent to main as 128+
+// main regular key to console as 128+Motions+
+// main space, backspace, enter, special-key, escape-enter sent to console as 128+
 void *console(void *arg)
 {
     enqueLine(0); enqueMatch(0);
@@ -875,22 +875,42 @@ void *console(void *arg)
     int esc = 0;
     writeitem(tailLine(),tailMatch());
     while (1) {
+        int done = (sizeScan() == 2 && headScan()+128 == Exit);
         int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
         else if (lenIn > 0) delocScan(lenIn);
+        if (done) break;
 
         int totOut = 0; int lenOut;
         while ((lenOut = detryOutput(enlocEcho(10),&isEndLine,10)) == 0) totOut += 10;
         if ((lenOut < 0 && totOut > 0) || sizeEcho() != totOut+10) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Exit) {
-            delocEcho(10); break;}
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Endline) {
+        else if (totOut+lenOut == 2 && headEcho()+128 == Escape) {
+            enqueInject(27); enqueInject('\n'); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == Enter) {
             enqueInject('\n'); delocEcho(10);}
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] == Backspace) {
+        else if (totOut+lenOut == 2 && headEcho()+128 == Back) {
             enqueInject(127); delocEcho(10);}
-        else if (totOut+lenOut == 3 && headEcho() == 27 && arrayEcho()[1] > 2) {
-            enqueInject(arrayEcho()[1]); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == Space) {
+            enqueInject(' '); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == North) {
+            enqueInject(27); enqueInject(91); enqueInject(65); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == South) {
+            enqueInject(27); enqueInject(91); enqueInject(66); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == East) {
+            enqueInject(27); enqueInject(91); enqueInject(67); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == West) {
+            enqueInject(27); enqueInject(91); enqueInject(68); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == Suspend) {
+            enqueInject(27); enqueInject(91); enqueInject(70); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == Click) {
+            enqueInject(27); enqueInject(91); enqueInject(72); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == Counter) {
+            enqueInject(27); enqueInject(91); enqueInject(53); enqueInject(126); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 == Wise) {
+            enqueInject(27); enqueInject(91); enqueInject(54); enqueInject(126); delocEcho(10);}
+        else if (totOut+lenOut == 2 && headEcho()+128 >= Motions && headEcho()+128 < Motions+'z'-'a'+1) {
+            enqueInject(headEcho()+128-Motions+'a'); delocEcho(10);}
         else {
             unlocEcho(10-lenOut);
             unwriteitem(tailLine());
@@ -926,7 +946,7 @@ void *console(void *arg)
             enqueLine(line); enqueMatch(0);
             if (collect != Menus && mode == item[collect].mode) {
                 // change mode to selected leaf
-                mark[mode] = line; enqueScan(line+128); enqueScan('\n');}
+                mark[mode] = line; enqueScan(line+128+Motions); enqueScan('\n');}
             else {
                 // go to line in selected menu indicated by mode
                 enqueLine(mark[mode]); enqueMatch(0);}}
@@ -939,6 +959,7 @@ void *console(void *arg)
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 0) writeesc(&esc,"<oops>\n",last,key,Escape);
+        else if (esc == 1 && key == '\n') writeesc(&esc,"<exit>\n",last,key,Exit);
         else if (esc == 1 && key == 91) last[esc++] = key;
         else if (esc == 1) writeesc(&esc,"<oops>\n",last,key,Escape);
         else if (esc == 2 && key == 50) last[esc++] = key;
@@ -976,7 +997,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos);
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
 void displayClick(GLFWwindow *window, int button, int action, int mods);
 
-void warp(double xwarp, double ywarp) {
+void warp(double xwarp, double ywarp)
+{
 #ifdef __linux__
     double xpos, ypos;
     glfwGetCursorPos(windowHandle,&xpos,&ypos);
@@ -1004,11 +1026,8 @@ void menu()
     char *buf = arrayMenu();
     int len = 0;
     while (buf[len] != '\n') len++;
-    if (len == 1 && buf[0] < 0) {
-        enum Menu line = buf[0]+128;
-        click = Init; mode[item[line].mode] = line;}
-    else if (len == 1 && buf[0] < Motions) {
-        SWITCH(buf[0],North) compass(0.0,-COMPASS_DELTA);
+    if (len == 1 && buf[0] < 0 && buf[0]+128 < Motions) {
+        SWITCH(buf[0]+128,North) compass(0.0,-COMPASS_DELTA);
         CASE(South) compass(0.0,COMPASS_DELTA);
         CASE(West) compass(-COMPASS_DELTA,0.0);
         CASE(East) compass(COMPASS_DELTA,0.0);
@@ -1016,7 +1035,11 @@ void menu()
         CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
         CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
         CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
-        DEFAULT(enqueEvent(Done); enqueCommand(0);)}
+        CASE(Exit) {enqueEvent(Done); enqueCommand(0);}
+        DEFAULT(exitErrstr("unexpected menu motion\n");)}
+    else if (len == 1 && buf[0] < 0) {
+        enum Menu line = buf[0]+128-Motions;
+        click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocMenu(len+1);
@@ -1867,13 +1890,8 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
-    enqueEscape(Exit);
-    while (validPrint()) {
-        int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
-        if (lenOut <= 0) exitErrstr("entryOutput failed\n");
-        delocPrint(lenOut);
-        if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
+    while (validPrint()) printf("%s\n",arrayPrint());
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
     if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
     if (files.base) {struct Files initial = {0}; free(files.base); files = initial;}
@@ -2943,12 +2961,21 @@ void displayClose(GLFWwindow* window)
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (action != GLFW_PRESS) return;
-    SWITCH(key,GLFW_KEY_ESCAPE) {enqueEvent(Done); enqueCommand(0);}
-    CASE(GLFW_KEY_ENTER) enqueEscape(Endline);
-    CASE(GLFW_KEY_BACKSPACE) enqueEscape(Backspace);
-    CASE(GLFW_KEY_SPACE) enqueEscape(' ');
-    DEFAULT({if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) enqueEscape(key-GLFW_KEY_A+'a');})
+    if (action == GLFW_RELEASE) return;
+    SWITCH(key,GLFW_KEY_ESCAPE) {escape = 1; return;}
+    CASE(GLFW_KEY_ENTER) {if (escape) enquePrint(Escape+128); else enquePrint(Enter+128); enquePrint('\n');}
+    CASE(GLFW_KEY_RIGHT) {enquePrint(East+128); enquePrint('\n');}
+    CASE(GLFW_KEY_LEFT) {enquePrint(West+128); enquePrint('\n');}
+    CASE(GLFW_KEY_DOWN) {enquePrint(South+128); enquePrint('\n');}
+    CASE(GLFW_KEY_UP) {enquePrint(North+128); enquePrint('\n');}
+    CASE(GLFW_KEY_PAGE_UP) {enquePrint(Counter+128); enquePrint('\n');}
+    CASE(GLFW_KEY_PAGE_DOWN) {enquePrint(Wise+128); enquePrint('\n');}
+    CASE(GLFW_KEY_HOME) {enquePrint(Click+128); enquePrint('\n');}
+    CASE(GLFW_KEY_END) {enquePrint(Suspend+128); enquePrint('\n');}
+    CASE(GLFW_KEY_BACKSPACE) {enquePrint(Back+128); enquePrint('\n');}
+    CASE(GLFW_KEY_SPACE) {enquePrint(Space+128); enquePrint('\n');}
+    DEFAULT(if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {enquePrint(key-GLFW_KEY_A+128+Motions); enquePrint('\n');})
+    escape = 0;
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
