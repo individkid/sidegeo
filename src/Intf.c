@@ -761,29 +761,6 @@ void writestr(const char *str)
     for (int i = 0; str[i]; i++) writechr(str[i]);
 }
 
-void writenum(int key)
-{
-    int len = snprintf(0,0,"<%d>",key);
-    char buf[len+1];
-    if (len < 0) exitErrstr("snprintf failed\n");
-    if (snprintf(buf,len+1,"<%d>",key) != len) exitErrstr("snprintf failed\n");
-    writestr(buf);
-}
-
-void writekey(int key)
-{
-    if (key != Escape) {enqueScan(key+128); enqueScan('\n');}
-}
-
-void writeesc(int *esc, const char *str, int *last, int key, int code)
-{
-    for (int i = 0; i < *esc; i++) writenum(last[i]);
-    writenum(key);
-    writestr(str);
-    *esc = 0;
-    writekey(code);
-}
-
 void writeitem(enum Menu line, int match)
 {
     struct Item *iptr = &item[line];
@@ -909,7 +886,7 @@ void *console(void *arg)
             enqueInject(27); enqueInject(91); enqueInject(53); enqueInject(126); delocEcho(10);}
         else if (totOut+lenOut == 2 && headEcho()+128 == Wise) {
             enqueInject(27); enqueInject(91); enqueInject(54); enqueInject(126); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 >= Motions && headEcho()+128 < Motions+'z'-'a'+1) {
+        else if (totOut+lenOut == 2 && headEcho()+128 >= Motions && headEcho()+128 <= Motions+'z'-'a') {
             enqueInject(headEcho()+128-Motions+'a'); delocEcho(10);}
         else {
             unlocEcho(10-lenOut);
@@ -920,8 +897,7 @@ void *console(void *arg)
             writeitem(tailLine(),tailMatch());}
 
         int key;
-        if (validInject()) {
-            key = headInject(); dequeInject();}
+        if (validInject()) {key = headInject(); dequeInject();}
         else {
             fd_set fds;
             FD_ZERO(&fds);
@@ -958,30 +934,30 @@ void *console(void *arg)
         else if (esc == 0 && key >= 'A' && key <= 'Z' && tailMatch() > 0) writematch(key-'A'+'a');
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
-        else if (esc == 0) writeesc(&esc,"<oops>\n",last,key,Escape);
-        else if (esc == 1 && key == '\n') writeesc(&esc,"<exit>\n",last,key,Exit);
+        else if (esc == 0) writemenu();
+        else if (esc == 1 && key == '\n') {enqueScan(Exit+128); enqueScan('\n'); esc = 0;}
         else if (esc == 1 && key == 91) last[esc++] = key;
-        else if (esc == 1) writeesc(&esc,"<oops>\n",last,key,Escape);
+        else if (esc == 1) esc = 0;
         else if (esc == 2 && key == 50) last[esc++] = key;
         else if (esc == 2 && key == 51) last[esc++] = key;
         else if (esc == 2 && key == 52) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
-        else if (esc == 2 && key == 65) writeesc(&esc,"<up>\n",last,key,North);
-        else if (esc == 2 && key == 66) writeesc(&esc,"<down>\n",last,key,South);
-        else if (esc == 2 && key == 67) writeesc(&esc,"<right>\n",last,key,East);
-        else if (esc == 2 && key == 68) writeesc(&esc,"<left>\n",last,key,West);
-        else if (esc == 2 && key == 69) writeesc(&esc,"<cent>\n",last,key,Escape);
-        else if (esc == 2 && key == 70) writeesc(&esc,"<end>\n",last,key,Suspend);
-        else if (esc == 2 && key == 71) writeesc(&esc,"<mid>\n",last,key,Escape);
-        else if (esc == 2 && key == 72) writeesc(&esc,"<home>\n",last,key,Click);
-        else if (esc == 2) writeesc(&esc,"<oops>\n",last,key,Escape);
-        else if (esc == 3 && key == 126 && last[2] == 50) writeesc(&esc,"<ins>\n",last,key,Escape);
-        else if (esc == 3 && key == 126 && last[2] == 51) writeesc(&esc,"<del>\n",last,key,Escape);
-        else if (esc == 3 && key == 126 && last[2] == 52) writeesc(&esc,"<page>\n",last,key,Escape);
-        else if (esc == 3 && key == 126 && last[2] == 53) writeesc(&esc,"<pgup>\n",last,key,Counter);
-        else if (esc == 3 && key == 126 && last[2] == 54) writeesc(&esc,"<pgdn>\n",last,key,Wise);
-        else writeesc(&esc,"<oops>\n",last,key,Escape);
+        else if (esc == 2 && key == 65) {enqueScan(North+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 66) {enqueScan(South+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 67) {enqueScan(East+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 68) {enqueScan(West+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 69) {writemenu(); esc = 0;}
+        else if (esc == 2 && key == 70) {enqueScan(Suspend+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 71) {writemenu(); esc = 0;}
+        else if (esc == 2 && key == 72) {enqueScan(Click+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2) {writemenu(); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 50) {writemenu(); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 51) {writemenu(); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 52) {writemenu(); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 53) {enqueScan(Counter+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 54) {enqueScan(Wise+128); enqueScan('\n'); esc = 0;}
+        else {writemenu(); esc = 0;}
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
 
@@ -2962,20 +2938,26 @@ void displayClose(GLFWwindow* window)
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE) return;
-    SWITCH(key,GLFW_KEY_ESCAPE) {escape = 1; return;}
-    CASE(GLFW_KEY_ENTER) {if (escape) enquePrint(Escape+128); else enquePrint(Enter+128); enquePrint('\n');}
-    CASE(GLFW_KEY_RIGHT) {enquePrint(East+128); enquePrint('\n');}
-    CASE(GLFW_KEY_LEFT) {enquePrint(West+128); enquePrint('\n');}
-    CASE(GLFW_KEY_DOWN) {enquePrint(South+128); enquePrint('\n');}
-    CASE(GLFW_KEY_UP) {enquePrint(North+128); enquePrint('\n');}
-    CASE(GLFW_KEY_PAGE_UP) {enquePrint(Counter+128); enquePrint('\n');}
-    CASE(GLFW_KEY_PAGE_DOWN) {enquePrint(Wise+128); enquePrint('\n');}
-    CASE(GLFW_KEY_HOME) {enquePrint(Click+128); enquePrint('\n');}
-    CASE(GLFW_KEY_END) {enquePrint(Suspend+128); enquePrint('\n');}
-    CASE(GLFW_KEY_BACKSPACE) {enquePrint(Back+128); enquePrint('\n');}
-    CASE(GLFW_KEY_SPACE) {enquePrint(Space+128); enquePrint('\n');}
-    DEFAULT(if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {enquePrint(key-GLFW_KEY_A+128+Motions); enquePrint('\n');})
-    escape = 0;
+    if (escape) {
+        SWITCH(key,GLFW_KEY_ENTER) {enquePrint(Escape+128); enquePrint('\n');}
+        DEFAULT(enquePrint(Space+128); enquePrint('\n');)
+        escape = 0;}
+    else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
+        enquePrint(key-GLFW_KEY_A+128+Motions); enquePrint('\n');}
+    else {
+        SWITCH(key,GLFW_KEY_ESCAPE) escape = 1;
+        CASE(GLFW_KEY_ENTER) {enquePrint(Enter+128); enquePrint('\n');}
+        CASE(GLFW_KEY_RIGHT) {enquePrint(East+128); enquePrint('\n');}
+        CASE(GLFW_KEY_LEFT) {enquePrint(West+128); enquePrint('\n');}
+        CASE(GLFW_KEY_DOWN) {enquePrint(South+128); enquePrint('\n');}
+        CASE(GLFW_KEY_UP) {enquePrint(North+128); enquePrint('\n');}
+        CASE(GLFW_KEY_PAGE_UP) {enquePrint(Counter+128); enquePrint('\n');}
+        CASE(GLFW_KEY_PAGE_DOWN) {enquePrint(Wise+128); enquePrint('\n');}
+        CASE(GLFW_KEY_HOME) {enquePrint(Click+128); enquePrint('\n');}
+        CASE(GLFW_KEY_END) {enquePrint(Suspend+128); enquePrint('\n');}
+        CASE(GLFW_KEY_BACKSPACE) {enquePrint(Back+128); enquePrint('\n');}
+        CASE(GLFW_KEY_SPACE) {enquePrint(Space+128); enquePrint('\n');}
+        DEFAULT(enquePrint(Space+128); enquePrint('\n');)}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
