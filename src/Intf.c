@@ -814,35 +814,44 @@ int isEndLine(char *chr)
 
 enum Motion motionof(char code)
 {
-    if ((int)code >= 0 || (int)code + 128 >= Motions) return Motions;
-    return (int)code + 128;
+    int uchar = code; if (uchar < 0) uchar += 256;
+    if (uchar < 128 || uchar - 128 >= Motions) return Motions;
+    return uchar - 128;
 }
 
 char alphaof(char code)
 {
-    if ((int)code >= 0 || (int)code + 128 < Motions || (int)code + 128 - Motions > 'z') return 0;
-    return (char)((int)code + 128 - Motions) + 'a';
+    int uchar = code; if (uchar < 0) uchar += 256;
+    if (uchar < 128 || uchar - 128 < Motions || uchar - 128 - Motions + 'a' > 'z') return 0;
+    return uchar - 128 - Motions + 'a';
 }
 
 int indexof(char code)
 {
-    if ((int)code >= 0 || (int)code + 128 < Motions) return -1;
-    return code + 128 - Motions;
+    int uchar = code; if (uchar < 0) uchar += 256;
+    if (uchar < 128 || uchar - 128 < Motions) return -1;
+    return uchar - 128 - Motions;
 }
 
 char ofmotion(enum Motion code)
 {
-    return (int)code + 128;
+    int uchar = (int)code + 128;
+    if (motionof(uchar) != code) exitErrstr("code not reversed\n");
+    return uchar;
 }
 
 char ofalpha(char code)
 {
-    return (int)(code - 'a') + 128 + Motions;
+    int uchar = (int)code - 'a' + 128 + Motions;
+    if (alphaof(uchar) != code) exitErrstr("code not reversed\n");
+    return uchar;
 }
 
 char ofindex(int code)
 {
-    return code + 128 + Motions;
+    int uchar = (int)code + 128 + Motions;
+    if (indexof(uchar) != code) exitErrstr("code not reversed\n");
+    return uchar;
 }
 
 // Scan -> Input(console) -> Input(main) -> Menu
@@ -1029,7 +1038,7 @@ void menu()
     char *buf = arrayMenu();
     int len = 0;
     while (buf[len] != '\n') len++;
-    if (len == 1 && motionof(buf[0]) >= 0 && motionof(buf[0]) < Motions) {
+    if (len == 1 && motionof(buf[0]) < Motions) {
         SWITCH(motionof(buf[0]),North) compass(0.0,-COMPASS_DELTA);
         CASE(South) compass(0.0,COMPASS_DELTA);
         CASE(West) compass(-COMPASS_DELTA,0.0);
