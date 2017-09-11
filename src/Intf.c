@@ -208,13 +208,7 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
  // index into item[line].name for console undo
-#define MOTION(FUNC) FUNC(Escape) FUNC(Exit) FUNC(Enter) FUNC(Back) FUNC(Space) \
-    FUNC(North) FUNC(South) FUNC(West) FUNC(East) \
-    FUNC(Counter) FUNC(Wise) FUNC(Click) FUNC(Suspend)
-#define MOTIONF(NAME) NAME,
-#define MOTIONG(NAME) #NAME, 
-enum Motion {MOTION(MOTIONF)Motions};
-const char *MotionName[Motions] = {MOTION(MOTIONG)};
+enum Motion {Escape,Exit,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
 int escape = 0; // escape sequence from OpenGL
 float affineMat[16]; // transformation state at click time
 float affineMata[16]; // left transformation state
@@ -818,6 +812,39 @@ int isEndLine(char *chr)
     return (*chr == '\n');
 }
 
+enum Motion motionof(char code)
+{
+    if ((int)code >= 0 || (int)code + 128 >= Motions) return Motions;
+    return (int)code + 128;
+}
+
+char alphaof(char code)
+{
+    if ((int)code >= 0 || (int)code + 128 < Motions || (int)code + 128 - Motions > 'z') return 0;
+    return (char)((int)code + 128 - Motions) + 'a';
+}
+
+int indexof(char code)
+{
+    if ((int)code >= 0 || (int)code + 128 < Motions) return -1;
+    return code + 128 - Motions;
+}
+
+char ofmotion(enum Motion code)
+{
+    return (int)code + 128;
+}
+
+char ofalpha(char code)
+{
+    return (int)(code - 'a') + 128 + Motions;
+}
+
+char ofindex(int code)
+{
+    return code + 128 + Motions;
+}
+
 // Scan -> Input(console) -> Input(main) -> Menu
 // Print -> Output(main) -> Output(console) -> Echo
 // console regular key, space, backspace highlights menu
@@ -852,7 +879,7 @@ void *console(void *arg)
     int esc = 0;
     writeitem(tailLine(),tailMatch());
     while (1) {
-        int done = (sizeScan() == 2 && headScan()+128 == Exit);
+        int done = (sizeScan() == 2 && motionof(headScan()) == Exit);
         int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
         else if (lenIn > 0) delocScan(lenIn);
@@ -862,32 +889,32 @@ void *console(void *arg)
         while ((lenOut = detryOutput(enlocEcho(10),&isEndLine,10)) == 0) totOut += 10;
         if ((lenOut < 0 && totOut > 0) || sizeEcho() != totOut+10) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocEcho(10);
-        else if (totOut+lenOut == 2 && headEcho()+128 == Escape) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Escape) {
             enqueInject(27); enqueInject('\n'); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == Enter) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Enter) {
             enqueInject('\n'); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == Back) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Back) {
             enqueInject(127); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == Space) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Space) {
             enqueInject(' '); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == North) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == North) {
             enqueInject(27); enqueInject(91); enqueInject(65); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == South) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == South) {
             enqueInject(27); enqueInject(91); enqueInject(66); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == East) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == East) {
             enqueInject(27); enqueInject(91); enqueInject(67); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == West) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == West) {
             enqueInject(27); enqueInject(91); enqueInject(68); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == Suspend) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Suspend) {
             enqueInject(27); enqueInject(91); enqueInject(70); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == Click) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Click) {
             enqueInject(27); enqueInject(91); enqueInject(72); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == Counter) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Counter) {
             enqueInject(27); enqueInject(91); enqueInject(53); enqueInject(126); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 == Wise) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Wise) {
             enqueInject(27); enqueInject(91); enqueInject(54); enqueInject(126); delocEcho(10);}
-        else if (totOut+lenOut == 2 && headEcho()+128 >= Motions && headEcho()+128 <= Motions+'z'-'a') {
-            enqueInject(headEcho()+128-Motions+'a'); delocEcho(10);}
+        else if (totOut+lenOut == 2 && alphaof(headEcho()) >= 'a' && alphaof(headEcho()) <= 'z') {
+            enqueInject(alphaof(headEcho())); delocEcho(10);}
         else {
             unlocEcho(10-lenOut);
             unwriteitem(tailLine());
@@ -922,7 +949,7 @@ void *console(void *arg)
             enqueLine(line); enqueMatch(0);
             if (collect != Menus && mode == item[collect].mode) {
                 // change mode to selected leaf
-                mark[mode] = line; enqueScan(line+128+Motions); enqueScan('\n');}
+                mark[mode] = line; enqueScan(ofindex(line)); enqueScan('\n');}
             else {
                 // go to line in selected menu indicated by mode
                 enqueLine(mark[mode]); enqueMatch(0);}}
@@ -935,7 +962,7 @@ void *console(void *arg)
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 0) writemenu();
-        else if (esc == 1 && key == '\n') {enqueScan(Exit+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 1 && key == '\n') {enqueScan(ofmotion(Exit)); enqueScan('\n'); esc = 0;}
         else if (esc == 1 && key == 91) last[esc++] = key;
         else if (esc == 1) esc = 0;
         else if (esc == 2 && key == 50) last[esc++] = key;
@@ -943,20 +970,20 @@ void *console(void *arg)
         else if (esc == 2 && key == 52) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
-        else if (esc == 2 && key == 65) {enqueScan(North+128); enqueScan('\n'); esc = 0;}
-        else if (esc == 2 && key == 66) {enqueScan(South+128); enqueScan('\n'); esc = 0;}
-        else if (esc == 2 && key == 67) {enqueScan(East+128); enqueScan('\n'); esc = 0;}
-        else if (esc == 2 && key == 68) {enqueScan(West+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 65) {enqueScan(ofmotion(North)); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 66) {enqueScan(ofmotion(South)); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 67) {enqueScan(ofmotion(East)); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 68) {enqueScan(ofmotion(West)); enqueScan('\n'); esc = 0;}
         else if (esc == 2 && key == 69) {writemenu(); esc = 0;}
-        else if (esc == 2 && key == 70) {enqueScan(Suspend+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 70) {enqueScan(ofmotion(Suspend)); enqueScan('\n'); esc = 0;}
         else if (esc == 2 && key == 71) {writemenu(); esc = 0;}
-        else if (esc == 2 && key == 72) {enqueScan(Click+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 72) {enqueScan(ofmotion(Click)); enqueScan('\n'); esc = 0;}
         else if (esc == 2) {writemenu(); esc = 0;}
         else if (esc == 3 && key == 126 && last[2] == 50) {writemenu(); esc = 0;}
         else if (esc == 3 && key == 126 && last[2] == 51) {writemenu(); esc = 0;}
         else if (esc == 3 && key == 126 && last[2] == 52) {writemenu(); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 53) {enqueScan(Counter+128); enqueScan('\n'); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 54) {enqueScan(Wise+128); enqueScan('\n'); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 53) {enqueScan(ofmotion(Counter)); enqueScan('\n'); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 54) {enqueScan(ofmotion(Wise)); enqueScan('\n'); esc = 0;}
         else {writemenu(); esc = 0;}
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
@@ -1002,8 +1029,8 @@ void menu()
     char *buf = arrayMenu();
     int len = 0;
     while (buf[len] != '\n') len++;
-    if (len == 1 && buf[0] < 0 && buf[0]+128 < Motions) {
-        SWITCH(buf[0]+128,North) compass(0.0,-COMPASS_DELTA);
+    if (len == 1 && motionof(buf[0]) >= 0 && motionof(buf[0]) < Motions) {
+        SWITCH(motionof(buf[0]),North) compass(0.0,-COMPASS_DELTA);
         CASE(South) compass(0.0,COMPASS_DELTA);
         CASE(West) compass(-COMPASS_DELTA,0.0);
         CASE(East) compass(COMPASS_DELTA,0.0);
@@ -1013,8 +1040,8 @@ void menu()
         CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
         CASE(Exit) {enqueEvent(Done); enqueCommand(0);}
         DEFAULT(exitErrstr("unexpected menu motion\n");)}
-    else if (len == 1 && buf[0] < 0) {
-        enum Menu line = buf[0]+128-Motions;
+    else if (len == 1 && indexof(buf[0]) >= 0) {
+        enum Menu line = indexof(buf[0]);
         click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
@@ -2937,27 +2964,27 @@ void displayClose(GLFWwindow* window)
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (action == GLFW_RELEASE) return;
+    if (action == GLFW_RELEASE || key > GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) {enquePrint(Escape+128); enquePrint('\n');}
-        DEFAULT(enquePrint(Space+128); enquePrint('\n');)
+        SWITCH(key,GLFW_KEY_ENTER) {enquePrint(ofmotion(Escape)); enquePrint('\n');}
+        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-        enquePrint(key-GLFW_KEY_A+128+Motions); enquePrint('\n');}
+        enquePrint(ofalpha(key-GLFW_KEY_A+'a')); enquePrint('\n');}
     else {
         SWITCH(key,GLFW_KEY_ESCAPE) escape = 1;
-        CASE(GLFW_KEY_ENTER) {enquePrint(Enter+128); enquePrint('\n');}
-        CASE(GLFW_KEY_RIGHT) {enquePrint(East+128); enquePrint('\n');}
-        CASE(GLFW_KEY_LEFT) {enquePrint(West+128); enquePrint('\n');}
-        CASE(GLFW_KEY_DOWN) {enquePrint(South+128); enquePrint('\n');}
-        CASE(GLFW_KEY_UP) {enquePrint(North+128); enquePrint('\n');}
-        CASE(GLFW_KEY_PAGE_UP) {enquePrint(Counter+128); enquePrint('\n');}
-        CASE(GLFW_KEY_PAGE_DOWN) {enquePrint(Wise+128); enquePrint('\n');}
-        CASE(GLFW_KEY_HOME) {enquePrint(Click+128); enquePrint('\n');}
-        CASE(GLFW_KEY_END) {enquePrint(Suspend+128); enquePrint('\n');}
-        CASE(GLFW_KEY_BACKSPACE) {enquePrint(Back+128); enquePrint('\n');}
-        CASE(GLFW_KEY_SPACE) {enquePrint(Space+128); enquePrint('\n');}
-        DEFAULT(enquePrint(Space+128); enquePrint('\n');)}
+        CASE(GLFW_KEY_ENTER) {enquePrint(ofmotion(Enter)); enquePrint('\n');}
+        CASE(GLFW_KEY_RIGHT) {enquePrint(ofmotion(East)); enquePrint('\n');}
+        CASE(GLFW_KEY_LEFT) {enquePrint(ofmotion(West)); enquePrint('\n');}
+        CASE(GLFW_KEY_DOWN) {enquePrint(ofmotion(South)); enquePrint('\n');}
+        CASE(GLFW_KEY_UP) {enquePrint(ofmotion(North)); enquePrint('\n');}
+        CASE(GLFW_KEY_PAGE_UP) {enquePrint(ofmotion(Counter)); enquePrint('\n');}
+        CASE(GLFW_KEY_PAGE_DOWN) {enquePrint(ofmotion(Wise)); enquePrint('\n');}
+        CASE(GLFW_KEY_HOME) {enquePrint(ofmotion(Click)); enquePrint('\n');}
+        CASE(GLFW_KEY_END) {enquePrint(ofmotion(Suspend)); enquePrint('\n');}
+        CASE(GLFW_KEY_BACKSPACE) {enquePrint(ofmotion(Back)); enquePrint('\n');}
+        CASE(GLFW_KEY_SPACE) {enquePrint(ofmotion(Space)); enquePrint('\n');}
+        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
