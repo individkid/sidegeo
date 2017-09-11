@@ -24,6 +24,7 @@ import Foreign.Storable
 import Foreign.C.Types
 import Foreign.Marshal.Array
 import Foreign.C.String
+import Language.Haskell.Interpreter
 import AffTopo.Naive
 
 foreign import ccall "place" placeC :: CInt -> CInt -> IO (Ptr CInt)
@@ -144,6 +145,7 @@ handleEvent = do
   "Fill" -> handleFill <$> handleEventF <*> handleEventF >> return False
   "Hollow" -> handleHollow <$> handleEventF <*> handleEventF >> return False
   "Remove" ->  handleRemove <$> handleEventG <*> handleEventF >> return False
+  "Call" -> handleCall <$> handleEventF <*> handleEventG >> return False
   "Error" -> return True
   "Done" -> return True
   _ -> printStr (concat ["unknown event ",(show event),"\n"]) >> return True
@@ -348,3 +350,11 @@ handleRemove "Face" index =
  in writeBuffer writeFaceSubC face2 >>
  handleInflateH
 handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])
+
+handleCall :: Int -> String -> IO ()
+handleCall file expr = do
+ result <- runInterpreter $ do
+  setImportsQ [("Prelude", Nothing)] -- TODO provide library for preprocess unprocess
+  eval expr
+ putStrLn $ show result
+

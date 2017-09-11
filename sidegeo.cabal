@@ -62,7 +62,8 @@ executable sculpt
   build-depends:       base >=4.8 && <4.9,
                        containers,
                        hmatrix,
-                       random
+                       random,
+                       hint
   hs-source-dirs:      src
   c-sources:           src/Intf.c
   if os(linux)

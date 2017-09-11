@@ -306,11 +306,12 @@ enum Event {
     Fill, // alter embed and refill faceSub and frameSub
     Hollow, // alter embed and refill faceSub and frameSub
     Remove, // pack out from faceSub and frameSub
+    Call, // allow given string to modify file
     Error, // terminate with prejudice
     Done}; // terminate normally
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-enum Kind {Place,Boundary,Face};
+enum Kind {Place,Boundary,Face,Other};
 struct Kinds {DECLARE_QUEUE(enum Kind)} kinds = {0};
  // argument for remove command
 struct Chars chars = {0};
@@ -1971,7 +1972,7 @@ void process()
         if ((source = fopen(headOption(),"r")) == 0) {enqueErrstr("cannot open source\n"); DEQUE(process,Process)}
         dequeOption();
         if (!validOption()) {enqueErrstr("missing dest file\n"); DEQUE(process,Process)}
-        if ((dest = fopen(headOption(),"r")) == 0) {enqueErrstr("cannot open dest\n"); DEQUE(process,Process)}
+        if ((dest = fopen(headOption(),"w")) == 0) {enqueErrstr("cannot open dest\n"); DEQUE(process,Process)}
         while (fgets(body+length,256-length,source)) {
             if ((length > 0 && body[length] == '-' && body[length+1] == '-') ||
                 (length > 0 && isxdigit(body[length]) && isxdigit(body[length+1]) && body[length+2] == '-' && body[length+3] == '-')) {
@@ -1979,7 +1980,7 @@ void process()
                 int len = strlen(body);
                 strncpy(temp,body,length);
                 fputs(temp,dest);
-                memmove(body,body,len-length+1);}
+                memmove(body,body+length,len-length+1);}
             length = strlen(body);
             if (length >= 2 && body[0] == '-' && body[1] == '-') {
                 memmove(body+2,body,length+1);
@@ -2348,7 +2349,7 @@ void configure()
 {
     struct File *file = arrayFile();
     int location = 0;
-    char filename[256] = {0};
+    char chars[256] = {0};
     char suffix = 0;
     int index = 0;
     enum Action action = Defer;
@@ -2406,7 +2407,11 @@ void configure()
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         retval = Reque; *file->buffer = 0;
         enqueCommand(0); enqueEvent(Remove); enqueKind(Boundary); enqueInt(index);}
-    if (retval == Advance && sscanf(file->buffer,"--branch %d %s", &location, filename) == 2 && file->mode == 0) {
+    if (retval == Advance && sscanf(file->buffer,"--call %d %s", &index, chars) == 2 && file->mode == 0) {
+        int len = strlen(chars);
+        retval = Reque; *file->buffer = 0;
+        enqueCommand(0); enqueEvent(Call); enqueKind(Other); enqueInt(len); strncpy(enlocChar(len),chars,len); enqueInt(index);}
+    if (retval == Advance && sscanf(file->buffer,"--branch %d %s", &location, chars) == 2 && file->mode == 0) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
     if (retval == Advance) {retval = fileTest(file,"test plane",&planeBuf);}
@@ -2730,19 +2735,16 @@ void leftTransform()
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
     for (int i = 0; i < 16; i++) affineMat[i] = affineMata[i];
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    click = Left;
 }
 
 void leftModify()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    click = Left;
 }
 
 void leftManipulate()
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    click = Left;
 }
 
 void leftLeft()
@@ -2750,7 +2752,6 @@ void leftLeft()
     glUseProgram(program[pershader]);
     glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
-    click = Init;
 }
 
 void rightRight()
@@ -2759,7 +2760,6 @@ void rightRight()
     double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
     double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
     warp(xwarp,ywarp);
-    click = Left;
 }
 
 void rightLeft()
@@ -2768,7 +2768,6 @@ void rightLeft()
     glUseProgram(program[pershader]);
     glUniformMatrix4fv(uniform[pershader][Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
-    click = Right;
 }
 
 void transformRight()
@@ -2786,7 +2785,6 @@ void matrixMatrix()
     jumpmat(affineMat,affineMatb,4);
     identmat(affineMatb,4);
     wPos = 0.0;
-    click = Left;
 }
 
 void matrixRotate(float *u)
@@ -2966,9 +2964,15 @@ void manipulateDrive()
     // TODO
 }
 
+/*
+state consists of click-mode and menu-selections.
+display* callbacks cause state transitions.
+
+*/
+
 void displayClose(GLFWwindow* window)
 {
-    enqueEvent(Done); enqueCommand(0);
+    enquePrint(ofmotion(Escape)); enquePrint('\n');
 }
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -3011,28 +3015,28 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             SWITCH(click,Init) leftRefine();
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Transform) {
-            SWITCH(click,Init) FALL(Right) leftTransform();
-            CASE(Matrix) matrixMatrix();
-            FALL(Left) leftLeft();
+            SWITCH(click,Init) FALL(Right) {leftTransform(); click = Left;}
+            CASE(Matrix) {matrixMatrix(); click = Left;}
+            FALL(Left) {leftLeft(); click = Init;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Modify) {
-            SWITCH(click,Init) FALL(Right) leftModify();
-            CASE(Matrix) matrixMatrix();
-            FALL(Left) leftLeft();
+            SWITCH(click,Init) FALL(Right) {leftModify(); click = Left;}
+            CASE(Matrix) {matrixMatrix(); click = Left;}
+            FALL(Left) {leftLeft(); click = Init;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Manipulate) {
-            SWITCH(click,Init) FALL(Right) leftManipulate();
-            CASE(Matrix) matrixMatrix();
-            FALL(Left) leftLeft();
+            SWITCH(click,Init) FALL(Right) {leftManipulate(); click = Left;}
+            CASE(Matrix) {matrixMatrix(); click = Left;}
+            FALL(Left) {leftLeft(); click = Init;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
-        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
         CASE(Transform) FALL(Modify) FALL(Manipulate) {
-            SWITCH(click,Init) {/*ignore*/}
-            CASE(Right) rightRight();
-            CASE(Matrix) matrixMatrix();
-            FALL(Left) rightLeft();
+            SWITCH(click,Init)
+            CASE(Right) {rightRight(); click = Left;}
+            CASE(Matrix) {matrixMatrix(); click = Left;}
+            FALL(Left) {rightLeft(); click = Right;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode\n");)}
     DEFAULT(enqueMsgstr("displayClick %d\n",button);)
@@ -3043,11 +3047,11 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
-    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) 
             transformRight();
-        CASE(Matrix) matrixMatrix();
+        CASE(Matrix) {matrixMatrix(); click = Left;}
         FALL(Left) {
             SWITCH(mode[Mouse],Rotate) transformRotate();
             CASE(Translate) transformTranslate();
@@ -3057,7 +3061,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     CASE(Modify) {
         SWITCH(click,Init) FALL(Right) 
             transformRight();
-        CASE(Matrix) matrixMatrix();
+        CASE(Matrix) {matrixMatrix(); click = Left;}
         FALL(Left) {
             SWITCH(mode[Mouse],Rotate) modifyRotate();
             CASE(Translate) modifyTranslate();
@@ -3067,7 +3071,7 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     CASE(Manipulate) {
         SWITCH(click,Init) FALL(Right)
             transformRight();
-        CASE(Matrix) matrixMatrix();
+        CASE(Matrix) {matrixMatrix(); click = Left;}
         FALL(Left) {
             SWITCH(mode[Mouse],Rotate) manipulateRotate();
             CASE(Translate) manipulateTranslate();
@@ -3080,9 +3084,9 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
 {
     wPos = wPos + yoffset;
-    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) {/*ignore*/}
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
-        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        SWITCH(click,Init) FALL(Right)
         CASE(Left) click = Matrix;
         FALL(Matrix) {
             SWITCH(mode[Roller],Clock) transformClock();
@@ -3092,7 +3096,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             DEFAULT(exitErrstr("invalid roller mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}            
     CASE(Modify) {
-        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        SWITCH(click,Init) FALL(Right)
         CASE(Left) click = Matrix;
         FALL(Matrix) {
             SWITCH(mode[Roller],Clock) modifyClock();
@@ -3102,7 +3106,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             DEFAULT(exitErrstr("invalid roller mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}            
     CASE(Manipulate) {
-        SWITCH(click,Init) FALL(Right) {/*ignore*/}
+        SWITCH(click,Init) FALL(Right)
         CASE(Left) click = Matrix;
         FALL(Matrix) {
             SWITCH(mode[Roller],Clock) manipulateClock();
@@ -3375,7 +3379,7 @@ char *error(int size)
 
 char *event()
 {
-    if (!validEvent()) return (char *)"";
+    if (!validEvent()) exitErrstr("no valid event\n");
     enum Event event = headEvent(); dequeEvent();
     SWITCH(event,Plane) return (char *)"Plane";
     CASE(Classify) return (char *)"Classify";
@@ -3384,6 +3388,7 @@ char *event()
     CASE(Fill) return (char *)"Fill";
     CASE(Hollow) return (char *)"Hollow";
     CASE(Remove) return (char *)"Remove";
+    CASE(Call) return (char *)"Call";
     CASE(Error) return (char *)"Error";
     CASE(Done) return (char *)"Done";
     DEFAULT(exitErrstr("invalid event\n");)
@@ -3392,11 +3397,17 @@ char *event()
 
 char *stringArgument()
 {
-    if (!validKind()) return (char *)"";
+    if (!validKind()) exitErrstr("no valid string\n");
     enum Kind kind = headKind(); dequeKind();
     SWITCH(kind,Place) return (char *)"Place";
     CASE(Boundary) return (char *)"Boundary";
     CASE(Face) return (char *)"Face";
+    CASE(Other) {
+        if (!validInt()) exitErrstr("no valid other\n");
+        int len = headInt(); dequeInt();
+        if (sizeChar() < len) exitErrstr("no valid other\n");
+        char *buf = arrayChar(); delocChar(len);
+        return buf;}
     DEFAULT(exitErrstr("invalid kind\n");)
     return (char *)"";
 }
