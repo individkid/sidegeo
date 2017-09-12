@@ -145,7 +145,7 @@ handleEvent = do
   "Fill" -> handleFill <$> handleEventF <*> handleEventF >> return False
   "Hollow" -> handleHollow <$> handleEventF <*> handleEventF >> return False
   "Remove" ->  handleRemove <$> handleEventG <*> handleEventF >> return False
-  "Call" -> handleCall <$> handleEventF <*> handleEventG >> return False
+  "Call" -> handleEventG >>= handleCall >> return False
   "Error" -> return True
   "Done" -> return True
   _ -> printStr (concat ["unknown event ",(show event),"\n"]) >> return True
@@ -351,10 +351,15 @@ handleRemove "Face" index =
  handleInflateH
 handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])
 
-handleCall :: Int -> String -> IO ()
-handleCall file expr = do
+handleCall :: String -> IO ()
+handleCall expr = do
  result <- runInterpreter $ do
   setImportsQ [("Prelude", Nothing)] -- TODO provide library for preprocess unprocess
   eval expr
- putStrLn $ show result
+ handleCallF result
+
+handleCallF :: Either InterpreterError String -> IO ()
+handleCallF (Left _) = return ()
+handleCallF (Right []) = return ()
+handleCallF (Right expr) = handleCall expr
 
