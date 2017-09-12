@@ -892,7 +892,9 @@ void *console(void *arg)
         int done = (sizeScan() == 2 && motionof(headScan()) == Exit);
         int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
-        else if (lenIn > 0) delocScan(lenIn);
+        else if (lenIn > 0) {
+            delocScan(lenIn);
+            glfwPostEmptyEvent();}
         if (done) break;
 
         int totOut = 0; int lenOut;
