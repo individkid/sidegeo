@@ -329,16 +329,30 @@ struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
+struct Commands straps = {0}; // for cleaning up queues
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
+void boot##NAME() \
+{ \
+    INSTANCE.base = malloc(10*sizeof*INSTANCE.base); \
+    INSTANCE.limit = INSTANCE.base + 10; \
+    INSTANCE.head = INSTANCE.base; \
+    INSTANCE.tail = INSTANCE.base; \
+} \
+void strap##NAME() \
+{ \
+    free(INSTANCE.base); \
+    INSTANCE.base = 0; \
+    INSTANCE.limit = 0; \
+    INSTANCE.head = 0; \
+    INSTANCE.tail = 0; \
+} \
 /*return pointer valid only until next call to enloc##NAME enque##NAME entry##NAME */  \
 TYPE *enloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
-        INSTANCE.base = malloc(10*sizeof*INSTANCE.base); \
-        INSTANCE.limit = INSTANCE.base + 10; \
-        INSTANCE.head = INSTANCE.base; \
-        INSTANCE.tail = INSTANCE.base;} \
+        bootstrap(strap##NAME); \
+        boot##NAME();} \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
         int tail = INSTANCE.tail - INSTANCE.base; \
         for (int i = 10; i < tail; i++) { \
@@ -498,6 +512,8 @@ void exitErrstr(const char *fmt, ...)
     exit(-1);
 }
 
+void bootstrap(Command strap);
+
 ACCESS_QUEUE(Option,char *,options)
 
 ACCESS_QUEUE(File,struct File,files)
@@ -569,6 +585,13 @@ ACCESS_QUEUE(Echo,char,echos)
 ACCESS_QUEUE(Inject,char,injects)
 
 ACCESS_QUEUE(Menu,char,menus)
+
+ACCESS_QUEUE(Strap,Command,straps)
+
+void bootstrap(Command strap)
+{
+    enqueStrap(strap);
+}
 
 void enqueMsgstr(const char *fmt, ...)
 {
@@ -1195,6 +1218,7 @@ void initialize(int argc, char **argv)
     hs_add_root(__stginit_Main);
 #endif
 
+    bootStrap();
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
@@ -1906,42 +1930,10 @@ void initialize(int argc, char **argv)
 void finalize()
 {
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
-    while (validPrint()) printf("%s\n",arrayPrint());
+    if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
+    if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
     if (windowHandle) {glfwTerminate(); windowHandle = 0;}
-    if (options.base) {struct Strings initial = {0}; free(options.base); options = initial;}
-    if (files.base) {struct Files initial = {0}; free(files.base); files = initial;}
-    if (configs.base) {struct Chars initial = {0}; free(configs.base); configs = initial;}
-    if (indices.base) {struct Ints initial = {0}; free(indices.base); indices = initial;}
-    if (lines.base) {struct Lines initial = {0}; free(lines.base); lines = initial;}
-    if (matchs.base) {struct Ints initial = {0}; free(matchs.base); matchs = initial;}
-    if (placings.base) {struct Metas initial = {0}; free(placings.base); placings = initial;}
-    if (embedings.base) {struct Metas initial = {0}; free(embedings.base); embedings = initial;}
-    if (todos.base) {struct Ints initial = {0}; free(todos.base); todos = initial;}
-    if (relates.base) {struct Ints initial = {0}; free(relates.base); relates = initial;}
-    if (boundarys.base) {struct Metas initial = {0}; free(boundarys.base); boundarys = initial;}
-    if (face2planes.base) {struct Ints initial = {0}; free(face2planes.base); face2planes = initial;}
-    if (frame2planes.base) {struct Ints initial = {0}; free(frame2planes.base); frame2planes = initial;}
-    if (plane2places.base) {struct Ints initial = {0}; free(plane2places.base); plane2places = initial;}
-    if (plane2points.base) {struct Metas initial = {0}; free(plane2points.base); plane2points = initial;}
-    if (faceSubs.base) {struct Ints initial = {0}; free(faceSubs.base); faceSubs = initial;}
-    if (frameSubs.base) {struct Ints initial = {0}; free(frameSubs.base); frameSubs = initial;}
-    if (arrays.base) {struct Arrays initial = {0}; free(arrays.base); arrays = initial;}
-    if (renders.base) {struct Renders initial = {0}; free(renders.base); renders = initial;}
-    if (defers.base) {struct Ints initial = {0}; free(defers.base); defers = initial;}
-    if (commands.base) {struct Commands initial = {0}; free(commands.base); commands = initial;}
-    if (events.base) {struct Events initial = {0}; free(events.base); events = initial;}
-    if (kinds.base) {struct Kinds initial = {0}; free(kinds.base); kinds = initial;}
-    if (chars.base) {struct Chars initial = {0}; free(chars.base); chars = initial;}
-    if (ints.base) {struct Ints initial = {0}; free(ints.base); ints = initial;}
-    if (floats.base) {struct Floats initial = {0}; free(floats.base); floats = initial;}
-    if (buffers.base) {struct Buffers initial = {0}; free(buffers.base); buffers = initial;}
-    if (inputs.base) {struct Chars initial = {0}; free(inputs.base); inputs = initial;}
-    if (outputs.base) {struct Chars initial = {0}; free(outputs.base); outputs = initial;}
-    if (scans.base) {struct Chars initial = {0}; free(scans.base); scans = initial;}
-    if (prints.base) {struct Chars initial = {0}; free(prints.base); prints = initial;}
-    if (echos.base) {struct Chars initial = {0}; free(echos.base); echos = initial;}
-    if (injects.base) {struct Chars initial = {0}; free(injects.base); injects = initial;}
-    if (menus.base) {struct Chars initial = {0}; free(menus.base); menus = initial;}
+    for (int i = 0; i < sizeStrap(); i++) (*arrayStrap()[i])(); strapStrap();
 }
 
 /*
