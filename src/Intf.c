@@ -322,6 +322,7 @@ struct Floats {DECLARE_QUEUE(float)} floats = {0};
  // for scratchpad and arguments
 struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
  // for scratchpad and arguments
+int suppress = 0; // assume console thread terminated
 struct Chars inputs = {0}; // for reading from console
 struct Chars outputs = {0}; // for writing to console
 struct Chars scans = {0}; // for staging input in console
@@ -912,7 +913,7 @@ void *console(void *arg)
     int esc = 0;
     writeitem(tailLine(),tailMatch());
     while (1) {
-        int done = (sizeScan() == 2 && motionof(headScan()) == Exit);
+        int done = (sizeScan() >= 2 && motionof(headScan()) == Exit && arrayScan()[1] == '\n');
         int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
         else if (lenIn > 0) {
@@ -1086,11 +1087,13 @@ void menu()
 void waitForEvent()
 {
     while (1) {
+        int done = (sizePrint() >= 2 && motionof(headPrint()) == Escape && arrayPrint()[1] == '\n');
         int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
         if (lenOut == 0) delocPrint(sizePrint());
         else if (lenOut > 0) {
             delocPrint(lenOut);
-            if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
+            if (!suppress && pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
+        if (done) suppress = 1;
         
         int totIn = 0; int lenIn;
         while ((lenIn = detryInput(enlocMenu(10),&isEndLine,10)) == 0) totIn += 10;
