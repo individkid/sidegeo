@@ -475,6 +475,12 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
     if (retval > 0) deloc##NAME(retval); \
     if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
     return retval; /*0: all filled but no terminator; >0: given number filled with terminator*/ \
+} \
+\
+/*return whether lines ready for detry*/ \
+int totry##NAME() \
+{ \
+    return INSTANCE.valid; \
 }
 
 #define CHECK(command,Command) \
@@ -913,12 +919,14 @@ void *console(void *arg)
     int esc = 0;
     writeitem(tailLine(),tailMatch());
     while (1) {
+        int totry = 0;
         int done = (sizeScan() >= 2 && motionof(headScan()) == Exit && arrayScan()[1] == '\n');
         int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
         if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
         else if (lenIn > 0) {
             delocScan(lenIn);
             glfwPostEmptyEvent();}
+        else if (totryInput()) totry = 1;
         if (done) break;
 
         int totOut = 0; int lenOut;
@@ -965,10 +973,13 @@ void *console(void *arg)
             fd_set fds;
             FD_ZERO(&fds);
             FD_SET(STDIN_FILENO, &fds);
-            struct timespec timeout = {0};
+            struct timespec nodelay = {0};
+            struct timespec delay = {0};
             int lenSel = 0;
+            delay.tv_nsec = 100000000ul;
             if (lenOut < 0 && lenIn < 0) lenSel = pselect(1, &fds, 0, 0, 0, &saved);
-            else lenSel = pselect(1, &fds, 0, 0, &timeout, 0);
+            else if (totry) lenSel = pselect(1, &fds, 0, 0, &delay, &saved);
+            else lenSel = pselect(1, &fds, 0, 0, &nodelay, 0);
             if (lenSel == 0 || (lenSel < 0 && errno == EINTR)) continue;
             if (lenSel != 1) exitErrstr("pselect failed: %s\n", strerror(errno));
             key = readchr();}
