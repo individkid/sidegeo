@@ -745,11 +745,11 @@ equivPermF :: Perm p => p -> [p] -> p
 equivPermF p [] = p
 equivPermF _ p = let
  sorted = sortBy comparePerm p
- sample = choose sorted
+ sample = head sorted
  equal = (EQ ==) . (comparePerm sample)
  prefix = takeWhile equal sorted
  refine = concatMap refinePerm prefix
- in equivPermF sample refine
+ in equivPermF (choose prefix) refine
 
 -- change to, change from, whether mirrored, done partial, todo partial
 refinePart :: Part -> Part -> [(Boundary,Boundary,Side,Part,Part)]

@@ -359,7 +359,7 @@ handleCall expr = do
  handleCallF result
 
 handleCallF :: Either InterpreterError String -> IO ()
-handleCallF (Left _) = return ()
+handleCallF (Left messg) = errorStr (show messg)
 handleCallF (Right []) = return ()
 handleCallF (Right expr) = handleCall expr
 

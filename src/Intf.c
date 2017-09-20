@@ -976,7 +976,8 @@ void *console(void *arg)
             struct timespec nodelay = {0};
             struct timespec delay = {0};
             int lenSel = 0;
-            delay.tv_nsec = 100000000ul;
+            delay.tv_sec = 0;
+            delay.tv_nsec = POLL_DELAY*1000000000;
             if (lenOut < 0 && lenIn < 0) lenSel = pselect(1, &fds, 0, 0, 0, &saved);
             else if (totry) lenSel = pselect(1, &fds, 0, 0, &delay, &saved);
             else lenSel = pselect(1, &fds, 0, 0, &nodelay, 0);
@@ -1098,12 +1099,14 @@ void menu()
 void waitForEvent()
 {
     while (1) {
+        int totry = 0;
         int done = (sizePrint() >= 2 && motionof(headPrint()) == Escape && arrayPrint()[1] == '\n');
         int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
         if (lenOut == 0) delocPrint(sizePrint());
         else if (lenOut > 0) {
             delocPrint(lenOut);
             if (!suppress && pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
+        else if (totryOutput()) totry = 1;
         if (done) suppress = 1;
         
         int totIn = 0; int lenIn;
@@ -1114,6 +1117,7 @@ void waitForEvent()
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
         else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
+        else if (totry) glfwWaitEventsTimeout(POLL_DELAY);
         else glfwPollEvents();
 
         if (!validCommand()) continue;
@@ -1231,9 +1235,6 @@ void initialize(int argc, char **argv)
 #ifdef __GLASGOW_HASKELL__
     hs_add_root(__stginit_Main);
 #endif
-
-    bootStrap();
-    for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -1928,6 +1929,9 @@ void initialize(int argc, char **argv)
         glUniform1f(uniform[i][Aspect],aspect);}
     glUseProgram(0);
 
+    bootStrap();
+    for (int i = 0; i < argc; i++) enqueOption(argv[i]);
+
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
@@ -1946,7 +1950,7 @@ void finalize()
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
     if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
-    if (windowHandle) {glfwTerminate(); windowHandle = 0;}
+    glfwTerminate();
     for (int i = 0; i < sizeStrap(); i++) (*arrayStrap()[i])(); strapStrap();
 }
 
@@ -1980,7 +1984,7 @@ void process()
         if ((source = fopen(headOption(),"r")) == 0) {enqueErrstr("cannot open source\n"); DEQUE(process,Process)}
         dequeOption();
         if (!validOption()) {enqueErrstr("missing dest file\n"); DEQUE(process,Process)}
-        if ((dest = fopen(headOption(),"w")) == 0) {enqueErrstr("cannot open dest\n"); DEQUE(process,Process)}
+        if ((dest = fopen(headOption(),"wx")) == 0) {enqueErrstr("cannot open dest\n"); DEQUE(process,Process)}
         while (fgets(body+length,256-length,source)) {
             if ((length > 0 && body[length] == '-' && body[length+1] == '-') ||
                 (length > 0 && isxdigit(body[length]) && isxdigit(body[length+1]) && body[length+2] == '-' && body[length+3] == '-')) {
@@ -3381,8 +3385,9 @@ char *print(int size)
 
 char *error(int size)
 {
+    char *buf = enlocPrint(size);
     enqueEvent(Error); enqueCommand(0);
-    return enlocPrint(size);
+    return buf;
 }
 
 char *event()

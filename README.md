@@ -7,7 +7,7 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -h print these options  
   * -H print readme  
   * -i \<file> load polytope and append changes  
-  * -I \<file> \<file>(!) preprocess to add missing headers  
+  * -I \<file> \<file> preprocess to add missing headers  
   * -o pack out garbage in graphics buffers  
   * -O \<ext> save minimal commands to produce polytopes  
   * -t run sanity check  
@@ -19,8 +19,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Subtractive -- click hollows out region under pierce point  
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
-  * Sample -- click resamples space of pierced polytope  
-  * Tweak -- click randomly moves pierced plane preserving space  
+  * Tweak -- click tweaks planes holding polytope or space fixed  
   * Action -- click switches to decoration file or opens equalizer panel  
   * Transform -- modify world or perspective matrix  
   * Modify -- modify pierced polytope independent of others  
@@ -34,6 +33,14 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Clock -- rotate picture plane around perpendicular to pierce point  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
+  * Classify -- type of thing displayed in Display mode  
+    * Vector -- display pierce point and coplane  
+    * Graph -- display relation of facets  
+    * Polyant -- display polyant representation  
+    * Place -- display map from boundary to halfspaces  
+  * Sample -- type of thing fixed during click in Tweak mode  
+    * Polytope -- classification of space may change  
+    * Space -- classification of space does not change  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
@@ -43,6 +50,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --fill takes pierce point, removes face and adds outside faces  
   * --hollow takes pierce point, removes face and adds inside faces  
   * --remove takes buffer type and subscript to invalidate  
+  * --test check current state agains given value  
   * --sample takes per-boundary sidedness to sample with similar embed  
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
@@ -59,6 +67,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --inject specifies user action to inject, ignored if not at eof  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
+  * --yield allow other files and command line options to proceed  
   * --delay takes duration for interpolation with next delay 
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
