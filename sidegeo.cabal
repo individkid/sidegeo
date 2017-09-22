@@ -65,7 +65,8 @@ executable sculpt
                        random,
                        hint
   hs-source-dirs:      src
-  c-sources:           src/Intf.c
+  c-sources:           src/Intf.c,
+                       src/Code.c
   if os(linux)
     extra-libraries:   GLEW,
                        glfw3,
