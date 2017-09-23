@@ -4,12 +4,14 @@ Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regi
 
 Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The following command line arguments are processed in order.
 
-  * -h print these options  
+  * -h print usage  
   * -H print readme  
   * -i \<file> load polytope and append changes  
   * -I \<file> \<file> preprocess to add missing headers  
   * -o pack out garbage in graphics buffers  
   * -O \<ext> save minimal commands to produce polytopes  
+  * -s prefix commands to save current state  
+  * -S \<ext> overwrite commands to save current state  
   * -t run sanity check  
   * -T run thorough tests  
 
@@ -55,6 +57,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
+  * --listen takes point for where track is recorded or audited  
   * --source takes sound file or source  
   * --filter takes plane subscript, per area equalization of tempo, dynamic, tone  
   * --color takes plane subscript and decoration  
