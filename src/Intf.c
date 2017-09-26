@@ -120,6 +120,7 @@ struct File {
     int state;
     const char *mode;};
 int fileOwner = 0;
+int fileLast = 0;
 int fileCount = 0;
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
 struct Chars {DECLARE_QUEUE(char)} configs = {0};
@@ -1814,7 +1815,7 @@ void configure()
     enum Action action = Defer;
     enum Action retval = Advance;
     if (fileOwner < fileCount && fileOwner != file->index) {requeFile(); DEFER(configure)}
-    fileOwner = file->index;
+    fileLast = fileOwner = file->index;
 #ifdef BRINGUP
     if (file->bringup == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
