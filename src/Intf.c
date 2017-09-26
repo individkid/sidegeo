@@ -331,7 +331,10 @@ struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
-struct Commands straps = {0}; // for cleaning up queues
+struct Base {
+    void (*destruct)(struct Base *);
+    void **ptr;}; // c++ class written in c
+struct Bases {DECLARE_QUEUE(struct Base)} bases = {0}; // for cleaning up queues
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
 void boot##NAME() \
@@ -341,19 +344,22 @@ void boot##NAME() \
     INSTANCE.head = INSTANCE.base; \
     INSTANCE.tail = INSTANCE.base; \
 } \
-void strap##NAME() \
+struct Derived##NAME { \
+    void (*destruct)(struct Derived##NAME *); \
+    TYPE **ptr;}; \
+void strap##NAME(struct Derived##NAME *this) \
 { \
-    free(INSTANCE.base); \
-    INSTANCE.base = 0; \
-    INSTANCE.limit = 0; \
-    INSTANCE.head = 0; \
-    INSTANCE.tail = 0; \
+    free(*this->ptr); \
+    *this->ptr = 0; \
 } \
 /*return pointer valid only until next call to enloc##NAME enque##NAME entry##NAME */  \
 TYPE *enloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
-        bootstrap(strap##NAME); \
+        struct Derived##NAME class = {0}; \
+        class.destruct = strap##NAME; \
+        class.ptr = &INSTANCE.base; \
+        bootstrap((struct Base *)&class); \
         boot##NAME();} \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
         int tail = INSTANCE.tail - INSTANCE.base; \
@@ -520,7 +526,7 @@ void exitErrstr(const char *fmt, ...)
     exit(-1);
 }
 
-void bootstrap(Command strap);
+void bootstrap(struct Base *);
 
 ACCESS_QUEUE(Option,char *,options)
 
@@ -594,11 +600,11 @@ ACCESS_QUEUE(Inject,char,injects)
 
 ACCESS_QUEUE(Menu,char,menus)
 
-ACCESS_QUEUE(Strap,Command,straps)
+ACCESS_QUEUE(Base,struct Base,bases)
 
-void bootstrap(Command strap)
+void bootstrap(struct Base *base)
 {
-    enqueStrap(strap);
+    enqueBase(*base);
 }
 
 void enqueMsgstr(const char *fmt, ...)
@@ -1372,7 +1378,7 @@ void initialize(int argc, char **argv)
         glUniform1f(uniform[i][Aspect],aspect);}
     glUseProgram(0);
 
-    bootStrap();
+    bootBase();
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
     struct sigaction sigact = {0};
@@ -1394,7 +1400,8 @@ void finalize()
     if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
     if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
     glfwTerminate();
-    for (int i = 0; i < sizeStrap(); i++) (*arrayStrap()[i])(); strapStrap();
+    for (int i = 0; i < sizeBase(); i++) (*arrayBase()[i].destruct)(&arrayBase()[i]);
+    free(bases.base); bases.base = 0;
 }
 
 /*
