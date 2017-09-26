@@ -1406,6 +1406,7 @@ void openFile(char *filename);
 void process()
 {
     CHECK(process,Process)
+    if (fileOwner < fileCount) {DEFER(process)}
     if (!validOption()) {DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print usage\n");
@@ -1725,15 +1726,9 @@ typedef enum Action (*fileModeFP)(struct File *file, enum Event event);
 enum Action fileMode(struct File *file, const char *name, int ints, int floats, enum Event event, fileModeFP func0, fileModeFP func1)
 {
     int changed = 0;
-    if (fileScan(file,name,ints,floats) && fileOwner < fileCount && fileOwner != file->index)
-        changed = 0;
-    else if (fileScan(file,name,ints,floats) && file->mode != 0 && file->mode != name)
-        return Advance;
-    else if (fileScan(file,name,ints,floats)) {
-        fileOwner = file->index; file->mode = name;
-        FILESWITCH(func0,event,*file->buffer = 0;)}
-    else if (file->mode == name) {
-        FILESWITCH(func1,event,file->mode = 0; fileOwner = fileCount;)}
+    if (fileScan(file,name,ints,floats) && file->mode != 0 && file->mode != name) return Advance;
+    else if (fileScan(file,name,ints,floats)) {file->mode = name; FILESWITCH(func0,event,*file->buffer = 0;)}
+    else if (file->mode == name) {FILESWITCH(func1,event,file->mode = 0;)}
     else return Advance;
     return (changed ? Reque : Defer);
 }
@@ -1811,6 +1806,8 @@ void configure()
     int index = 0;
     enum Action action = Defer;
     enum Action retval = Advance;
+    if (fileOwner < fileCount && fileOwner != file->index) {requeFile(); DEFER(configure)}
+    fileOwner = file->index;
 #ifdef BRINGUP
     if (file->bringup == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
@@ -1844,6 +1841,7 @@ void configure()
         header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
+    if (*file->buffer == 0) fileOwner = fileCount;
     if (*file->buffer) enqueMsgstr("configure %s\n",file->buffer);
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
