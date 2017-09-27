@@ -174,13 +174,15 @@ enum Click { // mode changed by mouse buttons
     Right, // pierce point calculated; position saved
     Clicks} click = Init;
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Transform,Modify,Manipulate,
+    Sculpts,Additive,Subtractive,Refine,Display,Tweak,Action,Transform,Modify,Manipulate,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
+    Classifies,Vector,Graph,Polyant,Place,
+    Samples,Polytope,Space,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
-    Sculpt,Mouse,Roller,Modes};
-#define INIT {Transform,Rotate,Cylinder}
+    Sculpt,Mouse,Roller,Classify,Sample,Modes};
+#define INIT {Transform,Rotate,Cylinder,Vector,Polytope}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -194,7 +196,10 @@ struct Item { // per-menu-line info
     {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
     {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
-    {Sculpts,Sculpt,1,"Transform","modify affine or perspective matrix"},
+    {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
+    {Sculpts,Sculpt,1,"Tweak","click tweaks planes holding polytope or space fixed"},
+    {Sculpts,Sculpt,1,"Action","click switches to decoration file or opens equalizer panel"},
+    {Sculpts,Sculpt,1,"Transform","modify world or perspective matrix"},
     {Sculpts,Sculpt,1,"Modify","modify pierced polytope independent of others"},
     {Sculpts,Sculpt,1,"Manipulate","modify pierced plane"},
     {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform/Modify/Manipulate modes"},
@@ -205,12 +210,20 @@ struct Item { // per-menu-line info
     {Rollers,Roller,2,"Cylinder","rotate around tilt line"},
     {Rollers,Roller,2,"Clock","rotate around perpendicular to pierce point"},
     {Rollers,Roller,2,"Scale","grow or shrink with pierce point fixed"},
-    {Rollers,Roller,2,"Drive","move picture plane forward or back"}};
+    {Rollers,Roller,2,"Drive","move picture plane forward or back"},
+    {Sculpts,Classify,1,"Classify","type of thing displayed in Display mode"},
+    {Classifies,Classify,2,"Vector","display pierce point and coplane"},
+    {Classifies,Classify,2,"Graph","display relation of facets"},
+    {Classifies,Classify,2,"Polyant","display polyant representation"},
+    {Classifies,Classify,2,"Place","display map from boundary to halfspaces"},
+    {Sculpts,Sample,1,"Sample","type of thing fixed during click in Tweak mode"},
+    {Samples,Sample,2,"Polytope","classification of space may change"},
+    {Samples,Sample,2,"Space","classification of space does not change"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
  // index into item[line].name for console undo
-enum Motion {Escape,Exit,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
+enum Motion {Escape,Exit,Enter,Back,White,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
 int escape = 0; // escape sequence from OpenGL
 float affineMat[16]; // transformation state at click time
 float affineMata[16]; // left transformation state
@@ -302,7 +315,7 @@ struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
 enum Event {
     Plane, // fill in pointSub and sideSub
-    Classify, // update symbolic representation
+    Symbolic, // update symbolic representation
     Inflate, // fill in faceSub and frameSub
     Pierce, // repurpose sideSub for pierce point
     Fill, // alter embed and refill faceSub and frameSub
@@ -313,7 +326,7 @@ enum Event {
     Done}; // terminate normally
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-enum Kind {Place,Boundary,Face,Other};
+enum Kind {File,Boundary,Face,Other};
 struct Kinds {DECLARE_QUEUE(enum Kind)} kinds = {0};
  // argument for remove command
 struct Chars chars = {0};
@@ -942,7 +955,7 @@ void *console(void *arg)
             enqueInject('\n'); delocEcho(10);}
         else if (totOut+lenOut == 2 && motionof(headEcho()) == Back) {
             enqueInject(127); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Space) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == White) {
             enqueInject(' '); delocEcho(10);}
         else if (totOut+lenOut == 2 && motionof(headEcho()) == North) {
             enqueInject(27); enqueInject(91); enqueInject(65); delocEcho(10);}
@@ -1592,7 +1605,7 @@ int iswrlckFile(struct File *file)
 
 void fileError(struct File *file, const char *msg) {
     struct File initial = {0};
-    enqueCommand(0); enqueEvent(Remove); enqueKind(Place); enqueInt(file->index);
+    enqueCommand(0); enqueEvent(Remove); enqueKind(File); enqueInt(file->index);
     enqueMsgstr(msg);
     close(file->handle);
     if (fileOwner == file->index) fileOwner = fileCount;
@@ -1666,7 +1679,7 @@ enum Action fileClassify(struct File *file, enum Event event)
     int state = 0;
     if (state++ == file->state) {ENQUE(classify,Classify) return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(Classify); return Reque;}
+        enqueCommand(0); enqueEvent(Symbolic); return Reque;}
     if (state++ == file->state) return Advance;
     return Defer;
 }
@@ -1859,7 +1872,7 @@ void configure()
     if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
     if (retval == Advance && sscanf(file->buffer,"--remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; *file->buffer = 0;
-        enqueCommand(0); enqueEvent(Remove); enqueKind(Place); enqueInt(file->index);}
+        enqueCommand(0); enqueEvent(Remove); enqueKind(File); enqueInt(file->index);}
     if (retval == Advance && sscanf(file->buffer,"--remove face %d", &index) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         retval = Reque; *file->buffer = 0;
@@ -2446,7 +2459,7 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
     if (action == GLFW_RELEASE || key > GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
         SWITCH(key,GLFW_KEY_ENTER) {enquePrint(ofmotion(Escape)); enquePrint('\n');}
-        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)
+        DEFAULT(enquePrint(ofmotion(White)); enquePrint('\n');)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
         enquePrint(ofalpha(key-GLFW_KEY_A+'a')); enquePrint('\n');}
@@ -2462,8 +2475,8 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
         CASE(GLFW_KEY_HOME) {enquePrint(ofmotion(Click)); enquePrint('\n');}
         CASE(GLFW_KEY_END) {enquePrint(ofmotion(Suspend)); enquePrint('\n');}
         CASE(GLFW_KEY_BACKSPACE) {enquePrint(ofmotion(Back)); enquePrint('\n');}
-        CASE(GLFW_KEY_SPACE) {enquePrint(ofmotion(Space)); enquePrint('\n');}
-        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)}
+        CASE(GLFW_KEY_SPACE) {enquePrint(ofmotion(White)); enquePrint('\n');}
+        DEFAULT(enquePrint(ofmotion(White)); enquePrint('\n');)}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
@@ -2849,7 +2862,7 @@ char *event()
     if (!validEvent()) exitErrstr("no valid event\n");
     enum Event event = headEvent(); dequeEvent();
     SWITCH(event,Plane) return (char *)"Plane";
-    CASE(Classify) return (char *)"Classify";
+    CASE(Symbolic) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
     CASE(Pierce) return (char *)"Pierce";
     CASE(Fill) return (char *)"Fill";
@@ -2866,7 +2879,7 @@ char *stringArgument()
 {
     if (!validKind()) exitErrstr("no valid string\n");
     enum Kind kind = headKind(); dequeKind();
-    SWITCH(kind,Place) return (char *)"Place";
+    SWITCH(kind,File) return (char *)"Place";
     CASE(Boundary) return (char *)"Boundary";
     CASE(Face) return (char *)"Face";
     CASE(Other) {
