@@ -17,6 +17,19 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -t run sanity check  
   * -T run thorough tests  
 
+Tests include the following, where "linear" refers to any linear space produced by tests run so far. Linear spaces produced by tests are added to a list if not already listed. The results of allSpace are saved for subsequent test runs.
+
+  * classify of random planes should be linear  
+  * anySpace should be linear  
+  * every space from allSpace of linear should be linear  
+  * allSpace of linear should be equal to allSpace of linear  
+  * linear should be equivalent to one of allSpace of linear  
+  * classify of sample of linear should be equivalent  
+  * superspace of linear and linear should be linear  
+  * classify of sample of classify of any embed in a linear should be equivalent  
+  * every plane through a point should have a coplane on the copoint  
+  * every edge facet of a region should have two and only two vertex facets  
+
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console.
 
   * Additive -- click fills in region over pierce point  
@@ -77,4 +90,4 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-Preprocess prepends body length to each line starting with --. The preprocessed body of a command may contain endlines if lines in the original file did not start with --. The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. There are preprocess and unprocess functions in the default import for --call. Between successive --delay commands, ransformations are made pseudocontinuous, and other commands are distributed evenly in time.
+Preprocess prepends body length to each line starting with --. The preprocessed body of a command may contain endlines if lines in the original file did not start with --. The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. There are preprocess and unprocess functions in the default import for --call. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time.
