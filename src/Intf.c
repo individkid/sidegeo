@@ -1865,6 +1865,8 @@ void configure()
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
         retval = Reque; *file->buffer = 0;
         enqueCommand(0); enqueEvent(Remove); enqueKind(Boundary); enqueInt(index);}
+    if (retval == Advance && sscanf(file->buffer,"--yiel%c", &suffix) == 1 && suffix == 'd' && file->mode == 0) {
+        fileOwner = fileCount; retval = Reque; *file->buffer = 0;}
     if (retval == Advance && sscanf(file->buffer,"--call %s", chars) == 1 && file->mode == 0) {
         int len = strlen(chars);
         retval = Reque; *file->buffer = 0;
