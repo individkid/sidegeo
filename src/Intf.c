@@ -1217,13 +1217,6 @@ void compileProgram(
     if (fragmentCode) glDeleteShader(fragment);
 }
 
-void displayClose(GLFWwindow* window);
-void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods);
-void displayLocation(GLFWwindow *window, int xloc, int yloc);
-void displaySize(GLFWwindow *window, int width, int height);
-void displayRefresh(GLFWwindow *window);
-void process();
-
 void buffer(struct Buffer *buffer, char *name, GLuint loc, int type, int dimn)
 {
     buffer->name = name;
@@ -1237,6 +1230,13 @@ void buffer(struct Buffer *buffer, char *name, GLuint loc, int type, int dimn)
         glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
 }
+
+void displayClose(GLFWwindow* window);
+void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods);
+void displayLocation(GLFWwindow *window, int xloc, int yloc);
+void displaySize(GLFWwindow *window, int width, int height);
+void displayRefresh(GLFWwindow *window);
+void process();
 
 extern const GLchar *diplaneVertex;
 extern const GLchar *diplaneGeometry;
@@ -1804,11 +1804,12 @@ void configure()
 {
     struct File *file = arrayFile();
     int location = 0;
-    char chars[256] = {0};
+    char *buffer = 0;
     char suffix = 0;
     int index = 0;
     enum Action action = Defer;
     enum Action retval = Advance;
+    buffer = enlocChar(256); unlocChar(256);
     if (fileOwner < fileCount && fileOwner != file->index) {requeFile(); DEFER(configure)}
     fileLast = fileOwner = file->index;
 #ifdef BRINGUP
@@ -1845,7 +1846,9 @@ void configure()
         if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
         requeIndex(); relocConfig(size+2);}
     if (*file->buffer == 0) fileOwner = fileCount;
+#ifdef BRINGUP
     if (*file->buffer) enqueMsgstr("configure %s\n",file->buffer);
+#endif
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
     if (retval == Advance && sscanf(file->buffer,"--inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
@@ -1867,11 +1870,12 @@ void configure()
         enqueCommand(0); enqueEvent(Remove); enqueKind(Boundary); enqueInt(index);}
     if (retval == Advance && sscanf(file->buffer,"--yiel%c", &suffix) == 1 && suffix == 'd' && file->mode == 0) {
         fileOwner = fileCount; retval = Reque; *file->buffer = 0;}
-    if (retval == Advance && sscanf(file->buffer,"--call %s", chars) == 1 && file->mode == 0) {
-        int len = strlen(chars);
+    if (retval == Advance && sscanf(file->buffer,"--call %s", buffer) == 1 && file->mode == 0) {
+        int len = strlen(buffer);
+        char buf[len+1]; strncpy(buf,buffer,len);
         retval = Reque; *file->buffer = 0;
-        enqueCommand(0); enqueEvent(Call); enqueKind(Other); enqueInt(len); strncpy(enlocChar(len),chars,len); enqueInt(file->index);}
-    if (retval == Advance && sscanf(file->buffer,"--branch %d %s", &location, chars) == 2 && file->mode == 0) {
+        enqueCommand(0); enqueEvent(Call); enqueKind(Other); enqueInt(len); strncpy(enlocChar(len),buf,len); enqueInt(file->index);}
+    if (retval == Advance && sscanf(file->buffer,"--branch %d %s", &location, buffer) == 2 && file->mode == 0) {
         // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
     }
     if (retval == Advance) {retval = fileTest(file,"test plane",&planeBuf);}
