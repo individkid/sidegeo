@@ -499,7 +499,7 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 } \
 \
 /*return whether lines ready for detry*/ \
-int totry##NAME() \
+inline int totry##NAME() \
 { \
     return INSTANCE.valid; \
 }
