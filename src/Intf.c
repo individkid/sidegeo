@@ -360,7 +360,7 @@ TYPE *enloc##NAME(int size) \
         struct Derived##NAME class = {0}; \
         class.destruct = strap##NAME; \
         class.ptr = &INSTANCE.base; \
-        bootstrap((struct Base *)&class); \
+        enqueBase(*(struct Base *)&class); \
         boot##NAME();} \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
         int tail = INSTANCE.tail - INSTANCE.base; \
@@ -527,7 +527,7 @@ void exitErrstr(const char *fmt, ...)
     exit(-1);
 }
 
-void bootstrap(struct Base *);
+void enqueBase(struct Base);
 
 ACCESS_QUEUE(Option,char *,options)
 
@@ -602,11 +602,6 @@ ACCESS_QUEUE(Inject,char,injects)
 ACCESS_QUEUE(Menu,char,menus)
 
 ACCESS_QUEUE(Base,struct Base,bases)
-
-void bootstrap(struct Base *base)
-{
-    enqueBase(*base);
-}
 
 void enqueMsgstr(const char *fmt, ...)
 {
@@ -1903,7 +1898,9 @@ void openFile(char *filename)
 #endif
     file.handle = open(filename,O_RDWR);
     if (file.handle < 0) enqueErrstr("invalid file argument\n");
-    if (fileOwner == fileCount) fileOwner++; file.index = fileCount; fileCount++;
+    if (fileOwner == fileCount) fileOwner++;
+    if (fileLast == fileCount) fileLast++;
+    file.index = fileCount; fileCount++;
     enqueFile(file); enqueCommand(configure);
 }
 
