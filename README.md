@@ -6,14 +6,14 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
 
   * -h print usage  
   * -H print readme  
-  * -i \<file> load polytope and append changes  
-  * -I \<file> \<file> preprocess to add missing headers  
+  * -f \<file> load polytope and append changes  
+  * -F \<file> \<file> preprocess to add missing headers  
   * -o pack out garbage in graphics buffers  
   * -O \<ext> save minimal commands to produce polytopes  
   * -s prefix commands to save current state  
   * -S \<ext> overwrite commands to save current state  
   * -e \<config> append to last file  
-  * -E \<count> change last file to indicated  
+  * -E \<file> change last file to indicated  
   * -t run sanity check  
   * -T run thorough tests  
 

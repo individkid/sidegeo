@@ -56,21 +56,9 @@ foreign import ccall "writeFrameSub" writeFrameSubC :: CInt -> CInt -> IO (Ptr C
 foreign import ccall "writePointSub" writePointSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writePlaneSub" writePlaneSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writeSideSub" writeSideSubC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "print" printC :: CInt -> IO (Ptr CChar)
-foreign import ccall "error" errorC :: CInt -> IO (Ptr CChar)
-foreign import ccall "event" eventC :: IO (Ptr CChar)
+foreign import ccall "eventArgument" eventArgumentC :: IO (Ptr CChar)
 foreign import ccall "stringArgument" stringArgumentC :: IO (Ptr CChar)
 foreign import ccall "intArgument" intArgumentC :: IO CInt
-
-printStr :: [Char] -> IO ()
-printStr str = do
- ptr <- printC (fromIntegral (length str))
- pokeArray ptr (map castCharToCChar str)
-
-errorStr :: [Char] -> IO ()
-errorStr str = do
- ptr <- errorC (fromIntegral (length str))
- pokeArray ptr (map castCharToCChar str)
 
 plusPtr' :: Int -> Ptr CInt -> Ptr CInt
 plusPtr' offset ptr = let
@@ -136,7 +124,7 @@ encodePlace place = let
 
 handleEvent :: IO Bool
 handleEvent = do
- event <- (eventC >>= peekCString)
+ event <- (eventArgumentC >>= peekCString)
  case event of
   "Plane" -> handleEventF >>= handlePlane >> return False
   "Classify" -> handleClassify >> return False
@@ -146,9 +134,8 @@ handleEvent = do
   "Hollow" -> handleHollow <$> handleEventF <*> handleEventF >> return False
   "Remove" ->  handleRemove <$> handleEventG <*> handleEventF >> return False
   "Call" -> handleCall <$> handleEventG  <*> handleEventF >> return False
-  "Error" -> return True
   "Done" -> return True
-  _ -> printStr (concat ["unknown event ",(show event),"\n"]) >> return True
+  _ -> putStrLn (concat ["unknown event ",(show event),"\n"]) >> return True
 
 handleEventF :: IO Int
 handleEventF = intArgumentC >>= (return . fromIntegral)
@@ -349,7 +336,7 @@ handleRemove "Face" index =
  face2 = concat face1
  in writeBuffer writeFaceSubC face2 >>
  handleInflateH
-handleRemove kind _ = errorStr (concat ["unknown kind ",kind,"\n"])
+handleRemove kind _ = putStrLn (concat ["unknown kind ",kind,"\n"])
 
 handleCall :: String -> Int -> IO ()
 handleCall expr index = do
@@ -359,7 +346,7 @@ handleCall expr index = do
  handleCallF result index
 
 handleCallF :: Either InterpreterError String -> Int -> IO ()
-handleCallF (Left messg) _ = errorStr (show messg)
+handleCallF (Left messg) _ = putStrLn (show messg)
 handleCallF (Right []) _ = return ()
 handleCallF (Right expr) index = handleCall expr index
 

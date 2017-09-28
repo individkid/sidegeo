@@ -321,8 +321,7 @@ enum Event {
     Hollow, // alter embed and refill faceSub and frameSub
     Remove, // pack out from faceSub and frameSub
     Call, // allow given string to modify file
-    Error, // terminate with prejudice
-    Done}; // terminate normally
+    Done}; // terminate
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
 enum Kind {File,Boundary,Face,Other};
@@ -531,9 +530,6 @@ inline int totry##NAME() \
 
 void exitErrstr(const char *fmt, ...)
 {
-    if (validTermios) {
-        tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios);
-        validTermios = 0;}
     printf("fatal: ");
     va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
@@ -626,8 +622,10 @@ void enqueMsgstr(const char *fmt, ...)
 void enqueErrstr(const char *fmt, ...)
 {
     enqueMsgstr("error: ");
-    va_list args; va_start(args, fmt); enqueMsgstr(fmt, args); va_end(args);
-    enqueEvent(Error); enqueCommand(0);
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
+    char *buf = enlocPrint(len+1);
+    va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
+    unlocPrint(1); // remove '\0' that vsnprintf puts on
 }
 
 float dotvec(float *u, float *v, int n)
@@ -1428,15 +1426,17 @@ void process()
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print usage\n");
         enqueMsgstr("-H print readme\n");
-        enqueMsgstr("-i <file> load polytope and append changes\n");
-        enqueMsgstr("-I <file> <file> preprocess to add missing headers\n");
+        enqueMsgstr("-f <file> load polytope and append changes\n");
+        enqueMsgstr("-F <file> <file> preprocess to add missing headers\n");
         enqueMsgstr("-o pack out garbage in graphics buffers\n");
         enqueMsgstr("-O <ext> save minimal commands to produce polytopes\n");
         enqueMsgstr("-s prefix commands to save current state\n");
         enqueMsgstr("-S <ext> overwrite commands to save current state\n");
+        enqueMsgstr("-e <config> append to last file\n");
+        enqueMsgstr("-E <file> change last file to indicated\n");
         enqueMsgstr("-t run sanity check\n");
         enqueMsgstr("-T run thorough tests\n");}
-    else if (strcmp(headOption(), "-I") == 0) {
+    else if (strcmp(headOption(), "-F") == 0) {
         FILE *source = 0;
         FILE *dest = 0;
         char body[256] = {0};
@@ -1465,10 +1465,11 @@ void process()
             snprintf(header,3,"%2x",length);
             memcpy(body,header,2);}
         if (fclose(source) != 0 || fclose(dest) != 0) {enqueErrstr("cannot close files\n"); DEQUE(process,Process)}}
-    else if (strcmp(headOption(), "-i") == 0) {
+    else if (strcmp(headOption(), "-f") == 0) {
         dequeOption();
         if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
         openFile(headOption());}
+    else enqueErrstr("invalid argument %s\n",headOption());
     dequeOption(); REQUE(process)
 }
 
@@ -2846,19 +2847,7 @@ int *writeSideSub(int start, int count)
     return setupBuffer(start,count,&sideSub,0);
 }
 
-char *print(int size)
-{
-    return enlocPrint(size);
-}
-
-char *error(int size)
-{
-    char *buf = enlocPrint(size);
-    enqueEvent(Error); enqueCommand(0);
-    return buf;
-}
-
-char *event()
+char *eventArgument()
 {
     if (!validEvent()) exitErrstr("no valid event\n");
     enum Event event = headEvent(); dequeEvent();
@@ -2870,7 +2859,6 @@ char *event()
     CASE(Hollow) return (char *)"Hollow";
     CASE(Remove) return (char *)"Remove";
     CASE(Call) return (char *)"Call";
-    CASE(Error) return (char *)"Error";
     CASE(Done) return (char *)"Done";
     DEFAULT(exitErrstr("invalid event\n");)
     return (char *)"";
