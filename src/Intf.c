@@ -173,7 +173,7 @@ enum Click { // mode changed by mouse buttons
     Right, // pierce point calculated; position saved
     Clicks} click = Init;
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Display,Tweak,Action,Transform,Modify,Manipulate,
+    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Action,Transform,Modify,Manipulate,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Classifies,Vector,Graph,Polyant,Place,
