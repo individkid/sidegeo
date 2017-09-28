@@ -21,7 +21,6 @@
 
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
-#include "Main_stub.h"
 extern void __stginit_Main(void);
 #endif
 
