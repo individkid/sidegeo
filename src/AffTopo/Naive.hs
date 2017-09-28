@@ -617,29 +617,29 @@ anySpace n m = let
  in placeToSpace (fold' (\x y -> superSpace n y (powerSpace [x])) bounds [])
 
 -- return all linear spaces given any space to start
-allSpaces :: Space -> [Space]
-allSpaces s = let
+allSpace :: Space -> [Space]
+allSpace s = let
  space = equivSpace s
  regions = regionsOfSpace space
- in allSpacesF regions space [] []
+ in allSpaceF regions space [] []
 
 -- migrate all possible from current space, and go on to next todo
-allSpacesF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
-allSpacesF (p:q) s todo done
- | migrateSpaceExists p s = allSpacesG q s (equivSpace (migrateSpace p s)) todo done
- | otherwise = allSpacesF q s todo done
-allSpacesF [] s todo done = allSpacesH todo (s : done)
+allSpaceF :: [Region] -> Space -> [Space] -> [Space] -> [Space]
+allSpaceF (p:q) s todo done
+ | migrateSpaceExists p s = allSpaceG q s (equivSpace (migrateSpace p s)) todo done
+ | otherwise = allSpaceF q s todo done
+allSpaceF [] s todo done = allSpaceH todo (s : done)
 
 -- if migration not already done or todo, recurse with migration added to todo
-allSpacesG :: [Region] -> Space -> Space -> [Space] -> [Space] -> [Space]
-allSpacesG r s t todo done
- | (s == t) || (elem t todo) || (elem t done) = allSpacesF r s todo done
- | otherwise = allSpacesF r s (t : todo) done
+allSpaceG :: [Region] -> Space -> Space -> [Space] -> [Space] -> [Space]
+allSpaceG r s t todo done
+ | (s == t) || (elem t todo) || (elem t done) = allSpaceF r s todo done
+ | otherwise = allSpaceF r s (t : todo) done
 
 -- recurse with choice removed from todo
-allSpacesH :: [Space] -> [Space] -> [Space]
-allSpacesH (s:todo) done = allSpacesF (regionsOfSpace s) s todo done
-allSpacesH [] done = done
+allSpaceH :: [Space] -> [Space] -> [Space]
+allSpaceH (s:todo) done = allSpaceF (regionsOfSpace s) s todo done
+allSpaceH [] done = done
 
 -- return superspace with given spaces as subspaces
 -- given spaces have given dimension. subspaces by shared boundaries are equal
@@ -926,7 +926,7 @@ spaceFromTopeF n tope b place = let
  powered = powerSpace [b]
  extend = map (superSpace n powered) place
  space = map placeToSpace extend
- every = concat (map allSpaces space)
+ every = concat (map allSpace space)
  places = map spaceToPlace every
  in nub' (filter (spaceFromTopeG n tope) places)
  -- TODO: eliminate equivalents

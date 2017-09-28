@@ -64,8 +64,8 @@ Configuration/history files consist of commands. User input appends to file. App
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  
   * --inflate initializes to facets between inside and outside regions  
-  * --fill takes pierce point, removes face and adds outside faces  
-  * --hollow takes pierce point, removes face and adds inside faces  
+  * --fill adds faces attached to outside region and removes inside faces  
+  * --hollow adds faces attached to inside region and removes outside faces  
   * --remove takes buffer type and subscript to invalidate  
   * --test check current state agains given value  
   * --sample takes per-boundary sidedness to sample with similar embed  

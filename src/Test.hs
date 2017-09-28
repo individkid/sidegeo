@@ -227,5 +227,5 @@ complexity = let
 symbolic :: Maybe String
 symbolic = let
  space = anySpace 2 5
- linears = allSpaces space
+ linears = allSpace space
  in rvb (\s -> rv (isLinear 2 s) (show s)) linears
