@@ -1423,7 +1423,7 @@ void process()
     CHECK(process,Process)
     if (fileOwner < fileCount) {DEFER(process)}
     if (!validOption()) {
-        if (fileCount == 0) {enqueEvent(Done); enqueCommand(0);}
+        if (fileCount == 0) {enquePrint(ofmotion(Escape)); enquePrint('\n');}
         DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print usage\n");
