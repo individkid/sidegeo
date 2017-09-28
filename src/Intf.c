@@ -177,11 +177,11 @@ enum Menu { // lines in the menu; select with enter key
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Classifies,Vector,Graph,Polyant,Place,
-    Samples,Polytope,Space,
+    Samples,Symbolic,Numeric,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
     Sculpt,Mouse,Roller,Classify,Sample,Modes};
-#define INIT {Transform,Rotate,Cylinder,Vector,Polytope}
+#define INIT {Transform,Rotate,Cylinder,Vector,Symbolic}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -196,7 +196,7 @@ struct Item { // per-menu-line info
     {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
-    {Sculpts,Sculpt,1,"Tweak","click tweaks planes holding polytope or space fixed"},
+    {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
     {Sculpts,Sculpt,1,"Action","click switches to decoration file or opens equalizer panel"},
     {Sculpts,Sculpt,1,"Transform","modify world or perspective matrix"},
     {Sculpts,Sculpt,1,"Modify","modify pierced polytope independent of others"},
@@ -215,14 +215,14 @@ struct Item { // per-menu-line info
     {Classifies,Classify,2,"Graph","display relation of facets"},
     {Classifies,Classify,2,"Polyant","display polyant representation"},
     {Classifies,Classify,2,"Place","display map from boundary to halfspaces"},
-    {Sculpts,Sample,1,"Sample","type of thing fixed during click in Tweak mode"},
-    {Samples,Sample,2,"Polytope","classification of space may change"},
-    {Samples,Sample,2,"Space","classification of space does not change"}};
+    {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
+    {Samples,Sample,2,"Symbolic","classification of space does not change"},
+    {Samples,Sample,2,"Numeric","configuration controls amount of change"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
  // index into item[line].name for console undo
-enum Motion {Escape,Exit,Enter,Back,White,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
+enum Motion {Escape,Exit,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
 int escape = 0; // escape sequence from OpenGL
 float affineMat[16]; // transformation state at click time
 float affineMata[16]; // left transformation state
@@ -314,7 +314,7 @@ struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
 enum Event {
     Plane, // fill in pointSub and sideSub
-    Symbolic, // update symbolic representation
+    Update, // update symbolic representation
     Inflate, // fill in faceSub and frameSub
     Pierce, // repurpose sideSub for pierce point
     Fill, // alter embed and refill faceSub and frameSub
@@ -954,7 +954,7 @@ void *console(void *arg)
             enqueInject('\n'); delocEcho(10);}
         else if (totOut+lenOut == 2 && motionof(headEcho()) == Back) {
             enqueInject(127); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == White) {
+        else if (totOut+lenOut == 2 && motionof(headEcho()) == Space) {
             enqueInject(' '); delocEcho(10);}
         else if (totOut+lenOut == 2 && motionof(headEcho()) == North) {
             enqueInject(27); enqueInject(91); enqueInject(65); delocEcho(10);}
@@ -1422,7 +1422,9 @@ void process()
 {
     CHECK(process,Process)
     if (fileOwner < fileCount) {DEFER(process)}
-    if (!validOption()) {DEQUE(process,Process)}
+    if (!validOption()) {
+        if (fileCount == 0) {enqueEvent(Done); enqueCommand(0);}
+        DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print usage\n");
         enqueMsgstr("-H print readme\n");
@@ -1678,7 +1680,7 @@ enum Action fileClassify(struct File *file, enum Event event)
     int state = 0;
     if (state++ == file->state) {ENQUE(classify,Classify) return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(Symbolic); return Reque;}
+        enqueCommand(0); enqueEvent(Update); return Reque;}
     if (state++ == file->state) return Advance;
     return Defer;
 }
@@ -2458,7 +2460,7 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
     if (action == GLFW_RELEASE || key > GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
         SWITCH(key,GLFW_KEY_ENTER) {enquePrint(ofmotion(Escape)); enquePrint('\n');}
-        DEFAULT(enquePrint(ofmotion(White)); enquePrint('\n');)
+        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
         enquePrint(ofalpha(key-GLFW_KEY_A+'a')); enquePrint('\n');}
@@ -2474,8 +2476,8 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
         CASE(GLFW_KEY_HOME) {enquePrint(ofmotion(Click)); enquePrint('\n');}
         CASE(GLFW_KEY_END) {enquePrint(ofmotion(Suspend)); enquePrint('\n');}
         CASE(GLFW_KEY_BACKSPACE) {enquePrint(ofmotion(Back)); enquePrint('\n');}
-        CASE(GLFW_KEY_SPACE) {enquePrint(ofmotion(White)); enquePrint('\n');}
-        DEFAULT(enquePrint(ofmotion(White)); enquePrint('\n');)}
+        CASE(GLFW_KEY_SPACE) {enquePrint(ofmotion(Space)); enquePrint('\n');}
+        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
@@ -2861,7 +2863,7 @@ char *event()
     if (!validEvent()) exitErrstr("no valid event\n");
     enum Event event = headEvent(); dequeEvent();
     SWITCH(event,Plane) return (char *)"Plane";
-    CASE(Symbolic) return (char *)"Classify";
+    CASE(Update) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
     CASE(Pierce) return (char *)"Pierce";
     CASE(Fill) return (char *)"Fill";

@@ -36,7 +36,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Subtractive -- click hollows out region under pierce point  
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
-  * Tweak -- click tweaks planes holding polytope or space fixed  
+  * Tweak -- click tweaks plane possibly holding space fixed  
   * Action -- click switches to decoration file or opens equalizer panel  
   * Transform -- modify world or perspective matrix  
   * Modify -- modify pierced polytope independent of others  
@@ -55,9 +55,9 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Graph -- display relation of facets  
     * Polyant -- display polyant representation  
     * Place -- display map from boundary to halfspaces  
-  * Sample -- type of thing fixed during click in Tweak mode  
-    * Polytope -- classification of space may change  
-    * Space -- classification of space does not change  
+  * Sample -- whether space fixed in Tweak mode  
+    * Symbolic -- classification of space does not change  
+    * Numeric -- configuration controls amount of change  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
@@ -81,7 +81,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --mirror is like window except tetrahedron is fixed  
   * --matrix takes transformation of display, ignored if not first file  
   * --project takes slope and cutoff, ignored if not first file  
-  * --configure warp, refine, color, filter, delay, matrix, arrow, display  
+  * --configure warp, refine, tweak, color, filter, delay  
   * --inject specifies user action to inject, ignored if not at eof  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
