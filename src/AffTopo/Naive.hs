@@ -136,9 +136,9 @@ a \\ b = slashSlashF (checkSort a) (checkSort b)
 
 slashSlashF :: Ord a => [a] -> [a] -> [a]
 slashSlashF (a:b) (c:d)
- | a > c = a : (slashSlashF b d)
- | a == c = slashSlashF b (c:d)
- | otherwise = undefined
+ | a > c = slashSlashF (a:b) d
+ | a < c = a : (slashSlashF b (c:d))
+ | a == c = slashSlashF b d
 slashSlashF a _ = a
 
 -- intersection
