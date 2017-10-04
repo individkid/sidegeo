@@ -1174,8 +1174,9 @@ spaceFromPlanes n w
 spaceFromPlanesF :: [Plane] -> Place -> ([Int], Point) -> [Region]
 spaceFromPlanesF w s (b, v) = let
  planes = fold' (\x y -> unplace x y) b w
+ bounds = (boundariesOfPlace s) \\ (map Boundary b)
  degen = map (\x -> if isAbovePlane v x then [[],[Region 0]] else [[Region 0],[]]) planes
- in takeRegions (spaceToPlace degen) s
+ in takeRegions (zipPlace bounds degen) s
 
 -- return planes with sidednesses as specified by given dimension and space
 planesFromSpace :: Int -> Space -> [Plane]
@@ -1192,7 +1193,7 @@ planesFromSpace n s
   index = pred m
   bound = Boundary index
   -- recurse with one fewer boundary
-  place = spaceToPlace s
+  place = zipPlace (map Boundary (indices m)) s
   sub = subSpace bound place
   space = placeToSpace sub
   planes = planesFromSpace n space
@@ -1216,7 +1217,7 @@ planesFromSpace n s
   -- find copoint in coregion
   copoint = planesFromSpaceG n coregion cospace coplanes
   -- interpret copoint as plane to add
-  in planes ++ [copoint] where
+  in planes ++ [vectorToPlane . pointToVector $ copoint] where
  m = length s
 
 -- return average of corners of coregeion

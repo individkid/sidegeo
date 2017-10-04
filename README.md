@@ -79,6 +79,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
+  * --system specify flow delta as linear combination of region stocks  
   * --matrix takes transformation of display, ignored if not first file  
   * --project takes slope and cutoff, ignored if not first file  
   * --configure warp, refine, tweak, color, filter, delay  
