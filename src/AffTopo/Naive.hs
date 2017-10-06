@@ -18,7 +18,7 @@ module AffTopo.Naive where
 
 import Prelude hiding ((++))
 import Data.List (sort, sortBy, foldl', elemIndex, findIndex, find)
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust)
 import Data.Bits (xor, shift, testBit)
 import qualified Numeric.LinearAlgebra as Matrix
 import qualified System.Random as Random
@@ -872,49 +872,13 @@ refineTopeI a b c (p,k) (q,l)
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
 topeFromSpace n r s = let
- -- find polys representing facets
- (bounds,space) = unzipPlace s
- pairs :: [(Int,Region)]
- pairs = [(x,y) | x <- (indices (succ n)), y <- r]
- cornered :: [(Region,[Boundary])]
- cornered = [(y,z) | (x,y) <- pairs, z <- attachedFacets x y space]
- indexed :: [(Region,[Boundary],[Boundary])]
- indexed = map (\(x,y) -> (x,y,unzipBoundaries y bounds)) cornered
- sided :: [(Region,[Boundary],[Boundary],[Side])]
- sided = map (\(x,y,z) -> (x,y,z,map (\w -> regionWrtBoundary w x space) z)) indexed
- neighbored :: [([Boundary],[Side],[Region])]
- neighbored = map (\(x,y,z,w) -> (y,w,map (\v -> oppositeOfRegion [v] x space) z)) sided
- booled :: [([Boundary],[Side],[Bool])]
- booled = map (\(y,w,v) -> (y,w,map (\u -> elem u r) v)) neighbored
- subfacets :: [[(Boundary,Side,Bool)]]
- subfacets = nub' (mapMaybe (\(y,w,u) -> justIf (any id u) (sort (zip3 y w u))) booled)
- facets :: [Poly]
- facets = map2 (\(y,w,_) -> (y,w)) subfacets
- -- find map from each facet extensions to subfacets
- in map (\x -> (x, topeFromSpaceF subfacets x)) facets
+ bounds = boundariesOfPlace s
+ sides = allSides
+ polys = [(x,y) | x <- bounds, y <- sides]
+ in nub' (concat (map (topeFromSpaceF n r s) polys))
 
--- given all facets with boundary significance
--- find extenders from given facet to its subfacets
-topeFromSpaceF :: [[(Boundary,Side,Bool)]] -> Poly -> Poly
-topeFromSpaceF p q = let
- -- find polys that are one boundary extensions
- byOne :: [[(Boundary,Side,Bool)]]
- byOne = filter (\x -> (length x) == (succ (length q))) p
- isIn :: (Boundary,Side) -> [(Boundary,Side,Bool)] -> Bool
- isIn x y = any (\(z,w,_) -> (z,w) == x) y
- isExt :: [(Boundary,Side,Bool)] -> [(Boundary,Side)] -> Bool
- isExt x y = all (\z -> isIn z x) y
- extensions :: [[(Boundary,Side,Bool)]]
- extensions = filter (\x -> isExt x q) byOne
- -- restrict the found polys by given poly
- notIn :: (Boundary,Side,Bool) -> Bool
- notIn (x,y,_) = not (elem (x,y) q)
- withOut :: [(Boundary,Side,Bool)] -> [(Boundary,Side,Bool)]
- withOut x = filter notIn x
- restrictions :: [[(Boundary,Side,Bool)]]
- restrictions = map withOut extensions
- -- return uniquefy of concat of restricted polys
- in nub' (mapMaybe (\[(x,y,z)] -> justIf z (x,y)) restrictions)
+topeFromSpaceF :: Int -> [Region] -> Place -> (Boundary,Side) -> Tope
+topeFromSpaceF = undefined
 
 -- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
