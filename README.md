@@ -26,6 +26,7 @@ Tests include the following, where "linear" refers to any linear space produced 
   * linear should be equivalent to one of allSpace of linear  
   * classify of sample of linear should be equivalent  
   * superspace of linear and linear should be linear  
+  * polyant has the same facets no matter which facet it is in  
   * classify of sample of classify of any embed in a linear should be equivalent  
   * every plane through a point should have a coplane on the copoint  
   * every edge facet of a region should have two and only two vertex facets  
@@ -37,7 +38,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
   * Tweak -- click tweaks plane possibly holding space fixed  
-  * Action -- click switches to decoration file or opens equalizer panel  
+  * Action -- click replaces polytope, opens equalizer, or calls function  
   * Transform -- modify world or perspective matrix  
   * Modify -- modify pierced polytope independent of others  
   * Manipulate -- modify pierced plane  
@@ -80,6 +81,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
   * --system specify flow delta as linear combination of region stocks  
+  * --action attaches Haskell function to boundary to be activated by click  
   * --matrix takes transformation of display, ignored if not first file  
   * --project takes slope and cutoff, ignored if not first file  
   * --configure warp, refine, tweak, color, filter, delay  

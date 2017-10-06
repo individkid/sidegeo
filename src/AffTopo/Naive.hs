@@ -871,14 +871,33 @@ refineTopeI a b c (p,k) (q,l)
 
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
-topeFromSpace n r s = let
- bounds = boundariesOfPlace s
- sides = allSides
- polys = [(x,y) | x <- bounds, y <- sides]
- in nub' (concat (map (topeFromSpaceF n r s) polys))
+topeFromSpace n r s
+ | n == 1 = topeFromSpaceH r s
+ | otherwise = let
+  bounds = boundariesOfPlace s
+  sides = allSides
+  polys = [(x,y) | x <- bounds, y <- sides]
+  facets = nub' (concat (map (topeFromSpaceF r s) polys))
+  faces = filter (\(x,_) -> (length x) == 1) facets
+  poly = concat (map (\(x,_) -> x) faces)
+  in ([],poly):facets
 
-topeFromSpaceF :: Int -> [Region] -> Place -> (Boundary,Side) -> Tope
+-- recurse with surface regions and add to Poly element to Tope domain elements
+topeFromSpaceF :: [Region] -> Place -> (Boundary,Side) -> Tope
 topeFromSpaceF = undefined
+
+-- test whether region is surface
+topeFromSpaceG :: Boundary -> Side -> Place -> [Region] -> Region -> Bool
+topeFromSpaceG b s p t r = let
+ (bounds,space) = unzipPlace p
+ bound = unzipBoundary b bounds
+ side = regionWrtBoundary bound r space
+ neighbor = oppositeOfRegion [bound] r space
+ in (side == s) && (elem neighbor t)
+
+-- find endpoint facets
+topeFromSpaceH :: [Region] -> Place -> Tope
+topeFromSpaceH = undefined
 
 -- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
