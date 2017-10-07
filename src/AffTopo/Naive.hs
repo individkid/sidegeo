@@ -872,70 +872,68 @@ refineTopeI a b c (p,k) (q,l)
 -- classify embedding with local invariance
 topeFromSpace :: Int -> [Region] -> Place -> Tope
 topeFromSpace n r s
- | n == 1 = topeFromSpaceH r s
+ | n == 0 = let
+  [region] = r
+  [(bound,[half,_])] = s
+  side = if elem region half then Side 0 else Side 1
+  in [([(bound,side)],[])]
  | otherwise = let
   bounds = boundariesOfPlace s
   sides = allSides
   polys = [(x,y) | x <- bounds, y <- sides]
-  facets = nub' (concat (map (topeFromSpaceF r s) polys))
+  facets = nub' (concat (map (topeFromSpaceF n r s) polys))
   faces = filter (\(x,_) -> (length x) == 1) facets
   poly = concat (map (\(x,_) -> x) faces)
   in ([],poly):facets
 
--- recurse with surface regions and add to Poly element to Tope domain elements
-topeFromSpaceF :: [Region] -> Place -> (Boundary,Side) -> Tope
-topeFromSpaceF = undefined
+-- recurse with surface regions and add Poly element to Tope domain elements
+topeFromSpaceF :: Int -> [Region] -> Place -> (Boundary,Side) -> Tope
+topeFromSpaceF n r p (b,s) = let
+ sect = sectionSpace b p
+ surface = filter (topeFromSpaceG b s p r) (regionsOfPlace p)
+ taken = takeRegions (embedSpace surface p) sect
+ tope = topeFromSpace (pred n) taken sect
+ in sort (map (\(x,y) -> (sort ((b,s):x), y)) tope)
 
 -- test whether region is surface
 topeFromSpaceG :: Boundary -> Side -> Place -> [Region] -> Region -> Bool
-topeFromSpaceG b s p t r = let
+topeFromSpaceG b s p q r = let
  (bounds,space) = unzipPlace p
  bound = unzipBoundary b bounds
  side = regionWrtBoundary bound r space
  neighbor = oppositeOfRegion [bound] r space
- in (side == s) && (elem neighbor t)
-
--- find endpoint facets
-topeFromSpaceH :: [Region] -> Place -> Tope
-topeFromSpaceH = undefined
+ in (side == s) && (elem neighbor q)
 
 -- find sample space that polytope could be embedded in
 spaceFromTope :: Int -> Tope -> Place
-spaceFromTope n a = choose (fold' (spaceFromTopeF n a) (boundariesOfTope a) [[]])
-
--- extend each in every way; filter by spaceFromTopeG; assume only one equivalent obeys
-spaceFromTopeF :: Int -> Tope -> Boundary -> [Place] -> [Place]
-spaceFromTopeF n tope b place = let
- powered = powerSpace [b]
- extend = map (superSpace n powered) place
- space = map placeToSpace extend
- every = concat (map allSpace space)
- places = map spaceToPlace every
- in nub' (filter (spaceFromTopeG n tope) places)
- -- TODO: eliminate equivalents
+spaceFromTope n t = let
+ bounds = boundariesOfTope t
+ spaces = allSpace (anySpace n (length bounds))
+ places = map spaceToPlace spaces
+ in choose (filter (spaceFromTopeF n t) places)
 
 -- return whether place obeys sidednesses implied by tope
-spaceFromTopeG :: Int -> Tope -> Place -> Bool
-spaceFromTopeG n tope place
+spaceFromTopeF :: Int -> Tope -> Place -> Bool
+spaceFromTopeF n tope place
  | n < 2 = let
-  inside = spaceFromTopeI (==) tope place
-  outside = spaceFromTopeI (/=) tope place
+  inside = spaceFromTopeH (==) tope place
+  outside = spaceFromTopeH (/=) tope place
   in ((inside +\ outside) == []) && ((((regionsOfPlace place) \\ inside) \\ outside) == [])
  | otherwise = let
   sections = [(x,y) | x <- boundariesOfPlace place, y <- allSides]
   sectionplace x = sectionSpace x place
-  sectiontope x y = spaceFromTopeH x y tope
-  in all (\(x,y) -> spaceFromTopeG (n-1) (sectiontope x y) (sectionplace x)) sections
+  sectiontope x y = spaceFromTopeG x y tope
+  in all (\(x,y) -> spaceFromTopeF (n-1) (sectiontope x y) (sectionplace x)) sections
 
 -- find section tope wrt boundary
-spaceFromTopeH :: Boundary -> Side -> Tope -> Tope
-spaceFromTopeH boundary side tope = let
+spaceFromTopeG :: Boundary -> Side -> Tope -> Tope
+spaceFromTopeG boundary side tope = let
  branch = filter (\(x,_) -> any (\(y,z) -> (y,z) == (boundary,side)) x) tope
  in map (\(x,y) -> (filter (\(z,_) -> z /= boundary) x, y)) branch
 
 -- find inside or outside regions of one dimensional polytope
-spaceFromTopeI :: (Side -> Side -> Bool) -> Tope -> Place -> [Region]
-spaceFromTopeI equal tope place = let
+spaceFromTopeH :: (Side -> Side -> Bool) -> Tope -> Place -> [Region]
+spaceFromTopeH equal tope place = let
  boundaries = boundariesOfTope tope
  subplace = unsubSpace boundaries place
  (bounds,space) = unzipPlace subplace
@@ -949,7 +947,7 @@ spaceFromTopeI equal tope place = let
 -- find regions attached to top-level facets
 topeRegions :: Int -> Tope -> Place -> [Region]
 topeRegions n tope place
- | n < 2 = spaceFromTopeI (==) tope place
+ | n < 2 = spaceFromTopeH (==) tope place
  | otherwise = let
   boundary = boundariesOfPlace place
   mappings = map (topeRegionsF n tope place) (zip boundary allSides)
@@ -961,7 +959,7 @@ topeRegions n tope place
 topeRegionsF :: Int -> Tope -> Place -> (Boundary,Side) -> [(Region,Boundary)]
 topeRegionsF n tope place (boundary,side) = let
  sectionplace = sectionSpace boundary place
- sectiontope = spaceFromTopeH boundary side tope
+ sectiontope = spaceFromTopeG boundary side tope
  regions = topeRegions (n-1) sectiontope sectionplace
  taken = takeRegions (embedSpace regions sectionplace) place
  space = placeToSpace place
