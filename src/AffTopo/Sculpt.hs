@@ -49,7 +49,7 @@ foreign import ccall "readFrameSub" readFrameSubC :: IO (Ptr CInt)
 foreign import ccall "readFrames" readFramesC :: IO CInt
 foreign import ccall "readPoints" readPointsC :: IO CInt
 foreign import ccall "readPlanes" readPlanesC :: IO CInt
-foreign import ccall "readSideBuf" readSideBufC :: IO (Ptr CInt)
+foreign import ccall "readSideSub" readSideSubC :: IO (Ptr CInt)
 foreign import ccall "readSides" readSidesC :: IO CInt
 foreign import ccall "writeFaceSub" writeFaceSubC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "writeFrameSub" writeFrameSubC :: CInt -> CInt -> IO (Ptr CInt)
@@ -185,7 +185,7 @@ handleClassifyF :: Int -> [Int] -> IO [Int]
 handleClassifyF done (index:todo) = let indexC = fromIntegral index in
  readQueue (placesC indexC) (placeC indexC) >>= \placeI ->
  readQueue (embedsC indexC) (embedC indexC) >>= \embedI ->
- readBuffer readSidesC readSideBufC >>= \side ->
+ readBuffer readSidesC readSideSubC >>= \side ->
  readQueue (boundariesC indexC) (boundaryC indexC) >>= \boundaryI -> let
  boundary = map Boundary boundaryI
  place = decodePlace boundaryI placeI
@@ -298,7 +298,7 @@ handleFillF fun index boundI = let
  indexC = fromIntegral index
  bound = Boundary boundI in
  readQueue (embedsC indexC) (embedC indexC) >>= \embedI ->
- readBuffer readSidesC readSideBufC >>= \sideI -> let
+ readBuffer readSidesC readSideSubC >>= \sideI -> let
  embed = map Region embedI
  side = map Side sideI
  in handleInflateF (handleFillG fun bound embed side) index

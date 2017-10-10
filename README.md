@@ -7,7 +7,7 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -h print usage  
   * -H print readme  
   * -f \<file> load polytope and append changes  
-  * -F \<file> \<file> preprocess to add missing headers  
+  * -F \<file> switch to file for perspective  
   * -o pack out garbage in graphics buffers  
   * -O \<ext> save minimal commands to produce polytopes  
   * -s prefix commands to save current state  
@@ -75,15 +75,15 @@ Configuration/history files consist of commands. User input appends to file. App
   * --polytope interprets polyants as significant facets  
   * --listen takes point for where track is recorded or audited  
   * --source takes sound file or source  
-  * --filter takes plane subscript, per area equalization of tempo, dynamic, tone  
+  * --filter takes plane subscript, per area, per flow equalization  
   * --color takes plane subscript and decoration  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
   * --system specify flow delta as linear combination of region stocks  
   * --action attaches Haskell function to boundary to be activated by click  
-  * --matrix takes transformation of display, ignored if not first file  
-  * --project takes slope and cutoff, ignored if not first file  
+  * --matrix takes transformation of display, ignored if not -F file  
+  * --project takes slope and cutoff, ignored if not -F file  
   * --configure warp, refine, tweak, color, filter, delay  
   * --inject specifies user action to inject, ignored if not at eof  
   * --jump causes playback to go to location in file  
@@ -93,4 +93,11 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-Preprocess prepends body length to each line starting with --. The preprocessed body of a command may contain endlines if lines in the original file did not start with --. The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. There are preprocess and unprocess functions in the default import for --call. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time.
+Preprocess prepends body length to each line starting with --. The preprocessed body of a command may contain endlines if lines in the original file did not start with --. The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. There are preprocess and unprocess functions in the default import for --call. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The filter associated with a plane affects the color and sound of the plane's facets. Each slider of the equalizer is an input to a linear equation for a point on a curve. Other inputs the the equalizer equations are projected area of the facet and system flow through the plane. Equalizer curves determine the following.
+
+  * color of facets as brightness in terms of color as a frequency  
+  * tone of notes as amplitude in terms of cycles per second of sound  
+  * envelope of notes as volume in terms of portion of note length  
+  * duration of notes as hight above minimum at start of note  
+  * rhythm of notes as passage of waveform up through zero  
+

@@ -102,9 +102,12 @@ GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
-struct Strings {DECLARE_QUEUE(char *)} options = {0};
+struct Options {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 enum Lock {Unlck,Rdlck,Wrlck};
+struct Chars {DECLARE_QUEUE(char)};
+struct Strings {DECLARE_QUEUE(struct Chars)} reads = {0};
+struct Chars *strings = 0;
 struct File {
 #ifdef BRINGUP
     int bringup;
@@ -112,7 +115,7 @@ struct File {
     int index;
     int handle;
     enum Lock lock;
-    char buffer[256];
+    struct Chars *buffer;
     int versor[7];
     float vector[4];
     int capital;
@@ -122,7 +125,7 @@ int fileOwner = 0;
 int fileLast = 0;
 int fileCount = 0;
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
-struct Chars {DECLARE_QUEUE(char)} configs = {0};
+struct Chars configs = {0};
 struct Ints {DECLARE_QUEUE(int)} indices = {0};
 int classifyDone = 0; // number of points classifed
 enum Action { // return values for command helpers
@@ -530,6 +533,7 @@ inline int totry##NAME() \
 
 void exitErrstr(const char *fmt, ...)
 {
+    if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
     printf("fatal: ");
     va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
@@ -538,6 +542,10 @@ void exitErrstr(const char *fmt, ...)
 void enqueBase(struct Base);
 
 ACCESS_QUEUE(Option,char *,options)
+
+ACCESS_QUEUE(Read,struct Chars,reads)
+
+ACCESS_QUEUE(String,char,(*strings))
 
 ACCESS_QUEUE(File,struct File,files)
 
@@ -920,7 +928,7 @@ void *console(void *arg)
     if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed: %s\n", strerror(errno));
 
     if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
-    tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
+    if (!validTermios) tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
     struct termios terminal;
     if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed: %s\n", strerror(errno));
     terminal.c_lflag &= ~(ECHO|ICANON);
@@ -1049,7 +1057,7 @@ void *console(void *arg)
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
 
-    tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
+    if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
     return 0;
 }
 
@@ -1427,7 +1435,7 @@ void process()
         enqueMsgstr("-h print usage\n");
         enqueMsgstr("-H print readme\n");
         enqueMsgstr("-f <file> load polytope and append changes\n");
-        enqueMsgstr("-F <file> <file> preprocess to add missing headers\n");
+        enqueMsgstr("-F <file> switch to file for perspective\n");
         enqueMsgstr("-o pack out garbage in graphics buffers\n");
         enqueMsgstr("-O <ext> save minimal commands to produce polytopes\n");
         enqueMsgstr("-s prefix commands to save current state\n");
@@ -1436,35 +1444,6 @@ void process()
         enqueMsgstr("-E <file> change last file to indicated\n");
         enqueMsgstr("-t run sanity check\n");
         enqueMsgstr("-T run thorough tests\n");}
-    else if (strcmp(headOption(), "-F") == 0) {
-        FILE *source = 0;
-        FILE *dest = 0;
-        char body[256] = {0};
-        int length = 0;
-        char header[3] = {0};
-        dequeOption();
-        if (!validOption()) {enqueErrstr("missing source file\n"); DEQUE(process,Process)}
-        if ((source = fopen(headOption(),"r")) == 0) {enqueErrstr("cannot open source\n"); DEQUE(process,Process)}
-        dequeOption();
-        if (!validOption()) {enqueErrstr("missing dest file\n"); DEQUE(process,Process)}
-        if ((dest = fopen(headOption(),"wx")) == 0) {enqueErrstr("cannot open dest\n"); DEQUE(process,Process)}
-        while (fgets(body+length,256-length,source)) {
-            if ((length > 0 && body[length] == '-' && body[length+1] == '-') ||
-                (length > 0 && isxdigit(body[length]) && isxdigit(body[length+1]) && body[length+2] == '-' && body[length+3] == '-')) {
-                char temp[256] = {0};
-                int len = strlen(body);
-                strncpy(temp,body,length);
-                fputs(temp,dest);
-                memmove(body,body+length,len-length+1);}
-            length = strlen(body);
-            if (length >= 2 && body[0] == '-' && body[1] == '-') {
-                memmove(body+2,body,length+1);
-                length += 2;
-                body[0] = '0';
-                body[1] = '1';}
-            snprintf(header,3,"%2x",length);
-            memcpy(body,header,2);}
-        if (fclose(source) != 0 || fclose(dest) != 0) {enqueErrstr("cannot close files\n"); DEQUE(process,Process)}}
     else if (strcmp(headOption(), "-f") == 0) {
         dequeOption();
         if (!validOption()) {enqueErrstr("missing file argument\n"); DEQUE(process,Process)}
@@ -1716,7 +1695,6 @@ enum Action fileAdvance(struct File *file, enum Event event)
 
 int fileScan(struct File *file, const char *name, int ints, int floats)
 {
-    int result = 0;
     const char *prefix = "--";
     const char *intfix = " %d%n";
     const char *floatfix = " %f%n";
@@ -1727,25 +1705,27 @@ int fileScan(struct File *file, const char *name, int ints, int floats)
     char format[strlen(prefix)+strlen(name)-1+strlen(suffix)+1];
     format[0] = 0; strcat(strcat(format,prefix),name);
     format[strlen(format)-1] = 0; strcat(format,suffix);
-    if (sscanf(file->buffer,format,&check,&pos) == 1 && check == name[strlen(name)-1]) offset += pos; else return 0;
-    for (int i = 0; i < ints; i++) if (sscanf(file->buffer+offset,intfix,file->versor+i,&pos) == 1) offset += pos; else return 0;
-    for (int i = 0; i < floats; i++) if (sscanf(file->buffer+offset,floatfix,file->vector+i,&pos) == 1) offset += pos; else return 0;
-    return 1;
+    if (sscanf(arrayString(),format,&check,&pos) == 1 && check == name[strlen(name)-1]) offset += pos+1; else return 0;
+    for (int i = 0; i < ints; i++) if (sscanf(arrayString()+offset,intfix,file->versor+i,&pos) == 1) offset += pos; else return 0;
+    for (int i = 0; i < floats; i++) if (sscanf(arrayString()+offset,floatfix,file->vector+i,&pos) == 1) offset += pos; else return 0;
+    return offset;
 }
 
 #define FILESWITCH(FUNC,EVENT,ADVANCE) \
     SWITCH(FUNC(file,EVENT),Advance) {changed = 1; file->state = 0; ADVANCE} \
-    CASE(Continue) {changed = 1; file->state++; *file->buffer = 0;} \
+    CASE(Continue) {changed = 1; file->state++; delocString(offset);} \
     CASE(Restart) file->state++; \
     BRANCH(Reque) {changed = 1; file->state++;} \
     CASE(Defer) changed = 0; \
     DEFAULT(return Except;)
 typedef enum Action (*fileModeFP)(struct File *file, enum Event event);
+
 enum Action fileMode(struct File *file, const char *name, int ints, int floats, enum Event event, fileModeFP func0, fileModeFP func1)
 {
     int changed = 0;
+    int offset = 0;
     if (fileScan(file,name,ints,floats) && file->mode != 0 && file->mode != name) return Advance;
-    else if (fileScan(file,name,ints,floats)) {file->mode = name; FILESWITCH(func0,event,*file->buffer = 0;)}
+    else if ((offset = fileScan(file,name,ints,floats))) {file->mode = name; FILESWITCH(func0,event,delocString(offset);)}
     else if (file->mode == name) {FILESWITCH(func1,event,file->mode = 0;)}
     else return Advance;
     return (changed ? Reque : Defer);
@@ -1753,9 +1733,10 @@ enum Action fileMode(struct File *file, const char *name, int ints, int floats, 
 
 enum Action fileTest(struct File *file, const char *name, struct Buffer *buffer)
 {
+    int offset = 0;
     SWITCH(buffer->type,GL_FLOAT)
     if (sizeof(file->vector)/sizeof(file->vector[0]) < buffer->dimn) exitErrstr("test too size");
-    if (fileScan(file, name, 1, buffer->dimn)) {
+    if ((offset = fileScan(file, name, 1, buffer->dimn))) {
         if (file->versor[0] < 0) exitErrstr("test too index\n");
         if (buffer->done > file->versor[0]) {
             GLfloat actual[buffer->dimn];
@@ -1770,7 +1751,7 @@ enum Action fileTest(struct File *file, const char *name, struct Buffer *buffer)
     else return Advance;
     CASE(GL_UNSIGNED_INT)
     if (sizeof(file->versor)/sizeof(file->versor[0]) < 1+buffer->dimn) exitErrstr("test too size");
-    if (fileScan(file, name, 1+buffer->dimn, 0)) {
+    if ((offset = fileScan(file, name, 1+buffer->dimn, 0))) {
         if (file->versor[0] < 0) exitErrstr("test too index\n");
         if (buffer->done > file->versor[0]) {
             GLuint actual[buffer->dimn];
@@ -1784,25 +1765,27 @@ enum Action fileTest(struct File *file, const char *name, struct Buffer *buffer)
         else enqueErrstr("test too index\n");}
     else return Advance;
     DEFAULT(exitErrstr("unknown buffer type\n");)
-    *file->buffer = 0; return Reque;
+    delocString(offset); return Reque;
 }
 
 enum Action fileQueue(struct File *file, const char *name, struct Ints *queue)
 {
+    int offset = 0;
     metas = queue;
-    if (fileScan(file, name, 2, 0)) {
+    if ((offset = fileScan(file, name, 2, 0))) {
         if (file->versor[0] < 0) exitErrstr("test too index\n");
         if (sizeMeta() > file->versor[0]) {
             if (arrayMeta()[file->versor[0]] != file->versor[1]) enqueErrstr("test too actual\n");}
         else enqueErrstr("test too index\n");}
     else return Advance;
-    return Reque;
+    delocString(offset); return Reque;
 }
 
 enum Action fileMeta(struct File *file, const char *name, struct Metas *queue)
 {
+    int offset = 0;
     metaptrs = queue;
-    if (fileScan(file, name, 3, 0)) {
+    if ((offset = fileScan(file, name, 3, 0))) {
         if (file->versor[0] < 0 || file->versor[1] < 0) exitErrstr("test too index\n");
         if (sizeMetaptr() > file->versor[0]) {
             metas = arrayMetaptr()+file->versor[0];
@@ -1811,88 +1794,83 @@ enum Action fileMeta(struct File *file, const char *name, struct Metas *queue)
             else enqueErrstr("test too index\n");}
         else enqueErrstr("test too index\n");}
     else return Advance;
-    return Reque;
+    delocString(offset); return Reque;
+}
+
+enum Action fileRead(struct File *file)
+{
+    if (sizeString() > 0 && arrayString()[0] != '-') return Advance;
+    if (sizeString() > 1 && arrayString()[1] != '-') return Advance;
+    if (sizeString() > 2 && strstr(arrayString(),"--") != 0) return Advance;
+    rdlckFile(file);
+    if (isrdlckFile(file)) {
+        int retval = read(file->handle,enlocString(256),256); unlckFile(file);
+        if (retval < 0) {unlocString(256); return Advance;}
+        if (retval < 256) unlocString(256-retval);
+        if (retval > 0) return Reque;}
+    if (validIndex() && headIndex() == file->index && sizeString() == 0) wrlckFile(file);
+    if (iswrlckFile(file)) {
+        int size = strlen(arrayConfig())+1;
+        int retval;
+        if (sizeConfig() < size) exitErrstr("config too size\n");
+        retval = write(file->handle, arrayConfig(), size); unlckFile(file);
+        if (retval < size) return Advance;
+        memcpy(enlocString(size-1),arrayConfig(),size-1);
+        dequeIndex(); delocConfig(size); 
+        return Reque;}
+    return Defer;
 }
 
 #define FILEERROR(MSG) fileError(file,MSG); dequeFile(); return;
 void configure()
 {
+    int offset = 0;
     struct File *file = arrayFile();
     int location = 0;
-    char *buffer = 0;
     char suffix = 0;
     int index = 0;
-    enum Action action = Defer;
     enum Action retval = Advance;
-    buffer = enlocChar(256); unlocChar(256);
     if (fileOwner < fileCount && fileOwner != file->index) {requeFile(); DEFER(configure)}
+    strings = file->buffer;
     fileLast = fileOwner = file->index;
 #ifdef BRINGUP
     if (file->bringup == 1) {
         SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
         CASE(Advance) {file->bringup = 0; enqueShader(dishader); enqueCommand(transformRight);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
+    requeFile(); DEFER(configure)
 #endif
-    if (validIndex() && headIndex() == file->index && *file->buffer == 0) wrlckFile(file);
-    if ((!validIndex() || headIndex() != file->index) && *file->buffer == 0) rdlckFile(file);
-    if (isrdlckFile(file) || iswrlckFile(file)) {
-        char header[3] = {0};
-        int size = 0;
-        int retval = read(file->handle,header,2);
-        if (retval != 0 && retval != 2) {FILEERROR("file error\n")}
-        if (retval == 0 && isrdlckFile(file)) unlckFile(file);
-        if (retval == 2) {
-            size = strtol(header,NULL,16);
-            if (size >= 256) {FILEERROR("file error\n")}
-            if (read(file->handle,file->buffer,size) != size) {FILEERROR("file error\n")}
-            action = Reque; file->buffer[size] = 0; unlckFile(file);}}
-    if (iswrlckFile(file)) {
-        char header[3] = {0};
-        int size = 0;
-        header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
-        if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
-        memcpy(file->buffer,arrayConfig()+2,size); file->buffer[size] = 0;
-        if (write(file->handle, arrayConfig(), size+2) != size+2) {FILEERROR("write error\n")}
-        action = Reque; dequeIndex(); delocConfig(size+2); unlckFile(file);}
-    if (validIndex() && headIndex() == file->index) {
-        char header[3] = {0};
-        int size = 0;
-        header[0] = arrayConfig()[0]; header[1] = arrayConfig()[1]; header[2] = 0; size = strtol(header,NULL,16);
-        if (sizeConfig() < size+2 || size >= 256) exitErrstr("config too size\n");
-        requeIndex(); relocConfig(size+2);}
-    if (*file->buffer == 0) fileOwner = fileCount;
-#ifdef BRINGUP
-    if (*file->buffer) enqueMsgstr("configure %s\n",file->buffer);
-#endif
+    enqueString(0); unqueString();
+    if (retval == Advance && isspace(headString())) {dequeString(); retval = Reque;}
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
-    if (retval == Advance && sscanf(file->buffer,"--inflat%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
-        retval = Reque; *file->buffer = 0;
+    if (retval == Advance && sscanf(arrayString(),"--inflat%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
+        retval = Reque; delocString(offset);
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);}
     if (retval == Advance) {retval = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance);}
     if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
-    if (retval == Advance && sscanf(file->buffer,"--remove plac%c", &suffix) == 1 && suffix == 'e' && file->mode == 0) {
-        retval = Reque; *file->buffer = 0;
+    if (retval == Advance && sscanf(arrayString(),"--remove plac%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
+        retval = Reque; delocString(offset);
         enqueCommand(0); enqueEvent(Remove); enqueKind(File); enqueInt(file->index);}
-    if (retval == Advance && sscanf(file->buffer,"--remove face %d", &index) == 1 && file->mode == 0) {
-        if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
-        retval = Reque; *file->buffer = 0;
+    if (retval == Advance && sscanf(arrayString(),"--remove face %d%n", &index, &offset) == 1 && file->mode == 0) {
+        if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error 4\n")}
+        retval = Reque; delocString(offset);
         enqueCommand(0); enqueEvent(Remove); enqueKind(Face); enqueInt(index);}
-    if (retval == Advance && sscanf(file->buffer,"--remove plane %d", &index) == 1 && file->mode == 0) {
-        if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error\n")}
-        retval = Reque; *file->buffer = 0;
+    if (retval == Advance && sscanf(arrayString(),"--remove plane %d%n", &index, &offset) == 1 && file->mode == 0) {
+        if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error 5\n")}
+        retval = Reque; delocString(offset);
         enqueCommand(0); enqueEvent(Remove); enqueKind(Boundary); enqueInt(index);}
-    if (retval == Advance && sscanf(file->buffer,"--yiel%c", &suffix) == 1 && suffix == 'd' && file->mode == 0) {
-        fileOwner = fileCount; retval = Reque; *file->buffer = 0;}
-    if (retval == Advance && sscanf(file->buffer,"--call %s", buffer) == 1 && file->mode == 0) {
-        int len = strlen(buffer);
-        char buf[len+1]; strncpy(buf,buffer,len);
-        retval = Reque; *file->buffer = 0;
-        enqueCommand(0); enqueEvent(Call); enqueKind(Other); enqueInt(len); strncpy(enlocChar(len),buf,len); enqueInt(file->index);}
-    if (retval == Advance && sscanf(file->buffer,"--branch %d %s", &location, buffer) == 2 && file->mode == 0) {
-        // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
-    }
+    if (retval == Advance && sscanf(arrayString(),"--yiel%c%n", &suffix, &offset) == 1 && suffix == 'd' && file->mode == 0) {
+        fileOwner = fileCount; retval = Reque; delocString(offset);}
+//    if (retval == Advance && sscanf(file->buffer,"--call %s", buffer) == 1 && file->mode == 0) {
+//        int len = strlen(buffer);
+//        char buf[len+1]; strncpy(buf,buffer,len);
+//        retval = Reque; *file->buffer = 0;
+//        enqueCommand(0); enqueEvent(Call); enqueKind(Other); enqueInt(len); strncpy(enlocChar(len),buf,len); enqueInt(file->index);}
+//    if (retval == Advance && sscanf(arrayString(),"--branch %d %s%n", &location, buffer, &offset) == 2 && file->mode == 0) {
+//        // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
+//    }
     if (retval == Advance) {retval = fileTest(file,"test plane",&planeBuf);}
     if (retval == Advance) {retval = fileTest(file,"test point",&pointBuf);}
     if (retval == Advance) {retval = fileTest(file,"test face",&faceSub);}
@@ -1903,11 +1881,14 @@ void configure()
     if (retval == Advance) {retval = fileTest(file,"test side",&sideSub);}
     if (retval == Advance) {retval = fileQueue(file,"test todo",&todos);}
     if (retval == Advance) {retval = fileMeta(file,"test place",&placings);}
-    if (retval == Advance && *file->buffer) {FILEERROR("file error\n")}
-    requeFile();
-    if (retval == Reque) action = Reque;
-    SWITCH(action,Reque) {REQUE(configure)}
-    CASE(Defer) {DEFER(configure)}
+    if (retval == Advance) {retval = fileRead(file);}
+    if (retval == Advance) {FILEERROR("file error 6\n")}
+    if (validIndex() && headIndex() == file->index) {
+        int size = strlen(arrayConfig())+1;
+        if (sizeConfig() < size) exitErrstr("config too size\n");
+        requeIndex(); relocConfig(size);}
+    SWITCH(retval,Reque) {requeFile(); REQUE(configure)}
+    CASE(Defer) FALL(Advance) {requeFile(); DEFER(configure)}
     DEFAULT(exitErrstr("unknown file action\n");)
 }
 
@@ -1918,6 +1899,7 @@ void openFile(char *filename)
     file.bringup = 1;
 #endif
     file.handle = open(filename,O_RDWR);
+    file.buffer = enlocRead(1);
     if (file.handle < 0) enqueErrstr("invalid file argument\n");
     if (fileOwner == fileCount) fileOwner++;
     if (fileLast == fileCount) fileLast++;
@@ -2764,7 +2746,7 @@ int *getBuffer(struct Buffer *buffer)
 {
     int count = buffer->done*buffer->dimn;
     GLuint temp[count];
-    if (buffer->type != GL_UNSIGNED_INT) exitErrstr("%s too type\n",buffer->name);
+    if (buffer->type != GL_UNSIGNED_INT) exitErrstr("get %s too type %d %d\n",buffer->name,buffer->type,GL_UNSIGNED_INT);
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
     glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GLuint),temp);
     glBindBuffer(GL_ARRAY_BUFFER,0);
@@ -2783,14 +2765,14 @@ int readPlanes()
     return planeSub.done*planeSub.dimn;
 }
 
-int *readSideBuf()
+int *readSideSub()
 {
-    return getBuffer(&sideBuf);
+    return getBuffer(&sideSub);
 }
 
 int readSides()
 {
-    return sideBuf.done*sideBuf.dimn;
+    return sideSub.done*sideSub.dimn;
 }
 
 void putBuffer()
@@ -2804,7 +2786,7 @@ void putBuffer()
     int type = buffer->type;
     int done = (start+count)/dimn;
     if ((start+count)%dimn) enqueErrstr("%s to mod\n",buffer->name);
-    if (type != GL_UNSIGNED_INT) exitErrstr("%s too type\n",buffer->name);
+    if (type != GL_UNSIGNED_INT) exitErrstr("put %s too type %d %d\n",buffer->name,type,GL_UNSIGNED_INT);
     if (done > buffer->room) {enqueWrap(buffer,done); requeBuffer(); relocInt(3+extra); requeArray(); DEFER(putBuffer)}
     GLuint temp[count]; for (int i = 0; i < count; i++) temp[i] = buf[i];
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
