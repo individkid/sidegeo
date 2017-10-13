@@ -60,6 +60,10 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Sample -- whether space fixed in Tweak mode  
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
+  * Level -- target of Alternate click mode  
+    * Surface -- click refers to the pierced plane  
+    * Polytope -- click referes to the pierced polytope  
+    * Collection -- click refers to polytopes in the file of pierced  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 

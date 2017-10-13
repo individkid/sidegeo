@@ -178,10 +178,11 @@ enum Menu { // lines in the menu; select with enter key
     Rollers,Cylinder,Clock,Scale,Drive,
     Classifies,Vector,Graph,Polyant,Place,
     Samples,Symbolic,Numeric,
+    Levels,Surface,Polytope,Collection,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
-    Sculpt,Mouse,Roller,Classify,Sample,Modes};
-#define INIT {Transform,Rotate,Cylinder,Vector,Symbolic}
+    Sculpt,Mouse,Roller,Classify,Sample,Level,Modes};
+#define INIT {Transform,Rotate,Cylinder,Vector,Symbolic,Surface}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -218,7 +219,11 @@ struct Item { // per-menu-line info
     {Classifies,Classify,2,"Place","display map from boundary to halfspaces"},
     {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
     {Samples,Sample,2,"Symbolic","classification of space does not change"},
-    {Samples,Sample,2,"Numeric","configuration controls amount of change"}};
+    {Samples,Sample,2,"Numeric","configuration controls amount of change"},
+    {Sculpts,Level,1,"Level","target of Alternate click mode"},
+    {Levels,Level,2,"Surface","click refers to the pierced plane"},
+    {Levels,Level,2,"Polytope","click referes to the pierced polytope"},
+    {Levels,Level,2,"Collection","click refers to polytopes in the file of pierced"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
