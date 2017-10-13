@@ -109,9 +109,6 @@ struct Chars {DECLARE_QUEUE(char)};
 struct Strings {DECLARE_QUEUE(struct Chars)} reads = {0};
 struct Chars *strings = 0;
 struct File {
-#ifdef BRINGUP
-    int bringup;
-#endif
     int index;
     int handle;
     enum Lock lock;
@@ -1472,6 +1469,7 @@ void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
         glBindBuffer(GL_ARRAY_BUFFER,0);
         buffer->done += todo;}
 }
+
 enum Action bringup()
 {
     // f = 1
@@ -1741,12 +1739,16 @@ enum Action fileTest(struct File *file, const char *name, struct Buffer *buffer)
         if (buffer->done > file->versor[0]) {
             GLfloat actual[buffer->dimn];
             int size = buffer->dimn*bufferType(buffer->type);
+            int match = 1;
             glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
             glGetBufferSubData(GL_ARRAY_BUFFER, file->versor[0]*size, size, actual);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
-            for (int i = 0; i < buffer->dimn; i++) {
-                if (fabs(actual[i] - file->vector[i]) > invalid[0]) enqueErrstr("test too actual %f /= %f\n",actual[i],file->vector[i]);
-                else enqueMsgstr("test just actual %f == %f\n",actual[i],file->vector[i]);}}
+            for (int i = 0; i < buffer->dimn; i++) if (fabs(actual[i] - file->vector[i]) > invalid[0]) match = 0;
+            enqueMsgstr("test %s actual <", (match ? "just" : "too"));
+            for (int i = 0; i < buffer->dimn; i++) {enqueMsgstr("%f",actual[i]); if (i < buffer->dimn-1) enqueMsgstr(",");}
+            enqueMsgstr("> %s <", (match ? "==" : "/="));
+            for (int i = 0; i < buffer->dimn; i++) {enqueMsgstr("%f",file->vector[i]); if (i < buffer->dimn-1) enqueMsgstr(",");}
+            enqueMsgstr(">\n");}
         else enqueErrstr("test too index\n");}
     else return Advance;
     CASE(GL_UNSIGNED_INT)
@@ -1833,15 +1835,18 @@ void configure()
     if (fileOwner < fileCount && fileOwner != file->index) {requeFile(); DEFER(configure)}
     strings = file->buffer;
     fileLast = fileOwner = file->index;
-#ifdef BRINGUP
-    if (file->bringup == 1) {
-        SWITCH(bringup(),Reque) {requeFile(); REQUE(configure)}
-        CASE(Advance) {file->bringup = 0; enqueShader(dishader); enqueCommand(transformRight);}
-        DEFAULT(exitErrstr("invalid bringup status\n");)}
-    requeFile(); DEFER(configure)
-#endif
     enqueString(0); unqueString();
+    if (headString() == '-') printf("configure %d %s", file->state, arrayString());
     if (retval == Advance && isspace(headString())) {dequeString(); retval = Reque;}
+#ifdef BRINGUP
+    if (retval == Advance && sscanf(arrayString(),"--bringu%c%n", &suffix, &offset) == 1 && suffix == 'p' && file->mode == 0) {
+        SWITCH(bringup(),Reque) retval = Reque;
+        CASE(Advance) {
+            printf("bringup advance\n");
+            enqueShader(dishader); enqueCommand(transformRight);
+            retval = Reque; delocString(offset);}
+        DEFAULT(exitErrstr("invalid bringup status\n");)}
+#endif
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
     if (retval == Advance && sscanf(arrayString(),"--inflat%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
@@ -1895,9 +1900,6 @@ void configure()
 void openFile(char *filename)
 {
     struct File file = {0};
-#ifdef BRINGUP
-    file.bringup = 1;
-#endif
     file.handle = open(filename,O_RDWR);
     file.buffer = enlocRead(1);
     if (file.handle < 0) enqueErrstr("invalid file argument\n");

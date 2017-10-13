@@ -73,14 +73,15 @@ Configuration/history files consist of commands. User input appends to file. App
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
+  * --stock takes point, initial value, and saturation equations  
+  * --flow specify size, rate, and delay of change to pore on facet  
   * --listen takes point for where track is recorded or audited  
-  * --source takes sound file or source  
-  * --filter takes plane subscript, per area, per flow equalization  
+  * --source takes sound file, source, or noise with amplitude and bias  
+  * --filter takes plane subscript, per area, per stock equalization  
   * --color takes plane subscript and decoration  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
-  * --system specify flow delta as linear combination of region stocks  
   * --action attaches Haskell function to boundary to be activated by click  
   * --matrix takes transformation of display, ignored if not -F file  
   * --project takes slope and cutoff, ignored if not -F file  
@@ -93,11 +94,4 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-Preprocess prepends body length to each line starting with --. The preprocessed body of a command may contain endlines if lines in the original file did not start with --. The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. There are preprocess and unprocess functions in the default import for --call. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The filter associated with a plane affects the color and sound of the plane's facets. Each slider of the equalizer is an input to a linear equation for a point on a curve. Other inputs the the equalizer equations are projected area of the facet and system flow through the plane. Equalizer curves determine the following.
-
-  * color of facets as brightness in terms of color as a frequency  
-  * tone of notes as amplitude in terms of cycles per second of sound  
-  * envelope of notes as volume in terms of portion of note length  
-  * duration of notes as hight above minimum at start of note  
-  * rhythm of notes as passage of waveform up through zero  
-
+The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from linear equations. In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another sizw is scheduled; and delay is how long before the size takes affect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separatedby one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise.
