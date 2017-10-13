@@ -173,7 +173,7 @@ enum Click { // mode changed by mouse buttons
     Right, // pierce point calculated; position saved
     Clicks} click = Init;
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Action,Transform,Modify,Manipulate,
+    Sculpts,Additive,Subtractive,Refine,Describe,Alternate,Tweak,Action,Transform,Modify,Manipulate,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Classifies,Vector,Graph,Polyant,Place,
@@ -196,6 +196,7 @@ struct Item { // per-menu-line info
     {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
+    {Sculpts,Sculpt,1,"Alternate","click moves pierced plane's faces to alternate display"},
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
     {Sculpts,Sculpt,1,"Action","click switches to decoration file or opens equalizer panel"},
     {Sculpts,Sculpt,1,"Transform","modify world or perspective matrix"},

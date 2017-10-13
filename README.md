@@ -37,6 +37,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Subtractive -- click hollows out region under pierce point  
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
+  * Alternate -- click moves pierced plane's faces to alternate display  
   * Tweak -- click tweaks plane possibly holding space fixed  
   * Action -- click replaces polytope, opens equalizer, or calls function  
   * Transform -- modify world or perspective matrix  
@@ -77,7 +78,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --flow specify size, rate, and delay of change to pore on facet  
   * --listen takes point for where track is recorded or audited  
   * --source takes sound file, source, or noise with amplitude and bias  
-  * --filter takes plane subscript, per area, per stock equalization  
+  * --filter takes plane subscript, per area, per stock signed amplification  
   * --color takes plane subscript and decoration  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
@@ -89,9 +90,10 @@ Configuration/history files consist of commands. User input appends to file. App
   * --inject specifies user action to inject, ignored if not at eof  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
+  * --start is like jump except it starts a new polytope  
   * --yield allow other files and command line options to proceed  
   * --delay takes duration for interpolation with next delay 
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from linear equations. In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another sizw is scheduled; and delay is how long before the size takes affect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separatedby one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise.
+The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another size is scheduled; and delay is how long before the size takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separated by one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise. For exmple, a system could consist of --stock --source --listen points at the vertives of a polytope constructed with --point, --flow faces in several overlapping --plane polytopes, and one --polytope with every face a --filter.
