@@ -173,16 +173,16 @@ enum Click { // mode changed by mouse buttons
     Right, // pierce point calculated; position saved
     Clicks} click = Init;
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Alternate,Tweak,Action,Transform,Modify,Manipulate,
+    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Action,Alternate,Transform,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
+    Levels,Plane,Polytope,File,Session,
     Classifies,Vector,Graph,Polyant,Place,
     Samples,Symbolic,Numeric,
-    Levels,Surface,Polytope,Collection,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
-    Sculpt,Mouse,Roller,Classify,Sample,Level,Modes};
-#define INIT {Transform,Rotate,Cylinder,Vector,Symbolic,Surface}
+    Sculpt,Mouse,Roller,Level,Classify,Sample,Modes};
+#define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -197,21 +197,24 @@ struct Item { // per-menu-line info
     {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
-    {Sculpts,Sculpt,1,"Alternate","click moves pierced plane's faces to alternate display"},
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
     {Sculpts,Sculpt,1,"Action","click switches to decoration file or opens equalizer panel"},
-    {Sculpts,Sculpt,1,"Transform","modify world or perspective matrix"},
-    {Sculpts,Sculpt,1,"Modify","modify pierced polytope independent of others"},
-    {Sculpts,Sculpt,1,"Manipulate","modify pierced plane"},
-    {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform/Modify/Manipulate modes"},
-    {Mouses,Mouse,2,"Rotate","tilt polytope/plane around pierce point"},
-    {Mouses,Mouse,2,"Translate","slide polytope/plane from pierce point"},
+    {Sculpts,Sculpt,1,"Alternate","click moves pierced target to alternate display"},
+    {Sculpts,Sculpt,1,"Transform","modify transform matrix for pierced target"},
+    {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform mode"},
+    {Mouses,Mouse,2,"Rotate","tilt polytope(s)/plane around pierce point"},
+    {Mouses,Mouse,2,"Translate","slide polytope(s)/plane from pierce point"},
     {Mouses,Mouse,2,"Look","tilt camera around focal point"},
-    {Sculpts,Roller,1,"Roller","action of roller button in Transform/Modify/Manipulate modes"},
+    {Sculpts,Roller,1,"Roller","action of roller button in Transform mode"},
     {Rollers,Roller,2,"Cylinder","rotate around tilt line"},
     {Rollers,Roller,2,"Clock","rotate around perpendicular to pierce point"},
     {Rollers,Roller,2,"Scale","grow or shrink with pierce point fixed"},
     {Rollers,Roller,2,"Drive","move picture plane forward or back"},
+    {Sculpts,Level,1,"Level","target of Alternate/Transform click mode"},
+    {Levels,Level,2,"Plane","target is the pierced plane"},
+    {Levels,Level,2,"Polytope","target is the pierced polytope"},
+    {Levels,Level,2,"File","target is polytopes in the file of pierced"},
+    {Levels,Level,2,"Session","target is all displayed polytopes"},
     {Sculpts,Classify,1,"Classify","type of thing displayed in Display mode"},
     {Classifies,Classify,2,"Vector","display pierce point and coplane"},
     {Classifies,Classify,2,"Graph","display relation of facets"},
@@ -219,11 +222,7 @@ struct Item { // per-menu-line info
     {Classifies,Classify,2,"Place","display map from boundary to halfspaces"},
     {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
     {Samples,Sample,2,"Symbolic","classification of space does not change"},
-    {Samples,Sample,2,"Numeric","configuration controls amount of change"},
-    {Sculpts,Level,1,"Level","target of Alternate click mode"},
-    {Levels,Level,2,"Surface","click refers to the pierced plane"},
-    {Levels,Level,2,"Polytope","click referes to the pierced polytope"},
-    {Levels,Level,2,"Collection","click refers to polytopes in the file of pierced"}};
+    {Samples,Sample,2,"Numeric","configuration controls amount of change"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
@@ -319,7 +318,7 @@ typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
 enum Event {
-    Plane, // fill in pointSub and sideSub
+    Side, // fill in pointSub and sideSub
     Update, // update symbolic representation
     Inflate, // fill in faceSub and frameSub
     Pierce, // repurpose sideSub for pierce point
@@ -330,7 +329,7 @@ enum Event {
     Done}; // terminate
 struct Events {DECLARE_QUEUE(enum Event)} events = {0};
  // event queue for commands to Haskell
-enum Kind {File,Boundary,Face,Other};
+enum Kind {Poly,Boundary,Face,Other};
 struct Kinds {DECLARE_QUEUE(enum Kind)} kinds = {0};
  // argument for remove command
 struct Chars chars = {0};
@@ -1590,7 +1589,7 @@ int iswrlckFile(struct File *file)
 
 void fileError(struct File *file, const char *msg) {
     struct File initial = {0};
-    enqueCommand(0); enqueEvent(Remove); enqueKind(File); enqueInt(file->index);
+    enqueCommand(0); enqueEvent(Remove); enqueKind(Poly); enqueInt(file->index);
     enqueMsgstr(msg);
     close(file->handle);
     if (fileOwner == file->index) fileOwner = fileCount;
@@ -1623,7 +1622,7 @@ enum Action filePlane(struct File *file, enum Event event)
     if (state++ == file->state && fileBuffer(&planeBuf,1,buffer)) return Restart;
     if (state++ == file->state && fileBuffer(&versorBuf,1,versor)) return Restart;
     if (state++ == file->state) {
-        enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
+        enqueCommand(0); enqueEvent(Side); enqueInt(file->index); return Advance;}
     return Defer;
 }
 
@@ -1648,7 +1647,7 @@ enum Action filePoint(struct File *file, enum Event event)
     if (state++ == file->state && fileBuffer(&planeSub,1,index)) return Restart;
     if (state++ == file->state) {enqueShader(Copoint); return Restart;}
     if (state++ == file->state && planeBuf.done >= planeSub.done) {
-        pointBuf.done -= 3; planeSub.done -= 1; enqueCommand(0); enqueEvent(Plane); enqueInt(file->index); return Advance;}
+        pointBuf.done -= 3; planeSub.done -= 1; enqueCommand(0); enqueEvent(Side); enqueInt(file->index); return Advance;}
     return Defer;
 }
 
@@ -1853,8 +1852,8 @@ void configure()
             retval = Reque; delocString(offset);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
 #endif
-    if (retval == Advance) {retval = fileMode(file,"plane",1,3,Plane,filePlane,fileClassify);}
-    if (retval == Advance) {retval = fileMode(file,"point",0,3,Plane,filePoint,fileClassify);}
+    if (retval == Advance) {retval = fileMode(file,"plane",1,3,Side,filePlane,fileClassify);}
+    if (retval == Advance) {retval = fileMode(file,"point",0,3,Side,filePoint,fileClassify);}
     if (retval == Advance && sscanf(arrayString(),"--inflat%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; delocString(offset);
         enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
@@ -1863,7 +1862,7 @@ void configure()
     if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
     if (retval == Advance && sscanf(arrayString(),"--remove plac%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; delocString(offset);
-        enqueCommand(0); enqueEvent(Remove); enqueKind(File); enqueInt(file->index);}
+        enqueCommand(0); enqueEvent(Remove); enqueKind(Poly); enqueInt(file->index);}
     if (retval == Advance && sscanf(arrayString(),"--remove face %d%n", &index, &offset) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error 4\n")}
         retval = Reque; delocString(offset);
@@ -2208,16 +2207,6 @@ void leftTransform()
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
-void leftModify()
-{
-    wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-}
-
-void leftManipulate()
-{
-    wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-}
-
 void leftLeft()
 {
     glUseProgram(program[pershader]);
@@ -2490,20 +2479,10 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             CASE(Matrix) {matrixMatrix(); click = Left;}
             FALL(Left) {leftLeft(); click = Init;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Modify) {
-            SWITCH(click,Init) FALL(Right) {leftModify(); click = Left;}
-            CASE(Matrix) {matrixMatrix(); click = Left;}
-            FALL(Left) {leftLeft(); click = Init;}
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Manipulate) {
-            SWITCH(click,Init) FALL(Right) {leftManipulate(); click = Left;}
-            CASE(Matrix) {matrixMatrix(); click = Left;}
-            FALL(Left) {leftLeft(); click = Init;}
-            DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
         SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
-        CASE(Transform) FALL(Modify) FALL(Manipulate) {
+        CASE(Transform) {
             SWITCH(click,Init)
             CASE(Right) {rightRight(); click = Left;}
             CASE(Matrix) {matrixMatrix(); click = Left;}
@@ -2529,26 +2508,6 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
             CASE(Look) transformLook();
             DEFAULT(exitErrstr("invalid mouse mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}
-    CASE(Modify) {
-        SWITCH(click,Init) FALL(Right) 
-            transformRight();
-        CASE(Matrix) {matrixMatrix(); click = Left;}
-        FALL(Left) {
-            SWITCH(mode[Mouse],Rotate) modifyRotate();
-            CASE(Translate) modifyTranslate();
-            CASE(Look) modifyLook();
-            DEFAULT(exitErrstr("invalid mouse mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}
-    CASE(Manipulate) {
-        SWITCH(click,Init) FALL(Right)
-            transformRight();
-        CASE(Matrix) {matrixMatrix(); click = Left;}
-        FALL(Left) {
-            SWITCH(mode[Mouse],Rotate) manipulateRotate();
-            CASE(Translate) manipulateTranslate();
-            CASE(Look) manipulateLook();
-            DEFAULT(exitErrstr("invalid mouse mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}
     DEFAULT(exitErrstr("invalid sculpt mode\n");)
 }
 
@@ -2566,26 +2525,6 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
             CASE(Drive) transformDrive();
             DEFAULT(exitErrstr("invalid roller mode\n");)}
         DEFAULT(exitErrstr("invalid click mode\n");)}            
-    CASE(Modify) {
-        SWITCH(click,Init) FALL(Right)
-        CASE(Left) click = Matrix;
-        FALL(Matrix) {
-            SWITCH(mode[Roller],Clock) modifyClock();
-            CASE(Cylinder) modifyCylinder();
-            CASE(Scale) modifyScale();
-            CASE(Drive) modifyDrive();
-            DEFAULT(exitErrstr("invalid roller mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}            
-    CASE(Manipulate) {
-        SWITCH(click,Init) FALL(Right)
-        CASE(Left) click = Matrix;
-        FALL(Matrix) {
-            SWITCH(mode[Roller],Clock) manipulateClock();
-            CASE(Cylinder) manipulateCylinder();
-            CASE(Scale) manipulateScale();
-            CASE(Drive) manipulateDrive();
-            DEFAULT(exitErrstr("invalid roller mode\n");)}
-        DEFAULT(exitErrstr("invalid click mode\n");)}
     DEFAULT(exitErrstr("invalid sculpt mode");)
 }
 
@@ -2841,7 +2780,7 @@ char *eventArgument()
 {
     if (!validEvent()) exitErrstr("no valid event\n");
     enum Event event = headEvent(); dequeEvent();
-    SWITCH(event,Plane) return (char *)"Plane";
+    SWITCH(event,Side) return (char *)"Plane";
     CASE(Update) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
     CASE(Pierce) return (char *)"Pierce";
@@ -2858,7 +2797,7 @@ char *stringArgument()
 {
     if (!validKind()) exitErrstr("no valid string\n");
     enum Kind kind = headKind(); dequeKind();
-    SWITCH(kind,File) return (char *)"Place";
+    SWITCH(kind,Poly) return (char *)"Place";
     CASE(Boundary) return (char *)"Boundary";
     CASE(Face) return (char *)"Face";
     CASE(Other) {

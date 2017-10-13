@@ -37,21 +37,24 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Subtractive -- click hollows out region under pierce point  
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
-  * Alternate -- click moves pierced plane's faces to alternate display  
   * Tweak -- click tweaks plane possibly holding space fixed  
   * Action -- click replaces polytope, opens equalizer, or calls function  
-  * Transform -- modify world or perspective matrix  
-  * Modify -- modify pierced polytope independent of others  
-  * Manipulate -- modify pierced plane  
-  * Mouse -- action of mouse motion in Transform/Modify/Manipulate modes  
-    * Rotate -- tilt polytope/plane around pierce point  
-    * Translate -- slide polytope/plane from pierce point  
+  * Alternate -- click moves pierced target to alternate display  
+  * Transform -- modify transform matrix for pierced target  
+  * Mouse -- action of mouse motion in Transform mode  
+    * Rotate -- tilt polytope(s)/plane around pierce point  
+    * Translate -- slide polytope(s)/plane from pierce point  
     * Look -- tilt camera around focal point  
-  * Roller -- action of roller button in Transform/Modify/Manipulate modes  
+  * Roller -- action of roller button in Transform mode  
     * Cylinder -- rotate polytope around tilt line  
     * Clock -- rotate picture plane around perpendicular to pierce point  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
+  * Level -- target of Alternate/Transform click mode  
+    * Plane -- target is the pierced plane  
+    * Polytope -- target is the pierced polytope  
+    * File -- target is polytopes in the file of pierced  
+    * Session -- target is all displayed polytopes  
   * Classify -- type of thing displayed in Display mode  
     * Vector -- display pierce point and coplane  
     * Graph -- display relation of facets  
@@ -60,10 +63,6 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Sample -- whether space fixed in Tweak mode  
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
-  * Level -- target of Alternate click mode  
-    * Surface -- click refers to the pierced plane  
-    * Polytope -- click referes to the pierced polytope  
-    * Collection -- click refers to polytopes in the file of pierced  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
