@@ -14,6 +14,8 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -S \<ext> overwrite commands to save current state  
   * -e \<config> append to last file  
   * -E \<file> change last file to indicated  
+  * -a \<name> open alternate display  
+  * -A \<name> use indicated alternate display  
   * -t run sanity check  
   * -T run thorough tests  
 
