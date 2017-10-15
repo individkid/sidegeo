@@ -40,7 +40,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
   * Tweak -- click tweaks plane possibly holding space fixed  
-  * Action -- click replaces polytope, opens equalizer, or calls function  
+  * Perform -- click replaces polytope, opens equalizer, or calls function  
   * Alternate -- click moves pierced target to alternate display  
   * Transform -- modify transform matrix for pierced target  
   * Mouse -- action of mouse motion in Transform mode  
@@ -65,6 +65,10 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Sample -- whether space fixed in Tweak mode  
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
+  * Action -- what Perform click does  
+    * Configure -- open dialog to decorate plane's facets  
+    * Hyperlink -- jump through facet to another space  
+    * Execute -- call Haskell function attached to facet  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 

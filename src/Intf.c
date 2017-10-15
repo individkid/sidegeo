@@ -173,16 +173,17 @@ enum Click { // mode changed by mouse buttons
     Right, // pierce point calculated; position saved
     Clicks} click = Init;
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Action,Alternate,Transform,
+    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Alternate,Transform,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Levels,Plane,Polytope,File,Session,
     Classifies,Vector,Graph,Polyant,Place,
     Samples,Symbolic,Numeric,
+    Performs,Configure,Hyperlink,Execute,
     Menus};
 enum Mode { // menu and submenus; navigate and enter by keys
-    Sculpt,Mouse,Roller,Level,Classify,Sample,Modes};
-#define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic}
+    Sculpt,Mouse,Roller,Level,Classify,Sample,Action,Modes};
+#define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Configure}
 enum Menu mode[Modes] = INIT; // owned by main thread
 enum Menu mark[Modes] = INIT; // owned by console thread
 struct Item { // per-menu-line info
@@ -198,7 +199,7 @@ struct Item { // per-menu-line info
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
-    {Sculpts,Sculpt,1,"Action","click switches to decoration file or opens equalizer panel"},
+    {Sculpts,Sculpt,1,"Perform","click switches to decoration file or opens equalizer panel"},
     {Sculpts,Sculpt,1,"Alternate","click moves pierced target to alternate display"},
     {Sculpts,Sculpt,1,"Transform","modify transform matrix for pierced target"},
     {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform mode"},
@@ -222,7 +223,11 @@ struct Item { // per-menu-line info
     {Classifies,Classify,2,"Place","display map from boundary to halfspaces"},
     {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
     {Samples,Sample,2,"Symbolic","classification of space does not change"},
-    {Samples,Sample,2,"Numeric","configuration controls amount of change"}};
+    {Samples,Sample,2,"Numeric","configuration controls amount of change"},
+    {Sculpts,Action,1,"Action","what Perform click does"},
+    {Performs,Action,2,"Configure","open dialog to decorate plane's facets"},
+    {Performs,Action,2,"Hyperlink","jump through facet to another space"},
+    {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
 struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
