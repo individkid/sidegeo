@@ -1541,8 +1541,8 @@ enum Action bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
-    bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
-    bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
+    if (planeBuf.done < NUM_PLANES) bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
+    if (versorBuf.done < NUM_PLANES) bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
     bringupBuffer(&faceSub,1,NUM_FACES,face);
     bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
     bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
@@ -1614,7 +1614,7 @@ int fileBuffer(struct Buffer *buffer, int todo, void *data)
 }
 
 /*
-plane configuration sends Plane event to initilize pointSub and sideSub for one new boundary
+plane configuration sends Side event to initilize pointSub and sideSub for one new boundary
 just before next nonplane configuration, atomic configuration takes over
 */
 
@@ -1627,6 +1627,9 @@ enum Action filePlane(struct File *file, enum Event event)
     if (state++ == file->state && fileBuffer(&planeBuf,1,buffer)) return Restart;
     if (state++ == file->state && fileBuffer(&versorBuf,1,versor)) return Restart;
     if (state++ == file->state) {
+#ifdef BRINGUP
+        return Advance;
+#endif
         enqueCommand(0); enqueEvent(Side); enqueInt(file->index); return Advance;}
     return Defer;
 }
@@ -1660,7 +1663,7 @@ enum Action filePoint(struct File *file, enum Event event)
 atomic configuration picks up where plane and point configurations left off
 classify command processes planeBuf versorBuf and pointSub into pointBuf with Coplane shader
 then classify fills sideBuf for one point at a time with the Adplane shader
-then Classify event encodes state from sideBuf
+then Update event encodes state from sideBuf
 */
 
 enum Action fileClassify(struct File *file, enum Event event)
@@ -1856,8 +1859,10 @@ void configure()
             enqueShader(dishader); enqueCommand(transformRight);
             retval = Reque; delocString(offset);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
-#endif
+    if (retval == Advance) {retval = fileMode(file,"plane",1,3,Side,filePlane,fileAdvance);}
+#else
     if (retval == Advance) {retval = fileMode(file,"plane",1,3,Side,filePlane,fileClassify);}
+#endif
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Side,filePoint,fileClassify);}
     if (retval == Advance && sscanf(arrayString(),"--inflat%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; delocString(offset);

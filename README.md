@@ -2,7 +2,7 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The following command line arguments are processed in order.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The following command line arguments are processed in order. The main display window is a hub from which parts or collections of polytopes can be moved to various alternate displays. But from alternate displays, things can only move back to the main display.
 
   * -h print usage  
   * -H print readme  
@@ -19,7 +19,7 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -t run sanity check  
   * -T run thorough tests  
 
-Tests include the following, where "linear" refers to any linear space produced by tests run so far. Linear spaces produced by tests are added to a list if not already listed. The results of allSpace are saved for subsequent test runs.
+The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name and short description of success, then presents the input; then lists the functions called, the state changed, the relations between the calls, the relations between the changes, and the relations between the calls and changes. Tests include the following, where "linear" refers to any linear space produced by tests run so far. Linear spaces produced by tests are added to a list if not already listed. The results of allSpace are saved for subsequent test runs.
 
   * classify of random planes should be linear  
   * anySpace should be linear  
@@ -99,10 +99,10 @@ Configuration/history files consist of commands. User input appends to file. App
   * --inject specifies user action to inject, ignored if not at eof  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
-  * --start is like jump except it starts a new polytope  
+  * --start goes to a new polytope with optional name for going back  
   * --yield allow other files and command line options to proceed  
   * --delay takes duration for interpolation with next delay 
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-The --call result string may be longer than the destination, and may contain newlines, to replace one or more by one or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another size is scheduled; and delay is how long before the size takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separated by one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise. For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, --flow faces in several overlapping --plane polytopes, and one --polytope with every face a --filter.
+The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another size is scheduled; and delay is how long before the size takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separated by one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise. For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, --flow faces in several overlapping --plane polytopes, and one --polytope with every face a --filter.
