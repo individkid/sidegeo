@@ -24,8 +24,9 @@ The BRINGUP file describes in detail what should happen upon some specific input
   * comma lists data states  
   * semicolon lists calls  
   * colon indicates return  
-  * parentheses with vertical bar indicates parallelism  
-  * parentheses without vertical bar facilitates pseudocode flow  
+  * square brackets with vertical bars indicates parallelism  
+  * curly brackets with vertical bars indicates alternation  
+  * parentheses facilitates pseudocode flow  
   * redo n means go back skipping n open parenteses plus one per close encountered  
   * done n means go forward skipping n close parantheses plus one per open encountered  
 
