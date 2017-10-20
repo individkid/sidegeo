@@ -19,7 +19,17 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * -t run sanity check  
   * -T run thorough tests  
 
-The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name and short description of success, then presents the input; then lists the functions called, the state changed, the relations between the calls, the relations between the changes, and the relations between the calls and changes. Tests include the following, where "linear" refers to any linear space produced by tests run so far. Linear spaces produced by tests are added to a list if not already listed. The results of allSpace are saved for subsequent test runs.
+The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name, short description, goal for success, input conditions, and then describes flow as pseudocode for cherry picked data state upon call and return, with the following features.
+
+  * comma lists data states  
+  * semicolon lists calls  
+  * colon indicates return  
+  * parentheses with vertical bar indicates parallelism  
+  * parentheses without vertical bar facilitates pseudocode flow  
+  * redo n means go back skipping n open parenteses plus one per close encountered  
+  * done n means go forward skipping n close parantheses plus one per open encountered  
+
+Built in tests include the following, where "linear" refers to any linear space produced by tests run so far. Linear spaces produced by tests are added to a list if not already listed. The results of allSpace are saved for subsequent test runs.
 
   * classify of random planes should be linear  
   * anySpace should be linear  
