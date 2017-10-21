@@ -44,7 +44,7 @@ Built in tests include the following, where "linear" refers to any linear space 
   * every plane through a point should have a coplane on the copoint  
   * every edge facet of a region should have two and only two vertex facets  
 
-Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons.
+Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. \<ctrl>\<num> binds selection of current menu location to number key. \<alt>\<num> binds current selections to number key.
 
   * Additive -- click fills in region over pierce point  
   * Subtractive -- click hollows out region under pierce point  
