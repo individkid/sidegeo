@@ -1915,8 +1915,10 @@ void configure()
 void openFile(char *filename)
 {
     struct File file = {0};
+    struct Chars string = {0};
     file.handle = open(filename,O_RDWR);
     file.buffer = enlocRead(1);
+    *file.buffer = string;
     if (file.handle < 0) enqueErrstr("invalid file argument\n");
     if (fileOwner == fileCount) fileOwner++;
     if (fileLast == fileCount) fileLast++;
