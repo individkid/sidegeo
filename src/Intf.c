@@ -36,6 +36,7 @@ extern void __stginit_Main(void);
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <portaudio.h>
 
 #ifdef __linux__
 #include <GL/glew.h>
@@ -102,6 +103,7 @@ GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
+pthread_t timewheelThread = 0; // for stock flow delay
 struct Options {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 enum Lock {Unlck,Rdlck,Wrlck};
@@ -783,12 +785,30 @@ float *invmat(float *u, int n)
 }
 
 /*
- * thread for menu in user console
+ * thread for stock flow delay
  */
 
 void handler(int sig)
 {
 }
+
+void *timewheel(void *arg)
+{
+    struct sigaction sigact = {0};
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_handler = &handler;
+    if (sigaction(SIGUSR2, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    sigset_t sigs = {0};
+    sigset_t saved = {0};
+    sigaddset(&sigs, SIGUSR2);
+    pthread_sigmask(SIG_UNBLOCK,&sigs,&saved);
+    while (1) {
+        break;}
+}
+
+/*
+ * thread for menu in user console
+ */
 
 int readchr()
 {
@@ -922,17 +942,14 @@ char ofindex(int code)
 // main space, backspace, enter, special-key, escape-enter sent to console as 128+
 void *console(void *arg)
 {
-    enqueLine(0); enqueMatch(0);
-
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
-    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed: %s\n", strerror(errno));
-    sigset_t sigs;
-    sigset_t saved;
-    sigemptyset(&sigs);
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    sigset_t sigs = {0};
+    sigset_t saved = {0};
     sigaddset(&sigs, SIGUSR1);
-    if (sigprocmask(SIG_BLOCK, &sigs, &saved) < 0) exitErrstr("sigprocmask failed: %s\n", strerror(errno));
+    pthread_sigmask(SIG_UNBLOCK,&sigs,&saved);
 
     if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
     if (!validTermios) tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
@@ -945,6 +962,7 @@ void *console(void *arg)
 
     int last[4];
     int esc = 0;
+    enqueLine(0); enqueMatch(0);
     writeitem(tailLine(),tailMatch());
     while (1) {
         int totry = 0;
@@ -1406,9 +1424,14 @@ void initialize(int argc, char **argv)
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
     if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    sigset_t sigs = {0};
+    sigaddset(&sigs, SIGUSR1);
+    sigaddset(&sigs, SIGUSR2);
+    sigprocmask(SIG_BLOCK,&sigs,0);
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
+    if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
@@ -1417,7 +1440,7 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
-    if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
+    if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
     if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
     glfwTerminate();

@@ -79,7 +79,10 @@ executable sculpt
                        Xcursor,
                        rt,
                        m,
-                       pthread
+                       asound,
+                       jack,
+                       pthread,
+                       portaudio
   if os(osx)
     extra-lib-dirs:    /usr/lib
     extra-libraries:   glfw3
