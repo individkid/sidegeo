@@ -94,8 +94,8 @@ Configuration/history files consist of commands. User input appends to file. App
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
-  * --stock takes point, initial value, and saturation equations  
-  * --flow specify size, rate, and delay of change to pore on facet  
+  * --stock name and optional point, initial value, and saturation values  
+  * --flow size, rate, and delay of change to pore between stocks or on facet  
   * --listen takes point for where track is recorded or audited  
   * --source takes sound file, source, or noise with amplitude and bias  
   * --filter takes plane subscript, per area, per stock signed amplification  
@@ -116,4 +116,20 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another size is scheduled; and delay is how long before the size takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separated by one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise. For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, --flow faces in several overlapping --plane polytopes, and one --polytope with every face a --filter.
+The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables. The values for the variables come from one of the following. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope.
+
+  * random number between one and zero  
+  * --stock or --source value  
+  * metric of facet qualified by topology  
+  * projected metric of facet wrt --listen point or focal point  
+  * --stock or --source value qualified by projection through face  
+
+The simple equations are use in the following places.
+
+  * --flow timewheel scheduling and --stock modifications  
+  * --delay file stepping rate  
+  * as part of Haskell expression in --call or --action  
+  * texture calculation specified ty --color  
+  * sound interface callback enabled by --filter
+
+In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another size is scheduled; and delay is how long before the size takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separated by one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise. For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, --flow faces in several overlapping --plane polytopes, and one --polytope with every face a --filter.
