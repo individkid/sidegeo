@@ -355,11 +355,12 @@ struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
-enum Special {Rgstr,Pipe}; // whether stock piped to waves
+enum Special {Invisible,Facet,Metric};
 struct Stock {
-    enum Special special;
-    int pipe; // identifier for use with special
-    int amount;}; // values pointed to by var pointers
+    int piped; // whether stock piped to waves
+    int pipe; // subscript into waves
+    enum Special special; // whether stock is facet metric or invisible
+    int min,max,val;}; // values pointed to by var pointers
 struct Stocks {DECLARE_QUEUE(struct Stock)} stocks = {0};
 struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ptrs {DECLARE_QUEUE(int *)} vars = {0};
@@ -370,28 +371,29 @@ struct Nomial {
     int num2,*con2,**var2;};
 struct Ratio {struct Nomial n,d;};
 struct Flow {
-    int src,dst;
-    struct Ratio ratio;
-    int size,rate,delay;
+    int src,dst; // subscripts into stocks
+    struct Ratio ratio; // how to calculate size
+    int size,rate,delay; // when to reschedule
     long time;};
  // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
 enum Switch {
     Throw, // calculate size from ratio and reschedule
     Catch}; // transfer drop of stock and reschedule
-struct Switches {DECLARE_QUEUE(enum Switch)} switches = {0};
- // linked list of timewheel actkions corresponding to idents
-struct Ints idents = {0};
- // linked list of flows subscripts
-struct Longs {DECLARE_QUEUE(long)} wheels = {0};
- // linked list of times corresponding to idents
-struct Ints nexts = {0}; // make wheels and idents a linked list
-int first = 0; // make wheels and idents a linked list
-int pool = 0; // make wheels and idents a linked list
+struct Wheel {
+    int next; // use as linked list
+    enum Switch act; // action scheduled
+    int flow; // index into flows
+    long time;}; // when ection scheduled
+struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
+ // linked list of timewheel actions
+int first = 0; // make wheels a linked list
+int pool = 0; // make wheels a linked list
 long last = 0; // last time portaudio callback was called
+struct Metas waves = {0}; // pipelines for portaudio callback
 struct Listen {
-    float vec[3];
-    struct Ints waves;};
+    int bound[3]; // vertex of listen point
+    int pipe;}; // subscript into waves
 struct Listens {DECLARE_QUEUE(struct Listen)} listens = {0};
 struct Base {
     void (*destruct)(struct Base *);
