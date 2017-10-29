@@ -355,6 +355,44 @@ struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
+enum Special {Rgstr,Pipe}; // whether stock piped to waves
+struct Stock {
+    enum Special special;
+    int pipe; // identifier for use with special
+    int amount;}; // values pointed to by var pointers
+struct Stocks {DECLARE_QUEUE(struct Stock)} stocks = {0};
+struct Ints cons = {0}; // buffer for arrays of coefficients
+struct Ptrs {DECLARE_QUEUE(int *)} vars = {0};
+ // buffer for arrays of pointers to stocks
+struct Nomial {
+    int con0;
+    int num1,*con1,**var1;
+    int num2,*con2,**var2;};
+struct Ratio {struct Nomial n,d;};
+struct Flow {
+    int src,dst;
+    struct Ratio ratio;
+    int size,rate,delay;
+    long time;};
+ // delayed reaction change to rate of transfer from src to dst
+struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
+enum Switch {
+    Throw, // calculate size from ratio and reschedule
+    Catch}; // transfer drop of stock and reschedule
+struct Switches {DECLARE_QUEUE(enum Switch)} switches = {0};
+ // linked list of timewheel actkions corresponding to idents
+struct Ints idents = {0};
+ // linked list of flows subscripts
+struct Longs {DECLARE_QUEUE(long)} wheels = {0};
+ // linked list of times corresponding to idents
+struct Ints nexts = {0}; // make wheels and idents a linked list
+int first = 0; // make wheels and idents a linked list
+int pool = 0; // make wheels and idents a linked list
+long last = 0; // last time portaudio callback was called
+struct Listen {
+    float vec[3];
+    struct Ints waves;};
+struct Listens {DECLARE_QUEUE(struct Listen)} listens = {0};
 struct Base {
     void (*destruct)(struct Base *);
     void **ptr;}; // c++ class written in c
