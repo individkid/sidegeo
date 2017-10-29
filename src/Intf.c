@@ -355,20 +355,24 @@ struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
-enum Special {Invisible,Facet,Metric};
+typedef int (*Metric)(int val, int siz, int *arg);
 struct Stock {
     int piped; // whether stock piped to waves
     int pipe; // subscript into waves
-    enum Special special; // whether stock is facet metric or invisible
-    int min,max,val;}; // values pointed to by var pointers
+    int min,max; // saturation limits for val
+    Metric func; // call this with following for value to use
+    int siz; int *arg; // generic arguments for func
+    int val;}; // values pointed to by var pointers
 struct Stocks {DECLARE_QUEUE(struct Stock)} stocks = {0};
+struct Ints args = {0}; // buffer for arguments to Metric
 struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ptrs {DECLARE_QUEUE(int *)} vars = {0};
  // buffer for arrays of pointers to stocks
 struct Nomial {
     int con0;
     int num1,*con1,**var1;
-    int num2,*con2,**var2;};
+    int num2,*con2,**var2;
+    int num3,*con3; struct Stock **var3;};
 struct Ratio {struct Nomial n,d;};
 struct Flow {
     int src,dst; // subscripts into stocks
@@ -1352,12 +1356,18 @@ extern const GLchar *repointVertex;
 extern const GLchar *repointGeometry;
 extern const GLchar *repointFragment;
 
+void glfwErrorCallback(int error, const char *description)
+{
+   printf("GLFW error %d %s\n", error, description);
+}
+
 void initialize(int argc, char **argv)
 {
 #ifdef __GLASGOW_HASKELL__
     hs_add_root(__stginit_Main);
 #endif
 
+    glfwSetErrorCallback(glfwErrorCallback);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
