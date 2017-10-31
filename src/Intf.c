@@ -36,7 +36,10 @@ extern void __stginit_Main(void);
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+
+#ifdef __linux__
 #include <portaudio.h>
+#endif
 
 #ifdef __linux__
 #include <GL/glew.h>
@@ -391,8 +394,28 @@ struct Wheel {
     long time;}; // when ection scheduled
 struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
-int first = 0; // make wheels a linked list
-int pool = 0; // make wheels a linked list
+int nobound = 0; // unbounded list of wheel entires
+struct Cover {
+    int first; // covering list of wheel entries
+    int size; // number of elements in list
+    int sub;}; // entry in nobound to insert after
+struct Covers {DECLARE_QUEUE(struct Cover)} covers = {0};
+int extreme = 0; // list of wheel entries beyond last cover
+int extremes = 0; // number of entries in extreme
+long present,interval; // formula for choosing cover
+/*
+ start of cover number n is present+(n*interval)
+ each cover ends where the next begins
+ interval only ever decreases
+ decreasing interval pulls cover starts toward present
+ any cover with end before present is empty
+ after decrease to inteval, elements in a cover are not before the cover's start
+ if adding to a cover increases its length too much,
+  first find location of cover start in nobound list
+  then deque from cover and either insert to nobound or other cover
+  if length still too much, decrease interval and try again
+ */
+int pool = 0; // list of unused wheel entries
 enum Tag {DoneTag,StockTag,FlowTag};
 struct Sched {
     enum Tag tag; // whether to add a new stock of flow
@@ -401,7 +424,7 @@ struct Sched {
         struct Flow flow;};};
 struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
  // schedule initial stock or flow
-long last = 0; // last time portaudio callback was called
+long called = 0; // last time portaudio callback was called
 struct Metas waves = {0}; // pipelines for portaudio callback
 struct Listen {
     int bound[3]; // vertex of listen point
