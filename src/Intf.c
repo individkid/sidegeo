@@ -356,7 +356,7 @@ struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
 typedef int (*Metric)(int val, int siz, int *arg);
- // distance length area volume random jpeg
+ // distance length area volume random jpeg microphone
 struct Stock {
     int tag,sub; // optional subscript into waves
     int min,max; // saturation limits for val
@@ -393,6 +393,14 @@ struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
 int first = 0; // make wheels a linked list
 int pool = 0; // make wheels a linked list
+enum Tag {DoneTag,StockTag,FlowTag};
+struct Sched {
+    enum Tag tag; // whether to add a new stock of flow
+    union {
+        struct Stock stock;
+        struct Flow flow;};};
+struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
+ // schedule initial stock or flow
 long last = 0; // last time portaudio callback was called
 struct Metas waves = {0}; // pipelines for portaudio callback
 struct Listen {
@@ -670,6 +678,18 @@ ACCESS_QUEUE(Inject,char,injects)
 
 ACCESS_QUEUE(Menu,char,menus)
 
+ACCESS_QUEUE(Stock,struct Stock,stocks)
+
+ACCESS_QUEUE(Var,int *,vars)
+
+ACCESS_QUEUE(Flow,struct Flow,flows)
+
+ACCESS_QUEUE(Wheel,struct Wheel,wheels)
+
+ACCESS_QUEUE(Sched,struct Sched,scheds)
+
+ACCESS_QUEUE(Listen,struct Listen,listens)
+
 ACCESS_QUEUE(Base,struct Base,bases)
 
 void enqueMsgstr(const char *fmt, ...)
@@ -836,6 +856,15 @@ void handler(int sig)
 {
 }
 
+int isTrue(struct Sched *sched)
+{
+    return 1;
+}
+
+void enlinkFlow(struct Flow flow)
+{
+}
+
 void *timewheel(void *arg)
 {
     struct sigaction sigact = {0};
@@ -846,7 +875,21 @@ void *timewheel(void *arg)
     pthread_sigmask(SIG_SETMASK,0,&saved);
     sigdelset(&saved, SIGUSR1);
     while (1) {
+        struct Sched sched = {0};
+        int lenSched = detrySched(&sched,&isTrue,1);
+        fd_set fds; FD_ZERO(&fds);
+        if (lenSched == 0) exitErrstr("detrySched failed\n");
+        if (lenSched < 0) {
+            int lenSel = pselect(1, &fds, 0, 0, 0, &saved);
+            if (lenSel < 0 && errno == EINTR) continue;
+            else exitErrstr("pselect failed: %s\n", strerror(errno));}
+        switch (sched.tag) {
+            case (DoneTag): break;
+            case (StockTag): enqueStock(sched.stock); continue;
+            case (FlowTag): enlinkFlow(sched.flow); continue;
+            default: exitErrstr("sched too tagged\n");}
         break;}
+    return 0;
 }
 
 /*
@@ -1471,6 +1514,7 @@ void initialize(int argc, char **argv)
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
     sigprocmask(SIG_BLOCK,&sigs,0);
+    if (pthread_mutex_init(&scheds.mutex, 0) != 0) exitErrstr("cannot initialize scheds mutex\n");
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
@@ -1483,7 +1527,12 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
+    struct Sched sched = {0}; sched.tag = DoneTag;
+    if (entrySched(&sched,&isTrue,1) != 1) exitErrstr("cannot entry sched\n");
+    if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
+    if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
+    if (pthread_mutex_destroy(&scheds.mutex) != 0) exitErrstr("cannot finalize scheds mutex\n");
     if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
     if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
     glfwTerminate();
