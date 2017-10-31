@@ -841,11 +841,10 @@ void *timewheel(void *arg)
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
-    if (sigaction(SIGUSR2, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
-    sigset_t sigs = {0};
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
     sigset_t saved = {0};
-    sigaddset(&sigs, SIGUSR2);
-    pthread_sigmask(SIG_UNBLOCK,&sigs,&saved);
+    pthread_sigmask(SIG_SETMASK,0,&saved);
+    sigdelset(&saved, SIGUSR1);
     while (1) {
         break;}
 }
@@ -990,10 +989,9 @@ void *console(void *arg)
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
     if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
-    sigset_t sigs = {0};
     sigset_t saved = {0};
-    sigaddset(&sigs, SIGUSR1);
-    pthread_sigmask(SIG_UNBLOCK,&sigs,&saved);
+    pthread_sigmask(SIG_SETMASK,0,&saved);
+    sigdelset(&saved, SIGUSR1);
 
     if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
     if (!validTermios) tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
@@ -1470,13 +1468,8 @@ void initialize(int argc, char **argv)
     bootBase();
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
-    struct sigaction sigact = {0};
-    sigemptyset(&sigact.sa_mask);
-    sigact.sa_handler = &handler;
-    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
-    sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
