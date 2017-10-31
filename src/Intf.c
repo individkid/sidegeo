@@ -356,12 +356,12 @@ struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
 typedef int (*Metric)(int val, int siz, int *arg);
+ // distance length area volume random jpeg
 struct Stock {
-    int piped; // whether stock piped to waves
-    int pipe; // subscript into waves
+    int tag,sub; // optional subscript into waves
     int min,max; // saturation limits for val
     Metric func; // call this with following for value to use
-    int siz; int *arg; // generic arguments for func
+    int siz,*arg; // generic arguments for func
     int val;}; // values pointed to by var pointers
 struct Stocks {DECLARE_QUEUE(struct Stock)} stocks = {0};
 struct Ints args = {0}; // buffer for arguments to Metric
@@ -375,10 +375,10 @@ struct Nomial {
     int num3,*con3; struct Stock **var3;};
 struct Ratio {struct Nomial n,d;};
 struct Flow {
-    int src,dst; // subscripts into stocks
+    int tag,sub; // subscript into stocks or planes
     struct Ratio ratio; // how to calculate size
     int size,rate,delay; // when to reschedule
-    long time;};
+    long time;}; // when last scheduled
  // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
 enum Switch {
