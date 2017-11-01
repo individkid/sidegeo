@@ -36,10 +36,7 @@ extern void __stginit_Main(void);
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
-
-#ifdef __linux__
 #include <portaudio.h>
-#endif
 #include "pqueue.h"
 
 #ifdef __linux__
@@ -360,6 +357,11 @@ struct Chars prints = {0}; // for staging output to console
 struct Chars echos = {0}; // for staging output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 struct Chars menus = {0}; // for staging output from console
+enum Requester {Distance,Length,Area,Volume};
+struct Request {
+    enum Requester tag;
+    int val,siz,*arg,sub;};
+struct Requests {DECLARE_QUEUE(struct Request)} requests = {0};
 typedef int (*Metric)(int val, int siz, int *arg);
  // distance length area volume random jpeg microphone
 struct Stock {
@@ -383,15 +385,15 @@ struct Flow {
     int tag,sub; // subscript into stocks or planes
     struct Ratio ratio; // how to calculate size
     int size,rate,delay; // when to reschedule
-    long time;}; // when last scheduled
+    pqueue_pri_t time;}; // when last scheduled
  // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
-enum Switch {
+enum Wheeler {
     Throw, // calculate size from ratio and reschedule
     Catch}; // transfer drop of stock and reschedule
 struct Wheel {
     int next; // use as linked list
-    enum Switch act; // action scheduled
+    enum Wheeler tag; // action scheduled
     int flow; // index into flows
     pqueue_pri_t time; // when action scheduled
     size_t pos;}; // used by pqueue
@@ -399,18 +401,21 @@ struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
 int first = 0; // list of used wheel entries
 int pool = 0; // list of unused wheel entries
-enum Tag {
-    Stop, // terminate timewheel thread
-    Build, // add new stock
-    Start}; // add new flow
+struct Change {
+    int sub,val;}; // change to val in subscripted stock
+enum Scheder {
+    Stocker, // add new stock
+    Flower, // add new flow
+    Changer, // change stock value
+    Scheders}; // terminate timewheel thread
 struct Sched {
-    enum Tag tag; // whether to add a new stock of flow
-    union {
-        struct Stock stock;
-        struct Flow flow;};};
+    enum Scheder tag; union { // whether to add a new stock of flow
+    struct Stock stock;
+    struct Flow flow;
+    struct Change change;};};
 struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
  // schedule initial stock or flow
-long called = 0; // last time portaudio callback was called
+pqueue_pri_t called = 0; // last time portaudio callback was called
 struct Metas waves = {0}; // pipelines for portaudio callback
 struct Listen {
     int bound[3]; // vertex of listen point
@@ -687,6 +692,8 @@ ACCESS_QUEUE(Inject,char,injects)
 
 ACCESS_QUEUE(Menu,char,menus)
 
+ACCESS_QUEUE(Request,struct Request,requests)
+
 ACCESS_QUEUE(Stock,struct Stock,stocks)
 
 ACCESS_QUEUE(Var,int *,vars)
@@ -921,9 +928,9 @@ void *timewheel(void *arg)
         fd_set fds; FD_ZERO(&fds);
         if (lenSched == 0) exitErrstr("detrySched failed\n");
         if (lenSched == 1) switch (sched.tag) {
-            case (Stop): break;
-            case (Build): enqueStock(sched.stock); continue;
-            case (Start): pqueue_insert(pqueue,&sched.flow); continue;
+            case (Scheders): break;
+            case (Stocker): enqueStock(sched.stock); continue;
+            case (Flower): pqueue_insert(pqueue,&sched.flow); continue;
             default: exitErrstr("sched too tagged\n");}
         // TODO: process first from pqueue while after current time
         if (lenSched < 0) {
@@ -1558,6 +1565,7 @@ void initialize(int argc, char **argv)
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
     sigprocmask(SIG_BLOCK,&sigs,0);
+    if (pthread_mutex_init(&requests.mutex, 0) != 0) exitErrstr("cannot initialize requests mutex\n");
     if (pthread_mutex_init(&scheds.mutex, 0) != 0) exitErrstr("cannot initialize scheds mutex\n");
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
@@ -1571,11 +1579,12 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
-    struct Sched sched = {0}; sched.tag = Stop;
+    struct Sched sched = {0}; sched.tag = Scheders;
     if (entrySched(&sched,&isTrue,1) != 1) exitErrstr("cannot entry sched\n");
     if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
+    if (pthread_mutex_destroy(&requests.mutex) != 0) exitErrstr("cannot finalize requests mutex\n");
     if (pthread_mutex_destroy(&scheds.mutex) != 0) exitErrstr("cannot finalize scheds mutex\n");
     if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
     if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
