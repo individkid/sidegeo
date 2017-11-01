@@ -40,6 +40,7 @@ extern void __stginit_Main(void);
 #ifdef __linux__
 #include <portaudio.h>
 #endif
+#include "pqueue.h"
 
 #ifdef __linux__
 #include <GL/glew.h>
@@ -82,6 +83,7 @@ extern void __stginit_Main(void);
 #define NUM_FEEDBACK 3
 #define COMPASS_DELTA 10.0
 #define ROLLER_DELTA 1.0
+#define PQUEUE_STEP 100
 
 #ifdef DEBUG
 #define DEBUGS Diplane
@@ -391,30 +393,11 @@ struct Wheel {
     int next; // use as linked list
     enum Switch act; // action scheduled
     int flow; // index into flows
-    long time;}; // when ection scheduled
+    pqueue_pri_t time; // when action scheduled
+    size_t pos;}; // used by pqueue
 struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
-int nobound = 0; // unbounded list of wheel entires
-struct Cover {
-    int first; // covering list of wheel entries
-    int size; // number of elements in list
-    int sub;}; // entry in nobound to insert after
-struct Covers {DECLARE_QUEUE(struct Cover)} covers = {0};
-int extreme = 0; // list of wheel entries beyond last cover
-int extremes = 0; // number of entries in extreme
-long present,interval; // formula for choosing cover
-/*
- start of cover number n is present+(n*interval)
- each cover ends where the next begins
- interval only ever decreases
- decreasing interval pulls cover starts toward present
- any cover with end before present is empty
- after decrease to inteval, elements in a cover are not before the cover's start
- if adding to a cover increases its length too much,
-  first find location of cover start in nobound list
-  then deque from cover and either insert to nobound or other cover
-  if length still too much, decrease interval and try again
- */
+int first = 0; // list of used wheel entries
 int pool = 0; // list of unused wheel entries
 enum Tag {DoneTag,StockTag,FlowTag};
 struct Sched {
@@ -884,8 +867,39 @@ int isTrue(struct Sched *sched)
     return 1;
 }
 
-void enlinkFlow(struct Flow flow)
+pqueue_pri_t pqueue_get_pri(void *a)
 {
+    struct Wheel *wheel = a;
+    return wheel->time;
+}
+
+void pqueue_set_pri(void *a, pqueue_pri_t pri)
+{
+    struct Wheel *wheel = a;
+    wheel->time = pri;
+}
+
+int pqueue_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr)
+{
+    return (next > curr);
+}
+
+size_t pqueue_get_pos(void *a)
+{
+    struct Wheel *wheel = a;
+    return wheel->pos;
+}
+
+void pqueue_set_pos(void *a, size_t pos)
+{
+    struct Wheel *wheel = a;
+    wheel->pos = pos;
+}
+
+void pqueue_print_entry(FILE *out, void *a)
+{
+    struct Wheel *wheel = a;
+    fprintf(out,"pri %llu pos %lu\n",wheel->time,wheel->pos);
 }
 
 void *timewheel(void *arg)
@@ -897,21 +911,25 @@ void *timewheel(void *arg)
     sigset_t saved = {0};
     pthread_sigmask(SIG_SETMASK,0,&saved);
     sigdelset(&saved, SIGUSR1);
+    pqueue_t *pqueue = pqueue_init(PQUEUE_STEP,&pqueue_cmp_pri,&pqueue_get_pri,&pqueue_set_pri,&pqueue_get_pos,&pqueue_set_pos);
     while (1) {
         struct Sched sched = {0};
         int lenSched = detrySched(&sched,&isTrue,1);
         fd_set fds; FD_ZERO(&fds);
         if (lenSched == 0) exitErrstr("detrySched failed\n");
+        if (lenSched == 1) switch (sched.tag) {
+            case (DoneTag): break;
+            case (StockTag): enqueStock(sched.stock); continue;
+            case (FlowTag): pqueue_insert(pqueue,&sched.flow); continue;
+            default: exitErrstr("sched too tagged\n");}
+        // TODO: process first from pqueue while after current time
         if (lenSched < 0) {
+            // TODO: set timeout to first from pqueue
             int lenSel = pselect(1, &fds, 0, 0, 0, &saved);
             if (lenSel < 0 && errno == EINTR) continue;
             else exitErrstr("pselect failed: %s\n", strerror(errno));}
-        switch (sched.tag) {
-            case (DoneTag): break;
-            case (StockTag): enqueStock(sched.stock); continue;
-            case (FlowTag): enlinkFlow(sched.flow); continue;
-            default: exitErrstr("sched too tagged\n");}
         break;}
+    pqueue_free(pqueue);
     return 0;
 }
 
@@ -2587,7 +2605,7 @@ void displayClose(GLFWwindow* window)
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (action == GLFW_RELEASE || key > GLFW_KEY_LEFT_SHIFT) return;
+    if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
         SWITCH(key,GLFW_KEY_ENTER) {enquePrint(ofmotion(Escape)); enquePrint('\n');}
         DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)
