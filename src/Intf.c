@@ -399,7 +399,10 @@ struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
 int first = 0; // list of used wheel entries
 int pool = 0; // list of unused wheel entries
-enum Tag {DoneTag,StockTag,FlowTag};
+enum Tag {
+    Stop, // terminate timewheel thread
+    Build, // add new stock
+    Start}; // add new flow
 struct Sched {
     enum Tag tag; // whether to add a new stock of flow
     union {
@@ -918,9 +921,9 @@ void *timewheel(void *arg)
         fd_set fds; FD_ZERO(&fds);
         if (lenSched == 0) exitErrstr("detrySched failed\n");
         if (lenSched == 1) switch (sched.tag) {
-            case (DoneTag): break;
-            case (StockTag): enqueStock(sched.stock); continue;
-            case (FlowTag): pqueue_insert(pqueue,&sched.flow); continue;
+            case (Stop): break;
+            case (Build): enqueStock(sched.stock); continue;
+            case (Start): pqueue_insert(pqueue,&sched.flow); continue;
             default: exitErrstr("sched too tagged\n");}
         // TODO: process first from pqueue while after current time
         if (lenSched < 0) {
@@ -1568,7 +1571,7 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
-    struct Sched sched = {0}; sched.tag = DoneTag;
+    struct Sched sched = {0}; sched.tag = Stop;
     if (entrySched(&sched,&isTrue,1) != 1) exitErrstr("cannot entry sched\n");
     if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
