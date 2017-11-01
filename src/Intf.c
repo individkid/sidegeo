@@ -376,7 +376,7 @@ struct Ptrs {DECLARE_QUEUE(int *)} vars = {0};
 struct Nomial {
     int con0;
     int num1,*con1,**var1;
-    int num2,*con2,**var2;
+    int num2,*con2,**var2a,**var2b;
     int num3,*con3; struct Stock **var3;};
 struct Ratio {struct Nomial n,d;};
 struct Flow {
