@@ -931,7 +931,7 @@ void *timewheel(void *arg)
             case (Scheders): break;
             case (Stocker): enqueStock(sched.stock); continue;
             case (Flower): pqueue_insert(pqueue,&sched.flow); continue;
-            case (Changer): if (sizeStock() <= sched.change.sub) exitErrstr("change too sub\n");
+            case (Changer): if (sizeStock() <= sched.change.sub || sched.change.sub < 0) exitErrstr("change too sub\n");
             arrayStock()[sched.change.sub].val = sched.change.val; continue;
             default: exitErrstr("sched too tagged\n");}
         // TODO: process first from pqueue while after current time
