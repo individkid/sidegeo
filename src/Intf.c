@@ -109,9 +109,9 @@ pthread_t timewheelThread = 0; // for stock flow delay
 struct Options {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 enum Lock {Unlck,Rdlck,Wrlck};
-struct Chars {DECLARE_QUEUE(char)};
+struct Chars {DECLARE_QUEUE(char)} *strings = 0;
 struct Strings {DECLARE_QUEUE(struct Chars)} reads = {0};
-struct Chars *strings = 0;
+ // per file buffer for lines
 struct File {
     int index;
     int handle;
@@ -127,7 +127,9 @@ int fileLast = 0;
 int fileCount = 0;
 struct Files {DECLARE_QUEUE(struct File)} files = {0};
 struct Chars configs = {0};
+ // null terminated strings to write to files
 struct Ints {DECLARE_QUEUE(int)} indices = {0};
+ // index of file to write to
 int classifyDone = 0; // number of points classifed
 enum Action { // return values for command helpers
     Defer, // reque the command to wait
@@ -385,21 +387,17 @@ struct Ratio {struct Nomial n,d;};
 struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
-    int sub; // first of linked list of attached stock subscripts
     struct Ratio ratio; // how to calculate size
     int size,rate,delay; // when to reschedule
     pqueue_pri_t time;}; // when last scheduled
  // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
-struct Attach {
-    int next,sub;}; // linked list node with stock or flow subscript
-struct Attachs {DECLARE_QUEUE(struct Attach)} attachs = {0};
-int attacher = 0; // list of unused attachments
+struct Metas attachs = {0}; // per flow list of stock subscript
 enum Wheeler {
     Throw, // calculate size from ratio and reschedule
     Catch}; // transfer drop of stock and reschedule
 struct Wheel {
-    int next; // use as linked list
+    int next,last; // use as linked list
     enum Wheeler tag; // action scheduled
     int sub; // index into flows
     int val; // change to stock for flow
@@ -407,7 +405,6 @@ struct Wheel {
     size_t pos;}; // used by pqueue
 struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
-int wheelee = 0; // list of used wheel entries
 int wheeler = 0; // list of unused wheel entries
 struct Change {
     int sub,val;}; // change to val in subscripted stock
@@ -721,8 +718,6 @@ ACCESS_QUEUE(Con,int,cons)
 ACCESS_QUEUE(Var,int,vars)
 
 ACCESS_QUEUE(Flow,struct Flow,flows)
-
-ACCESS_QUEUE(Attach,struct Attach,attachs)
 
 ACCESS_QUEUE(Wheel,struct Wheel,wheels)
 
