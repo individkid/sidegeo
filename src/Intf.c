@@ -368,7 +368,6 @@ struct Ints requestees = {0};
 typedef int (*Metric)(int val, int siz, int *arg);
  // distance length area volume random jpeg microphone
 struct Stock {
-    int first; // first of linked list of attached flow subscripts
     int vld,sub; // optional subscript into waves
     int min,max; // saturation limits for val
     Metric func; // call this with following for value to use
@@ -386,7 +385,7 @@ struct Ratio {struct Nomial n,d;};
 struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
-    int first; // first of linked list of attached stock subscripts
+    int sub; // first of linked list of attached stock subscripts
     struct Ratio ratio; // how to calculate size
     int size,rate,delay; // when to reschedule
     pqueue_pri_t time;}; // when last scheduled
@@ -412,6 +411,8 @@ int wheelee = 0; // list of used wheel entries
 int wheeler = 0; // list of unused wheel entries
 struct Change {
     int sub,val;}; // change to val in subscripted stock
+struct Link {
+    int stock,flow;}; // add or remove attachment
 enum Scheder {
     Stocker, // add new stock
     Flower, // add new flow
@@ -422,7 +423,8 @@ struct Sched {
     enum Scheder tag; union { // whether to add a new stock of flow
     struct Stock stock;
     struct Flow flow;
-    struct Change change;};};
+    struct Change change;
+    struct Link link;};};
 struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
  // schedule initial stock or flow
 struct Ints scheders = {0};
