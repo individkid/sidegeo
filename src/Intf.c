@@ -368,6 +368,7 @@ struct Ints requestees = {0};
 typedef int (*Metric)(int val, int siz, int *arg);
  // distance length area volume random jpeg microphone
 struct Stock {
+    int first; // first of linked list of attached flow subscripts
     int vld,sub; // optional subscript into waves
     int min,max; // saturation limits for val
     Metric func; // call this with following for value to use
@@ -385,15 +386,16 @@ struct Ratio {struct Nomial n,d;};
 struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
-    int sub; // first of linked list of attached stock subscripts
+    int first; // first of linked list of attached stock subscripts
     struct Ratio ratio; // how to calculate size
     int size,rate,delay; // when to reschedule
     pqueue_pri_t time;}; // when last scheduled
  // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
 struct Attach {
-    int next,sub;}; // linked list node with stock subscript
+    int next,sub;}; // linked list node with stock or flow subscript
 struct Attachs {DECLARE_QUEUE(struct Attach)} attachs = {0};
+int attacher = 0; // list of unused attachments
 enum Wheeler {
     Throw, // calculate size from ratio and reschedule
     Catch}; // transfer drop of stock and reschedule
@@ -406,14 +408,15 @@ struct Wheel {
     size_t pos;}; // used by pqueue
 struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
-int first = 0; // list of used wheel entries
-int pool = 0; // list of unused wheel entries
+int wheelee = 0; // list of used wheel entries
+int wheeler = 0; // list of unused wheel entries
 struct Change {
     int sub,val;}; // change to val in subscripted stock
 enum Scheder {
     Stocker, // add new stock
     Flower, // add new flow
     Changer, // change stock value
+    Linker, // change which flow a stock is fed by
     Scheders}; // terminate timewheel thread
 struct Sched {
     enum Scheder tag; union { // whether to add a new stock of flow
