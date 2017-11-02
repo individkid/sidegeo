@@ -352,12 +352,12 @@ struct Floats {DECLARE_QUEUE(float)} floats = {0};
 struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
  // for scratchpad and arguments
 int suppress = 0; // assume console thread terminated
-struct Chars inputs = {0}; // for reading from console
-struct Chars outputs = {0}; // for writing to console
-struct Chars inputers = {0}; // for staging input in console
-struct Chars outputees = {0}; // for staging output to console
-struct Chars outputers = {0}; // for staging output in console
-struct Chars inputees = {0}; // for staging output from console
+struct Chars inputs = {0}; // mutex from console to main
+struct Chars outputs = {0}; // mutex from main to console
+struct Chars inputers = {0}; // to be copied to input in console
+struct Chars inputees = {0}; // to be copied from input in main
+struct Chars outputees = {0}; // to be copied to output in main
+struct Chars outputers = {0}; // to be copied from output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 enum Requester {Distance,Length,Area,Volume};
 struct Request {
@@ -695,11 +695,11 @@ ACCESS_QUEUE(Output,char,outputs)
 
 ACCESS_QUEUE(Inputer,char,inputers)
 
+ACCESS_QUEUE(Inputee,char,inputees)
+
 ACCESS_QUEUE(Outputee,char,outputees)
 
 ACCESS_QUEUE(Outputer,char,outputers)
-
-ACCESS_QUEUE(Inputee,char,inputees)
 
 ACCESS_QUEUE(Inject,char,injects)
 
