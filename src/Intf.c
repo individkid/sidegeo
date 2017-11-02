@@ -185,7 +185,7 @@ enum Menu { // lines in the menu; select with enter key
     Samples,Symbolic,Numeric,
     Performs,Configure,Hyperlink,Execute,
     Menus};
-enum Mode { // menu and submenus; navigate and enter by keys
+enum Mode { // menu and menus; navigate and enter by keys
     Sculpt,Mouse,Roller,Level,Classify,Sample,Action,Modes};
 #define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Configure}
 enum Menu mode[Modes] = INIT; // owned by main thread
@@ -352,49 +352,56 @@ struct Buffers {DECLARE_QUEUE(struct Buffer *)} buffers = {0};
 int suppress = 0; // assume console thread terminated
 struct Chars inputs = {0}; // for reading from console
 struct Chars outputs = {0}; // for writing to console
-struct Chars scans = {0}; // for staging input in console
-struct Chars prints = {0}; // for staging output to console
-struct Chars echos = {0}; // for staging output in console
+struct Chars inputers = {0}; // for staging input in console
+struct Chars outputees = {0}; // for staging output to console
+struct Chars outputers = {0}; // for staging output in console
+struct Chars inputees = {0}; // for staging output from console
 struct Chars injects = {0}; // for staging opengl keys in console
-struct Chars menus = {0}; // for staging output from console
 enum Requester {Distance,Length,Area,Volume};
 struct Request {
     enum Requester tag;
-    int val,siz,*arg,sub;};
+    int val,siz,sub;};
 struct Requests {DECLARE_QUEUE(struct Request)} requests = {0};
+ // from timewheel to main thread for asynchronous change to stock
+struct Ints requesters = {0};
+struct Ints requestees = {0};
 typedef int (*Metric)(int val, int siz, int *arg);
  // distance length area volume random jpeg microphone
 struct Stock {
-    int tag,sub; // optional subscript into waves
+    int vld,sub; // optional subscript into waves
     int min,max; // saturation limits for val
     Metric func; // call this with following for value to use
-    int siz,*arg; // generic arguments for func
+    int siz,arg; // generic arguments for func
     int val;}; // values pointed to by var pointers
 struct Stocks {DECLARE_QUEUE(struct Stock)} stocks = {0};
 struct Ints args = {0}; // buffer for arguments to Metric
-struct Ints cons = {0}; // buffer for arrays of coefficients
-struct Ptrs {DECLARE_QUEUE(int *)} vars = {0};
  // buffer for arrays of pointers to stocks
 struct Nomial {
     int con0;
-    int num1,*con1,**var1;
-    int num2,*con2,**var2a,**var2b;
-    int num3,*con3; struct Stock **var3;};
+    int num1,con1,var1;
+    int num2,con2,var2a,var2b;
+    int num3,con3,var3;};
 struct Ratio {struct Nomial n,d;};
+struct Ints cons = {0}; // buffer for arrays of coefficients
+struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
-    int tag,sub; // subscript into stocks or planes
+    int sub; // first of linked list of attached stock subscripts
     struct Ratio ratio; // how to calculate size
     int size,rate,delay; // when to reschedule
     pqueue_pri_t time;}; // when last scheduled
  // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
+struct Attach {
+    int next,sub;}; // linked list node with stock subscript
+struct Attachs {DECLARE_QUEUE(struct Attach)} attachs = {0};
 enum Wheeler {
     Throw, // calculate size from ratio and reschedule
     Catch}; // transfer drop of stock and reschedule
 struct Wheel {
     int next; // use as linked list
     enum Wheeler tag; // action scheduled
-    int flow; // index into flows
+    int sub; // index into flows
+    int val; // change to stock for flow
     pqueue_pri_t time; // when action scheduled
     size_t pos;}; // used by pqueue
 struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
@@ -415,6 +422,8 @@ struct Sched {
     struct Change change;};};
 struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
  // schedule initial stock or flow
+struct Ints scheders = {0};
+struct Ints schedees = {0};
 pqueue_pri_t called = 0; // last time portaudio callback was called
 struct Metas waves = {0}; // pipelines for portaudio callback
 struct Listen {
@@ -682,27 +691,41 @@ ACCESS_QUEUE(Input,char,inputs)
 
 ACCESS_QUEUE(Output,char,outputs)
 
-ACCESS_QUEUE(Scan,char,scans)
+ACCESS_QUEUE(Inputer,char,inputers)
 
-ACCESS_QUEUE(Print,char,prints)
+ACCESS_QUEUE(Outputee,char,outputees)
 
-ACCESS_QUEUE(Echo,char,echos)
+ACCESS_QUEUE(Outputer,char,outputers)
+
+ACCESS_QUEUE(Inputee,char,inputees)
 
 ACCESS_QUEUE(Inject,char,injects)
 
-ACCESS_QUEUE(Menu,char,menus)
-
 ACCESS_QUEUE(Request,struct Request,requests)
+
+ACCESS_QUEUE(Requester,int,requesters)
+
+ACCESS_QUEUE(Requestee,int,requestees)
 
 ACCESS_QUEUE(Stock,struct Stock,stocks)
 
-ACCESS_QUEUE(Var,int *,vars)
+ACCESS_QUEUE(Arg,int,args)
+
+ACCESS_QUEUE(Con,int,cons)
+
+ACCESS_QUEUE(Var,int,vars)
 
 ACCESS_QUEUE(Flow,struct Flow,flows)
+
+ACCESS_QUEUE(Attach,struct Attach,attachs)
 
 ACCESS_QUEUE(Wheel,struct Wheel,wheels)
 
 ACCESS_QUEUE(Sched,struct Sched,scheds)
+
+ACCESS_QUEUE(Scheder,int,scheders)
+
+ACCESS_QUEUE(Schedee,int,schedees)
 
 ACCESS_QUEUE(Listen,struct Listen,listens)
 
@@ -711,18 +734,18 @@ ACCESS_QUEUE(Base,struct Base,bases)
 void enqueMsgstr(const char *fmt, ...)
 {
     va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char *buf = enlocPrint(len+1);
+    char *buf = enlocOutputee(len+1);
     va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    unlocPrint(1); // remove '\0' that vsnprintf puts on
+    unlocOutputee(1); // remove '\0' that vsnprintf puts on
 }
 
 void enqueErrstr(const char *fmt, ...)
 {
     enqueMsgstr("error: ");
     va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char *buf = enlocPrint(len+1);
+    char *buf = enlocOutputee(len+1);
     va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    unlocPrint(1); // remove '\0' that vsnprintf puts on
+    unlocOutputee(1); // remove '\0' that vsnprintf puts on
 }
 
 float dotvec(float *u, float *v, int n)
@@ -927,20 +950,18 @@ void *timewheel(void *arg)
         int lenSched = detrySched(&sched,&isTrue,1);
         fd_set fds; FD_ZERO(&fds);
         if (lenSched == 0) exitErrstr("detrySched failed\n");
+        if (lenSched == 1 && sched.tag == Scheders) break;
         if (lenSched == 1) switch (sched.tag) {
-            case (Scheders): break;
-            case (Stocker): enqueStock(sched.stock); continue;
-            case (Flower): pqueue_insert(pqueue,&sched.flow); continue;
+            case (Stocker): enqueStock(sched.stock); break;
+            case (Flower): pqueue_insert(pqueue,&sched.flow); break;
             case (Changer): if (sizeStock() <= sched.change.sub || sched.change.sub < 0) exitErrstr("change too sub\n");
-            arrayStock()[sched.change.sub].val = sched.change.val; continue;
+            arrayStock()[sched.change.sub].val = sched.change.val; break;
             default: exitErrstr("sched too tagged\n");}
-        // TODO: process first from pqueue while after current time
         if (lenSched < 0) {
+            // TODO: process first from pqueue while after current time
             // TODO: set timeout to first from pqueue
             int lenSel = pselect(1, &fds, 0, 0, 0, &saved);
-            if (lenSel < 0 && errno == EINTR) continue;
-            else exitErrstr("pselect failed: %s\n", strerror(errno));}
-        break;}
+            if (lenSel != 0 && !(lenSel < 0 && errno == EINTR)) exitErrstr("pselect failed: %s\n", strerror(errno));}}
     pqueue_free(pqueue);
     return 0;
 }
@@ -1072,8 +1093,8 @@ char ofindex(int code)
     return uchar;
 }
 
-// Scan -> Input(console) -> Input(main) -> Menu
-// Print -> Output(main) -> Output(console) -> Echo
+// Inputer -> Input(console) -> Input(main) -> Inputee
+// Outputee -> Output(main) -> Output(console) -> Outputer
 // console regular key, space, backspace highlights menu
 // console enter sends highlight to main as 128+Motions+
 // console special-key, escape-enter sent to main as 128+
@@ -1104,51 +1125,51 @@ void *console(void *arg)
     writeitem(tailLine(),tailMatch());
     while (1) {
         int totry = 0;
-        int done = (sizeScan() >= 2 && motionof(headScan()) == Exit && arrayScan()[1] == '\n');
-        int lenIn = entryInput(arrayScan(),&isEndLine,sizeScan());
-        if (lenIn == 0) exitErrstr("missing endline in arrayScan\n");
+        int done = (sizeInputer() >= 2 && motionof(headInputer()) == Exit && arrayInputer()[1] == '\n');
+        int lenIn = entryInput(arrayInputer(),&isEndLine,sizeInputer());
+        if (lenIn == 0) exitErrstr("missing endline in arrayInputer\n");
         else if (lenIn > 0) {
-            delocScan(lenIn);
+            delocInputer(lenIn);
             glfwPostEmptyEvent();}
         else if (totryInput()) totry = 1;
         if (done) break;
 
         int totOut = 0; int lenOut;
-        while ((lenOut = detryOutput(enlocEcho(10),&isEndLine,10)) == 0) totOut += 10;
-        if ((lenOut < 0 && totOut > 0) || sizeEcho() != totOut+10) exitErrstr("detryOutput failed\n");
-        else if (lenOut < 0) delocEcho(10);
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Escape) {
-            enqueInject(27); enqueInject('\n'); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Enter) {
-            enqueInject('\n'); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Back) {
-            enqueInject(127); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Space) {
-            enqueInject(' '); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == North) {
-            enqueInject(27); enqueInject(91); enqueInject(65); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == South) {
-            enqueInject(27); enqueInject(91); enqueInject(66); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == East) {
-            enqueInject(27); enqueInject(91); enqueInject(67); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == West) {
-            enqueInject(27); enqueInject(91); enqueInject(68); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Suspend) {
-            enqueInject(27); enqueInject(91); enqueInject(70); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Click) {
-            enqueInject(27); enqueInject(91); enqueInject(72); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Counter) {
-            enqueInject(27); enqueInject(91); enqueInject(53); enqueInject(126); delocEcho(10);}
-        else if (totOut+lenOut == 2 && motionof(headEcho()) == Wise) {
-            enqueInject(27); enqueInject(91); enqueInject(54); enqueInject(126); delocEcho(10);}
-        else if (totOut+lenOut == 2 && alphaof(headEcho()) >= 'a' && alphaof(headEcho()) <= 'z') {
-            enqueInject(alphaof(headEcho())); delocEcho(10);}
+        while ((lenOut = detryOutput(enlocOutputer(10),&isEndLine,10)) == 0) totOut += 10;
+        if ((lenOut < 0 && totOut > 0) || sizeOutputer() != totOut+10) exitErrstr("detryOutput failed\n");
+        else if (lenOut < 0) delocOutputer(10);
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Escape) {
+            enqueInject(27); enqueInject('\n'); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Enter) {
+            enqueInject('\n'); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Back) {
+            enqueInject(127); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Space) {
+            enqueInject(' '); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == North) {
+            enqueInject(27); enqueInject(91); enqueInject(65); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == South) {
+            enqueInject(27); enqueInject(91); enqueInject(66); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == East) {
+            enqueInject(27); enqueInject(91); enqueInject(67); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == West) {
+            enqueInject(27); enqueInject(91); enqueInject(68); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Suspend) {
+            enqueInject(27); enqueInject(91); enqueInject(70); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Click) {
+            enqueInject(27); enqueInject(91); enqueInject(72); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Counter) {
+            enqueInject(27); enqueInject(91); enqueInject(53); enqueInject(126); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && motionof(headOutputer()) == Wise) {
+            enqueInject(27); enqueInject(91); enqueInject(54); enqueInject(126); delocOutputer(10);}
+        else if (totOut+lenOut == 2 && alphaof(headOutputer()) >= 'a' && alphaof(headOutputer()) <= 'z') {
+            enqueInject(alphaof(headOutputer())); delocOutputer(10);}
         else {
-            unlocEcho(10-lenOut);
+            unlocOutputer(10-lenOut);
             unwriteitem(tailLine());
-            enqueEcho(0);
-            writestr(arrayEcho());
-            delocEcho(sizeEcho());
+            enqueOutputer(0);
+            writestr(arrayOutputer());
+            delocOutputer(sizeOutputer());
             writeitem(tailLine(),tailMatch());}
 
         int key;
@@ -1181,7 +1202,7 @@ void *console(void *arg)
             enqueLine(line); enqueMatch(0);
             if (collect != Menus && mode == item[collect].mode) {
                 // change mode to selected leaf
-                mark[mode] = line; enqueScan(ofindex(line)); enqueScan('\n');}
+                mark[mode] = line; enqueInputer(ofindex(line)); enqueInputer('\n');}
             else {
                 // go to line in selected menu indicated by mode
                 enqueLine(mark[mode]); enqueMatch(0);}}
@@ -1194,7 +1215,7 @@ void *console(void *arg)
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 0) writemenu();
-        else if (esc == 1 && key == '\n') {enqueScan(ofmotion(Exit)); enqueScan('\n'); esc = 0;}
+        else if (esc == 1 && key == '\n') {enqueInputer(ofmotion(Exit)); enqueInputer('\n'); esc = 0;}
         else if (esc == 1 && key == 91) last[esc++] = key;
         else if (esc == 1) esc = 0;
         else if (esc == 2 && key == 50) last[esc++] = key;
@@ -1202,20 +1223,20 @@ void *console(void *arg)
         else if (esc == 2 && key == 52) last[esc++] = key;
         else if (esc == 2 && key == 53) last[esc++] = key;
         else if (esc == 2 && key == 54) last[esc++] = key;
-        else if (esc == 2 && key == 65) {enqueScan(ofmotion(North)); enqueScan('\n'); esc = 0;}
-        else if (esc == 2 && key == 66) {enqueScan(ofmotion(South)); enqueScan('\n'); esc = 0;}
-        else if (esc == 2 && key == 67) {enqueScan(ofmotion(East)); enqueScan('\n'); esc = 0;}
-        else if (esc == 2 && key == 68) {enqueScan(ofmotion(West)); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 65) {enqueInputer(ofmotion(North)); enqueInputer('\n'); esc = 0;}
+        else if (esc == 2 && key == 66) {enqueInputer(ofmotion(South)); enqueInputer('\n'); esc = 0;}
+        else if (esc == 2 && key == 67) {enqueInputer(ofmotion(East)); enqueInputer('\n'); esc = 0;}
+        else if (esc == 2 && key == 68) {enqueInputer(ofmotion(West)); enqueInputer('\n'); esc = 0;}
         else if (esc == 2 && key == 69) {writemenu(); esc = 0;}
-        else if (esc == 2 && key == 70) {enqueScan(ofmotion(Suspend)); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 70) {enqueInputer(ofmotion(Suspend)); enqueInputer('\n'); esc = 0;}
         else if (esc == 2 && key == 71) {writemenu(); esc = 0;}
-        else if (esc == 2 && key == 72) {enqueScan(ofmotion(Click)); enqueScan('\n'); esc = 0;}
+        else if (esc == 2 && key == 72) {enqueInputer(ofmotion(Click)); enqueInputer('\n'); esc = 0;}
         else if (esc == 2) {writemenu(); esc = 0;}
         else if (esc == 3 && key == 126 && last[2] == 50) {writemenu(); esc = 0;}
         else if (esc == 3 && key == 126 && last[2] == 51) {writemenu(); esc = 0;}
         else if (esc == 3 && key == 126 && last[2] == 52) {writemenu(); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 53) {enqueScan(ofmotion(Counter)); enqueScan('\n'); esc = 0;}
-        else if (esc == 3 && key == 126 && last[2] == 54) {enqueScan(ofmotion(Wise)); enqueScan('\n'); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 53) {enqueInputer(ofmotion(Counter)); enqueInputer('\n'); esc = 0;}
+        else if (esc == 3 && key == 126 && last[2] == 54) {enqueInputer(ofmotion(Wise)); enqueInputer('\n'); esc = 0;}
         else {writemenu(); esc = 0;}
         writeitem(tailLine(),tailMatch());}
     unwriteitem(tailLine());
@@ -1258,7 +1279,7 @@ void compass(double xdelta, double ydelta) {
 
 void menu()
 {
-    char *buf = arrayMenu();
+    char *buf = arrayInputee();
     int len = 0;
     while (buf[len] != '\n') len++;
     if (len == 1 && motionof(buf[0]) < Motions) {
@@ -1277,27 +1298,27 @@ void menu()
         click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
-    delocMenu(len+1);
+    delocInputee(len+1);
 }
 
 void waitForEvent()
 {
     while (1) {
         int totry = 0;
-        int done = (sizePrint() >= 2 && motionof(headPrint()) == Escape && arrayPrint()[1] == '\n');
-        int lenOut = entryOutput(arrayPrint(),&isEndLine,sizePrint());
-        if (lenOut == 0) delocPrint(sizePrint());
+        int done = (sizeOutputee() >= 2 && motionof(headOutputee()) == Escape && arrayOutputee()[1] == '\n');
+        int lenOut = entryOutput(arrayOutputee(),&isEndLine,sizeOutputee());
+        if (lenOut == 0) delocOutputee(sizeOutputee());
         else if (lenOut > 0) {
-            delocPrint(lenOut);
+            delocOutputee(lenOut);
             if (!suppress && pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
         else if (totryOutput()) totry = 1;
         if (done) suppress = 1;
         
         int totIn = 0; int lenIn;
-        while ((lenIn = detryInput(enlocMenu(10),&isEndLine,10)) == 0) totIn += 10;
+        while ((lenIn = detryInput(enlocInputee(10),&isEndLine,10)) == 0) totIn += 10;
         if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
-        else if (lenIn < 0) unlocMenu(10);
-        else {unlocMenu(10-lenIn); menu();}
+        else if (lenIn < 0) unlocInputee(10);
+        else {unlocInputee(10-lenIn); menu();}
 
         if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
         else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -1606,7 +1627,7 @@ void process()
     CHECK(process,Process)
     if (fileOwner < fileCount) {DEFER(process)}
     if (!validOption()) {
-        if (fileCount == 0) {enquePrint(ofmotion(Escape)); enquePrint('\n');}
+        if (fileCount == 0) {enqueOutputee(ofmotion(Escape)); enqueOutputee('\n');}
         DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print usage\n");
@@ -2614,32 +2635,32 @@ display* callbacks cause state transitions.
 
 void displayClose(GLFWwindow* window)
 {
-    enquePrint(ofmotion(Escape)); enquePrint('\n');
+    enqueOutputee(ofmotion(Escape)); enqueOutputee('\n');
 }
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) {enquePrint(ofmotion(Escape)); enquePrint('\n');}
-        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)
+        SWITCH(key,GLFW_KEY_ENTER) {enqueOutputee(ofmotion(Escape)); enqueOutputee('\n');}
+        DEFAULT(enqueOutputee(ofmotion(Space)); enqueOutputee('\n');)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-        enquePrint(ofalpha(key-GLFW_KEY_A+'a')); enquePrint('\n');}
+        enqueOutputee(ofalpha(key-GLFW_KEY_A+'a')); enqueOutputee('\n');}
     else {
         SWITCH(key,GLFW_KEY_ESCAPE) escape = 1;
-        CASE(GLFW_KEY_ENTER) {enquePrint(ofmotion(Enter)); enquePrint('\n');}
-        CASE(GLFW_KEY_RIGHT) {enquePrint(ofmotion(East)); enquePrint('\n');}
-        CASE(GLFW_KEY_LEFT) {enquePrint(ofmotion(West)); enquePrint('\n');}
-        CASE(GLFW_KEY_DOWN) {enquePrint(ofmotion(South)); enquePrint('\n');}
-        CASE(GLFW_KEY_UP) {enquePrint(ofmotion(North)); enquePrint('\n');}
-        CASE(GLFW_KEY_PAGE_UP) {enquePrint(ofmotion(Counter)); enquePrint('\n');}
-        CASE(GLFW_KEY_PAGE_DOWN) {enquePrint(ofmotion(Wise)); enquePrint('\n');}
-        CASE(GLFW_KEY_HOME) {enquePrint(ofmotion(Click)); enquePrint('\n');}
-        CASE(GLFW_KEY_END) {enquePrint(ofmotion(Suspend)); enquePrint('\n');}
-        CASE(GLFW_KEY_BACKSPACE) {enquePrint(ofmotion(Back)); enquePrint('\n');}
-        CASE(GLFW_KEY_SPACE) {enquePrint(ofmotion(Space)); enquePrint('\n');}
-        DEFAULT(enquePrint(ofmotion(Space)); enquePrint('\n');)}
+        CASE(GLFW_KEY_ENTER) {enqueOutputee(ofmotion(Enter)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_RIGHT) {enqueOutputee(ofmotion(East)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_LEFT) {enqueOutputee(ofmotion(West)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_DOWN) {enqueOutputee(ofmotion(South)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_UP) {enqueOutputee(ofmotion(North)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_PAGE_UP) {enqueOutputee(ofmotion(Counter)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_PAGE_DOWN) {enqueOutputee(ofmotion(Wise)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_HOME) {enqueOutputee(ofmotion(Click)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_END) {enqueOutputee(ofmotion(Suspend)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_BACKSPACE) {enqueOutputee(ofmotion(Back)); enqueOutputee('\n');}
+        CASE(GLFW_KEY_SPACE) {enqueOutputee(ofmotion(Space)); enqueOutputee('\n');}
+        DEFAULT(enqueOutputee(ofmotion(Space)); enqueOutputee('\n');)}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
