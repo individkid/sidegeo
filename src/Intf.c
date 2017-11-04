@@ -417,6 +417,12 @@ struct Change {
     int sub,val;}; // change to val in subscripted stock
 struct Link {
     int stock,flow;}; // add or remove attachment
+ // stocks can be attached to flows by line of sight
+ //  if two stock points are separated by a flow face and not separated by any impermeable faces
+ //  then the stocks are attached to the positive and negative flows
+ // stocks can be attached to flows of faces attached to regions of flow and impermeable planes
+ // or stocks can be attached in any way without regard to topology
+ // note that when stock attachments depend on topology, changes to topology can change attachments4444
 enum Scheder {
     Stocker, // add new stock
     Flower, // add new flow
@@ -1009,6 +1015,7 @@ void *timewheel(void *arg)
         fd_set fds; FD_ZERO(&fds);
         if (lenSched == 0) exitErrstr("detrySched failed\n");
         if (lenSched == 1 && sched.tag == Scheders) break;
+        int i,j;
         if (lenSched == 1) switch (sched.tag) {
             case (Stocker): enqueStock(sched.stock);
             // TODO: initialize new wave queue if necessary
@@ -1018,14 +1025,22 @@ void *timewheel(void *arg)
             // TODO: enque first Throw as well as first Catch
             break;
             case (Linker):
-            // TODO: add or pack out stock subscript in flow attach
+            metas = arrayAttach()+sched.link.flow;
+            for (i = j = 0; i < sizeMeta(); i++, j++) {
+                if (arrayMeta()[i] == sched.link.stock) j++;
+                arrayMeta()[i] = arrayMeta()[j];}
+            if (i == j) enqueMeta(sched.link.stock);
             break;
             case (Changer): if (sizeStock() <= sched.change.sub || sched.change.sub < 0) exitErrstr("change too sub\n");
             arrayStock()[sched.change.sub].val = sched.change.val; break;
             default: exitErrstr("sched too tagged\n");}
         if (lenSched < 0) {
-            // TODO: set timeout to first from pqueue
-            int lenSel = pselect(1, &fds, 0, 0, 0, &saved);
+            int lenSel = 0;
+            if (pqueue_size(pqueue) > 0) {
+                pqueue_pri_t pri = pqueue_get_pri(pqueue_peek(pqueue));
+                struct timespec time = {0}; setTime(&time,pri);
+                lenSel = pselect(1, &fds, 0, 0, &time, &saved);} else {
+                lenSel = pselect(1, &fds, 0, 0, 0, &saved);}
             if (lenSel != 0 && !(lenSel < 0 && errno == EINTR)) exitErrstr("pselect failed: %s\n", strerror(errno));}}
     pqueue_free(pqueue);
     return 0;
