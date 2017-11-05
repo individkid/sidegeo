@@ -368,18 +368,22 @@ struct Chars injects = {0}; // for staging opengl keys in console
 enum Requester {Distance,Length,Area,Volume};
 struct Request {
     enum Requester tag;
-    int val,siz,sub;};
+    int val,siz,arg;};
 struct Requests {DECLARE_QUEUE(struct Request)} requests = {0};
  // from timewheel to main thread for asynchronous change to stock
 struct Ints requesters = {0}; // mutex from timewheel to main staged from args
 struct Ints requestees = {0}; // for staging out from requester in main
-typedef int (*Metric)(int val, int siz, int *arg);
+struct Stock;
+typedef int (*Metric)(struct Stock *stock);
  // distance length area volume random jpeg microphone
+ // typically, return val immediately if sync already set,
+ // send val,siz,arg to main thread through requests,
+ // set async, and return current val
 struct Stock {
     int vld,sub; // optional subscript into waves
     int min,max; // saturation limits for val
-    int async; // Request to update val is pending
     Metric func; // call this with following for value to use
+    int async; // Request to update val is pending
     int siz,arg; // generic arguments for func
     int val;}; // values pointed to by var pointers
 struct Stocks {DECLARE_QUEUE(struct Stock)} stocks = {0};
@@ -387,14 +391,15 @@ struct Ints args = {0}; // buffer for arguments to Metric
  // buffer for arrays of pointers to stocks
 struct Nomial {
     int con0;
-    int num1,con1,var1;
-    int num2,con2,var2a,var2b;
-    int num3,con3,var3;};
+    int num1,con1,var1; // var refers to val in stock
+    int num2,con2,var2a,var2b; // vars refer to vals in stocks
+    int num3,con3,var3;}; // var refers to func in stock
 struct Ratio {struct Nomial n,d;};
 struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
-    int sub; // position of this for finding position in attachs
+    int num,sub; // position of this for finding position in attachs
+    // sub is aliased to size of list in attach when in Sched
     struct Ratio ratio; // how to calculate size
     pqueue_pri_t size,rate,delay; // when to reschedule
     int sup;}; // scheduled catch; remove upon throw
@@ -430,6 +435,7 @@ enum Scheder {
     Linker, // change which flow a stock is fed by
     Scheders}; // terminate timewheel thread
 struct Sched {
+    int state; // for multiple calls to detryScheder
     enum Scheder tag; union { // whether to add a new stock of flow
     struct Stock stock;
     struct Flow flow;
@@ -568,11 +574,12 @@ int entry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
     int retval = 0; \
     for (int i = 0; i < len; i++) { \
         buf[i] = val[i]; \
-        if ((*isterm)(val+i)) { \
+        if (isterm && (*isterm)(val+i)) { \
             INSTANCE.valid++; \
             retval = i+1; \
             break;}} \
     if (retval > 0 && retval < len) unloc##NAME(len-retval); \
+    if (retval == 0 && isterm == 0) INSTANCE.valid++; \
     if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     return retval; /*0: all taken but no terminator; >0: given number taken with terminator*/ \
 } \
@@ -588,12 +595,13 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
     for (int i = 0; i < len; i++) { \
         if (i == size##NAME()) exitErrstr("valid but no terminator: %s\n", strerror(errno)); \
         val[i] = buf[i]; \
-        if ((*isterm)(val+i)) { \
+        if (isterm && (*isterm)(val+i)) { \
             INSTANCE.valid--; \
             retval = i+1; \
             break;}} \
     if (retval == 0) deloc##NAME(len); \
     if (retval > 0) deloc##NAME(retval); \
+    if (retval == 0 && isterm == 0) INSTANCE.valid--; \
     if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
     return retval; /*0: all filled but no terminator; >0: given number filled with terminator*/ \
 } \
@@ -741,6 +749,8 @@ ACCESS_QUEUE(Sched,struct Sched,scheds)
 ACCESS_QUEUE(Scheder,int,scheders)
 
 ACCESS_QUEUE(Schedee,int,schedees)
+
+ACCESS_QUEUE(Wave,struct Ints,waves)
 
 ACCESS_QUEUE(Listen,struct Listen,listens)
 
@@ -910,11 +920,6 @@ void handler(int sig)
 {
 }
 
-int isTrue(struct Sched *sched)
-{
-    return 1;
-}
-
 pqueue_pri_t pqueue_get_pri(void *a)
 {
     struct Wheel *wheel = a;
@@ -969,7 +974,7 @@ int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **s
         *wheel = (struct Wheel *)pqueue_pop(pqueue);
         if ((*wheel)->sub < 0 || sizeFlow() <= (*wheel)->sub) exitErrstr("wheel too flow\n");
         *flow = arrayFlow()+(*wheel)->sub;
-        if ((*flow)->sub < 0 || sizeAttach() <= (*flow)->sub) exitErrstr("flow too stock\n");
+        if ((*flow)->sub < 0 || sizeAttach() <= (*flow)->sub) exitErrstr("(*flow) too stock\n");
         metas = arrayAttach()+(*flow)->sub;
         *stock = arrayMeta();
         *size = sizeMeta();
@@ -977,6 +982,12 @@ int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **s
     return 0;
 }
 
+#define DETRY_SCHEDER(INT,SUB,SIZ) \
+            if (state++ == sched.state) { \
+                int lenScheder = detryScheder(enloc##INT(SIZ),0,SIZ); \
+                if (lenScheder > 0) exitErrstr("detryScheder failed\n"); \
+                if (lenScheder < 0) deloc##INT(SIZ); \
+                else {SUB = size##INT()-SIZ; sched.state++;}}
 void *timewheel(void *arg)
 {
     struct sigaction sigact = {0};
@@ -987,13 +998,14 @@ void *timewheel(void *arg)
     pthread_sigmask(SIG_SETMASK,0,&saved);
     sigdelset(&saved, SIGUSR1);
     pqueue_t *pqueue = pqueue_init(PQUEUE_STEP,&pqueue_cmp_pri,&pqueue_get_pri,&pqueue_set_pri,&pqueue_get_pos,&pqueue_set_pos);
+    struct Sched sched = {0};
     while (1) {
-        struct Wheel *wheel;
-        struct Flow *flow;
-        int *stock;
-        int size;
+        struct Wheel *wheel = 0;
+        struct Flow *flow = 0;
+        int *stock = 0;
+        int size = 0;
         while (popFirst(pqueue,&wheel,&flow,&stock,&size)) switch (wheel->tag) {
-            case (Throw):
+            case (Throw): {
             //TODO: cancel currently scheduled Catch
             //TODO: remember current size
             //TODO: calculate size from ratio
@@ -1003,37 +1015,72 @@ void *timewheel(void *arg)
             //asif:   Catch.2,Catch.2,Catch.2,Throw,Catch.2,Catch.2
             //thus: schedule corpuscle transfer at time remaining times new period over old period
             //thus: spoof last throw time to schedule time minus new period
-            break;
+            break;}
             case (Catch):
             for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += wheel->val;
             wheel->pri += flow->size;
             // TODO: reschedule Catch
             break;
             default: exitErrstr("wheel too tag\n");}
-        struct Sched sched = {0};
-        int lenSched = detrySched(&sched,&isTrue,1);
+        int lenSched = (sched.state == 0 ? detrySched(&sched,0,1) : 0);
         fd_set fds; FD_ZERO(&fds);
-        if (lenSched == 0) exitErrstr("detrySched failed\n");
-        if (lenSched == 1 && sched.tag == Scheders) break;
-        int i,j;
-        if (lenSched == 1) switch (sched.tag) {
-            case (Stocker): enqueStock(sched.stock);
-            // TODO: initialize new wave queue if necessary
+        if (lenSched > 0) exitErrstr("detrySched failed\n");
+        if (lenSched == 0 && sched.tag == Scheders) break;
+        if (lenSched == 0) switch (sched.tag) {
+            case (Stocker):
+            if (sched.stock.vld) {
+                struct Ints initial = {0};
+                sched.stock.sub = sizeWave();
+                enqueWave(initial);
+                metas = arrayWave()+sched.stock.sub;
+                enlocMeta(sched.stock.vld);
+                sched.stock.vld = 1;}
+            enqueStock(sched.stock);
             break;
-            case (Flower):
-            // TODO: don't forget to initialize attach per flow
-            // TODO: enque first Throw as well as first Catch
-            break;
-            case (Linker):
+            case (Flower): {
+            int state = 0;
+            int dummy = 0;
+            if (state++ == sched.state) {
+                struct Ints initial = {0};
+                sched.flow.sub = sizeAttach();
+                enqueAttach(initial);
+                sched.state++;}
+            metas = arrayAttach()+sched.flow.sub;
+            DETRY_SCHEDER(Meta,dummy,sched.flow.num)
+            DETRY_SCHEDER(Con,sched.flow.ratio.n.con1,sched.flow.ratio.n.num1)
+            DETRY_SCHEDER(Con,sched.flow.ratio.n.con2,sched.flow.ratio.n.num2)
+            DETRY_SCHEDER(Con,sched.flow.ratio.n.con3,sched.flow.ratio.n.num3)
+            DETRY_SCHEDER(Var,sched.flow.ratio.n.var1,sched.flow.ratio.n.num1)
+            DETRY_SCHEDER(Var,sched.flow.ratio.n.var2a,sched.flow.ratio.n.num2)
+            DETRY_SCHEDER(Var,sched.flow.ratio.n.var2b,sched.flow.ratio.n.num2)
+            DETRY_SCHEDER(Var,sched.flow.ratio.n.var3,sched.flow.ratio.n.num3)
+            DETRY_SCHEDER(Con,sched.flow.ratio.d.con1,sched.flow.ratio.d.num1)
+            DETRY_SCHEDER(Con,sched.flow.ratio.d.con2,sched.flow.ratio.d.num2)
+            DETRY_SCHEDER(Con,sched.flow.ratio.d.con3,sched.flow.ratio.d.num3)
+            DETRY_SCHEDER(Var,sched.flow.ratio.d.var1,sched.flow.ratio.d.num1)
+            DETRY_SCHEDER(Var,sched.flow.ratio.d.var2a,sched.flow.ratio.d.num2)
+            DETRY_SCHEDER(Var,sched.flow.ratio.d.var2b,sched.flow.ratio.d.num2)
+            DETRY_SCHEDER(Var,sched.flow.ratio.d.var3,sched.flow.ratio.d.num3)
+            if (state++ == sched.state) {
+                enqueFlow(sched.flow);
+                sched.state++;}
+            if (state != sched.state) lenSched = -1;
+            break;}
+            case (Linker): {
             metas = arrayAttach()+sched.link.flow;
-            for (i = j = 0; i < sizeMeta(); i++, j++) {
+            int i = 0, j = 0;
+            for (; i < sizeMeta(); i++, j++) {
                 if (arrayMeta()[i] == sched.link.stock) j++;
                 arrayMeta()[i] = arrayMeta()[j];}
             if (i == j) enqueMeta(sched.link.stock);
+            break;}
+            case (Changer):
+            if (sizeStock() <= sched.change.sub || sched.change.sub < 0) exitErrstr("change too sub\n");
+            arrayStock()[sched.change.sub].val = sched.change.val;
+            arrayStock()[sched.change.sub].async = 0;
             break;
-            case (Changer): if (sizeStock() <= sched.change.sub || sched.change.sub < 0) exitErrstr("change too sub\n");
-            arrayStock()[sched.change.sub].val = sched.change.val; break;
             default: exitErrstr("sched too tagged\n");}
+        if (lenSched == 0) sched.state = 0;
         if (lenSched < 0) {
             int lenSel = 0;
             if (pqueue_size(pqueue) > 0) {
@@ -1685,7 +1732,7 @@ void initialize(int argc, char **argv)
 void finalize()
 {
     struct Sched sched = {0}; sched.tag = Scheders;
-    if (entrySched(&sched,&isTrue,1) != 1) exitErrstr("cannot entry sched\n");
+    if (entrySched(&sched,0,1) != 0) exitErrstr("cannot entry sched\n");
     if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
@@ -2124,13 +2171,11 @@ void configure()
     strings = file->buffer;
     fileLast = fileOwner = file->index;
     enqueString(0); unqueString();
-    if (headString() == '-') printf("configure %d %s", file->state, arrayString());
     if (retval == Advance && isspace(headString())) {dequeString(); retval = Reque;}
 #ifdef BRINGUP
     if (retval == Advance && sscanf(arrayString(),"--bringu%c%n", &suffix, &offset) == 1 && suffix == 'p' && file->mode == 0) {
         SWITCH(bringup(),Reque) retval = Reque;
         CASE(Advance) {
-            printf("bringup advance\n");
             enqueShader(dishader); enqueCommand(transformRight);
             retval = Reque; delocString(offset);}
         DEFAULT(exitErrstr("invalid bringup status\n");)}
