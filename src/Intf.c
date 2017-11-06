@@ -399,12 +399,10 @@ struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
     int num,sub; // position of this for finding position in attachs
-    // sub is aliased to size of list in attach when in Sched
     struct Ratio ratio; // how to calculate size
-    pqueue_pri_t size,rate; // when to reschedule
+    pqueue_pri_t delta,rate; // when to reschedule
     int val; // change to stock for flow; 1 or -1
     int sup;}; // scheduled catch; reque upon throw
- // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
 struct Metas attachs = {0}; // per flow list of stock subscript
 enum Wheeler {
@@ -958,7 +956,8 @@ void pqueue_print_entry(FILE *out, void *a)
 long long int getNomial(struct Nomial *nomial)
 {
     long long int result = nomial->con0;
-    if (nomial->num1 < 0 || nomial->con1 < 0 || nomial->var1 < 0) exitErrstr("nomial too num1\n");
+    if (nomial->num1 > 0) {
+    if (nomial->con1 < 0 || nomial->var1 < 0) exitErrstr("nomial too num1\n");
     if (sizeCon() < nomial->num1 + nomial->con1) exitErrstr("nomial too con1\n");
     if (sizeVar() < nomial->num1 + nomial->var1) exitErrstr("nomial too var1\n");
     for (int i = 0; i < nomial->num1; i++) {
@@ -967,8 +966,9 @@ long long int getNomial(struct Nomial *nomial)
         if (var < 0 || sizeStock() <= var) exitErrstr("nomial too stock\n");
         struct Stock *stock = arrayStock()+var;
         long long int val = stock->val;
-        result += con*val;}
-    if (nomial->num2 < 0 || nomial->con2 < 0 || nomial->var2a < 0 || nomial->var2b < 0) exitErrstr("nomial too num2\n");
+        result += con*val;}}
+    if (nomial->num2 > 0) {
+    if (nomial->con2 < 0 || nomial->var2a < 0 || nomial->var2b < 0) exitErrstr("nomial too num2\n");
     if (sizeCon() < nomial->num2 + nomial->con2) exitErrstr("nomial too con2\n");
     if (sizeVar() < nomial->num2 + nomial->var2a) exitErrstr("nomial too var2a\n");
     if (sizeVar() < nomial->num2 + nomial->var2b) exitErrstr("nomial too var2b\n");
@@ -982,8 +982,9 @@ long long int getNomial(struct Nomial *nomial)
         struct Stock *stockB = arrayStock()+varB;
         long long int valA = stockA->val;
         long long int valB = stockB->val;
-        result += con*valA*valB;}
-    if (nomial->num3 < 0 || nomial->con3 < 0 || nomial->var3 < 0) exitErrstr("nomial too num3\n");
+        result += con*valA*valB;}}
+    if (nomial->num3 > 0) {
+    if (nomial->con3 < 0 || nomial->var3 < 0) exitErrstr("nomial too num3\n");
     if (sizeCon() < nomial->num3 + nomial->con3) exitErrstr("nomial too con3\n");
     if (sizeVar() < nomial->num3 + nomial->var3) exitErrstr("nomial too var3\n");
     for (int i = 0; i < nomial->num3; i++) {
@@ -992,7 +993,7 @@ long long int getNomial(struct Nomial *nomial)
         if (var < 0 || sizeStock() <= var) exitErrstr("nomial too stock\n");
         struct Stock *stock = arrayStock()+var;
         long long int val = stock->func(stock);
-        result += con*val;}
+        result += con*val;}}
     return result;}
 
 pqueue_pri_t getTime()
@@ -1049,14 +1050,14 @@ void *timewheel(void *arg)
         struct Wheel *catch = 0;
         while (popFirst(pqueue,&wheel,&flow,&stock,&size,&catch)) switch (wheel->tag) {
             case (Throw): {
-            pqueue_pri_t size = flow->size;
+            pqueue_pri_t delta = flow->delta;
             int val = flow->val;
             long long int quotient = getNomial(&flow->ratio.n) / getNomial(&flow->ratio.d);
-            if (quotient > 0) {flow->val = 1; flow->size = quotient;}
-            else {flow->val = -1; flow->size = -quotient;}
-            pqueue_pri_t sofar = size - (catch->pri - getTime());
-            pqueue_pri_t accum = (val == flow->val ? size - sofar : size + sofar);
-            pqueue_pri_t rerate = accum * flow->size / size;
+            if (quotient > 0) {flow->val = 1; flow->delta = quotient;}
+            else {flow->val = -1; flow->delta = -quotient;}
+            pqueue_pri_t sofar = delta - (catch->pri - getTime());
+            pqueue_pri_t accum = (val == flow->val ? delta - sofar : delta + sofar);
+            pqueue_pri_t rerate = accum * flow->delta / delta;
             pqueue_pri_t pri = getTime() + rerate;
             pqueue_change_priority(pqueue,pri,catch);
             wheel->pri += flow->rate;
@@ -1064,7 +1065,7 @@ void *timewheel(void *arg)
             break;}
             case (Catch):
             for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += flow->val;
-            wheel->pri += flow->size;
+            wheel->pri += flow->delta;
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too catch\n");
             break;
             default: exitErrstr("wheel too tag\n");}
