@@ -401,7 +401,7 @@ struct Flow {
     int num,sub; // position of this for finding position in attachs
     // sub is aliased to size of list in attach when in Sched
     struct Ratio ratio; // how to calculate size
-    pqueue_pri_t size,rate,delay; // when to reschedule
+    pqueue_pri_t size,rate; // when to reschedule
     int val; // change to stock for flow; 1 or -1
     int sup;}; // scheduled catch; reque upon throw
  // delayed reaction change to rate of transfer from src to dst
@@ -1059,6 +1059,8 @@ void *timewheel(void *arg)
             pqueue_pri_t rerate = accum * flow->size / size;
             pqueue_pri_t pri = getTime() + rerate;
             pqueue_change_priority(pqueue,pri,catch);
+            wheel->pri += flow->rate;
+            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too throw\n");
             break;}
             case (Catch):
             for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += flow->val;
