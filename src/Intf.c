@@ -400,7 +400,7 @@ struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
     int num,sub; // position in attachs and deltas
     struct Ratio ratio; // how to calculate size
-    pqueue_pri_t delay,delta,rate; // when to reschedule
+    pqueue_pri_t delay,drop,grain; // when to reschedule
     int val; // change to stock for flow; 1 or -1
     int sup;}; // scheduled catch; reque upon throw
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
@@ -1059,27 +1059,28 @@ void *timewheel(void *arg)
             case (Throw): {
             long long int quotient = getNomial(&flow->ratio.n) / getNomial(&flow->ratio.d);
             calcs = arrayDelta()+flow->sub; enqueCalc(quotient);
-            wheel->pri += flow->rate;
+            wheel->pri += flow->grain;
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too thow\n");
-            break;}
+            if (flow->delay) break;}
             case (Catch): {
-            pqueue_pri_t delta = flow->delta;
+            pqueue_pri_t drop = flow->drop;
             int val = flow->val;
             calcs = arrayDelta()+flow->sub;
             long long int quotient = headCalc(); dequeCalc();
-            if (quotient > 0) {flow->val = 1; flow->delta = quotient;}
-            else {flow->val = -1; flow->delta = -quotient;}
-            pqueue_pri_t sofar = delta - (catch->pri - getTime());
-            pqueue_pri_t accum = (val == flow->val ? delta - sofar : delta + sofar);
-            pqueue_pri_t rerate = accum * flow->delta / delta;
+            if (quotient > 0) {flow->val = 1; flow->drop = quotient;}
+            else {flow->val = -1; flow->drop = -quotient;}
+            pqueue_pri_t sofar = drop - (catch->pri - getTime());
+            pqueue_pri_t accum = (val == flow->val ? drop - sofar : drop + sofar);
+            pqueue_pri_t rerate = accum * flow->drop / drop;
             pqueue_pri_t prior = getTime() + rerate;
             pqueue_change_priority(pqueue,prior,catch);
-            wheel->pri += flow->rate;
-            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too catch\n");
+            if (flow->delay) {
+            wheel->pri += flow->grain;
+            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too catch\n");}
             break;}
             case (Drop):
             for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += flow->val;
-            wheel->pri += flow->delta;
+            wheel->pri += flow->drop;
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too drop\n");
             break;
             default: exitErrstr("wheel too tag\n");}
@@ -1132,13 +1133,14 @@ void *timewheel(void *arg)
                 sched.flow.sup = sizeWheel();
                 enqueWheel(wheel);
                 if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too throw\n");
+                if (sched.flow.delay) {
                 wheel.tag = Catch;
-                wheel.pri = getTime()+sched.flow.delay;
-                enqueWheel(wheel);
-                if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");
+                wheel.pri += sched.flow.delay;
+                enqueWheel(wheel); // 
+                if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");}
                 wheel.tag = Drop;
-                wheel.pri = getTime()+1;
-                enqueWheel(wheel); // give something for initial Throw to remove
+                wheel.pri++;
+                enqueWheel(wheel); // give something for initial Catch to remove
                 if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");
                 enqueFlow(sched.flow);
                 sched.state++;}
