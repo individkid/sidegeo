@@ -399,19 +399,18 @@ struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
     int num,sub; // position in attachs and deltas
-    int len; // length of ratio calculation pipeline
     struct Ratio ratio; // how to calculate size
-    pqueue_pri_t delta,rate; // when to reschedule
+    pqueue_pri_t delay,delta,rate; // when to reschedule
     int val; // change to stock for flow; 1 or -1
     int sup;}; // scheduled catch; reque upon throw
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
 struct Metas attachs = {0}; // per flow list of stock subscript
-struct Calcs {DECLARE_QUEUE(long long int)} *calcs = {0};
+struct Calcs {DECLARE_QUEUE(long long int)} *calcs = 0;
 struct Deltas {DECLARE_QUEUE(struct Calcs)} deltas = {0};
 enum Wheeler {
     Throw, // calculate size from ratio and reschedule
-     // and calculate first transfer from end of pipeline
-    Catch}; // transfer drop of stock and reschedule
+    Catch, // calculate first transfer from pipeline
+    Drop}; // transfer drop of stock and reschedule
 struct Wheel {
     enum Wheeler tag; // action scheduled
     int sub; // index into flows
@@ -742,11 +741,11 @@ ACCESS_QUEUE(Var,int,vars)
 
 ACCESS_QUEUE(Flow,struct Flow,flows)
 
+ACCESS_QUEUE(Attach,struct Ints,attachs)
+
 ACCESS_QUEUE(Calc,long long int,(*calcs))
 
 ACCESS_QUEUE(Delta,struct Calcs,deltas)
-
-ACCESS_QUEUE(Attach,struct Ints,attachs)
 
 ACCESS_QUEUE(Wheel,struct Wheel,wheels)
 
@@ -1060,10 +1059,13 @@ void *timewheel(void *arg)
             case (Throw): {
             long long int quotient = getNomial(&flow->ratio.n) / getNomial(&flow->ratio.d);
             calcs = arrayDelta()+flow->sub; enqueCalc(quotient);
-            if (sizeCalc() > flow->len) exitErrstr("calc too len\n");
-            if (sizeCalc() == flow->len) {
+            wheel->pri += flow->rate;
+            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too thow\n");
+            break;}
+            case (Catch): {
             pqueue_pri_t delta = flow->delta;
             int val = flow->val;
+            calcs = arrayDelta()+flow->sub;
             long long int quotient = headCalc(); dequeCalc();
             if (quotient > 0) {flow->val = 1; flow->delta = quotient;}
             else {flow->val = -1; flow->delta = -quotient;}
@@ -1073,12 +1075,12 @@ void *timewheel(void *arg)
             pqueue_pri_t prior = getTime() + rerate;
             pqueue_change_priority(pqueue,prior,catch);
             wheel->pri += flow->rate;
-            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too throw\n");}
+            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too catch\n");
             break;}
-            case (Catch):
+            case (Drop):
             for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += flow->val;
             wheel->pri += flow->delta;
-            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too catch\n");
+            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too drop\n");
             break;
             default: exitErrstr("wheel too tag\n");}
         int lenSched = (sched.state == 0 ? detrySched(&sched,0,1) : 0);
@@ -1131,7 +1133,11 @@ void *timewheel(void *arg)
                 enqueWheel(wheel);
                 if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too throw\n");
                 wheel.tag = Catch;
-                wheel.pri++;
+                wheel.pri = getTime()+sched.flow.delay;
+                enqueWheel(wheel);
+                if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");
+                wheel.tag = Drop;
+                wheel.pri = getTime()+1;
                 enqueWheel(wheel); // give something for initial Throw to remove
                 if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");
                 enqueFlow(sched.flow);
