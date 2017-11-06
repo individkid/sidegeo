@@ -402,7 +402,8 @@ struct Flow {
     // sub is aliased to size of list in attach when in Sched
     struct Ratio ratio; // how to calculate size
     pqueue_pri_t size,rate,delay; // when to reschedule
-    int sup;}; // scheduled catch; remove upon throw
+    int val; // change to stock for flow; 1 or -1
+    int sup;}; // scheduled catch; reque upon throw
  // delayed reaction change to rate of transfer from src to dst
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
 struct Metas attachs = {0}; // per flow list of stock subscript
@@ -412,7 +413,6 @@ enum Wheeler {
 struct Wheel {
     enum Wheeler tag; // action scheduled
     int sub; // index into flows
-    int val; // change to stock for flow; 1 or -1
     pqueue_pri_t pri; // when action scheduled
     size_t pos;}; // used by pqueue
 struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
@@ -955,6 +955,46 @@ void pqueue_print_entry(FILE *out, void *a)
     fprintf(out,"pri %llu pos %lu\n",wheel->pri,wheel->pos);
 }
 
+long long int getNomial(struct Nomial *nomial)
+{
+    long long int result = nomial->con0;
+    if (nomial->num1 < 0 || nomial->con1 < 0 || nomial->var1 < 0) exitErrstr("nomial too num1\n");
+    if (sizeCon() < nomial->num1 + nomial->con1) exitErrstr("nomial too con1\n");
+    if (sizeVar() < nomial->num1 + nomial->var1) exitErrstr("nomial too var1\n");
+    for (int i = 0; i < nomial->num1; i++) {
+        long long int con = arrayCon()[nomial->con1+i];
+        int var = arrayVar()[nomial->var1+i];
+        if (var < 0 || sizeStock() <= var) exitErrstr("nomial too stock\n");
+        struct Stock *stock = arrayStock()+var;
+        long long int val = stock->val;
+        result += con*val;}
+    if (nomial->num2 < 0 || nomial->con2 < 0 || nomial->var2a < 0 || nomial->var2b < 0) exitErrstr("nomial too num2\n");
+    if (sizeCon() < nomial->num2 + nomial->con2) exitErrstr("nomial too con2\n");
+    if (sizeVar() < nomial->num2 + nomial->var2a) exitErrstr("nomial too var2a\n");
+    if (sizeVar() < nomial->num2 + nomial->var2b) exitErrstr("nomial too var2b\n");
+    for (int i = 0; i < nomial->num2; i++) {
+        long long int con = arrayCon()[nomial->con2+i];
+        int varA = arrayVar()[nomial->var2a+i];
+        int varB = arrayVar()[nomial->var2b+i];
+        if (varA < 0 || sizeStock() <= varA) exitErrstr("nomial too stock\n");
+        if (varB < 0 || sizeStock() <= varB) exitErrstr("nomial too stock\n");
+        struct Stock *stockA = arrayStock()+varA;
+        struct Stock *stockB = arrayStock()+varB;
+        long long int valA = stockA->val;
+        long long int valB = stockB->val;
+        result += con*valA*valB;}
+    if (nomial->num3 < 0 || nomial->con3 < 0 || nomial->var3 < 0) exitErrstr("nomial too num3\n");
+    if (sizeCon() < nomial->num3 + nomial->con3) exitErrstr("nomial too con3\n");
+    if (sizeVar() < nomial->num3 + nomial->var3) exitErrstr("nomial too var3\n");
+    for (int i = 0; i < nomial->num3; i++) {
+        long long int con = arrayCon()[nomial->con3+i];
+        int var = arrayVar()[nomial->var3+i];
+        if (var < 0 || sizeStock() <= var) exitErrstr("nomial too stock\n");
+        struct Stock *stock = arrayStock()+var;
+        long long int val = stock->func(stock);
+        result += con*val;}
+    return result;}
+
 pqueue_pri_t getTime()
 {
     struct timespec time;
@@ -968,7 +1008,7 @@ void setTime(struct timespec *time, pqueue_pri_t pri)
     time->tv_nsec = pri%0x3b9aca00;
 }
 
-int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **stock, int *size)
+int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **stock, int *size, struct Wheel **catch)
 {
     if (pqueue_size(pqueue) > 0 && getTime() >= pqueue_get_pri(pqueue_peek(pqueue))) {
         *wheel = (struct Wheel *)pqueue_pop(pqueue);
@@ -978,6 +1018,8 @@ int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **s
         metas = arrayAttach()+(*flow)->sub;
         *stock = arrayMeta();
         *size = sizeMeta();
+        if ((*flow)->sup < 0 || (*flow)->sup >= sizeWheel()) exitErrstr("catch too wheel\n");
+        *catch = arrayWheel()+(*flow)->sup;
         return 1;}
     return 0;
 }
@@ -1004,22 +1046,24 @@ void *timewheel(void *arg)
         struct Flow *flow = 0;
         int *stock = 0;
         int size = 0;
-        while (popFirst(pqueue,&wheel,&flow,&stock,&size)) switch (wheel->tag) {
+        struct Wheel *catch = 0;
+        while (popFirst(pqueue,&wheel,&flow,&stock,&size,&catch)) switch (wheel->tag) {
             case (Throw): {
-            //TODO: cancel currently scheduled Catch
-            //TODO: remember current size
-            //TODO: calculate size from ratio
-            //TODO: schedule first Catch to satisfy last part of last size and first part of new size
-            //before: Catch.1,Catch.1,Catch.1,Catch.1,Catch.1,Catch.1,Throw,Catch.1,Catch.1,Catch.1,Catch.1
-            //after:  Catch.1,Catch.1,Catch.1,Catch.1,Catch.1,Catch.1,Throw,Catch.2,Catch.2
-            //asif:   Catch.2,Catch.2,Catch.2,Throw,Catch.2,Catch.2
-            //thus: schedule corpuscle transfer at time remaining times new period over old period
-            //thus: spoof last throw time to schedule time minus new period
+            pqueue_pri_t size = flow->size;
+            int val = flow->val;
+            long long int quotient = getNomial(&flow->ratio.n) / getNomial(&flow->ratio.d);
+            if (quotient > 0) {flow->val = 1; flow->size = quotient;}
+            else {flow->val = -1; flow->size = -quotient;}
+            pqueue_pri_t sofar = size - (catch->pri - getTime());
+            pqueue_pri_t accum = (val == flow->val ? size - sofar : size + sofar);
+            pqueue_pri_t rerate = accum * flow->size / size;
+            pqueue_pri_t pri = getTime() + rerate;
+            pqueue_change_priority(pqueue,pri,catch);
             break;}
             case (Catch):
-            for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += wheel->val;
+            for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += flow->val;
             wheel->pri += flow->size;
-            // TODO: reschedule Catch
+            if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too catch\n");
             break;
             default: exitErrstr("wheel too tag\n");}
         int lenSched = (sched.state == 0 ? detrySched(&sched,0,1) : 0);
@@ -1062,6 +1106,17 @@ void *timewheel(void *arg)
             DETRY_SCHEDER(Var,sched.flow.ratio.d.var2b,sched.flow.ratio.d.num2)
             DETRY_SCHEDER(Var,sched.flow.ratio.d.var3,sched.flow.ratio.d.num3)
             if (state++ == sched.state) {
+                struct Wheel wheel = {0};
+                wheel.tag = Throw;
+                wheel.sub = sizeFlow();
+                wheel.pri = getTime();
+                sched.flow.sup = sizeWheel();
+                enqueWheel(wheel);
+                if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too throw\n");
+                wheel.tag = Catch;
+                wheel.pri++;
+                enqueWheel(wheel); // give something for initial Throw to remove
+                if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");
                 enqueFlow(sched.flow);
                 sched.state++;}
             if (state != sched.state) lenSched = -1;
