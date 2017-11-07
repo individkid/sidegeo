@@ -400,15 +400,16 @@ struct Ratio {struct Nomial n,d;};
 struct Ints cons = {0}; // buffer for arrays of coefficients
 struct Ints vars = {0}; // buffer for arrays of subscripts
 struct Flow {
-    int num,sub; // position in attachs and deltas
-    struct Ratio ratio; // how to calculate size
+    int num; // number of attachs
+    int sub; // position in attachs deltas ratios
     pqueue_pri_t delay,drop,grain; // when to reschedule
     int val; // change to stock for flow; 1 or -1
-    int sup;}; // scheduled catch; reque upon throw
+    int sup;}; // scheduled drop; reque upon catch
 struct Flows {DECLARE_QUEUE(struct Flow)} flows = {0};
 struct Metas attachs = {0}; // per flow list of stock subscript
 struct Calcs {DECLARE_QUEUE(long long int)} *calcs = 0;
 struct Deltas {DECLARE_QUEUE(struct Calcs)} deltas = {0};
+struct Ratios {DECLARE_QUEUE(struct Ratio)} ratios = {0};
 enum Wheeler {
     Throw, // calculate size from ratio and reschedule
     Catch, // calculate first transfer from pipeline
@@ -421,6 +422,22 @@ struct Wheel {
 struct Wheels {DECLARE_QUEUE(struct Wheel)} wheels = {0};
  // linked list of timewheel actions
 int wheeler = 0; // list of unused wheel entries
+enum Scheder {
+    Stocker, // add new stock
+    Flower, // add new flow
+    Scheders}; // terminate timewheel thread
+int schedState = 0; // for multiple calls to detrySchedee
+struct Sched {
+    enum Scheder tag; union { // whether to add a new stock of flow
+    struct Stock stock;
+    struct Flow flow;};};
+struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
+ // from main to timewheel to initialize or change system
+struct Scheds scheders = {0}; // for staging to scheds in main
+struct Ints schedees = {0}; // mutex for args with sched
+struct Ints schedeers = {0}; // for staging to sched args in main
+struct Ratios ratioees = {0}; // mitex for ratios of sched
+struct Ratios ratioeers = {0}; // for staging to ratio in main
 struct Change {
     int sub,val;}; // change to val in subscripted stock
 struct Link {
@@ -431,24 +448,18 @@ struct Link {
  // stocks can be attached to flows of faces attached to regions of flow and impermeable planes
  // or stocks can be attached in any way without regard to topology
  // note that when stock attachments depend on topology, changes to topology can change attachments4444
-enum Scheder {
-    Stocker, // add new stock
-    Flower, // add new flow
+enum Smaller {
     Changer, // change stock value
     Linker, // change which flow a stock is fed by
-    Scheders}; // terminate timewheel thread
-struct Sched {
-    int state; // for multiple calls to detrySchedee
-    enum Scheder tag; union { // whether to add a new stock of flow
-    struct Stock stock;
-    struct Flow flow;
+    Smallers}; // deque action from Sched
+int smallState = 0; // to wait for actions from Sched
+struct Small {
+    enum Smaller tag; union {
     struct Change change;
     struct Link link;};};
-struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
- // from main to timewheel to initialize or change system
-struct Scheds scheders = {0}; // for staging to scheds in main
-struct Ints schedees = {0}; // mutex for args with sched
-struct Ints schedeers = {0}; // for staging to sched args in main
+struct Smalls {DECLARE_QUEUE(struct Small)} smalls = {0};
+ // from main to timewheel to dynamically change the system
+struct Smalls smallers = {0}; // for staging to smalls in main
 pqueue_pri_t called = 0; // last time portaudio callback was called
 struct Metas waves = {0}; // pipelines for portaudio callback
 struct Listen {
@@ -750,6 +761,8 @@ ACCESS_QUEUE(Attach,struct Ints,attachs)
 
 ACCESS_QUEUE(Calc,long long int,(*calcs))
 
+ACCESS_QUEUE(Ratio,struct Ratio,ratios)
+
 ACCESS_QUEUE(Delta,struct Calcs,deltas)
 
 ACCESS_QUEUE(Wheel,struct Wheel,wheels)
@@ -761,6 +774,14 @@ ACCESS_QUEUE(Scheder,struct Sched,scheders)
 ACCESS_QUEUE(Schedee,int,schedees)
 
 ACCESS_QUEUE(Schedeer,int,schedeers)
+
+ACCESS_QUEUE(Ratioee,struct Ratio,ratioees)
+
+ACCESS_QUEUE(Ratioeer,struct Ratio,ratioeers)
+
+ACCESS_QUEUE(Small,struct Small,smalls)
+
+ACCESS_QUEUE(Smaller,struct Small,smallers)
 
 ACCESS_QUEUE(Wave,struct Ints,waves)
 
@@ -1023,18 +1044,20 @@ void setTime(struct timespec *time, pqueue_pri_t pri)
     time->tv_nsec = pri%NANO_SECONDS;
 }
 
-int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **attach, int *size, struct Wheel **catch)
+int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **attach, int *size, struct Wheel **catch, struct Ratio **ratio)
 {
     if (pqueue_size(pqueue) > 0 && getTime() >= pqueue_get_pri(pqueue_peek(pqueue))) {
         *wheel = (struct Wheel *)pqueue_pop(pqueue);
         if ((*wheel)->sub < 0 || sizeFlow() <= (*wheel)->sub) exitErrstr("wheel too flow\n");
         *flow = arrayFlow()+(*wheel)->sub;
-        if ((*flow)->sub < 0 || sizeAttach() <= (*flow)->sub) exitErrstr("(*flow) too attach\n");
+        if ((*flow)->sub < 0 || sizeAttach() <= (*flow)->sub) exitErrstr("flow too attach\n");
         metas = arrayAttach()+(*flow)->sub;
         *attach = arrayMeta();
         *size = sizeMeta();
         if ((*flow)->sup < 0 || (*flow)->sup >= sizeWheel()) exitErrstr("catch too wheel\n");
         *catch = arrayWheel()+(*flow)->sup;
+        if ((*flow)->sub < 0 || sizeRatio() <= (*flow)->sub) exitErrstr("flow too ratio\n");
+        *ratio = arrayRatio()+(*flow)->sub;
         return 1;}
     return 0;
 }
@@ -1046,13 +1069,13 @@ int saturate(int lhs, int rhs, int min, int max)
     return lhs + rhs;
 }
 
-#define DETRY_SCHED(INT,SUB,SIZ) \
-            if (state++ == sched.state) { \
-                int lenSchedee = detrySchedee(enloc##INT(SIZ),0,SIZ); \
-                if (lenSchedee > 0) exitErrstr("detrySchedee failed\n"); \
-                if (lenSchedee < 0) deloc##INT(SIZ); \
-                else {SUB = size##INT()-SIZ; sched.state++;}}
-#define ENTRY_REQ(EE,ER) \
+#define DETRY(EE,ER,SUB,SIZ) \
+            if (state++ == schedState) { \
+                int len##EE = detry##EE(enloc##ER(SIZ),0,SIZ); \
+                if (len##EE > 0) exitErrstr(#EE" too detry\n"); \
+                if (len##EE < 0) deloc##ER(SIZ); \
+                else {SUB = size##ER()-SIZ; schedState++;}}
+#define ENTRY(EE,ER) \
         int len##EE = entry##EE(array##ER(),0,size##ER()); \
         if (len##EE > 0) exitErrstr(#EE" too entry\n"); \
         else if (len##EE == 0) { \
@@ -1070,15 +1093,17 @@ void *timewheel(void *arg)
 
     pqueue_t *pqueue = pqueue_init(PQUEUE_STEP,&pqueue_cmp_pri,&pqueue_get_pri,&pqueue_set_pri,&pqueue_get_pos,&pqueue_set_pos);
     struct Sched sched = {0};
+    struct Small small = {0};
     while (1) {
         struct Wheel *wheel = 0;
         struct Flow *flow = 0;
         int *attach = 0;
         int size = 0;
         struct Wheel *catch = 0;
-        while (popFirst(pqueue,&wheel,&flow,&attach,&size,&catch)) switch (wheel->tag) {
+        struct Ratio *ratio = 0;
+        while (popFirst(pqueue,&wheel,&flow,&attach,&size,&catch,&ratio)) switch (wheel->tag) {
             case (Throw): {
-            long long int quotient = getNomial(&flow->ratio.n) / getNomial(&flow->ratio.d);
+            long long int quotient = getNomial(&ratio->n) / getNomial(&ratio->d);
             calcs = arrayDelta()+flow->sub; enqueCalc(quotient);
             wheel->pri += flow->grain;
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too thow\n");
@@ -1108,11 +1133,37 @@ void *timewheel(void *arg)
             break;
             default: exitErrstr("wheel too tag\n");}
 
-        ENTRY_REQ(Request,Requester)
-        ENTRY_REQ(Requestee,Requesteer)
+        ENTRY(Request,Requester)
+        ENTRY(Requestee,Requesteer)
 
-        int lenSched = (sched.state == 0 ? detrySched(&sched,0,1) : 0);
-        if (lenSched > 0) exitErrstr("detrySched failed\n");
+        int lenSmall = (smallState == 0 ? detrySmall(&small,0,1) : 0);
+        int lenSched = -1;
+        if (lenSmall > 0) exitErrstr("detrySmall failed\n");
+        if (lenSmall == 0) switch (small.tag) {
+            case (Linker): {
+            metas = arrayAttach()+small.link.flow;
+            int i = 0, j = 0;
+            for (; i < sizeMeta(); i++, j++) {
+                if (arrayMeta()[i] == small.link.stock) j++;
+                arrayMeta()[i] = arrayMeta()[j];}
+            if (i == j) enqueMeta(small.link.stock);
+            break;}
+            case (Changer):
+            if (sizeStock() <= small.change.sub || small.change.sub < 0) exitErrstr("change too sub\n");
+            arrayStock()[small.change.sub].val = small.change.val;
+            arrayStock()[small.change.sub].async = 0;
+            break;
+            case (Smallers): {
+            int state = 0;
+            if (state++ == smallState) smallState++; // indicate to wait for sched
+            if (state++ == smallState) {
+                lenSched = detrySched(&sched,0,1);
+                if (lenSched > 0) exitErrstr("detrySched failed\n");
+                if (lenSched == 0) smallState++;}
+            else lenSched = 0;
+            break;}
+            default: exitErrstr("small too tagged\n");}
+
         if (lenSched == 0 && sched.tag == Scheders) break;
         if (lenSched == 0) switch (sched.tag) {
             case (Stocker):
@@ -1128,30 +1179,32 @@ void *timewheel(void *arg)
             case (Flower): {
             int state = 0;
             int dummy = 0;
-            if (state++ == sched.state) {
+            if (state++ == schedState) {
                 struct Ints attach = {0};
                 struct Calcs calc = {0};
                 sched.flow.sub = sizeAttach();
                 enqueAttach(attach);
                 enqueDelta(calc);
-                sched.state++;}
+                schedState++;}
+            DETRY(Ratioee,Ratio,dummy,1)
             metas = arrayAttach()+sched.flow.sub;
-            DETRY_SCHED(Meta,dummy,sched.flow.num)
-            DETRY_SCHED(Con,sched.flow.ratio.n.con1,sched.flow.ratio.n.num1)
-            DETRY_SCHED(Con,sched.flow.ratio.n.con2,sched.flow.ratio.n.num2)
-            DETRY_SCHED(Con,sched.flow.ratio.n.con3,sched.flow.ratio.n.num3)
-            DETRY_SCHED(Var,sched.flow.ratio.n.var1,sched.flow.ratio.n.num1)
-            DETRY_SCHED(Var,sched.flow.ratio.n.var2a,sched.flow.ratio.n.num2)
-            DETRY_SCHED(Var,sched.flow.ratio.n.var2b,sched.flow.ratio.n.num2)
-            DETRY_SCHED(Var,sched.flow.ratio.n.var3,sched.flow.ratio.n.num3)
-            DETRY_SCHED(Con,sched.flow.ratio.d.con1,sched.flow.ratio.d.num1)
-            DETRY_SCHED(Con,sched.flow.ratio.d.con2,sched.flow.ratio.d.num2)
-            DETRY_SCHED(Con,sched.flow.ratio.d.con3,sched.flow.ratio.d.num3)
-            DETRY_SCHED(Var,sched.flow.ratio.d.var1,sched.flow.ratio.d.num1)
-            DETRY_SCHED(Var,sched.flow.ratio.d.var2a,sched.flow.ratio.d.num2)
-            DETRY_SCHED(Var,sched.flow.ratio.d.var2b,sched.flow.ratio.d.num2)
-            DETRY_SCHED(Var,sched.flow.ratio.d.var3,sched.flow.ratio.d.num3)
-            if (state++ == sched.state) {
+            DETRY(Schedee,Meta,dummy,sched.flow.num)
+            ratio = arrayRatio()+sched.flow.sub;
+            DETRY(Schedee,Con,ratio->n.con1,ratio->n.num1)
+            DETRY(Schedee,Con,ratio->n.con2,ratio->n.num2)
+            DETRY(Schedee,Con,ratio->n.con3,ratio->n.num3)
+            DETRY(Schedee,Var,ratio->n.var1,ratio->n.num1)
+            DETRY(Schedee,Var,ratio->n.var2a,ratio->n.num2)
+            DETRY(Schedee,Var,ratio->n.var2b,ratio->n.num2)
+            DETRY(Schedee,Var,ratio->n.var3,ratio->n.num3)
+            DETRY(Schedee,Con,ratio->d.con1,ratio->d.num1)
+            DETRY(Schedee,Con,ratio->d.con2,ratio->d.num2)
+            DETRY(Schedee,Con,ratio->d.con3,ratio->d.num3)
+            DETRY(Schedee,Var,ratio->d.var1,ratio->d.num1)
+            DETRY(Schedee,Var,ratio->d.var2a,ratio->d.num2)
+            DETRY(Schedee,Var,ratio->d.var2b,ratio->d.num2)
+            DETRY(Schedee,Var,ratio->d.var3,ratio->d.num3)
+            if (state++ == schedState) {
                 struct Wheel wheel = {0};
                 wheel.tag = Throw;
                 wheel.sub = sizeFlow();
@@ -1169,26 +1222,13 @@ void *timewheel(void *arg)
                 enqueWheel(wheel); // give something for initial Catch to remove
                 if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");
                 enqueFlow(sched.flow);
-                sched.state++;}
-            if (state != sched.state) lenSched = -1;
+                schedState++;}
+            if (state != schedState) lenSched = -1;
             break;}
-            case (Linker): {
-            metas = arrayAttach()+sched.link.flow;
-            int i = 0, j = 0;
-            for (; i < sizeMeta(); i++, j++) {
-                if (arrayMeta()[i] == sched.link.stock) j++;
-                arrayMeta()[i] = arrayMeta()[j];}
-            if (i == j) enqueMeta(sched.link.stock);
-            break;}
-            case (Changer):
-            if (sizeStock() <= sched.change.sub || sched.change.sub < 0) exitErrstr("change too sub\n");
-            arrayStock()[sched.change.sub].val = sched.change.val;
-            arrayStock()[sched.change.sub].async = 0;
-            break;
             default: exitErrstr("sched too tagged\n");}
-        if (lenSched == 0) sched.state = 0;
+        if (lenSched == 0) smallState = schedState = 0;
 
-        if (lenSched < 0) {
+        if (lenSmall < 0 && lenSched < 0) {
             int lenSel = 0;
             fd_set fds; FD_ZERO(&fds);
             if (pqueue_size(pqueue) > 0) {
@@ -1825,6 +1865,8 @@ void initialize(int argc, char **argv)
     sigprocmask(SIG_BLOCK,&sigs,0);
     if (pthread_mutex_init(&requests.mutex, 0) != 0) exitErrstr("cannot initialize requests mutex\n");
     if (pthread_mutex_init(&scheds.mutex, 0) != 0) exitErrstr("cannot initialize scheds mutex\n");
+    if (pthread_mutex_init(&smalls.mutex, 0) != 0) exitErrstr("cannot initialize smalls mutex\n");
+    // TODO: create and destroy Ratio mutex
     if (pthread_mutex_init(&requesters.mutex, 0) != 0) exitErrstr("cannot initialize requesters mutex\n");
     if (pthread_mutex_init(&scheders.mutex, 0) != 0) exitErrstr("cannot initialize scheders mutex\n");
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
@@ -1839,13 +1881,17 @@ void initialize(int argc, char **argv)
 
 void finalize()
 {
+    struct Small small = {0}; small.tag = Smallers;
     struct Sched sched = {0}; sched.tag = Scheders;
-    if (entrySched(&sched,0,1) != 0) exitErrstr("cannot entry sched\n");
+    if (entrySmall(&small,0,1) != 0) exitErrstr("cannot entry small\n"); // TOOD: pselect wait if mutex try fails
+    if (entrySched(&sched,0,1) != 0) exitErrstr("cannot entry sched\n"); // TOOD: pselect wait if mutex try fails
     if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_mutex_destroy(&requests.mutex) != 0) exitErrstr("cannot finalize requests mutex\n");
     if (pthread_mutex_destroy(&scheds.mutex) != 0) exitErrstr("cannot finalize scheds mutex\n");
+    if (pthread_mutex_destroy(&smalls.mutex) != 0) exitErrstr("cannot finalize smalls mutex\n");
+    // TODO: create and destroy Ratio mutex
     if (pthread_mutex_destroy(&requesters.mutex) != 0) exitErrstr("cannot finalize requesters mutex\n");
     if (pthread_mutex_destroy(&scheders.mutex) != 0) exitErrstr("cannot finalize scheders mutex\n");
     if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
