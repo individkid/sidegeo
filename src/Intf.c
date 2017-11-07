@@ -1016,15 +1016,15 @@ void setTime(struct timespec *time, pqueue_pri_t pri)
     time->tv_nsec = pri%NANO_SECONDS;
 }
 
-int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **stock, int *size, struct Wheel **catch)
+int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **attach, int *size, struct Wheel **catch)
 {
     if (pqueue_size(pqueue) > 0 && getTime() >= pqueue_get_pri(pqueue_peek(pqueue))) {
         *wheel = (struct Wheel *)pqueue_pop(pqueue);
         if ((*wheel)->sub < 0 || sizeFlow() <= (*wheel)->sub) exitErrstr("wheel too flow\n");
         *flow = arrayFlow()+(*wheel)->sub;
-        if ((*flow)->sub < 0 || sizeAttach() <= (*flow)->sub) exitErrstr("(*flow) too stock\n");
+        if ((*flow)->sub < 0 || sizeAttach() <= (*flow)->sub) exitErrstr("(*flow) too attach\n");
         metas = arrayAttach()+(*flow)->sub;
-        *stock = arrayMeta();
+        *attach = arrayMeta();
         *size = sizeMeta();
         if ((*flow)->sup < 0 || (*flow)->sup >= sizeWheel()) exitErrstr("catch too wheel\n");
         *catch = arrayWheel()+(*flow)->sup;
@@ -1060,10 +1060,10 @@ void *timewheel(void *arg)
     while (1) {
         struct Wheel *wheel = 0;
         struct Flow *flow = 0;
-        int *subs = 0;
+        int *attach = 0;
         int size = 0;
         struct Wheel *catch = 0;
-        while (popFirst(pqueue,&wheel,&flow,&subs,&size,&catch)) switch (wheel->tag) {
+        while (popFirst(pqueue,&wheel,&flow,&attach,&size,&catch)) switch (wheel->tag) {
             case (Throw): {
             long long int quotient = getNomial(&flow->ratio.n) / getNomial(&flow->ratio.d);
             calcs = arrayDelta()+flow->sub; enqueCalc(quotient);
@@ -1088,7 +1088,7 @@ void *timewheel(void *arg)
             break;}
             case (Drop):
             for (int i = 0; i < size; i++) {
-                struct Stock *stock = arrayStock()+subs[i];
+                struct Stock *stock = arrayStock()+attach[i];
                 stock->val = saturate(stock->val,flow->val,stock->min,stock->max);}
             wheel->pri += flow->drop;
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too drop\n");
@@ -1849,9 +1849,7 @@ void process()
 {
     CHECK(process,Process)
     if (fileOwner < fileCount) {DEFER(process)}
-    if (!validOption()) {
-        if (fileCount == 0) {enqueOutputee(ofmotion(Escape)); enqueOutputee('\n');}
-        DEQUE(process,Process)}
+    if (!validOption()) {DEQUE(process,Process)}
     if (strcmp(headOption(), "-h") == 0) {
         enqueMsgstr("-h print usage\n");
         enqueMsgstr("-H print readme\n");
@@ -2331,7 +2329,7 @@ void openFile(char *filename)
     file.handle = open(filename,O_RDWR);
     file.buffer = enlocRead(1);
     *file.buffer = string;
-    if (file.handle < 0) enqueErrstr("invalid file argument\n");
+    if (file.handle < 0) {enqueErrstr("invalid file argument\n"); return;}
     if (fileOwner == fileCount) fileOwner++;
     if (fileLast == fileCount) fileLast++;
     file.index = fileCount; fileCount++;
