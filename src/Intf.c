@@ -367,6 +367,7 @@ struct Chars outputers = {0}; // to be copied from output in console
 struct Chars injects = {0}; // for staging opengl keys in console
 enum Requester {Distance,Length,Area,Volume};
 struct Request {
+    int state;
     enum Requester tag;
     int val,siz;};
 struct Requests {DECLARE_QUEUE(struct Request)} requests = {0};
@@ -437,7 +438,7 @@ enum Scheder {
     Linker, // change which flow a stock is fed by
     Scheders}; // terminate timewheel thread
 struct Sched {
-    int state; // for multiple calls to detryScheder
+    int state; // for multiple calls to detrySchedee
     enum Scheder tag; union { // whether to add a new stock of flow
     struct Stock stock;
     struct Flow flow;
@@ -1045,12 +1046,18 @@ int saturate(int lhs, int rhs, int min, int max)
     return lhs + rhs;
 }
 
-#define DETRY_SCHEDER(INT,SUB,SIZ) \
+#define DETRY_SCHED(INT,SUB,SIZ) \
             if (state++ == sched.state) { \
                 int lenSchedee = detrySchedee(enloc##INT(SIZ),0,SIZ); \
                 if (lenSchedee > 0) exitErrstr("detrySchedee failed\n"); \
                 if (lenSchedee < 0) deloc##INT(SIZ); \
                 else {SUB = size##INT()-SIZ; sched.state++;}}
+#define ENTRY_REQ(EE,ER) \
+        int len##EE = entry##EE(array##ER(),0,size##ER()); \
+        if (len##EE > 0) exitErrstr(#EE" too entry\n"); \
+        else if (len##EE == 0) { \
+            deloc##ER(size##ER()); \
+            glfwPostEmptyEvent();}
 void *timewheel(void *arg)
 {
     struct sigaction sigact = {0};
@@ -1101,11 +1108,8 @@ void *timewheel(void *arg)
             break;
             default: exitErrstr("wheel too tag\n");}
 
-        int lenRequest = entryRequest(arrayRequester(),0,sizeRequester());
-        if (lenRequest > 0) exitErrstr("request too entry\n");
-        else if (lenRequest == 0) {
-            delocRequester(sizeRequester());
-            glfwPostEmptyEvent();}
+        ENTRY_REQ(Request,Requester)
+        ENTRY_REQ(Requestee,Requesteer)
 
         int lenSched = (sched.state == 0 ? detrySched(&sched,0,1) : 0);
         if (lenSched > 0) exitErrstr("detrySched failed\n");
@@ -1132,21 +1136,21 @@ void *timewheel(void *arg)
                 enqueDelta(calc);
                 sched.state++;}
             metas = arrayAttach()+sched.flow.sub;
-            DETRY_SCHEDER(Meta,dummy,sched.flow.num)
-            DETRY_SCHEDER(Con,sched.flow.ratio.n.con1,sched.flow.ratio.n.num1)
-            DETRY_SCHEDER(Con,sched.flow.ratio.n.con2,sched.flow.ratio.n.num2)
-            DETRY_SCHEDER(Con,sched.flow.ratio.n.con3,sched.flow.ratio.n.num3)
-            DETRY_SCHEDER(Var,sched.flow.ratio.n.var1,sched.flow.ratio.n.num1)
-            DETRY_SCHEDER(Var,sched.flow.ratio.n.var2a,sched.flow.ratio.n.num2)
-            DETRY_SCHEDER(Var,sched.flow.ratio.n.var2b,sched.flow.ratio.n.num2)
-            DETRY_SCHEDER(Var,sched.flow.ratio.n.var3,sched.flow.ratio.n.num3)
-            DETRY_SCHEDER(Con,sched.flow.ratio.d.con1,sched.flow.ratio.d.num1)
-            DETRY_SCHEDER(Con,sched.flow.ratio.d.con2,sched.flow.ratio.d.num2)
-            DETRY_SCHEDER(Con,sched.flow.ratio.d.con3,sched.flow.ratio.d.num3)
-            DETRY_SCHEDER(Var,sched.flow.ratio.d.var1,sched.flow.ratio.d.num1)
-            DETRY_SCHEDER(Var,sched.flow.ratio.d.var2a,sched.flow.ratio.d.num2)
-            DETRY_SCHEDER(Var,sched.flow.ratio.d.var2b,sched.flow.ratio.d.num2)
-            DETRY_SCHEDER(Var,sched.flow.ratio.d.var3,sched.flow.ratio.d.num3)
+            DETRY_SCHED(Meta,dummy,sched.flow.num)
+            DETRY_SCHED(Con,sched.flow.ratio.n.con1,sched.flow.ratio.n.num1)
+            DETRY_SCHED(Con,sched.flow.ratio.n.con2,sched.flow.ratio.n.num2)
+            DETRY_SCHED(Con,sched.flow.ratio.n.con3,sched.flow.ratio.n.num3)
+            DETRY_SCHED(Var,sched.flow.ratio.n.var1,sched.flow.ratio.n.num1)
+            DETRY_SCHED(Var,sched.flow.ratio.n.var2a,sched.flow.ratio.n.num2)
+            DETRY_SCHED(Var,sched.flow.ratio.n.var2b,sched.flow.ratio.n.num2)
+            DETRY_SCHED(Var,sched.flow.ratio.n.var3,sched.flow.ratio.n.num3)
+            DETRY_SCHED(Con,sched.flow.ratio.d.con1,sched.flow.ratio.d.num1)
+            DETRY_SCHED(Con,sched.flow.ratio.d.con2,sched.flow.ratio.d.num2)
+            DETRY_SCHED(Con,sched.flow.ratio.d.con3,sched.flow.ratio.d.num3)
+            DETRY_SCHED(Var,sched.flow.ratio.d.var1,sched.flow.ratio.d.num1)
+            DETRY_SCHED(Var,sched.flow.ratio.d.var2a,sched.flow.ratio.d.num2)
+            DETRY_SCHED(Var,sched.flow.ratio.d.var2b,sched.flow.ratio.d.num2)
+            DETRY_SCHED(Var,sched.flow.ratio.d.var3,sched.flow.ratio.d.num3)
             if (state++ == sched.state) {
                 struct Wheel wheel = {0};
                 wheel.tag = Throw;
