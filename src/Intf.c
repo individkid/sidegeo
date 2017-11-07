@@ -1007,13 +1007,13 @@ pqueue_pri_t getTime()
 {
     struct timespec time;
     if (clock_gettime(CLOCK_MONOTONIC,&time) != 0) exitErrstr("time too monotonic\n");
-    return time.tv_sec*0x3b9aca00+time.tv_nsec;
+    return time.tv_sec*NANO_SECONDS+time.tv_nsec;
 }
 
 void setTime(struct timespec *time, pqueue_pri_t pri)
 {
-    time->tv_sec = pri/0x3b9aca00;
-    time->tv_nsec = pri%0x3b9aca00;
+    time->tv_sec = pri/NANO_SECONDS;
+    time->tv_nsec = pri%NANO_SECONDS;
 }
 
 int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **stock, int *size, struct Wheel **catch)
@@ -1032,6 +1032,13 @@ int popFirst(pqueue_t *pqueue, struct Wheel **wheel, struct Flow **flow, int **s
     return 0;
 }
 
+int saturate(int lhs, int rhs, int min, int max)
+{
+    if (lhs >= 0 && max - lhs < rhs) return max;
+    if (lhs < 0 && rhs < min - lhs) return min;
+    return lhs + rhs;
+}
+
 #define DETRY_SCHEDER(INT,SUB,SIZ) \
             if (state++ == sched.state) { \
                 int lenScheder = detryScheder(enloc##INT(SIZ),0,SIZ); \
@@ -1047,15 +1054,16 @@ void *timewheel(void *arg)
     sigset_t saved = {0};
     pthread_sigmask(SIG_SETMASK,0,&saved);
     sigdelset(&saved, SIGUSR1);
+
     pqueue_t *pqueue = pqueue_init(PQUEUE_STEP,&pqueue_cmp_pri,&pqueue_get_pri,&pqueue_set_pri,&pqueue_get_pos,&pqueue_set_pos);
     struct Sched sched = {0};
     while (1) {
         struct Wheel *wheel = 0;
         struct Flow *flow = 0;
-        int *stock = 0;
+        int *subs = 0;
         int size = 0;
         struct Wheel *catch = 0;
-        while (popFirst(pqueue,&wheel,&flow,&stock,&size,&catch)) switch (wheel->tag) {
+        while (popFirst(pqueue,&wheel,&flow,&subs,&size,&catch)) switch (wheel->tag) {
             case (Throw): {
             long long int quotient = getNomial(&flow->ratio.n) / getNomial(&flow->ratio.d);
             calcs = arrayDelta()+flow->sub; enqueCalc(quotient);
@@ -1069,23 +1077,25 @@ void *timewheel(void *arg)
             long long int quotient = headCalc(); dequeCalc();
             if (quotient > 0) {flow->val = 1; flow->drop = quotient;}
             else {flow->val = -1; flow->drop = -quotient;}
-            pqueue_pri_t sofar = drop - (catch->pri - getTime());
+            pqueue_pri_t sofar = drop - (catch->pri - wheel->pri);
             pqueue_pri_t accum = (val == flow->val ? drop - sofar : drop + sofar);
             pqueue_pri_t rerate = accum * flow->drop / drop;
-            pqueue_pri_t prior = getTime() + rerate;
+            pqueue_pri_t prior = wheel->pri + rerate;
             pqueue_change_priority(pqueue,prior,catch);
             if (flow->delay) {
             wheel->pri += flow->grain;
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too catch\n");}
             break;}
             case (Drop):
-            for (int i = 0; i < size; i++) arrayStock()[stock[i]].val += flow->val;
+            for (int i = 0; i < size; i++) {
+                struct Stock *stock = arrayStock()+subs[i];
+                stock->val = saturate(stock->val,flow->val,stock->min,stock->max);}
             wheel->pri += flow->drop;
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too drop\n");
             break;
             default: exitErrstr("wheel too tag\n");}
+
         int lenSched = (sched.state == 0 ? detrySched(&sched,0,1) : 0);
-        fd_set fds; FD_ZERO(&fds);
         if (lenSched > 0) exitErrstr("detrySched failed\n");
         if (lenSched == 0 && sched.tag == Scheders) break;
         if (lenSched == 0) switch (sched.tag) {
@@ -1136,7 +1146,7 @@ void *timewheel(void *arg)
                 if (sched.flow.delay) {
                 wheel.tag = Catch;
                 wheel.pri += sched.flow.delay;
-                enqueWheel(wheel); // 
+                enqueWheel(wheel);
                 if (pqueue_insert(pqueue,stackWheel()-1) != 0) exitErrstr("pqueue too catch\n");}
                 wheel.tag = Drop;
                 wheel.pri++;
@@ -1161,11 +1171,13 @@ void *timewheel(void *arg)
             break;
             default: exitErrstr("sched too tagged\n");}
         if (lenSched == 0) sched.state = 0;
+
         if (lenSched < 0) {
             int lenSel = 0;
+            fd_set fds; FD_ZERO(&fds);
             if (pqueue_size(pqueue) > 0) {
-                pqueue_pri_t pri = pqueue_get_pri(pqueue_peek(pqueue));
-                struct timespec time = {0}; setTime(&time,pri);
+                pqueue_pri_t interval = pqueue_get_pri(pqueue_peek(pqueue)) - getTime();
+                struct timespec time = {0}; setTime(&time,interval);
                 lenSel = pselect(1, &fds, 0, 0, &time, &saved);} else {
                 lenSel = pselect(1, &fds, 0, 0, 0, &saved);}
             if (lenSel != 0 && !(lenSel < 0 && errno == EINTR)) exitErrstr("pselect failed: %s\n", strerror(errno));}}
