@@ -368,11 +368,12 @@ struct Chars injects = {0}; // for staging opengl keys in console
 enum Requester {Distance,Length,Area,Volume};
 struct Request {
     enum Requester tag;
-    int val,siz,arg;};
+    int val,siz;};
 struct Requests {DECLARE_QUEUE(struct Request)} requests = {0};
  // from timewheel to main thread for asynchronous change to stock
-struct Ints requesters = {0}; // mutex from timewheel to main staged from args
-struct Ints requestees = {0}; // for staging out from requester in main
+struct Requests requesters = {0}; // for staging to main from timewheel
+struct Ints requestees = {0}; // mutex from timewheel to main staged from args
+struct Ints requesteers = {0}; // for staging args to mutex
 struct Stock;
 typedef int (*Metric)(struct Stock *stock);
  // distance length area volume random jpeg microphone
@@ -444,8 +445,9 @@ struct Sched {
     struct Link link;};};
 struct Scheds {DECLARE_QUEUE(struct Sched)} scheds = {0};
  // from main to timewheel to initialize or change system
-struct Ints scheders = {0}; // mutex from main to flywheel staged to args cons vars
-struct Ints schedees = {0}; // for staging in to scheder in main
+struct Scheds scheders = {0}; // for staging to scheds in main
+struct Ints schedees = {0}; // mutex for args with sched
+struct Ints schedeers = {0}; // for staging to sched args in main
 pqueue_pri_t called = 0; // last time portaudio callback was called
 struct Metas waves = {0}; // pipelines for portaudio callback
 struct Listen {
@@ -727,9 +729,11 @@ ACCESS_QUEUE(Inject,char,injects)
 
 ACCESS_QUEUE(Request,struct Request,requests)
 
-ACCESS_QUEUE(Requester,int,requesters)
+ACCESS_QUEUE(Requester,struct Request,requesters)
 
 ACCESS_QUEUE(Requestee,int,requestees)
+
+ACCESS_QUEUE(Requesteer,int,requesteers)
 
 ACCESS_QUEUE(Stock,struct Stock,stocks)
 
@@ -751,9 +755,11 @@ ACCESS_QUEUE(Wheel,struct Wheel,wheels)
 
 ACCESS_QUEUE(Sched,struct Sched,scheds)
 
-ACCESS_QUEUE(Scheder,int,scheders)
+ACCESS_QUEUE(Scheder,struct Sched,scheders)
 
 ACCESS_QUEUE(Schedee,int,schedees)
+
+ACCESS_QUEUE(Schedeer,int,schedeers)
 
 ACCESS_QUEUE(Wave,struct Ints,waves)
 
@@ -1041,9 +1047,9 @@ int saturate(int lhs, int rhs, int min, int max)
 
 #define DETRY_SCHEDER(INT,SUB,SIZ) \
             if (state++ == sched.state) { \
-                int lenScheder = detryScheder(enloc##INT(SIZ),0,SIZ); \
-                if (lenScheder > 0) exitErrstr("detryScheder failed\n"); \
-                if (lenScheder < 0) deloc##INT(SIZ); \
+                int lenSchedee = detrySchedee(enloc##INT(SIZ),0,SIZ); \
+                if (lenSchedee > 0) exitErrstr("detrySchedee failed\n"); \
+                if (lenSchedee < 0) deloc##INT(SIZ); \
                 else {SUB = size##INT()-SIZ; sched.state++;}}
 void *timewheel(void *arg)
 {
@@ -1094,6 +1100,12 @@ void *timewheel(void *arg)
             if (pqueue_insert(pqueue,wheel) != 0) exitErrstr("pqueue too drop\n");
             break;
             default: exitErrstr("wheel too tag\n");}
+
+        int lenRequest = entryRequest(arrayRequester(),0,sizeRequester());
+        if (lenRequest > 0) exitErrstr("request too entry\n");
+        else if (lenRequest == 0) {
+            delocRequester(sizeRequester());
+            glfwPostEmptyEvent();}
 
         int lenSched = (sched.state == 0 ? detrySched(&sched,0,1) : 0);
         if (lenSched > 0) exitErrstr("detrySched failed\n");
