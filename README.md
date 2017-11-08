@@ -2,7 +2,19 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. The following command line arguments are processed in order. The main display window is a hub from which parts or collections of polytopes can be moved to various alternate displays. But from alternate displays, things can only move back to the main display.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs and Main.hs use a foreign function interface to Intf.c. For the following reasons, Intf.c contains pthreads, called console, timewheel, haskell, command, and the command thread uses a command queue.
+
+  * console is a separate threqd because pselect is incompatible with glfwWait/Poll.  
+  * timewheel is a separate thread because stocks and flows need realtime operation.  
+  * haskell is a separate thread because Haskell is a high level language that prefers to own main.  
+  * command handles glfw because callbacks should not block and not call glfwWait/Poll.  
+  * command may yield to glfw and queued commands by calling as well as returning, whichever is more clear.  
+  * command handles file IO and commandline processing because they may block.  
+  * command handles actions that may block but have no other reason for separate threads.  
+  * command must use glfwWait/Poll because glfw callbacks cannot use mutex.  
+  * command is the only command queue thread because other threads can be serialized.  
+
+The main display window is a hub from which parts or collections of polytopes can be moved to various alternate displays. But from alternate displays, things can only move back to the main display. The following command line arguments are processed in order.
 
   * -h print usage  
   * -H print readme  
@@ -96,9 +108,8 @@ Configuration/history files consist of commands. User input appends to file. App
   * --polytope interprets polyants as significant facets  
   * --stock name and optional point, initial value, and saturation values  
   * --flow size, rate, and delay of change to pore between stocks or on facet  
-  * --listen takes point for where track is recorded or audited  
-  * --source takes sound file, source, or noise with amplitude and bias  
-  * --filter takes plane subscript, per area, per stock signed amplification  
+  * --listen takes stock for track to record or audit  
+  * --source takes sound file, microphone, or noise as volatile stock  
   * --color takes plane subscript and decoration  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
@@ -116,20 +127,18 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --filter --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables. The values for the variables come from one of the following. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope.
+The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope. The values for the variables come from one of the following.
 
-  * random number between one and zero  
   * --stock or --source value  
   * metric of facet qualified by topology  
-  * projected metric of facet wrt --listen point or focal point  
-  * --stock or --source value qualified by projection through face  
+  * projected metric of facet wrt some point or focal point  
 
-The simple equations are use in the following places.
+Stock values are used in the following places.
 
-  * --flow timewheel scheduling and --stock modifications  
+  * --flow pore size modification equations  
   * --delay file stepping rate  
   * as part of Haskell expression in --call or --action  
-  * texture calculation specified ty --color  
-  * sound interface callback enabled by --filter
+  * texture calculation specified by --color  
+  * waveform piped to sound interface callback  
 
-In --flow command, size is how often a unit of stock is moved across a boundary; rate is how soon another size is scheduled; and delay is how long before the size takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock can flow only when unsaturated --stock points are separated by one and only one --flow surface facet, and no non--flow surface facets, on a region path. If multiple unsaturated --stock points are connected by region path whithout surface facets, they share the flows evenly. Note that a pure tone is produced by a rapidly oscillating stock as multiplier of unit bias of zero noise. For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, --flow faces in several overlapping --plane polytopes, and one --polytope with every face a --filter.
+In --flow command, size is how often a unit of stock is moved; rate is how soon a size change is scheduled; and delay is how long before the size change takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock associated with a point can flow through region paths through --flow faces. Stock associated with a point can also flow along edges through --flow faces. Stock not associated with a point can still flow by reference from a --flow that need not be associated with a face. Note that a pure tone is produced by a --stock with a --flow size that is -1 times the stock with a delay of 1/4 of the period. For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, and --flow faces in several overlapping --plane polytopes.
