@@ -625,6 +625,18 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 inline int totry##NAME() \
 { \
     return INSTANCE.valid; \
+} \
+\
+inline void entry1##NAME(TYPE val) \
+{ \
+    if (entry##NAME(&val,0,1) != 0) exitErrstr("entry one failed\n"); \
+} \
+\
+inline TYPE detry1##NAME() \
+{ \
+    TYPE val; \
+    if (detry##NAME(&val,0,1) != 0) exitErrstr("detry one failed\n"); \
+    return val; \
 }
 
 #define CHECK(command,Command) \
@@ -1566,7 +1578,7 @@ void menu()
         CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
         CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
         CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
-        CASE(Exit) {enqueEvent(Done); enqueCommand(0);}
+        CASE(Exit) entry1Event(Done);
         DEFAULT(exitErrstr("unexpected menu motion\n");)}
     else if (len == 1 && indexof(buf[0]) >= 0) {
         enum Menu line = indexof(buf[0]);
@@ -1600,13 +1612,15 @@ void waitForEvent()
         else if (totry) glfwWaitEventsTimeout(POLL_DELAY);
         else glfwPollEvents();
 
+        if (totryEvent()) break;
+
         if (!validCommand()) continue;
         Command command = headCommand();
         dequeCommand();
         if (validDefer() && sequenceNumber == headDefer()) dequeDefer();
         sequenceNumber++;
-        if (command) (*command)();
-        else break;}
+        (*command)();
+    }
 }
 
 const char *inputCode(enum Shader shader)
@@ -1871,6 +1885,7 @@ void initialize(int argc, char **argv)
     if (pthread_mutex_init(&scheders.mutex, 0) != 0) exitErrstr("cannot initialize scheders mutex\n");
     if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
     if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
+    if (pthread_mutex_init(&events.mutex, 0) != 0) exitErrstr("cannot initialize events mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
 
@@ -1896,6 +1911,7 @@ void finalize()
     if (pthread_mutex_destroy(&scheders.mutex) != 0) exitErrstr("cannot finalize scheders mutex\n");
     if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
     if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
+    if (pthread_mutex_destroy(&events.mutex) != 0) exitErrstr("cannot finlize events mutex\n");
     glfwTerminate();
     for (int i = 0; i < sizeBase(); i++) (*arrayBase()[i].destruct)(&arrayBase()[i]);
     free(bases.base); bases.base = 0;
@@ -2068,7 +2084,7 @@ int iswrlckFile(struct File *file)
 
 void fileError(struct File *file, const char *msg) {
     struct File initial = {0};
-    enqueCommand(0); enqueEvent(Remove); enqueKind(Poly); enqueInt(file->index);
+    entry1Event(Remove); enqueKind(Poly); enqueInt(file->index);
     enqueMsgstr(msg);
     close(file->handle);
     if (fileOwner == file->index) fileOwner = fileCount;
@@ -2104,7 +2120,7 @@ enum Action filePlane(struct File *file, enum Event event)
 #ifdef BRINGUP
         return Advance;
 #endif
-        enqueCommand(0); enqueEvent(Side); enqueInt(file->index); return Advance;}
+        entry1Event(Side); enqueInt(file->index); return Advance;}
     return Defer;
 }
 
@@ -2129,7 +2145,7 @@ enum Action filePoint(struct File *file, enum Event event)
     if (state++ == file->state && fileBuffer(&planeSub,1,index)) return Restart;
     if (state++ == file->state) {enqueShader(Copoint); return Restart;}
     if (state++ == file->state && planeBuf.done >= planeSub.done) {
-        pointBuf.done -= 3; planeSub.done -= 1; enqueCommand(0); enqueEvent(Side); enqueInt(file->index); return Advance;}
+        pointBuf.done -= 3; planeSub.done -= 1; entry1Event(Side); enqueInt(file->index); return Advance;}
     return Defer;
 }
 
@@ -2145,7 +2161,7 @@ enum Action fileClassify(struct File *file, enum Event event)
     int state = 0;
     if (state++ == file->state) {ENQUE(classify,Classify) return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(Update); return Reque;}
+        entry1Event(Update); return Reque;}
     if (state++ == file->state) return Advance;
     return Defer;
 }
@@ -2164,12 +2180,12 @@ enum Action filePierce(struct File *file, enum Event event)
 {
     int state = 0;
     if (state++ == file->state) {
-        enqueCommand(0); enqueEvent(Pierce); enqueInt(file->index); return Restart;}
+        entry1Event(Pierce); enqueInt(file->index); return Restart;}
     if (state++ == file->state) {
         GLfloat buffer[3]; for (int i = 0; i < 3; i++) buffer[i] = file->vector[i];
         code[Adplane].limit = 0; enqueLocate(buffer); return Restart;}
     if (state++ == file->state && sideBuf.done >= sideSub.done) {
-        enqueCommand(0); enqueEvent(event); enqueInt(file->index); enqueInt(file->versor[0]); return Advance;}
+        entry1Event(event); enqueInt(file->index); enqueInt(file->versor[0]); return Advance;}
     return Defer;
 }
 
@@ -2338,28 +2354,28 @@ void configure()
     if (retval == Advance) {retval = fileMode(file,"point",0,3,Side,filePoint,fileClassify);}
     if (retval == Advance && sscanf(arrayString(),"--inflat%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; delocString(offset);
-        enqueCommand(0); enqueEvent(Inflate); enqueInt(file->index);
+        entry1Event(Inflate); enqueInt(file->index);
         enqueShader(dishader); enqueCommand(transformRight);}
     if (retval == Advance) {retval = fileMode(file,"fill",1,3,Fill,filePierce,fileAdvance);}
     if (retval == Advance) {retval = fileMode(file,"hollow",1,3,Hollow,filePierce,fileAdvance);}
     if (retval == Advance && sscanf(arrayString(),"--remove plac%c%n", &suffix, &offset) == 1 && suffix == 'e' && file->mode == 0) {
         retval = Reque; delocString(offset);
-        enqueCommand(0); enqueEvent(Remove); enqueKind(Poly); enqueInt(file->index);}
+        entry1Event(Remove); enqueKind(Poly); enqueInt(file->index);}
     if (retval == Advance && sscanf(arrayString(),"--remove face %d%n", &index, &offset) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error 4\n")}
         retval = Reque; delocString(offset);
-        enqueCommand(0); enqueEvent(Remove); enqueKind(Face); enqueInt(index);}
+        entry1Event(Remove); enqueKind(Face); enqueInt(index);}
     if (retval == Advance && sscanf(arrayString(),"--remove plane %d%n", &index, &offset) == 1 && file->mode == 0) {
         if (index >= sizePlane2Place() || arrayPlane2Place()[index] != file->index) {FILEERROR("file error 5\n")}
         retval = Reque; delocString(offset);
-        enqueCommand(0); enqueEvent(Remove); enqueKind(Boundary); enqueInt(index);}
+        entry1Event(Remove); enqueKind(Boundary); enqueInt(index);}
     if (retval == Advance && sscanf(arrayString(),"--yiel%c%n", &suffix, &offset) == 1 && suffix == 'd' && file->mode == 0) {
         fileOwner = fileCount; retval = Reque; delocString(offset);}
 //    if (retval == Advance && sscanf(file->buffer,"--call %s", buffer) == 1 && file->mode == 0) {
 //        int len = strlen(buffer);
 //        char buf[len+1]; strncpy(buf,buffer,len);
 //        retval = Reque; *file->buffer = 0;
-//        enqueCommand(0); enqueEvent(Call); enqueKind(Other); enqueInt(len); strncpy(enlocChar(len),buf,len); enqueInt(file->index);}
+//        entry1Event(Call); enqueKind(Other); enqueInt(len); strncpy(enlocChar(len),buf,len); enqueInt(file->index);}
 //    if (retval == Advance && sscanf(arrayString(),"--branch %d %s%n", &location, buffer, &offset) == 2 && file->mode == 0) {
 //        // TODO: push current file and start a new one in its place with location as limit and a link to the pushed one
 //    }
@@ -3263,7 +3279,7 @@ int *writeSideSub(int start, int count)
 char *eventArgument()
 {
     if (!validEvent()) exitErrstr("no valid event\n");
-    enum Event event = headEvent(); dequeEvent();
+    enum Event event = detry1Event();
     SWITCH(event,Side) return (char *)"Plane";
     CASE(Update) return (char *)"Classify";
     CASE(Inflate) return (char *)"Inflate";
