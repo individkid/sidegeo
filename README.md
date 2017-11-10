@@ -2,34 +2,16 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs and Main.hs use a foreign function interface to Intf.c. For the following reasons, Intf.c contains pthreads, called console, timewheel, haskell, command, and the command thread uses a command queue.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs and Main.hs use a foreign function interface to Intf.c. For the following reasons, Intf.c contains pthreads, called haskell, console, timewheel, process, configure, command.
 
+  * haskell is the main thread because Haskell is a high level language that prefers to own main.  
   * console is a separate threqd because pselect is incompatible with glfwWait/Poll.  
   * timewheel is a separate thread because stocks and flows need realtime operation.  
-  * haskell is a separate thread because Haskell is a high level language that prefers to own main.  
-  * command handles glfw because callbacks should not block and not call glfwWait/Poll.  
+  * process is a separate thread because there must be one command thread per glfw context. 
+  * configure is a separate thread per open file to keep process and file io serialized. 
+  * command is a separate thread per glfw window because callbacks should not block.  
   * command may yield to glfw and queued commands by calling as well as returning, whichever is more clear.  
-  * command handles file IO and commandline processing because they may block.  
-  * command handles actions that may block but have no other reason for separate threads.  
-  * command must use glfwWait/Poll because glfw callbacks cannot use mutex.  
   * command is the only command queue thread because other threads can be serialized.  
-
-The main display window is a hub from which parts or collections of polytopes can be moved to various alternate displays. But from alternate displays, things can only move back to the main display. The following command line arguments are processed in order.
-
-  * -h print usage  
-  * -H print readme  
-  * -f \<file> load polytope and append changes  
-  * -F \<file> switch to file for perspective  
-  * -o pack out garbage in graphics buffers  
-  * -O \<ext> save minimal commands to produce polytopes  
-  * -s prefix commands to save current state  
-  * -S \<ext> overwrite commands to save current state  
-  * -e \<config> append to last file  
-  * -E \<file> change last file to indicated  
-  * -a \<name> open alternate display  
-  * -A \<name> use indicated alternate display  
-  * -t run sanity check  
-  * -T run thorough tests  
 
 The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name, short description, goal for success, input conditions, and then describes flow as pseudocode, for cherry picked data state upon call and return, with the following features.
 
@@ -55,6 +37,23 @@ Built in tests include the following, where "linear" refers to any linear space 
   * classify of sample of classify of any embed in a linear should be equivalent  
   * every plane through a point should have a coplane on the copoint  
   * every edge facet of a region should have two and only two vertex facets  
+
+The main display window is a hub from which parts or collections of polytopes can be moved to various alternate displays. But from alternate displays, things can only move back to the main display. The following command line arguments are processed in order.
+
+  * -h print usage  
+  * -H print readme  
+  * -f \<file> load polytope and append changes  
+  * -F \<file> switch to file for perspective  
+  * -o pack out garbage in graphics buffers  
+  * -O \<ext> save minimal commands to produce polytopes  
+  * -s prefix commands to save current state  
+  * -S \<ext> overwrite commands to save current state  
+  * -e \<config> append to last file  
+  * -E \<file> change last file to indicated  
+  * -a \<name> open alternate display  
+  * -A \<name> use indicated alternate display  
+  * -t run sanity check  
+  * -T run thorough tests  
 
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. \<ctrl>\<num> binds selection of current menu location to number key. \<alt>\<num> binds current selections to number key.
 

@@ -1617,7 +1617,7 @@ void menu()
     delocInputee(len+1);
 }
 
-void waitForEvent()
+void haskell()
 {
     while (1) {
         int totry = 0;

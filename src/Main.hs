@@ -29,7 +29,7 @@ import AffTopo.Sculpt
 
 foreign import ccall "initialize" initializeC :: CInt -> Ptr (Ptr CChar) -> IO ()
 foreign import ccall "finalize" finalizeC :: IO ()
-foreign import ccall "waitForEvent" waitForEventC :: IO ()
+foreign import ccall "haskell" haskellC :: IO ()
 
 main :: IO ()
 main = do
@@ -45,7 +45,7 @@ main = do
 
 mainF :: IO ()
 mainF = do
- waitForEventC
+ haskellC
  done <- handleEvent
  mainG done
 
