@@ -95,6 +95,7 @@ extern void __stginit_Main(void);
     TYPE *limit; \
     TYPE *head; \
     TYPE *tail; \
+    int init; \
     pthread_mutex_t mutex; \
     int valid;
 
@@ -467,35 +468,30 @@ struct Listen {
     int pipe;}; // subscript into waves
 struct Listens {DECLARE_QUEUE(struct Listen)} listens = {0};
 struct Base {
-    void (*destruct)(struct Base *);
-    void **ptr;}; // c++ class written in c
+    void **ptr;
+    pthread_mutex_t *mut;
+    int *val;}; // c++ class written in c
 struct Bases {DECLARE_QUEUE(struct Base)} bases = {0}; // for cleaning up queues
+struct Base base = {0};
 
 #define ACCESS_QUEUE(NAME,TYPE,INSTANCE) \
-void boot##NAME() \
+void constr##NAME(struct Base *base) \
 { \
     INSTANCE.base = malloc(10*sizeof*INSTANCE.base); \
     INSTANCE.limit = INSTANCE.base + 10; \
     INSTANCE.head = INSTANCE.base; \
     INSTANCE.tail = INSTANCE.base; \
-} \
-struct Derived##NAME { \
-    void (*destruct)(struct Derived##NAME *); \
-    TYPE **ptr;}; \
-void strap##NAME(struct Derived##NAME *this) \
-{ \
-    free(*this->ptr); \
-    *this->ptr = 0; \
+    base->ptr = (void**)&INSTANCE.base; \
+    base->mut = &INSTANCE.mutex; \
+    base->val = &INSTANCE.init; \
 } \
 /*return pointer valid only until next call to enloc##NAME enque##NAME entry##NAME */  \
 TYPE *enloc##NAME(int size) \
 { \
     if (INSTANCE.base == 0) { \
-        struct Derived##NAME class = {0}; \
-        class.destruct = strap##NAME; \
-        class.ptr = &INSTANCE.base; \
-        enqueBase(*(struct Base *)&class); \
-        boot##NAME();} \
+        struct Base base = {0}; \
+        constr##NAME(&base); \
+        enqueBase(base);} \
     while (INSTANCE.head - INSTANCE.base >= 10) { \
         int tail = INSTANCE.tail - INSTANCE.base; \
         for (int i = 10; i < tail; i++) { \
@@ -584,6 +580,9 @@ inline void reque##NAME() \
 int entry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
 { \
     if (len <= 0) return -1; \
+    if (!INSTANCE.init) { \
+        if (pthread_mutex_init(&INSTANCE.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
+        INSTANCE.init = 1;} \
     if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     TYPE *buf = enloc##NAME(len); \
     int retval = 0; \
@@ -605,6 +604,9 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
     if (len <= 0) return -1; \
     if (INSTANCE.valid == 0) return -1; \
     if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("detry lock failed: %s\n", strerror(errno)); \
+    if (INSTANCE.valid == 0) { \
+        if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
+        return -1;} \
     TYPE *buf = array##NAME(); \
     int retval = 0; \
     for (int i = 0; i < len; i++) { \
@@ -619,6 +621,25 @@ int detry##NAME(TYPE *val, int(*isterm)(TYPE*), int len) \
     if (retval == 0 && isterm == 0) INSTANCE.valid--; \
     if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
     return retval; /*0: all filled but no terminator; >0: given number filled with terminator*/ \
+} \
+\
+TYPE *extry##NAME(int len) \
+{ \
+    if (size##NAME() != 0) return 0; \
+    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("extry lock failed: %s\n", strerror(errno)); \
+    if (size##NAME() != 0) { \
+        if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
+        return 0;} \
+    TYPE *buf = enloc##NAME(len); \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
+    return buf; \
+} \
+\
+void untry##NAME() \
+{ \
+    if (pthread_mutex_lock(&INSTANCE.mutex) != 0) exitErrstr("extry lock failed: %s\n", strerror(errno)); \
+    unloc##NAME(size##NAME()); \
+    if (pthread_mutex_unlock(&INSTANCE.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
 } \
 \
 /*return whether lines ready for detry*/ \
@@ -816,6 +837,14 @@ void enqueErrstr(const char *fmt, ...)
     char *buf = enlocOutputee(len+1);
     va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
     unlocOutputee(1); // remove '\0' that vsnprintf puts on
+}
+
+void destruct(struct Base *base)
+{
+    free(*base->ptr);
+    *base->ptr = 0;
+    if (*base->val && pthread_mutex_destroy(base->mut) != 0) exitErrstr("cannot finalize mutex\n");
+    *base->val = 0;
 }
 
 float dotvec(float *u, float *v, int n)
@@ -1871,21 +1900,12 @@ void initialize(int argc, char **argv)
         glUniform1f(code[i].uniform[Aspect],aspect);}
     glUseProgram(0);
 
-    bootBase();
+    constrBase(&base);
     for (int i = 0; i < argc; i++) enqueOption(argv[i]);
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
     sigprocmask(SIG_BLOCK,&sigs,0);
-    if (pthread_mutex_init(&requests.mutex, 0) != 0) exitErrstr("cannot initialize requests mutex\n");
-    if (pthread_mutex_init(&scheds.mutex, 0) != 0) exitErrstr("cannot initialize scheds mutex\n");
-    if (pthread_mutex_init(&smalls.mutex, 0) != 0) exitErrstr("cannot initialize smalls mutex\n");
-    // TODO: create and destroy Ratio mutex
-    if (pthread_mutex_init(&requesters.mutex, 0) != 0) exitErrstr("cannot initialize requesters mutex\n");
-    if (pthread_mutex_init(&scheders.mutex, 0) != 0) exitErrstr("cannot initialize scheders mutex\n");
-    if (pthread_mutex_init(&inputs.mutex, 0) != 0) exitErrstr("cannot initialize inputs mutex\n");
-    if (pthread_mutex_init(&outputs.mutex, 0) != 0) exitErrstr("cannot initialize outputs mutex\n");
-    if (pthread_mutex_init(&events.mutex, 0) != 0) exitErrstr("cannot initialize events mutex\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
 
@@ -1903,18 +1923,9 @@ void finalize()
     if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
-    if (pthread_mutex_destroy(&requests.mutex) != 0) exitErrstr("cannot finalize requests mutex\n");
-    if (pthread_mutex_destroy(&scheds.mutex) != 0) exitErrstr("cannot finalize scheds mutex\n");
-    if (pthread_mutex_destroy(&smalls.mutex) != 0) exitErrstr("cannot finalize smalls mutex\n");
-    // TODO: create and destroy Ratio mutex
-    if (pthread_mutex_destroy(&requesters.mutex) != 0) exitErrstr("cannot finalize requesters mutex\n");
-    if (pthread_mutex_destroy(&scheders.mutex) != 0) exitErrstr("cannot finalize scheders mutex\n");
-    if (pthread_mutex_destroy(&inputs.mutex) != 0) exitErrstr("cannot finalize inputs mutex\n");
-    if (pthread_mutex_destroy(&outputs.mutex) != 0) exitErrstr("cannot finalize outputs mutex\n");
-    if (pthread_mutex_destroy(&events.mutex) != 0) exitErrstr("cannot finlize events mutex\n");
     glfwTerminate();
-    for (int i = 0; i < sizeBase(); i++) (*arrayBase()[i].destruct)(&arrayBase()[i]);
-    free(bases.base); bases.base = 0;
+    for (int i = 0; i < sizeBase(); i++) destruct(arrayBase()+i);
+    destruct(&base);
 }
 
 /*
