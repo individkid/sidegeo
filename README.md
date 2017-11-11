@@ -2,7 +2,7 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs and Main.hs use a foreign function interface to Intf.c. For the following reasons, Intf.c contains pthreads, called haskell, console, timewheel, process, configure, command.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs and Main.hs use a foreign function interface to Intf.c. For the following reasons, Intf.c contains pthreads, called haskell, console, timewheel, process, command.
 
   * haskell is a separate thread because Haskell is a high level language with an rts.  
   * console is a separate thread because pselect is incompatible with glfwWait/Poll.  
