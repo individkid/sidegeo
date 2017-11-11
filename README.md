@@ -2,15 +2,13 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs and Main.hs use a foreign function interface to Intf.c. For the following reasons, Intf.c contains pthreads, called haskell, console, timewheel, process, command.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs uses a foreign function interface to Intf.c which contains the following pthreads.
 
   * haskell is a separate thread because Haskell is a high level language with an rts.  
   * console is a separate thread because pselect is incompatible with glfwWait/Poll.  
   * timewheel is a separate thread because stocks and flows need realtime operation.  
-  * process is a separate thread that cycles through files after commandline arguments. 
-  * command is a the main thread because glfw needs the main thread and callbacks should be simple.  
-  * command may yield to glfw and queued commands by yielding as well as returning, whichever is more clear.  
-  * command is the only command queue thread because other threads are persistent and serial.  
+  * process is a separate thread that cycles through files after commandline arguments.  
+  * command is the main thread because glfw needs the main thread and callbacks should be simple.  
 
 The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name, short description, goal for success, input conditions, and then describes flow as pseudocode, for cherry picked data state upon call and return, with the following features.
 
