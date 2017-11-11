@@ -7,7 +7,7 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * haskell is a separate thread because Haskell is a high level language with an rts.  
   * console is a separate thread because pselect is incompatible with glfwWait/Poll.  
   * timewheel is a separate thread because stocks and flows need realtime operation.  
-  * process is a separate thread that round robins through files after commandline arguments. 
+  * process is a separate thread that cycles through files after commandline arguments. 
   * command is a the main thread because glfw needs the main thread and callbacks should be simple.  
   * command may yield to glfw and queued commands by yielding as well as returning, whichever is more clear.  
   * command is the only command queue thread because other threads are persistent and serial.  
