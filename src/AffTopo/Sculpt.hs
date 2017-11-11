@@ -59,6 +59,7 @@ foreign import ccall "writeSideSub" writeSideSubC :: CInt -> CInt -> IO (Ptr CIn
 foreign import ccall "eventArgument" eventArgumentC :: IO (Ptr CChar)
 foreign import ccall "stringArgument" stringArgumentC :: IO (Ptr CChar)
 foreign import ccall "intArgument" intArgumentC :: IO CInt
+foreign export ccall handleEvent :: IO Bool
 
 plusPtr' :: Int -> Ptr CInt -> Ptr CInt
 plusPtr' offset ptr = let

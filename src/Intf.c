@@ -21,7 +21,8 @@
 
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
-extern void __stginit_Main(void);
+#include "AffTopo/Sculpt_stub.h"
+//extern void ___stginit_AffTopoziSculpt(void);
 #endif
 
 #include <stdarg.h>
@@ -107,6 +108,7 @@ struct termios savedTermios = {0}; // for restoring from non canonical unechoed 
 int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 pthread_t timewheelThread = 0; // for stock flow delay
+pthread_t haskellThread = 0; // for haskell runtime system
 struct Options {DECLARE_QUEUE(char *)} options = {0};
  // command line arguments
 enum Lock {Unlck,Rdlck,Wrlck};
@@ -245,7 +247,7 @@ struct Lines {DECLARE_QUEUE(enum Menu)} lines = {0};
  // index into item for console undo
 struct Ints matchs = {0};
  // index into item[line].name for console undo
-enum Motion {Escape,Exit,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
+enum Motion {Escape,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
 int escape = 0; // escape sequence from OpenGL
 float affineMat[16] = {0}; // transformation state at click time
 float affineMata[16] = {0}; // left transformation state
@@ -335,6 +337,7 @@ struct Ints defers = {0};
 typedef void (*Command)();
 struct Commands {DECLARE_QUEUE(Command)} commands = {0};
  // commands from commandline, user input, Haskell, IPC, etc
+struct Commands commandees = {0}; // from other threads
 enum Event {
     Side, // fill in pointSub and sideSub
     Update, // update symbolic representation
@@ -745,6 +748,8 @@ ACCESS_QUEUE(Render,struct Render,renders)
 ACCESS_QUEUE(Defer,int,defers)
 
 ACCESS_QUEUE(Command,Command,commands)
+
+ACCESS_QUEUE(Commandee,Command,commandees)
 
 ACCESS_QUEUE(Event,enum Event,events)
 
@@ -1441,21 +1446,19 @@ void *console(void *arg)
     writeitem(tailLine(),tailMatch());
     while (1) {
         int totry = 0;
-        int done = (sizeInputer() >= 2 && motionof(headInputer()) == Exit && arrayInputer()[1] == '\n');
         int lenIn = entryInput(arrayInputer(),&isEndLine,sizeInputer());
         if (lenIn == 0) exitErrstr("missing endline in arrayInputer\n");
         else if (lenIn > 0) {
             delocInputer(lenIn);
             glfwPostEmptyEvent();}
         else if (totryInput()) totry = 1;
-        if (done) break;
 
         int totOut = 0; int lenOut;
         while ((lenOut = detryOutput(enlocOutputer(10),&isEndLine,10)) == 0) totOut += 10;
         if ((lenOut < 0 && totOut > 0) || sizeOutputer() != totOut+10) exitErrstr("detryOutput failed\n");
         else if (lenOut < 0) delocOutputer(10);
         else if (totOut+lenOut == 2 && motionof(headOutputer()) == Escape) {
-            enqueInject(27); enqueInject('\n'); delocOutputer(10);}
+            delocOutputer(10); break;}
         else if (totOut+lenOut == 2 && motionof(headOutputer()) == Enter) {
             enqueInject('\n'); delocOutputer(10);}
         else if (totOut+lenOut == 2 && motionof(headOutputer()) == Back) {
@@ -1531,7 +1534,7 @@ void *console(void *arg)
         else if (esc == 0 && key == ' ') writemenu();
         else if (esc == 0 && key == 27) last[esc++] = key;
         else if (esc == 0) writemenu();
-        else if (esc == 1 && key == '\n') {enqueInputer(ofmotion(Exit)); enqueInputer('\n'); esc = 0;}
+        else if (esc == 1 && key == '\n') {entry1Commandee(0); glfwPostEmptyEvent(); esc = 0;}
         else if (esc == 1 && key == 91) last[esc++] = key;
         else if (esc == 1) esc = 0;
         else if (esc == 2 && key == 50) last[esc++] = key;
@@ -1558,6 +1561,28 @@ void *console(void *arg)
     unwriteitem(tailLine());
 
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
+    return 0;
+}
+
+void *haskell(void *arg)
+{
+    struct sigaction sigact = {0};
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_handler = &handler;
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    sigset_t saved = {0};
+    pthread_sigmask(SIG_SETMASK,0,&saved);
+    sigdelset(&saved, SIGUSR1);
+    hs_init(0,0);
+#ifdef __GLASGOW_HASKELL__
+    //hs_add_root(___stginit_AffTopoziSculpt);
+#endif
+    while (1) {
+    fd_set fds; FD_ZERO(&fds);
+    int retval = pselect(1, &fds, 0, 0, 0, &saved);
+    if (retval != 0 && !(retval < 0 && errno == EINTR)) exitErrstr("pselect failed: %s\n", strerror(errno));
+    if (totryEvent() && handleEvent()) break;}
+    hs_exit();
     return 0;
 }
 
@@ -1607,7 +1632,6 @@ void menu()
         CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
         CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
         CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
-        CASE(Exit) entry1Event(Done);
         DEFAULT(exitErrstr("unexpected menu motion\n");)}
     else if (len == 1 && indexof(buf[0]) >= 0) {
         enum Menu line = indexof(buf[0]);
@@ -1615,41 +1639,6 @@ void menu()
     else {
         buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
     delocInputee(len+1);
-}
-
-void haskell()
-{
-    while (1) {
-        int totry = 0;
-        int done = (sizeOutputee() >= 2 && motionof(headOutputee()) == Escape && arrayOutputee()[1] == '\n');
-        int lenOut = entryOutput(arrayOutputee(),&isEndLine,sizeOutputee());
-        if (lenOut == 0) delocOutputee(sizeOutputee());
-        else if (lenOut > 0) {
-            delocOutputee(lenOut);
-            if (!suppress && pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");}
-        else if (totryOutput()) totry = 1;
-        if (done) suppress = 1;
-        
-        int totIn = 0; int lenIn;
-        while ((lenIn = detryInput(enlocInputee(10),&isEndLine,10)) == 0) totIn += 10;
-        if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
-        else if (lenIn < 0) unlocInputee(10);
-        else {unlocInputee(10-lenIn); menu();}
-
-        if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
-        else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
-        else if (totry) glfwWaitEventsTimeout(POLL_DELAY);
-        else glfwPollEvents();
-
-        if (totryEvent()) break;
-
-        if (!validCommand()) continue;
-        Command command = headCommand();
-        dequeCommand();
-        if (validDefer() && sequenceNumber == headDefer()) dequeDefer();
-        sequenceNumber++;
-        (*command)();
-    }
 }
 
 const char *inputCode(enum Shader shader)
@@ -1794,12 +1783,8 @@ void glfwErrorCallback(int error, const char *description)
    printf("GLFW error %d %s\n", error, description);
 }
 
-void initialize(int argc, char **argv)
+int main(int argc, char **argv)
 {
-#ifdef __GLASGOW_HASKELL__
-    hs_add_root(__stginit_Main);
-#endif
-
     glfwSetErrorCallback(glfwErrorCallback);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -1808,6 +1793,7 @@ void initialize(int argc, char **argv)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     windowHandle = glfwCreateWindow(800, 600, "Sculpt", NULL, NULL);
     if (!windowHandle) {exitErrstr("could not create window\n");}
+    glfwSetErrorCallback(glfwErrorCallback);
     glfwSetWindowCloseCallback(windowHandle, displayClose);
     glfwSetKeyCallback(windowHandle, displayKey);
     glfwSetMouseButtonCallback(windowHandle, displayClick);
@@ -1899,33 +1885,60 @@ void initialize(int argc, char **argv)
         glUniform1f(code[i].uniform[Slope],slope);
         glUniform1f(code[i].uniform[Aspect],aspect);}
     glUseProgram(0);
-
-    constrBase(&base);
-    for (int i = 0; i < argc; i++) enqueOption(argv[i]);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glfwSwapBuffers(windowHandle);
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
     sigprocmask(SIG_BLOCK,&sigs,0);
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
+    if (pthread_create(&haskellThread, 0, &haskell, 0) != 0) exitErrstr("cannot create thread\n");
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glfwSwapBuffers(windowHandle);
+    constrBase(&base);
+    for (int i = 1; i < argc; i++) enqueOption(argv[i]);
     ENQUE(process,Process)
-}
 
-void finalize()
-{
+    while (1) {
+        int lenOut = entryOutput(arrayOutputee(),&isEndLine,sizeOutputee());
+        if (lenOut == 0) delocOutputee(sizeOutputee());
+        else if (lenOut > 0) delocOutputee(lenOut);
+        
+        int totIn = 0; int lenIn;
+        while ((lenIn = detryInput(enlocInputee(10),&isEndLine,10)) == 0) totIn += 10;
+        if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
+        else if (lenIn < 0) unlocInputee(10);
+        else {unlocInputee(10-lenIn); menu();}
+
+        int lenCmd = detryCommandee(enlocCommand(1),0,1);
+        if (lenCmd < 0) unlocCommand(1);
+
+        if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
+        else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
+        else glfwPollEvents();
+
+        if (!validCommand()) continue;
+        Command command = headCommand();
+        dequeCommand();
+        if (validDefer() && sequenceNumber == headDefer()) dequeDefer();
+        sequenceNumber++;
+        if (!command) break;
+        (*command)();
+    }
     struct Small small = {0}; small.tag = Smallers;
     struct Sched sched = {0}; sched.tag = Scheders;
-    if (entrySmall(&small,0,1) != 0) exitErrstr("cannot entry small\n"); // TOOD: pselect wait if mutex try fails
-    if (entrySched(&sched,0,1) != 0) exitErrstr("cannot entry sched\n"); // TOOD: pselect wait if mutex try fails
+    entry1Small(small); entry1Sched(sched);
     if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+    entry1Output(ofmotion(Escape)); entry1Output('\n');
+    if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+    entry1Event(Done);
+    if (pthread_kill(haskellThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
-    glfwTerminate();
+    if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
     for (int i = 0; i < sizeBase(); i++) destruct(arrayBase()+i);
     destruct(&base);
+    glfwTerminate();
 }
 
 /*
@@ -2950,7 +2963,7 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) {enqueOutputee(ofmotion(Escape)); enqueOutputee('\n');}
+        SWITCH(key,GLFW_KEY_ENTER) enqueCommand(0);
         DEFAULT(enqueOutputee(ofmotion(Space)); enqueOutputee('\n');)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
