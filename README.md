@@ -2,13 +2,16 @@ Can polytopes be represented without resort to vectors? A polytope as a graph of
 
 Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regions as polytope), spaceFromTope and topeRegions (find sample space and regions that would classify to polytope), spaceFromPlanes (classify planes as space), planesFromSpace (find sample planes that would classify to space).
 
-Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs uses a foreign function interface to Intf.c which contains the following pthreads.
+Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs uses a foreign function interface to c code. The first of the following c file implements a thread Intraface communicates between the threads. Microcode is glsl code for graphics engines interfaced to with OpenGl.
 
-  * haskell is a separate thread because Haskell is a high level language with an rts.  
-  * console is a separate thread because pselect is incompatible with glfwWait/Poll.  
-  * timewheel is a separate thread because stocks and flows need realtime operation.  
-  * process is a separate thread that cycles through files after commandline arguments.  
-  * command is the main thread because glfw needs the main thread and callbacks should be simple.  
+  * haskell is a separate thread because Haskell is a high level language with an rts. haskell thread uses condition variable to wait for requests from command thread. haskell thread sends responses with mutex queues to command thread.  
+  * console is a separate thread because pselect is incompatible with glfwWait/Poll. console thread uses pselect to wait for user input or for signal from any other thread issuing output.  
+  * timewheel is a separate thread because stocks and flows need realtime operation. timewheel thread uses pselect to wait for wallclock or for signal from a console thread.  
+  * process is a separate thread that reads through commandline arguments and waits for injected arguments.  
+  * configure is a per-file thread that allows process to continue at eof. non-owner configure tries for writelock on --pid to after end of file, becoming owner and temporarily preventing appends if it gets the writelock. new owner overwrites --pid and allows appends but keeps writelock on its --pid. the owner waits for signal, and moves appended commands to before its --pid. non-owners wait for input by readlock blocking on the owner's --pid, and block for writelock to append output if still at eof.  
+  * command is the main thread because glfw needs the main thread and callbacks should be simple. command is woken by user action, or by glfwPostEmptyEvent from process, configure, timeheel, haskell.  
+  * intraface is queue macro parameterized by type that declares and defines functions to add-to remove-from discard-from the head or tail of queues, in the same thread, with mutex, or with mutex and condition variable.  
+  * microcode has two versions of code for each task, one version for if the polygons are represented by 6 planes, and one version for if the polygons are represented by 3 points. the tasks are display, find coplanes/copoints, find sidedness of point/plane, find pierce points, reinterpret plane/point.  
 
 The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name, short description, goal for success, input conditions, and then describes flow as pseudocode, for cherry picked data state upon call and return, with the following features.
 
@@ -102,8 +105,8 @@ Configuration/history files consist of commands. User input appends to file. App
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
-  * --stock name and optional point, initial value, and saturation values  
-  * --flow size, rate, and delay of change to pore between stocks or on facet  
+  * --stock name, initial value, and saturation values  
+  * --flow formula for value of target and formula for reschedule delay  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
   * --color takes plane subscript and decoration  
