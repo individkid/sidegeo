@@ -105,7 +105,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
-  * --stock name, initial value, and saturation values  
+  * --stock name, initial value, formulae for saturation and delay  
   * --flow formula for value of target and formula for reschedule delay  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
@@ -126,7 +126,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope. The values for the variables come from one of the following.
+The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --stock --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope. The values for the variables come from the following.
 
   * --stock or --source value  
   * metric of facet qualified by topology  
@@ -134,10 +134,16 @@ The --call result string may be longer than the destination, and may contain new
 
 Stock values are used in the following places.
 
-  * --flow pore size modification equations  
+  * --flow value equations  
+  * --flow reschedule delay equations
+  * --stock saturation equations
+  * --stock available delay equations
   * --delay file stepping rate  
-  * as part of Haskell expression in --call or --action  
-  * texture calculation specified by --color  
-  * waveform piped to sound interface callback  
+  * --call or --action expressions  
+  * --color specifications  
+  * --listen waveform sound pipe  
 
-In --flow command, size is how often a unit of stock is moved; rate is how soon a size change is scheduled; and delay is how long before the size change takes effect. When a pore size changes, a fraction of a unit of stock is transfered immediately according to the old pore size and when the transfer is currently scheduled; the current scheduled transfer is cancelled; and a unit of stock is scheduled according to the new pore size. Stock associated with a point can flow through region paths through --flow faces. Stock associated with a point can also flow along edges through --flow faces. Stock not associated with a point can still flow by reference from a --flow that need not be associated with a face. Note that a pure tone is produced by a --stock with a --flow size that is -1 times the stock with a delay of 1/4 of the period. For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, and --flow faces in several overlapping --plane polytopes.
+For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, and --flow faces in several overlapping --plane polytopes.
+
+This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
+
