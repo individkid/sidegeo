@@ -9,7 +9,7 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * console is a separate thread because pselect is incompatible with glfwWait/Poll. console thread uses pselect to wait for user input or for signal from any other thread issuing output.  
   * timewheel is a separate thread because stocks and flows need realtime operation. timewheel thread uses pselect to wait for wallclock or for signal from a configure thread.  
   * process is a separate thread that reads through commandline arguments and waits for injected arguments.  
-  * configure is a per-file thread that allows process to continue at eof or yield. non-owner configure tries for writelock on --pid to after end of file, becoming owner and temporarily preventing appends if it gets the writelock. new owner overwrites --pid and allows appends but keeps writelock on its --pid. the owner waits for signal, and moves appended commands to before its --pid. non-owners wait for input by readlock blocking on the owner's --pid, and append output if still at eof after writelock.  
+  * configure is a per-file thread that allows process to continue at eof or yield. non-owner configure tries for writelock on --pid to after end of file, becoming owner and temporarily preventing appends if it gets the writelock. new owner overwrites --pid and allows appends but keeps writelock on its --pid. the owner waits for signal, and moves appended commands to before its --pid. non-owners wait for input by readlock blocking on the owner's --pid, and append --pid terminated output if still at eof after writelock.  
   * command is the main thread because glfw needs the main thread and callbacks should be simple. command is woken by user action, or by glfwPostEmptyEvent from process, configure, timeheel, haskell.  
   * microcode has two versions of code for each task, one version for if the polygons are represented by 6 planes, and one version for if the polygons are represented by 3 points. the tasks are display, find coplanes/copoints, find sidedness of point/plane, find pierce points, reinterpret plane/point.  
 
@@ -105,6 +105,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
+  * --stock name, initial value, minimum maximum saturation values
   * --flow formulae for value, reschedule delay, assignment delay  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
