@@ -1,5 +1,5 @@
 /*
-*    Code.c microcode for graphics engines
+*    Microcode.c microcode for graphics engines
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
