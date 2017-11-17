@@ -442,6 +442,18 @@ int last##NAME(int link) \
     return arrayLink##NAME()[link].last; \
 }
 
+inline void *int2void(int val)
+{
+    char *ptr = 0;
+    return (void *)(ptr+val);
+}
+
+inline int void2int(void *val)
+{
+    char *ptr = 0;
+    return ((char *)val-ptr);
+}
+
 #define POOL_QUEUE(NAME,TYPE) \
 LOCAL_QUEUE(Local##NAME,TYPE) \
 LINK_QUEUE(Link##NAME) \
@@ -479,55 +491,55 @@ POOL_QUEUE(Pool##NAME,TYPE) \
 \
 pqueue_pri_t NAME##_get_pri(void *sub) \
 { \
-    struct Pqueue *pq = castPqueue##NAME(sub); \
+    struct Pqueue *pq = castPqueue##NAME(void2int(sub)); \
     return pq->pri; \
 } \
 \
 void NAME##_set_pri(void *sub, pqueue_pri_t pri) \
 { \
-    struct Pqueue *pq = castPqueue##NAME(sub); \
+    struct Pqueue *pq = castPqueue##NAME(void2int(sub)); \
     pq->pri = pri; \
 } \
 \
 int NAME##_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr) \
 { \
-    return (next > curr); \
+    return (next < curr); \
 } \
 \
 size_t NAME##_get_pos(void *sub) \
 { \
-    struct Pqueue *pq = castPqueue##NAME(sub); \
+    struct Pqueue *pq = castPqueue##NAME(void2int(sub)); \
     return pq->pos; \
 } \
 \
 void NAME##_set_pos(void *sub, size_t pos) \
 { \
-    struct Pqueue *pq = castPqueue##NAME(sub); \
+    struct Pqueue *pq = castPqueue##NAME(void2int(sub)); \
     pq->pos = pos; \
 } \
 \
 void NAME##_print_entry(FILE *out, void *sub) \
 { \
-    struct Pqueue *pq = castPqueue##NAME(sub); \
+    struct Pqueue *pq = castPqueue##NAME(void2int(sub)); \
     fprintf(out,"pri %llu pos %lu val %d\n",pq->pri,pq->pos,pq->val); \
 } \
 \
 pqueue_t *pqueue_##NAME = pqueue_init(PQUEUE_STEP,&NAME##_cmp_pri,&NAME##_get_pri,&NAME##_set_pri,&NAME##_get_pos,&NAME##_set_pos); \
 \
-TYPE *sched##NAME(pqueue_pri_t pri) \
+TYPE *schedule##NAME(pqueue_pri_t pri) \
 { \
     int sub = allocPqueue##NAME(); \
     int val = allocPool##NAME(); \
     struct Pqueue *pq = castPqueue##NAME(sub); \
     pq->pri = pri; \
     pq->val = val; \
-    pqueue_insert(pqueue_##NAME,sub); \
+    pqueue_insert(pqueue_##NAME,int2void(sub)); \
     return castPool##NAME(val); \
 } \
 \
 TYPE *advance##NAME() \
 { \
-    int sub = pqueue_pop(pqueue_##NAME); \
+    int sub = void2int(pqueue_pop(pqueue_##NAME)); \
     int val = castPqueue##NAME(sub)->val; \
     freePqueue##NAME(sub); \
     freePool##NAME(val); \
