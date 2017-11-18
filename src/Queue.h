@@ -16,135 +16,51 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef INTRAFACE_H
+#ifndef QUEUE_H
 
-#define ENDEUN_QUEUE(NAME,TYPE) \
-TYPE *enlocv##NAME(int siz); \
-void enlocx##NAME(TYPE val); \
-void enlocs##NAME(TYPE *ptr, int siz); \
-int enlocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
-TYPE *delocv##NAME(int siz); \
-TYPE delocx##NAME(); \
-void delocs##NAME(TYPE *ptr, int siz); \
-int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
-TYPE *unlocv##NAME(int siz); \
-TYPE unlocx##NAME(); \
-void unlocs##NAME(TYPE *ptr, int siz);
+/*
+put {EN|DE}{TRY|VAR}_QUEUE in .c file for thread at one end
+corresponding to {EN|DE} put {DE|EN}{TRY|VAR}_QUEUE in .c file for thread at the other end
+corresponding to {TRY|VAR} put {MUTEX|COND}_QUEUE in Common.c
+put {LOCAL|LINK|POOL|PRIORITY}_QUEUE in single .c files for single threads
+put BASE_QUEUE in Common.c, call prepQueue at beginning and doneQueue at end of main
+*/
 
-#define ENTRY_QUEUE(NAME,TYPE) \
-void entryx##NAME(TYPE val); \
-void entrys##NAME(TYPE *ptr, int siz); \
-int entryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz);
-
-#define DETRY_QUEUE(NAME,TYPE) \
-void detryv##NAME(int siz); \
-TYPE detryx##NAME(); \
-void detrys##NAME(TYPE *ptr, int siz); \
-int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz);
-
-#define ENVAR_QUEUE(NAME,TYPE) \
-void envarx##NAME(TYPE val); \
-void envars##NAME(TYPE *ptr, int siz); \
-int envarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz);
-
-#define DEVAR_QUEUE(NAME,TYPE) \
-void devarv##NAME(int siz); \
-TYPE devarx##NAME(); \
-void devars##NAME(TYPE *ptr, int siz); \
-int devarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz);
-
-#define LOCAL_QUEUE(NAME,TYPE) \
-struct NAME##Struct { \
-    TYPE *base; \
-    TYPE *limit; \
-    TYPE *head; \
-    TYPE *tail; \
-    void (*signal)(); \
-    int init; \
-    pthread_mutex_t mutex; \
-    pthread_cond_t cond; \
-    int valid; \
-    int seqnum; \
-} NAME##Inst = {0}; \
-inline int size##NAME() \
-{ \
-	return NAME##Inst.tail - NAME##Inst.head; \
-} \
-\
-inline int valid##NAME() \
-{ \
-	return NAME##Inst.valid - NAME##Inst.seqnum; \
-} \
-\
-inline TYPE *array##NAME() \
-{ \
-	return NAME##Inst.head; \
-} \
-\
-inline TYPE *stack##NAME() \
-{ \
-    return NAME##Inst.tail; \
-} \
-\
-inline TYPE head##NAME() \
-{ \
-    return *array##NAME(); \
-} \
-\
-inline TYPE tail##NAME() \
-{ \
-    return *(stack##NAME()-1); \
-} \
-\
-void init##NAME(struct Base *base) \
-{ \
-    NAME##Inst.base = malloc(10*sizeof*NAME##Inst.base); \
-    NAME##Inst.limit = NAME##Inst.base + 10; \
-    NAME##Inst.head = NAME##Inst.base; \
-    NAME##Inst.tail = NAME##Inst.base; \
-    base->ptr = (void**)&NAME##Inst.base; \
-    base->mut = &NAME##Inst.mutex; \
-    base->con = &NAME##Inst.cond; \
-    base->val = &NAME##Inst.init; \
-} \
-\
-/*return pointer valid only until next call to en*##NAME */  \
+#define LOCAL_HELP(NAME,TYPE,INST) \
+/*unique NAME per thread per queue, shared INST per queue*/ \
+/*return pointer valid only until next call to en*##NAME */ \
 TYPE *enlocv##NAME(int siz) \
 { \
-	if (siz < 0) exitErrstr("enlocv too siz\n"); \
-    if (NAME##Inst.base == 0) { \
-        struct Base base = {0}; \
-        init##NAME(&base); \
-        if (!BaseInst.base) exitErrstr("please call prepQueue\n"); \
-        entryxBase(base);} \
-    while (NAME##Inst.head - NAME##Inst.base >= 10) { \
-        int tail = NAME##Inst.tail - NAME##Inst.base; \
+    init##NAME() \
+    if (siz < 0) exitErrstr("enlocv too siz\n"); \
+    while (INST##Inst.head - INST##Inst.base >= 10) { \
+        int tail = INST##Inst.tail - INST##Inst.base; \
         for (int i = 10; i < tail; i++) { \
-            NAME##Inst.base[i-10] = NAME##Inst.base[i];} \
-        NAME##Inst.head = NAME##Inst.head - 10; \
-        NAME##Inst.tail = NAME##Inst.tail - 10;} \
-    while (NAME##Inst.tail + siz >= NAME##Inst.limit) { \
-        int limit = NAME##Inst.limit - NAME##Inst.base; \
-        int size = NAME##Inst.tail - NAME##Inst.head; \
-        TYPE *temp = malloc((limit+10)*sizeof*NAME##Inst.base); \
-        memcpy(temp,NAME##Inst.head,size*sizeof*NAME##Inst.base); \
-        free(NAME##Inst.base); NAME##Inst.base = temp; \
-        NAME##Inst.head = NAME##Inst.base; \
-        NAME##Inst.tail = NAME##Inst.base + size; \
-        NAME##Inst.limit = NAME##Inst.base + limit + 10;} \
-    NAME##Inst.tail = NAME##Inst.tail + siz; \
-    return NAME##Inst.tail - siz; \
+            INST##Inst.base[i-10] = INST##Inst.base[i];} \
+        INST##Inst.head = INST##Inst.head - 10; \
+        INST##Inst.tail = INST##Inst.tail - 10;} \
+    while (INST##Inst.tail + siz >= INST##Inst.limit) { \
+        int limit = INST##Inst.limit - INST##Inst.base; \
+        int size = INST##Inst.tail - INST##Inst.head; \
+        TYPE *temp = malloc((limit+10)*sizeof*INST##Inst.base); \
+        memcpy(temp,INST##Inst.head,size*sizeof*INST##Inst.base); \
+        free(INST##Inst.base); INST##Inst.base = temp; \
+        INST##Inst.head = INST##Inst.base; \
+        INST##Inst.tail = INST##Inst.base + size; \
+        INST##Inst.limit = INST##Inst.base + limit + 10;} \
+    INST##Inst.tail = INST##Inst.tail + siz; \
+    return INST##Inst.tail - siz; \
 } \
 \
 void enlocx##NAME(TYPE val) \
 { \
-	*enlocv##NAME(1) = val; \
+    *enlocv##NAME(1) = val; \
 } \
 \
 void enlocs##NAME(TYPE *ptr, int siz) \
 { \
-	TYPE *buf = enlocv##NAME(siz); \
-	for (int i = 0; i < siz; i++) buf[i] = ptr[i]; \
+    TYPE *buf = enlocv##NAME(siz); \
+    for (int i = 0; i < siz; i++) buf[i] = ptr[i]; \
 } \
 \
 /*0: all taken but no terminator; >0: given number taken with terminator*/ \
@@ -155,20 +71,20 @@ int enlocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
     for (int i = 0; i < siz; i++) { \
         buf[i] = ptr[i]; \
         if (isterm && (*isterm)(ptr+i)) { \
-            NAME##Inst.valid++; \
+            INST##Inst.valid++; \
             retval = i+1; \
             break;}} \
-    if (retval > 0 && retval < siz) NAME##Inst.tail -= siz-retval; \
-    if (retval == 0 && isterm == 0 && siz > 0) NAME##Inst.valid++; \
+    if (retval > 0 && retval < siz) INST##Inst.tail -= siz-retval; \
+    if (retval == 0 && isterm == 0 && siz > 0) INST##Inst.valid++; \
     return retval; \
 } \
 \
 TYPE *delocv##NAME(int siz) \
 { \
     if (siz < 0) exitErrstr("deloc too siz\n"); \
-    NAME##Inst.head = NAME##Inst.head + siz; \
-    if (NAME##Inst.head > NAME##Inst.tail) exitErrstr("deloc too siz\n"); \
-    return NAME##Inst.head-siz;
+    INST##Inst.head = INST##Inst.head + siz; \
+    if (INST##Inst.head > INST##Inst.tail) exitErrstr("deloc too siz\n"); \
+    return INST##Inst.head-siz;
 } \
 \
 TYPE delocx##NAME() \
@@ -178,26 +94,57 @@ TYPE delocx##NAME() \
 \
 void delocs##NAME(TYPE *ptr, int siz) \
 { \
-	TYPE *buf = delocv##NAME(siz); \
-	for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
+    TYPE *buf = delocv##NAME(siz); \
+    for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
 } \
 \
 int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
     if (siz < 0) exitErrstr("deloc too siz\n"); \
-    TYPE *buf = NAME##Inst.head; \
+    TYPE *buf = INST##Inst.head; \
     int retval = 0; \
-    for (int i = 0; i < siz && buf+i != NAME##Inst.tail; i++) { \
+    for (int i = 0; i < siz && buf+i != INST##Inst.tail; i++) { \
         ptr[i] = buf[i]; \
         if (isterm && (*isterm)(buf+i)) { \
-            NAME##Inst.seqnum++; \
+            INST##Inst.seqnum++; \
             retval = i+1; \
             break;}} \
-    if (retval == 0) NAME##Inst.head += siz; \
-    else NAME##Inst.head += retval; \
-    if (retval == 0 && isterm == 0 && siz > 0) NAME##Inst.seqnum++; \
+    if (retval == 0) INST##Inst.head += siz; \
+    else INST##Inst.head += retval; \
+    if (retval == 0 && isterm == 0 && siz > 0) INST##Inst.seqnum++; \
     return retval; \
+}
+
+#define QUEUE_STEP 10
+
+#define LOCAL_QUEUE(NAME,TYPE,BASE) \
+/*unique NAME per thread per queue, shared BASE per thread*/ \
+struct NAME##Struct { \
+    TYPE *base; \
+    TYPE *limit; \
+    TYPE *head; \
+    TYPE *tail; \
+    void (*signal)(); \
+    pthread_mutex_t mutex; \
+    pthread_cond_t cond; \
+    int valid; \
+    int seqnum; \
+} NAME##Inst = {0}; \
+\
+void init##NAME() \
+{ \
+    if (NAME##Inst.base == 0) { \
+    if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
+    NAME##Inst.base = malloc(QUEUE_STEP*sizeof*NAME##Inst.base); \
+    NAME##Inst.limit = NAME##Inst.base + QUEUE_STEP; \
+    NAME##Inst.head = NAME##Inst.base; \
+    NAME##Inst.tail = NAME##Inst.base; \
+    struct Base base = {0}; \
+    base->ptr = (void**)&NAME##Inst.base; \
+    enlocx##BASE(base);} \
 } \
+\
+LOCAL_HELP(NAME,TYPE,NAME) \
 \
 TYPE *unlocv##NAME(int siz) \
 { \
@@ -218,126 +165,218 @@ void unlocs##NAME(TYPE *ptr, int siz) \
 	for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
 } \
 \
-/* unlocz does not make sense */
+/* unlocz does not make sense */ \
+inline int size##NAME() \
+{ \
+    return NAME##Inst.tail - NAME##Inst.head; \
+} \
+\
+inline int valid##NAME() \
+{ \
+    return NAME##Inst.valid - NAME##Inst.seqnum; \
+} \
+\
+inline TYPE *array##NAME() \
+{ \
+    return NAME##Inst.head; \
+} \
+\
+inline TYPE *stack##NAME() \
+{ \
+    return NAME##Inst.tail; \
+} \
+\
+inline TYPE head##NAME() \
+{ \
+    return *array##NAME(); \
+} \
+\
+inline TYPE tail##NAME() \
+{ \
+    return *(stack##NAME()-1); \
+}
 
-#define ENTRY_QUEUE(CMD,RET,COND,INST) \
-    if (INST.init < 1) { \
-        if (pthread_mutex_init(&INST.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
-        INST.init = 1;} \
+#define ENTRY_HELP(CMD,RET,COND,INST) \
     if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     CMD \
     if (INST.signal && COND) (*signal)(); \
     if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
-#define DETRY_QUEUE(CMD,RET,INST) \
-    if (INST.init < 1) { \
-        if (pthread_mutex_init(&INST.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
-        INST.init = 1;} \
+#define DETRY_HELP(CMD,RET,INST) \
     if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     CMD \
     if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
-#define ENVAR_QUEUE(CMD,RET,COND,INST) \
-    if (INST.init < 1) { \
-        if (pthread_mutex_init(&INST.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
-        INST.init = 1;} \
-    if (INST.init < 2) { \
-        if (pthread_cond_init(&INST.cond, 0) != 0) exitErrstr("cannot initialize cond\n"); \
-        INST.init = 2;} \
+#define ENVAR_HELP(CMD,RET,COND,INST) \
     if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     CMD \
     if (COND && pthread_cond_signal(&INST.cond) != 0) exitErrstr("entry cond failed: %s\n", strerror(errno)); \
     if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
-#define DEVAR_QUEUE(CMD,RET,COND,INST) \
-    if (INST.init < 1) { \
-        if (pthread_mutex_init(&INST.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
-        INST.init = 1;} \
-    if (INST.init < 2) { \
-        if (pthread_cond_init(&INST.cond, 0) != 0) exitErrstr("cannot initialize cond\n"); \
-        INST.init = 2;} \
+#define DEVAR_HELP(CMD,RET,COND,INST) \
     if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     while (COND) if (pthread_cond_wait(&INST.cond,&INST.mutex) != 0) exitErrstr("entry wait failed: %s\n", strerror(errno)); \
     CMD \
     if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
-#define MUTEX_QUEUE(NAME,TYPE,INST) \
-LOCAL_QUEUE(NAME,TYPE,INST) \
+#define SHARED_QUEUE(TYPE,INST) \
+/*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
+struct INST##Struct { \
+    TYPE *base; \
+    TYPE *limit; \
+    TYPE *head; \
+    TYPE *tail; \
+    void (*signal)(); \
+    pthread_mutex_t mutex; \
+    pthread_cond_t cond; \
+    int valid; \
+    int seqnum; \
+} INST##Inst = {0};
+
+#define MUTEX_QUEUE(NAME,TYPE,INST,BASE) \
+/*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
+struct INST##Struct { \
+    TYPE *base; \
+    TYPE *limit; \
+    TYPE *head; \
+    TYPE *tail; \
+    void (*signal)(); \
+    pthread_mutex_t mutex; \
+    pthread_cond_t cond; \
+    int valid; \
+    int seqnum;}; \
+int once##NAME = 0; \
+\
+void init##NAME() \
+{ \
+    if (once##NAME == 0) { \
+    if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
+    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    if (INST##Inst.base == 0) { \
+    INST##Inst.base = malloc(QUEUE_STEP*sizeof*INST##Inst.base); \
+    INST##Inst.limit = INST##Inst.base + QUEUE_STEP; \
+    INST##Inst.head = INST##Inst.base; \
+    INST##Inst.tail = INST##Inst.base; \
+    if (pthread_mutex_init(&INST##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
+    struct Base base = {0}; \
+    base->ptr = (void**)&INST##Inst.base; \
+    base->mut = &INST##Inst.mutex; \
+    base->val = 1; \
+    enlocx##BASE(base);} \
+    if (pthread_mutex_unlock(&BASE##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno));} \
+} \
+\
+LOCAL_HELP(NAME,TYPE,INST) \
+\
 /* entryv does not make sense */ \
 \
 void entryx##NAME(TYPE val) \
 { \
-    ENTRY_QUEUE(enlocx##NAME(val);,,1,INST) \
+    ENTRY_HELP(enlocx##NAME(val);,,1,INST##Inst) \
 } \
 \
 void entrys##NAME(TYPE *ptr, int siz) \
 { \
-    ENTRY_QUEUE(enlocs##NAME(ptr,siz);,,1,INST) \
+    ENTRY_HELP(enlocs##NAME(ptr,siz);,,1,INST##Inst) \
 } \
 \
 int entryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    ENTRY_QUEUE(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST) \
+    ENTRY_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST##Inst) \
 } \
 \
 /* detryv does not make sense */ \
 \
 TYPE detryx##NAME() \
 { \
-    TRY_QUEUE(TYPE val = delocx##NAME();,return val;,INST) \
+    DETRY_HELP(TYPE val = delocx##NAME();,return val;,INST##Inst) \
 } \
 \
 void detrys##NAME(TYPE *ptr, int siz) \
 { \
-    TRY_QUEUE(delocs##NAME(ptr,siz);,,INST) \
+    DETRY_HELP(delocs##NAME(ptr,siz);,,INST##Inst) \
 } \
 \
 int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    TRY_QUEUE(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST) \
+    DETRY_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST##Inst) \
 } \
 \
 /* untry does not make sense */
 
-#define COND_QUEUE(NAME,TYPE,INST) \
-MUTEX_QUEUE(NAME,TYPE,INST) \
+#define CONDITION_QUEUE(NAME,TYPE,INST,BASE) \
+/*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
+struct INST##Struct { \
+    TYPE *base; \
+    TYPE *limit; \
+    TYPE *head; \
+    TYPE *tail; \
+    void (*signal)(); \
+    pthread_mutex_t mutex; \
+    pthread_cond_t cond; \
+    int valid; \
+    int seqnum;}; \
+int once##NAME = 0; \
+\
+void init##NAME() \
+{ \
+    if (once##NAME == 0) { \
+    if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
+    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    if (INST##Inst.base == 0) { \
+    INST##Inst.base = malloc(QUEUE_STEP*sizeof*INST##Inst.base); \
+    INST##Inst.limit = INST##Inst.base + QUEUE_STEP; \
+    INST##Inst.head = INST##Inst.base; \
+    INST##Inst.tail = INST##Inst.base; \
+    if (pthread_mutex_init(&INST##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
+    if (pthread_cond_init(&INST##Inst.cond, 0) != 0) exitErrstr("cannot initialize cond\n"); \
+    struct Base base = {0}; \
+    base->ptr = (void**)&INST##Inst.base; \
+    base->mut = &INST##Inst.mutex; \
+    base->con = &INST##Inst.cond; \
+    base->val = 2; \
+    enlocx##BASE(base);} \
+    if (pthread_mutex_unlock(&BASE##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno));} \
+} \
+\
+LOCAL_HELP(NAME,TYPE,INST) \
 \
 /* envarv does not make sense */ \
 \
 void envarx##NAME(TYPE val) \
 { \
-    ENVAR_QUEUE(enlocx##NAME(val);,,1,INST) \
+    ENVAR_HELP(enlocx##NAME(val);,,1,INST##Inst) \
 } \
 \
 void envars##NAME(TYPE *ptr, int siz) \
 { \
-    ENVAR_QUEUE(enlocs##NAME(ptr,siz);,,1,INST) \
+    ENVAR_HELP(enlocs##NAME(ptr,siz);,,1,INST##Inst) \
 } \
 \
 int envarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    ENVAR_QUEUE(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST) \
+    ENVAR_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST##Inst) \
 } \
 \
 /* devarv does not make sense */ \
 \
 TYPE devarx##NAME() \
 { \
-    DEVAR_QUEUE(TYPE val = delocx##NAME();,return val;,INST.tail-INST.head<1,INST) \
+    DEVAR_HELP(TYPE val = delocx##NAME();,return val;,INST##Inst.tail-INST##Inst.head<1,INST##Inst) \
 } \
 \
 void devars##NAME(TYPE *ptr, int siz) \
 { \
-    DEVAR_QUEUE(delocs##NAME(ptr,siz);,,INST.tail-INST.head<siz,INST) \
+    DEVAR_HELP(delocs##NAME(ptr,siz);,,INST##Inst.tail-INST##Inst.head<siz,INST##Inst) \
 } \
 \
 int devarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    DEVAR_QUEUE(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST.valid==INST.seqnum,INST) \
+    DEVAR_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST##Inst.valid==INST##Inst.seqnum,INST##Inst) \
 } \
 \
 /* unvar does not make sense */
@@ -346,35 +385,33 @@ struct Base {
     void **ptr;
     pthread_mutex_t *mut;
     pthread_cond_t *con;
-    int *val;}; // c++ class written in c
+    int val;};
 
-void exitErrstr(const char *fmt, ...);
-void entryxBase(struct Base);
-void prepQueue();
-void doneQueue();
-
-#define BASE_QUEUE \
-MUTEX_QUEUE(Base,struct Base) \
-struct Base base = {0}; \
+#define BASE_QUEUE(BASE) \
+/*one per thread, and one shared*/ \
+LOCAL_QUEUE(BASE,struct Base,BASE) \
 \
-void prepQueue() \
+void prep##BASE() \
 { \
-    initBase(&base); \
+    BASE##Inst.base = malloc(QUEUE_STEP*sizeof*BASE##Inst.base); \
+    BASE##Inst.limit = BASE##Inst.base + QUEUE_STEP; \
+    BASE##Inst.head = BASE##Inst.base; \
+    BASE##Inst.tail = BASE##Inst.base; \
+    if (pthread_mutex_init(&BASE##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
 } \
 \
-void freeQueue(struct Base *base) \
+void done##BASE() \
 { \
-    free(*base->ptr); \
-    *base->ptr = 0; \
-    if (*base->val > 0 && pthread_mutex_destroy(base->mut) != 0) exitErrstr("cannot finalize mutex\n"); \
-    if (*base->val > 1 && pthread_cond_destroy(base->con) != 0) exitErrstr("cannot finalize cond\n"); \
-    *base->val = 0; \
-} \
-\
-void doneQueue() \
-{ \
-    for (int i = 0; i < sizeBase(); i++) freeQueue(arrayBase()+i); \
-    freeQueue(&base); \
+    for (int i = 0; i < sizeBase(); i++) { \
+        struct Base *base = arrayBase()+i; \
+        free(*base->ptr); \
+        *base->ptr = 0; \
+        if (base->val > 0 && pthread_mutex_destroy(base->mut) != 0) exitErrstr("cannot finalize mutex\n"); \
+        if (base->val > 1 && pthread_cond_destroy(base->con) != 0) exitErrstr("cannot finalize cond\n"); \
+        base->val = 0;} \
+    free(BASE##Inst.base); \
+    BASE##Inst.base = 0; \
+    if (pthread_mutex_destroy(&BASE##Inst.mutex) != 0) exitErrstr("cannot finalize mutex\n"); \
 }
 
 struct Link {
@@ -382,10 +419,10 @@ struct Link {
     int val; // subscript into a buffer or direct value
 };
 
-#define LINK_QUEUE(NAME) \
-LOCAL_QUEUE(Link##NAME,struct Link) \
-LOCAL_QUEUE(Head##NAME,int) \
-LOCAL_QUEUE(Tail##NAME,int) \
+#define LINK_QUEUE(NAME,BASE) \
+LOCAL_QUEUE(Link##NAME,struct Link,BASE) \
+LOCAL_QUEUE(Head##NAME,int,BASE) \
+LOCAL_QUEUE(Tail##NAME,int,BASE) \
 \
 void move##NAME(int link, int pool) \
 { \
@@ -396,16 +433,18 @@ void move##NAME(int link, int pool) \
         enlocxLink##NAME(empty);} \
     while (pool >= sizeHead##NAME()) { \
         int init = -1-sizeHead##NAME(); \
-        enlocxHead##NAME(init); \
+        enlocxHead##NAME(-1-sizeTail##NAME()); \
         enlocxTail##NAME(init);} \
     int next = arrayLink##NAME()[link].next; \
     int last = arrayLink##NAME()[link].last; \
+    if ((next == 0) != (last == 0)) exitErrstr("link too different\n"); \
     if (next > 0) arrayLink##NAME()[next-1].last = last; \
     if (next < 0) arrayTail##NAME()[next+1] = last; \
     if (last > 0) arrayLink##NAME()[last-1].next = next; \
     if (last < 0) arrayHead##NAME()[last+1] = next; \
     int head = arrayHead##NAME()[pool]; \
     int tail = arrayTail##NAME()[pool]; \
+    if (head == 0 || tail == 0) exitErrstr("link too zero\n"); \
     arrayLink##NAME()[link].next = head; \
     arrayLink##NAME()[link].last = -1-pool; \
     arrayHead##NAME()[pool] = 1+link; \
@@ -454,9 +493,9 @@ inline int void2int(void *val)
     return ((char *)val-ptr);
 }
 
-#define POOL_QUEUE(NAME,TYPE) \
-LOCAL_QUEUE(Local##NAME,TYPE) \
-LINK_QUEUE(Link##NAME) \
+#define POOL_QUEUE(NAME,TYPE,BASE) \
+LOCAL_QUEUE(Local##NAME,TYPE,BASE) \
+LINK_QUEUE(Link##NAME,BASE) \
 \
 int alloc##NAME() \
 { \
@@ -485,9 +524,9 @@ struct Pqueue {
 
 #define PQUEUE_STEP 100
 
-#define PRIORITY_QUEUE(NAME,TYPE) \
-POOL_QUEUE(Pqueue##NAME,struct Pqueue) \
-POOL_QUEUE(Pool##NAME,TYPE) \
+#define PRIORITY_QUEUE(NAME,TYPE,BASE) \
+POOL_QUEUE(Pqueue##NAME,struct Pqueue,BASE) \
+POOL_QUEUE(Pool##NAME,TYPE,BASE) \
 \
 pqueue_pri_t NAME##_get_pri(void *sub) \
 { \
@@ -551,6 +590,10 @@ int ready##NAME(pqueue_pri_t pri) \
     int sub = pqueue_peek(pqueue_##NAME); \
     return NAME##_cmp_pri(pri,castPqueue##NAME(sub)->pri); \
 }
+
+// TODO: define ACKNOWLEDGE_QUEUE like CONDITION_QUEUE except has request, listen, respond functions
+
+void exitErrstr(const char *fmt, ...);
 
 #endif
 
