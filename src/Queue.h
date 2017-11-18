@@ -18,14 +18,6 @@
 
 #ifndef QUEUE_H
 
-/*
-put {EN|DE}{TRY|VAR}_QUEUE in .c file for thread at one end
-corresponding to {EN|DE} put {DE|EN}{TRY|VAR}_QUEUE in .c file for thread at the other end
-corresponding to {TRY|VAR} put {MUTEX|COND}_QUEUE in Common.c
-put {LOCAL|LINK|POOL|PRIORITY}_QUEUE in single .c files for single threads
-put BASE_QUEUE in Common.c, call prepQueue at beginning and doneQueue at end of main
-*/
-
 #define LOCAL_HELP(NAME,TYPE,INST) \
 /*unique NAME per thread per queue, shared INST per queue*/ \
 /*return pointer valid only until next call to en*##NAME */ \
