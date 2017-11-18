@@ -31,7 +31,7 @@ put BASE_QUEUE in Common.c, call prepQueue at beginning and doneQueue at end of 
 /*return pointer valid only until next call to en*##NAME */ \
 TYPE *enlocv##NAME(int siz) \
 { \
-    init##NAME() \
+    init##NAME(); \
     if (siz < 0) exitErrstr("enlocv too siz\n"); \
     while (INST##Inst.head - INST##Inst.base >= 10) { \
         int tail = INST##Inst.tail - INST##Inst.base; \
@@ -197,30 +197,30 @@ inline TYPE tail##NAME() \
 }
 
 #define ENTRY_HELP(CMD,RET,COND,INST) \
-    if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     CMD \
     if (INST.signal && COND) (*signal)(); \
-    if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
 #define DETRY_HELP(CMD,RET,INST) \
-    if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     CMD \
-    if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
 #define ENVAR_HELP(CMD,RET,COND,INST) \
-    if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     CMD \
     if (COND && pthread_cond_signal(&INST.cond) != 0) exitErrstr("entry cond failed: %s\n", strerror(errno)); \
-    if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
 #define DEVAR_HELP(CMD,RET,COND,INST) \
-    if (pthread_mutex_lock(&INST.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
-    while (COND) if (pthread_cond_wait(&INST.cond,&INST.mutex) != 0) exitErrstr("entry wait failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    while (COND) if (pthread_cond_wait(&INST.cond,&INST##Inst.mutex) != 0) exitErrstr("entry wait failed: %s\n", strerror(errno)); \
     CMD \
-    if (pthread_mutex_unlock(&INST.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     RET
 
 #define SHARED_QUEUE(TYPE,INST) \
@@ -276,34 +276,34 @@ LOCAL_HELP(NAME,TYPE,INST) \
 \
 void entryx##NAME(TYPE val) \
 { \
-    ENTRY_HELP(enlocx##NAME(val);,,1,INST##Inst) \
+    ENTRY_HELP(enlocx##NAME(val);,,1,INST) \
 } \
 \
 void entrys##NAME(TYPE *ptr, int siz) \
 { \
-    ENTRY_HELP(enlocs##NAME(ptr,siz);,,1,INST##Inst) \
+    ENTRY_HELP(enlocs##NAME(ptr,siz);,,1,INST) \
 } \
 \
 int entryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    ENTRY_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST##Inst) \
+    ENTRY_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST) \
 } \
 \
 /* detryv does not make sense */ \
 \
 TYPE detryx##NAME() \
 { \
-    DETRY_HELP(TYPE val = delocx##NAME();,return val;,INST##Inst) \
+    DETRY_HELP(TYPE val = delocx##NAME();,return val;,INST) \
 } \
 \
 void detrys##NAME(TYPE *ptr, int siz) \
 { \
-    DETRY_HELP(delocs##NAME(ptr,siz);,,INST##Inst) \
+    DETRY_HELP(delocs##NAME(ptr,siz);,,INST) \
 } \
 \
 int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    DETRY_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST##Inst) \
+    DETRY_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST) \
 } \
 \
 /* untry does not make sense */
@@ -349,34 +349,34 @@ LOCAL_HELP(NAME,TYPE,INST) \
 \
 void envarx##NAME(TYPE val) \
 { \
-    ENVAR_HELP(enlocx##NAME(val);,,1,INST##Inst) \
+    ENVAR_HELP(enlocx##NAME(val);,,1,INST) \
 } \
 \
 void envars##NAME(TYPE *ptr, int siz) \
 { \
-    ENVAR_HELP(enlocs##NAME(ptr,siz);,,1,INST##Inst) \
+    ENVAR_HELP(enlocs##NAME(ptr,siz);,,1,INST) \
 } \
 \
 int envarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    ENVAR_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST##Inst) \
+    ENVAR_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST) \
 } \
 \
 /* devarv does not make sense */ \
 \
 TYPE devarx##NAME() \
 { \
-    DEVAR_HELP(TYPE val = delocx##NAME();,return val;,INST##Inst.tail-INST##Inst.head<1,INST##Inst) \
+    DEVAR_HELP(TYPE val = delocx##NAME();,return val;,INST##Inst.tail-INST##Inst.head<1,INST) \
 } \
 \
 void devars##NAME(TYPE *ptr, int siz) \
 { \
-    DEVAR_HELP(delocs##NAME(ptr,siz);,,INST##Inst.tail-INST##Inst.head<siz,INST##Inst) \
+    DEVAR_HELP(delocs##NAME(ptr,siz);,,INST##Inst.tail-INST##Inst.head<siz,INST) \
 } \
 \
 int devarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    DEVAR_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST##Inst.valid==INST##Inst.seqnum,INST##Inst) \
+    DEVAR_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST##Inst.valid==INST##Inst.seqnum,INST) \
 } \
 \
 /* unvar does not make sense */
