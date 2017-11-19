@@ -19,7 +19,6 @@
 #ifndef QUEUE_H
 
 #define LOCAL_HELP(NAME,TYPE,INST) \
-/*unique NAME per thread per queue, shared INST per queue*/ \
 /*return pointer valid only until next call to en*##NAME */ \
 TYPE *enlocv##NAME(int siz) \
 { \
@@ -188,33 +187,6 @@ inline TYPE tail##NAME() \
     return *(stack##NAME()-1); \
 }
 
-#define ENTRY_HELP(CMD,RET,COND,INST) \
-    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
-    CMD \
-    if (INST.signal && COND) (*signal)(); \
-    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
-    RET
-
-#define DETRY_HELP(CMD,RET,INST) \
-    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
-    CMD \
-    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
-    RET
-
-#define ENVAR_HELP(CMD,RET,COND,INST) \
-    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
-    CMD \
-    if (COND && pthread_cond_signal(&INST.cond) != 0) exitErrstr("entry cond failed: %s\n", strerror(errno)); \
-    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
-    RET
-
-#define DEVAR_HELP(CMD,RET,COND,INST) \
-    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
-    while (COND) if (pthread_cond_wait(&INST.cond,&INST##Inst.mutex) != 0) exitErrstr("entry wait failed: %s\n", strerror(errno)); \
-    CMD \
-    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
-    RET
-
 #define SHARED_QUEUE(TYPE,INST) \
 /*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
 struct INST##Struct { \
@@ -268,34 +240,52 @@ LOCAL_HELP(NAME,TYPE,INST) \
 \
 void entryx##NAME(TYPE val) \
 { \
-    ENTRY_HELP(enlocx##NAME(val);,,1,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    enlocx##NAME(val); \
+    if (INST.signal) (*signal)(); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
 } \
 \
 void entrys##NAME(TYPE *ptr, int siz) \
 { \
-    ENTRY_HELP(enlocs##NAME(ptr,siz);,,1,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    enlocs##NAME(ptr,siz); \
+    if (INST.signal) (*signal)(); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
 } \
 \
 int entryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    ENTRY_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    int retval = enlocz##NAME(ptr,isterm,siz); \
+    if (INST.signal && (retval > 0 || (retval == 0 && isterm == 0 && siz > 0))) (*signal)(); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
+    return retval; \
 } \
 \
 /* detryv does not make sense */ \
 \
 TYPE detryx##NAME() \
 { \
-    DETRY_HELP(TYPE val = delocx##NAME();,return val;,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("detry lock failed: %s\n", strerror(errno)); \
+    TYPE val = delocx##NAME(); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
+    return val; \
 } \
 \
 void detrys##NAME(TYPE *ptr, int siz) \
 { \
-    DETRY_HELP(delocs##NAME(ptr,siz);,,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("detry lock failed: %s\n", strerror(errno)); \
+    delocs##NAME(ptr,siz); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
 } \
 \
 int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    DETRY_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("detry lock failed: %s\n", strerror(errno)); \
+    int retval = delocz##NAME(ptr,isterm,siz); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
+    return retval; \
 } \
 \
 /* untry does not make sense */
@@ -318,7 +308,7 @@ void init##NAME() \
 { \
     if (once##NAME == 0) { \
     if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
-    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("envar lock failed: %s\n", strerror(errno)); \
     if (INST##Inst.base == 0) { \
     INST##Inst.base = malloc(QUEUE_STEP*sizeof*INST##Inst.base); \
     INST##Inst.limit = INST##Inst.base + QUEUE_STEP; \
@@ -332,7 +322,7 @@ void init##NAME() \
     base->con = &INST##Inst.cond; \
     base->val = 2; \
     enlocx##BASE(base);} \
-    if (pthread_mutex_unlock(&BASE##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno));} \
+    if (pthread_mutex_unlock(&BASE##Inst.mutex) != 0) exitErrstr("envar unlock failed: %s\n", strerror(errno));} \
 } \
 \
 LOCAL_HELP(NAME,TYPE,INST) \
@@ -341,34 +331,59 @@ LOCAL_HELP(NAME,TYPE,INST) \
 \
 void envarx##NAME(TYPE val) \
 { \
-    ENVAR_HELP(enlocx##NAME(val);,,1,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("envar lock failed: %s\n", strerror(errno)); \
+    enlocx##NAME(val); \
+    if (pthread_cond_signal(&INST.cond) != 0) exitErrstr("envar cond failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("envar unlock failed: %s\n", strerror(errno)); \
 } \
 \
 void envars##NAME(TYPE *ptr, int siz) \
 { \
-    ENVAR_HELP(enlocs##NAME(ptr,siz);,,1,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("envar lock failed: %s\n", strerror(errno)); \
+    enlocs##NAME(ptr,siz); \
+    if (pthread_cond_signal(&INST.cond) != 0) exitErrstr("envar cond failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("envar unlock failed: %s\n", strerror(errno)); \
 } \
 \
 int envarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    ENVAR_HELP(int retval = enlocz##NAME(ptr,isterm,siz);,return retval;,((retval == 0 && isterm == 0 && siz > 0) || retval > 0),INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("envar lock failed: %s\n", strerror(errno)); \
+    int retval = enlocz##NAME(ptr,isterm,siz); \
+    if ((retval > 0 || (retval == 0 && isterm == 0 && siz > 0)) && \
+        pthread_cond_signal(&INST.cond) != 0) exitErrstr("envar cond failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("envar unlock failed: %s\n", strerror(errno)); \
+    return retval; \
 } \
 \
 /* devarv does not make sense */ \
 \
 TYPE devarx##NAME() \
 { \
-    DEVAR_HELP(TYPE val = delocx##NAME();,return val;,INST##Inst.tail-INST##Inst.head<1,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("devar lock failed: %s\n", strerror(errno)); \
+    while (INST##Inst.tail-INST##Inst.head<1) \
+        if (pthread_cond_wait(&INST.cond,&INST##Inst.mutex) != 0) exitErrstr("devar wait failed: %s\n", strerror(errno)); \
+    TYPE val = delocx##NAME(); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("devar unlock failed: %s\n", strerror(errno)); \
+    return val; \
 } \
 \
 void devars##NAME(TYPE *ptr, int siz) \
 { \
-    DEVAR_HELP(delocs##NAME(ptr,siz);,,INST##Inst.tail-INST##Inst.head<siz,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("devar lock failed: %s\n", strerror(errno)); \
+    while (INST##Inst.tail-INST##Inst.head<siz) \
+        if (pthread_cond_wait(&INST.cond,&INST##Inst.mutex) != 0) exitErrstr("devar wait failed: %s\n", strerror(errno)); \
+    delocs##NAME(ptr,siz); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("devar unlock failed: %s\n", strerror(errno)); \
 } \
 \
 int devarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
-    DEVAR_HELP(int retval = delocz##NAME(ptr,isterm,siz);,return retval;,INST##Inst.valid==INST##Inst.seqnum,INST) \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("devar lock failed: %s\n", strerror(errno)); \
+    while (INST##Inst.valid==INST##Inst.seqnum) \
+        if (pthread_cond_wait(&INST.cond,&INST##Inst.mutex) != 0) exitErrstr("devar wait failed: %s\n", strerror(errno)); \
+    int retval = delocz##NAME(ptr,isterm,siz); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("devar unlock failed: %s\n", strerror(errno)); \
+    return retval; \
 } \
 \
 /* unvar does not make sense */
@@ -583,7 +598,83 @@ int ready##NAME(pqueue_pri_t pri) \
     return NAME##_cmp_pri(pri,castPqueue##NAME(sub)->pri); \
 }
 
-// TODO: define ACKNOWLEDGE_QUEUE like CONDITION_QUEUE except has request, listen, respond functions
+#define ACKNOWLEDGE_QUEUE(NAME,TYPE,INST,BASE) \
+/*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
+struct INST##Struct { \
+    TYPE *base; \
+    TYPE *limit; \
+    TYPE *head; \
+    TYPE *tail; \
+    void (*signal)(); \
+    pthread_mutex_t mutex; \
+    pthread_cond_t cond; \
+    int valid; \
+    int seqnum;}; \
+int once##NAME = 0; \
+\
+void init##NAME() \
+{ \
+    if (once##NAME == 0) { \
+    if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
+    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("request lock failed: %s\n", strerror(errno)); \
+    if (INST##Inst.base == 0) { \
+    INST##Inst.base = malloc(QUEUE_STEP*sizeof*INST##Inst.base); \
+    INST##Inst.limit = INST##Inst.base + QUEUE_STEP; \
+    INST##Inst.head = INST##Inst.base; \
+    INST##Inst.tail = INST##Inst.base; \
+    if (pthread_mutex_init(&INST##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
+    if (pthread_cond_init(&INST##Inst.cond, 0) != 0) exitErrstr("cannot initialize cond\n"); \
+    struct Base base = {0}; \
+    base->ptr = (void**)&INST##Inst.base; \
+    base->mut = &INST##Inst.mutex; \
+    base->con = &INST##Inst.cond; \
+    base->val = 2; \
+    enlocx##BASE(base);} \
+    if (pthread_mutex_unlock(&BASE##Inst.mutex) != 0) exitErrstr("init unlock failed: %s\n", strerror(errno));} \
+} \
+\
+LOCAL_HELP(NAME,TYPE,INST) \
+\
+void request##NAME(TYPE val) \
+{ \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("request lock failed: %s\n", strerror(errno)); \
+    INST##Inst.valid++; \
+    int target = INST##Inst.valid; \
+    enlocx##NAME(val); \
+    if (pthread_cond_signal(&INST.cond) != 0) exitErrstr("request cond failed: %s\n", strerror(errno)); \
+    while (target!=INST##Inst.seqnum) \
+        if (pthread_cond_wait(&INST.cond,&INST##Inst.mutex) != 0) exitErrstr("request wait failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("request unlock failed: %s\n", strerror(errno)); \
+} \
+\
+TYPE listen##NAME() \
+{ \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("listen lock failed: %s\n", strerror(errno)); \
+    while (INST##Inst.tail-INST##Inst.head<1) \
+        if (pthread_cond_wait(&INST.cond,&INST##Inst.mutex) != 0) exitErrstr("listen wait failed: %s\n", strerror(errno)); \
+    TYPE val = *NAME##Inst.head; \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("listen unlock failed: %s\n", strerror(errno)); \
+    return val; \
+} \
+\
+int poll##NAME() \
+{ \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("poll lock failed: %s\n", strerror(errno)); \
+    int retval = (INST##Inst.tail-INST##Inst.head>0); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("poll unlock failed: %s\n", strerror(errno)); \
+    return retval; \
+} \
+\
+void respond##NAME() \
+{ \
+    if (pthread_mutex_lock(&INST##Inst.mutex) != 0) exitErrstr("respond lock failed: %s\n", strerror(errno)); \
+    INST##Inst.head++; \
+    if (INST##Inst.head > INST##Inst.tail) exitErrstr("respond too head\n"); \
+    if (INST##Inst.valid==INST##Inst.seqnum) exitErrstr("respond too seqnum\n"); \
+    INST##Inst.seqnum++; \
+    if (pthread_cond_broadcast(&INST.cond) != 0) exitErrstr("respond cond failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_unlock(&INST##Inst.mutex) != 0) exitErrstr("respond unlock failed: %s\n", strerror(errno)); \
+}
 
 void exitErrstr(const char *fmt, ...);
 
