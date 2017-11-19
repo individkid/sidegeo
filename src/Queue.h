@@ -18,27 +18,29 @@
 
 #ifndef QUEUE_H
 
+#define QUEUE_STEP 10
+
 #define LOCAL_HELP(NAME,TYPE,INST) \
 /*return pointer valid only until next call to en*##NAME */ \
 TYPE *enlocv##NAME(int siz) \
 { \
     init##NAME(); \
     if (siz < 0) exitErrstr("enlocv too siz\n"); \
-    while (INST##Inst.head - INST##Inst.base >= 10) { \
+    while (INST##Inst.head - INST##Inst.base >= QUEUE_STEP) { \
         int tail = INST##Inst.tail - INST##Inst.base; \
-        for (int i = 10; i < tail; i++) { \
-            INST##Inst.base[i-10] = INST##Inst.base[i];} \
-        INST##Inst.head = INST##Inst.head - 10; \
-        INST##Inst.tail = INST##Inst.tail - 10;} \
+        for (int i = QUEUE_STEP; i < tail; i++) { \
+            INST##Inst.base[i-QUEUE_STEP] = INST##Inst.base[i];} \
+        INST##Inst.head = INST##Inst.head - QUEUE_STEP; \
+        INST##Inst.tail = INST##Inst.tail - QUEUE_STEP;} \
     while (INST##Inst.tail + siz >= INST##Inst.limit) { \
         int limit = INST##Inst.limit - INST##Inst.base; \
         int size = INST##Inst.tail - INST##Inst.head; \
-        TYPE *temp = malloc((limit+10)*sizeof*INST##Inst.base); \
+        TYPE *temp = malloc((limit+QUEUE_STEP)*sizeof*INST##Inst.base); \
         memcpy(temp,INST##Inst.head,size*sizeof*INST##Inst.base); \
         free(INST##Inst.base); INST##Inst.base = temp; \
         INST##Inst.head = INST##Inst.base; \
         INST##Inst.tail = INST##Inst.base + size; \
-        INST##Inst.limit = INST##Inst.base + limit + 10;} \
+        INST##Inst.limit = INST##Inst.base + limit + QUEUE_STEP;} \
     INST##Inst.tail = INST##Inst.tail + siz; \
     return INST##Inst.tail - siz; \
 } \
@@ -105,8 +107,6 @@ int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
     if (retval == 0 && isterm == 0 && siz > 0) INST##Inst.seqnum++; \
     return retval; \
 }
-
-#define QUEUE_STEP 10
 
 #define LOCAL_QUEUE(NAME,TYPE,BASE) \
 /*unique NAME per thread per queue, shared BASE per thread*/ \
