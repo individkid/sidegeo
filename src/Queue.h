@@ -213,6 +213,7 @@ struct INST##Struct { \
     pthread_cond_t cond; \
     int valid; \
     int seqnum;}; \
+extern struct INST##Struct INST##Inst; \
 int once##NAME = 0; \
 \
 void init##NAME() \
@@ -302,6 +303,7 @@ struct INST##Struct { \
     pthread_cond_t cond; \
     int valid; \
     int seqnum;}; \
+extern struct INST##Struct INST##Inst; \
 int once##NAME = 0; \
 \
 void init##NAME() \
@@ -610,6 +612,7 @@ struct INST##Struct { \
     pthread_cond_t cond; \
     int valid; \
     int seqnum;}; \
+extern struct INST##Struct INST##Inst; \
 int once##NAME = 0; \
 \
 void init##NAME() \
