@@ -21,7 +21,7 @@
 
 #define QUEUE_STEP 10
 
-#define SHARED_HELP(TYPE,INST) \
+#define QUEUE_HELP(TYPE,INST) \
 struct INST##Struct { \
     TYPE *base; \
     TYPE *limit; \
@@ -124,7 +124,9 @@ int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 
 #define LOCAL_QUEUE(NAME,TYPE,BASE) \
 /*unique NAME per thread per queue, shared BASE per thread*/ \
-SHARED_HELP(TYPE,NAME) = {0}; \
+QUEUE_HELP(TYPE,NAME) = {0}; \
+extern QUEUE_HELP(struct Base,BASE); \
+enlocx##BASE(struct Base *); \
 \
 void init##NAME() \
 { \
@@ -226,12 +228,14 @@ void done##BASE() \
 
 #define SHARED_QUEUE(TYPE,INST) \
 /*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
-SHARED_HELP(TYPE,INST) = {0};
+QUEUE_HELP(TYPE,INST) = {0};
 
 #define MUTEX_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-extern SHARED_HELP(TYPE,INST); \
+extern QUEUE_HELP(TYPE,INST); \
 int once##NAME = 0; \
+extern QUEUE_HELP(struct Base,BASE); \
+enlocx##BASE(struct Base *); \
 \
 void init##NAME() \
 { \
@@ -310,8 +314,10 @@ int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 
 #define CONDITION_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-extern SHARED_HELP(TPE,INST); \
+extern QUEUE_HELP(TPE,INST); \
 int once##NAME = 0; \
+extern QUEUE_HELP(struct Base,BASE); \
+enlocx##BASE(struct Base *); \
 \
 void init##NAME() \
 { \
@@ -577,8 +583,10 @@ int ready##NAME(pqueue_pri_t pri) \
 
 #define ACKNOWLEDGE_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-extern SHARED_HELP(TPE,INST); \
+extern QUEUE_HELP(TPE,INST); \
 int once##NAME = 0; \
+extern QUEUE_HELP(struct Base,BASE); \
+enlocx##BASE(struct Base *); \
 \
 void init##NAME() \
 { \
