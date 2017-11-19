@@ -187,8 +187,7 @@ inline TYPE tail##NAME() \
     return *(stack##NAME()-1); \
 }
 
-#define SHARED_QUEUE(TYPE,INST) \
-/*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
+#define SHARED_HELP(TYPE,INST) \
 struct INST##Struct { \
     TYPE *base; \
     TYPE *limit; \
@@ -199,21 +198,15 @@ struct INST##Struct { \
     pthread_cond_t cond; \
     int valid; \
     int seqnum; \
-} INST##Inst = {0};
+} INST##Inst
+
+#define SHARED_QUEUE(TYPE,INST) \
+/*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
+SHARED_HELP(TYPE,INST) = {0};
 
 #define MUTEX_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-struct INST##Struct { \
-    TYPE *base; \
-    TYPE *limit; \
-    TYPE *head; \
-    TYPE *tail; \
-    void (*signal)(); \
-    pthread_mutex_t mutex; \
-    pthread_cond_t cond; \
-    int valid; \
-    int seqnum;}; \
-extern struct INST##Struct INST##Inst; \
+extern SHARED_HELP(TPE,INST); \
 int once##NAME = 0; \
 \
 void init##NAME() \
@@ -293,17 +286,7 @@ int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 
 #define CONDITION_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-struct INST##Struct { \
-    TYPE *base; \
-    TYPE *limit; \
-    TYPE *head; \
-    TYPE *tail; \
-    void (*signal)(); \
-    pthread_mutex_t mutex; \
-    pthread_cond_t cond; \
-    int valid; \
-    int seqnum;}; \
-extern struct INST##Struct INST##Inst; \
+extern SHARED_HELP(TPE,INST); \
 int once##NAME = 0; \
 \
 void init##NAME() \
@@ -602,17 +585,7 @@ int ready##NAME(pqueue_pri_t pri) \
 
 #define ACKNOWLEDGE_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-struct INST##Struct { \
-    TYPE *base; \
-    TYPE *limit; \
-    TYPE *head; \
-    TYPE *tail; \
-    void (*signal)(); \
-    pthread_mutex_t mutex; \
-    pthread_cond_t cond; \
-    int valid; \
-    int seqnum;}; \
-extern struct INST##Struct INST##Inst; \
+extern SHARED_HELP(TPE,INST); \
 int once##NAME = 0; \
 \
 void init##NAME() \
