@@ -33,6 +33,7 @@ struct INST##Struct { \
     int valid; \
     int seqnum; \
 } INST##Inst
+/*QUEUE_HELP(TYPE,INST) = {0}; in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/
 
 #define LOCAL_HELP(NAME,TYPE,INST) \
 /*return pointer valid only until next call to en*##NAME */ \
@@ -225,10 +226,6 @@ void done##BASE() \
     BASE##Inst.base = 0; \
     if (pthread_mutex_destroy(&BASE##Inst.mutex) != 0) exitErrstr("cannot finalize mutex\n"); \
 }
-
-#define SHARED_QUEUE(TYPE,INST) \
-/*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
-QUEUE_HELP(TYPE,INST) = {0};
 
 #define MUTEX_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
