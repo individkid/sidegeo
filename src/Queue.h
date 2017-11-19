@@ -17,8 +17,22 @@
 */
 
 #ifndef QUEUE_H
+#define QUEUE_H
 
 #define QUEUE_STEP 10
+
+#define SHARED_HELP(TYPE,INST) \
+struct INST##Struct { \
+    TYPE *base; \
+    TYPE *limit; \
+    TYPE *head; \
+    TYPE *tail; \
+    void (*signal)(); \
+    pthread_mutex_t mutex; \
+    pthread_cond_t cond; \
+    int valid; \
+    int seqnum; \
+} INST##Inst
 
 #define LOCAL_HELP(NAME,TYPE,INST) \
 /*return pointer valid only until next call to en*##NAME */ \
@@ -110,17 +124,7 @@ int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 
 #define LOCAL_QUEUE(NAME,TYPE,BASE) \
 /*unique NAME per thread per queue, shared BASE per thread*/ \
-struct NAME##Struct { \
-    TYPE *base; \
-    TYPE *limit; \
-    TYPE *head; \
-    TYPE *tail; \
-    void (*signal)(); \
-    pthread_mutex_t mutex; \
-    pthread_cond_t cond; \
-    int valid; \
-    int seqnum; \
-} NAME##Inst = {0}; \
+SHARED_HELP(TYPE,NAME) = {0}; \
 \
 void init##NAME() \
 { \
@@ -187,18 +191,38 @@ inline TYPE tail##NAME() \
     return *(stack##NAME()-1); \
 }
 
-#define SHARED_HELP(TYPE,INST) \
-struct INST##Struct { \
-    TYPE *base; \
-    TYPE *limit; \
-    TYPE *head; \
-    TYPE *tail; \
-    void (*signal)(); \
-    pthread_mutex_t mutex; \
-    pthread_cond_t cond; \
-    int valid; \
-    int seqnum; \
-} INST##Inst
+struct Base {
+    void **ptr;
+    pthread_mutex_t *mut;
+    pthread_cond_t *con;
+    int val;};
+
+#define BASE_QUEUE(BASE) \
+/*one per thread, and one shared*/ \
+LOCAL_QUEUE(BASE,struct Base,BASE) \
+\
+void prep##BASE() \
+{ \
+    BASE##Inst.base = malloc(QUEUE_STEP*sizeof*BASE##Inst.base); \
+    BASE##Inst.limit = BASE##Inst.base + QUEUE_STEP; \
+    BASE##Inst.head = BASE##Inst.base; \
+    BASE##Inst.tail = BASE##Inst.base; \
+    if (pthread_mutex_init(&BASE##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
+} \
+\
+void done##BASE() \
+{ \
+    for (int i = 0; i < sizeBase(); i++) { \
+        struct Base *base = arrayBase()+i; \
+        free(*base->ptr); \
+        *base->ptr = 0; \
+        if (base->val > 0 && pthread_mutex_destroy(base->mut) != 0) exitErrstr("cannot finalize mutex\n"); \
+        if (base->val > 1 && pthread_cond_destroy(base->con) != 0) exitErrstr("cannot finalize cond\n"); \
+        base->val = 0;} \
+    free(BASE##Inst.base); \
+    BASE##Inst.base = 0; \
+    if (pthread_mutex_destroy(&BASE##Inst.mutex) != 0) exitErrstr("cannot finalize mutex\n"); \
+}
 
 #define SHARED_QUEUE(TYPE,INST) \
 /*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
@@ -206,14 +230,14 @@ SHARED_HELP(TYPE,INST) = {0};
 
 #define MUTEX_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-extern SHARED_HELP(TPE,INST); \
+extern SHARED_HELP(TYPE,INST); \
 int once##NAME = 0; \
 \
 void init##NAME() \
 { \
-    if (once##NAME == 0) { \
+    if (once##NAME == 0) {once##NAME = 1; \
     if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
-    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
+    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("init lock failed: %s; please call prep%s\n", strerror(errno), #BASE); \
     if (INST##Inst.base == 0) { \
     INST##Inst.base = malloc(QUEUE_STEP*sizeof*INST##Inst.base); \
     INST##Inst.limit = INST##Inst.base + QUEUE_STEP; \
@@ -291,9 +315,8 @@ int once##NAME = 0; \
 \
 void init##NAME() \
 { \
-    if (once##NAME == 0) { \
-    if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
-    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("envar lock failed: %s\n", strerror(errno)); \
+    if (once##NAME == 0) {once##NAME = 1; \
+    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("init lock failed: %s; please call prep%s\n", strerror(errno), #BASE); \
     if (INST##Inst.base == 0) { \
     INST##Inst.base = malloc(QUEUE_STEP*sizeof*INST##Inst.base); \
     INST##Inst.limit = INST##Inst.base + QUEUE_STEP; \
@@ -373,39 +396,6 @@ int devarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 \
 /* unvar does not make sense */
 
-struct Base {
-    void **ptr;
-    pthread_mutex_t *mut;
-    pthread_cond_t *con;
-    int val;};
-
-#define BASE_QUEUE(BASE) \
-/*one per thread, and one shared*/ \
-LOCAL_QUEUE(BASE,struct Base,BASE) \
-\
-void prep##BASE() \
-{ \
-    BASE##Inst.base = malloc(QUEUE_STEP*sizeof*BASE##Inst.base); \
-    BASE##Inst.limit = BASE##Inst.base + QUEUE_STEP; \
-    BASE##Inst.head = BASE##Inst.base; \
-    BASE##Inst.tail = BASE##Inst.base; \
-    if (pthread_mutex_init(&BASE##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
-} \
-\
-void done##BASE() \
-{ \
-    for (int i = 0; i < sizeBase(); i++) { \
-        struct Base *base = arrayBase()+i; \
-        free(*base->ptr); \
-        *base->ptr = 0; \
-        if (base->val > 0 && pthread_mutex_destroy(base->mut) != 0) exitErrstr("cannot finalize mutex\n"); \
-        if (base->val > 1 && pthread_cond_destroy(base->con) != 0) exitErrstr("cannot finalize cond\n"); \
-        base->val = 0;} \
-    free(BASE##Inst.base); \
-    BASE##Inst.base = 0; \
-    if (pthread_mutex_destroy(&BASE##Inst.mutex) != 0) exitErrstr("cannot finalize mutex\n"); \
-}
-
 struct Link {
     int next,last; // links if positive, index into head or tail if negative
     int val; // subscript into a buffer or direct value
@@ -473,18 +463,6 @@ int last##NAME(int link) \
     return arrayLink##NAME()[link].last; \
 }
 
-inline void *int2void(int val)
-{
-    char *ptr = 0;
-    return (void *)(ptr+val);
-}
-
-inline int void2int(void *val)
-{
-    char *ptr = 0;
-    return ((char *)val-ptr);
-}
-
 #define POOL_QUEUE(NAME,TYPE,BASE) \
 LOCAL_QUEUE(Local##NAME,TYPE,BASE) \
 LINK_QUEUE(Link##NAME,BASE) \
@@ -515,6 +493,18 @@ struct Pqueue {
     size_t pos;}; // used by pqueue
 
 #define PQUEUE_STEP 100
+
+inline void *int2void(int val)
+{
+    char *ptr = 0;
+    return (void *)(ptr+val);
+}
+
+inline int void2int(void *val)
+{
+    char *ptr = 0;
+    return ((char *)val-ptr);
+}
 
 #define PRIORITY_QUEUE(NAME,TYPE,BASE) \
 POOL_QUEUE(Pqueue##NAME,struct Pqueue,BASE) \
@@ -579,8 +569,8 @@ TYPE *advance##NAME() \
 \
 int ready##NAME(pqueue_pri_t pri) \
 { \
-    int sub = pqueue_peek(pqueue_##NAME); \
-    return NAME##_cmp_pri(pri,castPqueue##NAME(sub)->pri); \
+    int sub = void2int(pqueue_peek(pqueue_##NAME)); \
+    return NAME##_cmp_pri(castPqueue##NAME(sub)->pri,pri); \
 }
 
 #define ACKNOWLEDGE_QUEUE(NAME,TYPE,INST,BASE) \
@@ -590,9 +580,8 @@ int once##NAME = 0; \
 \
 void init##NAME() \
 { \
-    if (once##NAME == 0) { \
-    if (BASE##Inst.base == 0) exitErrstr("please call prep"#BASE"\n"); \
-    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("request lock failed: %s\n", strerror(errno)); \
+    if (once##NAME == 0) {once##NAME = 1; \
+    if (pthread_mutex_lock(&BASE##Inst.mutex) != 0) exitErrstr("init lock failed: %s; please call prep%s\n", strerror(errno), #BASE); \
     if (INST##Inst.base == 0) { \
     INST##Inst.base = malloc(QUEUE_STEP*sizeof*INST##Inst.base); \
     INST##Inst.limit = INST##Inst.base + QUEUE_STEP; \
