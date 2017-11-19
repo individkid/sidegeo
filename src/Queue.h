@@ -33,7 +33,8 @@ struct INST##Struct { \
     int valid; \
     int seqnum; \
 } INST##Inst
-/*QUEUE_HELP(TYPE,INST) = {0}; in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/
+/*QUEUE_HELP(TYPE,INST) = {0}; in Common.c for MUTEX_QUEUE and CONDITION_QUEUE
+  QUEUE_HELP(TYPE,INST) = {0}; in local .c for LOCAL_QUEUE*/
 
 #define LOCAL_HELP(NAME,TYPE,INST) \
 /*return pointer valid only until next call to en*##NAME */ \
@@ -126,7 +127,7 @@ int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 #define LOCAL_QUEUE(NAME,TYPE,BASE) \
 /*unique NAME per thread per queue, shared BASE per thread*/ \
 QUEUE_HELP(TYPE,NAME) = {0}; \
-extern QUEUE_HELP(struct Base,BASE); \
+QUEUE_HELP(struct Base,BASE); \
 enlocx##BASE(struct Base *); \
 \
 void init##NAME() \
