@@ -469,11 +469,13 @@ LINK_QUEUE(Link##NAME,BASE) \
 \
 int alloc##NAME() \
 { \
-    if (headLink##NAME(0) < 0) { \
-        setLink##NAME(moveLink##NAME(0,-1),sizeLocal##NAME()); \
-        enlocvLocal##NAME(1);} \
     int head = headLink##NAME(0); \
-    moveLink##NAME(1,head); \
+    if (head < 0) { \
+        moveLink##NAME(-1,0); \
+        head = headLink##NAME(0); \
+        setLink##NAME(head,sizeLocal##NAME()); \
+        enlocvLocal##NAME(1);} \
+    moveLink##NAME(head,1); \
     return getLink##NAME(head); \
 } \
 \
