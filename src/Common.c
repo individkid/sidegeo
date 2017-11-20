@@ -21,29 +21,22 @@
 #include "Queue.h"
 #include "Common.h"
 
-BASE_QUEUE
-
-MUTEX_QUEUE(Output,char)
-
-LOCAL_QUEUE(CommonChar,char)
+BASE_QUEUE(Base)
+SHARED_QUEUE(char,Output)
 
 void enqueMsgstr(const char *fmt, ...)
 {
     va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char *buf = enlocvCommonChar(len+1);
-    va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    unlocvCommonChar(1); // remove '\0' that vsnprintf puts on
-    entrysOutput(buf,len);
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
+    entrysOutputer(buf,len);
 }
 
 void enqueErrstr(const char *fmt, ...)
 {
     enqueMsgstr("error: ");
     va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char *buf = enlocvCommonChar(len+1);
-    va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    unlocvCommonChar(1); // remove '\0' that vsnprintf puts on
-    entrysOutput(buf,len);
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
+    entrysOutputer(buf,len);
 }
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io

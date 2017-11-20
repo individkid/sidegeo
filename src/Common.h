@@ -17,6 +17,9 @@
 */
 
 #ifndef COMMON_H
+#define COMMON_H
+
+#include "Queue.h"
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
@@ -63,5 +66,7 @@ float *crossvec(float *u, float *v);
 float detmat(float *u, int n);
 float *adjmat(float *u, int n);
 float *invmat(float *u, int n);
+
+ENTRY_QUEUE(Output,char)
 
 #endif

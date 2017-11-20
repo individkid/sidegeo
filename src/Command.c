@@ -68,8 +68,10 @@ float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
 
+BASE_QUEUE(CommandBase)
 typedef void (*Command)();
-LOCAL_QUEUE(Command,Command)
+LOCAL_QUEUE(Command,Command,CommandBase)
+MUTEX_QUEUE(CommandOutput,char,Output,Base)
 
 void leftAdditive()
 {
@@ -546,53 +548,27 @@ int main(int argc, char **argv)
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
+    sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
-    if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
-    if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
-    if (pthread_create(&haskellThread, 0, &haskell, 0) != 0) exitErrstr("cannot create thread\n");
 
-    constrBase(&base);
-    for (int i = 1; i < argc; i++) enqueOption(argv[i]);
-    ENQUE(process,Process)
+    prepCommandBase();
+    for (int i = 1; i < argc; i++) enlocxOption(argv[i]);
+    enlocxCommand(&process);
 
     while (1) {
-        int lenOut = entryOutput(arrayOutputee(),&isEndLine,sizeOutputee());
-        if (lenOut == 0) delocOutputee(sizeOutputee());
-        else if (lenOut > 0) delocOutputee(lenOut);
-        
-        int totIn = 0; int lenIn;
-        while ((lenIn = detryInput(enlocInputee(10),&isEndLine,10)) == 0) totIn += 10;
-        if (lenIn < 0 && totIn > 0) exitErrstr("detryInput failed\n");
-        else if (lenIn < 0) unlocInputee(10);
-        else {unlocInputee(10-lenIn); menu();}
+        if (detrysCommandee(enlocvCommand(1),1) < 0) unlocvCommand(1);
 
-        int lenCmd = detryCommandee(enlocCommand(1),0,1);
-        if (lenCmd < 0) unlocCommand(1);
-
-        if (lenIn < 0 && lenOut < 0 && !validCommand()) glfwWaitEvents();
-        else if (lenIn < 0 && lenOut < 0 && sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
+        if (sizeCommand() == 0) glfwWaitEvents();
+        else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
         else glfwPollEvents();
 
-        if (!validCommand()) continue;
-        Command command = headCommand();
-        dequeCommand();
-        if (validDefer() && sequenceNumber == headDefer()) dequeDefer();
+        if (sizeCommand() == 0) continue;
+        Command command = delocxCommand();
+        if (sizeDefer() > 0 && sequenceNumber == headDefer()) delocvDefer(1);
         sequenceNumber++;
         if (!command) break;
         (*command)();
     }
-    struct Small small = {0}; small.tag = Smallers;
-    struct Sched sched = {0}; sched.tag = Scheders;
-    entry1Small(small); entry1Sched(sched);
-    if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-    entry1Output(ofmotion(Escape)); entry1Output('\n');
-    if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-    entry1Event(Done);
-    if (pthread_kill(haskellThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-    if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
-    if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
-    if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
-    for (int i = 0; i < sizeBase(); i++) destruct(arrayBase()+i);
-    destruct(&base);
+    doneCommandBase();
     glfwTerminate();
 }

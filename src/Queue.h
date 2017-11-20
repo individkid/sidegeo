@@ -19,8 +19,6 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#define QUEUE_STEP 10
-
 #define QUEUE_HELP(TYPE,INST) \
 struct INST##Struct { \
     TYPE *base; \
@@ -33,8 +31,12 @@ struct INST##Struct { \
     int valid; \
     int seqnum; \
 } INST##Inst
-/*QUEUE_HELP(TYPE,INST) = {0}; in Common.c for MUTEX_QUEUE and CONDITION_QUEUE
-  QUEUE_HELP(TYPE,INST) = {0}; in local .c for LOCAL_QUEUE*/
+
+#define SHARED_QUEUE(TYPE,INST) \
+/*in Common.c for MUTEX_QUEUE and CONDITION_QUEUE*/ \
+QUEUE_HELP(TYPE,INST) = {0};
+
+#define QUEUE_STEP 10
 
 #define LOCAL_HELP(NAME,TYPE,INST) \
 /*return pointer valid only until next call to en*##NAME */ \
@@ -124,6 +126,39 @@ int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
     return retval; \
 }
 
+struct Base {
+    void **ptr;
+    pthread_mutex_t *mut;
+    pthread_cond_t *con;
+    int val;};
+
+#define BASE_QUEUE(BASE) \
+/*one per thread, and one shared*/ \
+LOCAL_QUEUE(BASE,struct Base,BASE) \
+\
+void prep##BASE() \
+{ \
+    BASE##Inst.base = malloc(QUEUE_STEP*sizeof*BASE##Inst.base); \
+    BASE##Inst.limit = BASE##Inst.base + QUEUE_STEP; \
+    BASE##Inst.head = BASE##Inst.base; \
+    BASE##Inst.tail = BASE##Inst.base; \
+    if (pthread_mutex_init(&BASE##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
+} \
+\
+void done##BASE() \
+{ \
+    for (int i = 0; i < sizeBase(); i++) { \
+        struct Base *base = arrayBase()+i; \
+        free(*base->ptr); \
+        *base->ptr = 0; \
+        if (base->val > 0 && pthread_mutex_destroy(base->mut) != 0) exitErrstr("cannot finalize mutex\n"); \
+        if (base->val > 1 && pthread_cond_destroy(base->con) != 0) exitErrstr("cannot finalize cond\n"); \
+        base->val = 0;} \
+    free(BASE##Inst.base); \
+    BASE##Inst.base = 0; \
+    if (pthread_mutex_destroy(&BASE##Inst.mutex) != 0) exitErrstr("cannot finalize mutex\n"); \
+}
+
 #define LOCAL_QUEUE(NAME,TYPE,BASE) \
 /*unique NAME per thread per queue, shared BASE per thread*/ \
 QUEUE_HELP(TYPE,NAME) = {0}; \
@@ -195,45 +230,12 @@ inline TYPE tail##NAME() \
     return *(stack##NAME()-1); \
 }
 
-struct Base {
-    void **ptr;
-    pthread_mutex_t *mut;
-    pthread_cond_t *con;
-    int val;};
-
-#define BASE_QUEUE(BASE) \
-/*one per thread, and one shared*/ \
-LOCAL_QUEUE(BASE,struct Base,BASE) \
-\
-void prep##BASE() \
-{ \
-    BASE##Inst.base = malloc(QUEUE_STEP*sizeof*BASE##Inst.base); \
-    BASE##Inst.limit = BASE##Inst.base + QUEUE_STEP; \
-    BASE##Inst.head = BASE##Inst.base; \
-    BASE##Inst.tail = BASE##Inst.base; \
-    if (pthread_mutex_init(&BASE##Inst.mutex, 0) != 0) exitErrstr("cannot initialize mutex\n"); \
-} \
-\
-void done##BASE() \
-{ \
-    for (int i = 0; i < sizeBase(); i++) { \
-        struct Base *base = arrayBase()+i; \
-        free(*base->ptr); \
-        *base->ptr = 0; \
-        if (base->val > 0 && pthread_mutex_destroy(base->mut) != 0) exitErrstr("cannot finalize mutex\n"); \
-        if (base->val > 1 && pthread_cond_destroy(base->con) != 0) exitErrstr("cannot finalize cond\n"); \
-        base->val = 0;} \
-    free(BASE##Inst.base); \
-    BASE##Inst.base = 0; \
-    if (pthread_mutex_destroy(&BASE##Inst.mutex) != 0) exitErrstr("cannot finalize mutex\n"); \
-}
-
 #define MUTEX_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
 extern QUEUE_HELP(TYPE,INST); \
 int once##NAME = 0; \
 extern QUEUE_HELP(struct Base,BASE); \
-enlocx##BASE(struct Base *); \
+enlocx##BASE(struct Base); \
 \
 void init##NAME() \
 { \
@@ -312,10 +314,10 @@ int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 
 #define CONDITION_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-extern QUEUE_HELP(TPE,INST); \
+extern QUEUE_HELP(TYPE,INST); \
 int once##NAME = 0; \
 extern QUEUE_HELP(struct Base,BASE); \
-enlocx##BASE(struct Base *); \
+enlocx##BASE(struct Base); \
 \
 void init##NAME() \
 { \
@@ -581,10 +583,10 @@ int ready##NAME(pqueue_pri_t pri) \
 
 #define ACKNOWLEDGE_QUEUE(NAME,TYPE,INST,BASE) \
 /*unique NAME per thread per queue, shared INST per queue, shared BASE*/ \
-extern QUEUE_HELP(TPE,INST); \
+extern QUEUE_HELP(TYPE,INST); \
 int once##NAME = 0; \
 extern QUEUE_HELP(struct Base,BASE); \
-enlocx##BASE(struct Base *); \
+enlocx##BASE(struct Base); \
 \
 void init##NAME() \
 { \
