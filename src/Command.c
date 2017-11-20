@@ -71,7 +71,6 @@ float aspect = 0;
 BASE_QUEUE(CommandBase)
 typedef void (*Command)();
 LOCAL_QUEUE(Command,Command,CommandBase)
-MUTEX_QUEUE(CommandOutput,char,Output,Base)
 
 void leftAdditive()
 {
