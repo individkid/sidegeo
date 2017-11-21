@@ -31,7 +31,6 @@
 #include <CoreGraphics/CoreGraphics.h>
 #endif
 
-#include "Queue.h"
 #include "Common.h"
 
 #ifdef __linux__
@@ -68,9 +67,8 @@ float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
 
-BASE_QUEUE(CommandBase)
-typedef void (*Command)();
-LOCAL_QUEUE(Command,Command,CommandBase)
+DEFINE_DUMMY(CommandBase)
+DEFINE_LOCAL(Command,Command,CommandBase)
 
 void leftAdditive()
 {
@@ -545,17 +543,18 @@ int main(int argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
 
+    // TODO initialize mutex and cond from Common
+    for (int i = 1; i < argc; i++) enlocxOption(argv[i]);
+    enlocxCommand(&process);
+
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
     sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
-
-    prepCommandBase();
-    for (int i = 1; i < argc; i++) enlocxOption(argv[i]);
-    enlocxCommand(&process);
+    // start threads
 
     while (1) {
-        if (detrysCommandee(enlocvCommand(1),1) < 0) unlocvCommand(1);
+        if (detrysCommanded(enlocvCommand(1),1) < 0) unlocvCommand(1);
 
         if (sizeCommand() == 0) glfwWaitEvents();
         else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -568,6 +567,8 @@ int main(int argc, char **argv)
         if (!command) break;
         (*command)();
     }
-    doneCommandBase();
+    // TODO finalize base mutex and cond from Common
+    // TODO finalize base from CommandBase
     glfwTerminate();
 }
+

@@ -19,6 +19,28 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "Queue.h"
+
+typedef void (*Command)();
+
+DECLARE_MUTEX(Output,char)
+DECLARE_MUTEX(Commanded,Command)
+
+static void enqueMsgstr(const char *fmt, ...)
+{
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
+    entrysOutput(buf,len);
+}
+
+static void enqueErrstr(const char *fmt, ...)
+{
+    enqueMsgstr("error: ");
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
+    entrysOutput(buf,len);
+}
+
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
 #define FALL(VAL) case (VAL):
@@ -64,22 +86,5 @@ float *crossvec(float *u, float *v);
 float detmat(float *u, int n);
 float *adjmat(float *u, int n);
 float *invmat(float *u, int n);
-
-MUTEX_QUEUE(Output,char,Base)
-
-static void enqueMsgstr(const char *fmt, ...)
-{
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    entrysOutput(buf,len);
-}
-
-static void enqueErrstr(const char *fmt, ...)
-{
-    enqueMsgstr("error: ");
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    entrysOutput(buf,len);
-}
 
 #endif

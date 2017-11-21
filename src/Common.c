@@ -18,11 +18,11 @@
 
 #include <stdio.h>
 #include <termios.h>
-#include "Queue.h"
 #include "Common.h"
 
-BASE_QUEUE(Base)
-SHARED_QUEUE(Output,char)
+DEFINE_DUMMY(Common)
+DECLARE_MUTEX(Output,char,Common)
+DECLARE_MUTEX(Commanded,Command,Output)
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
