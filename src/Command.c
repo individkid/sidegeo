@@ -67,9 +67,6 @@ float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
 
-DEFINE_DUMMY(CommandBase)
-DEFINE_LOCAL(Command,Command,CommandBase)
-
 void leftAdditive()
 {
     // TODO
@@ -543,7 +540,9 @@ int main(int argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
 
-    // TODO initialize mutex and cond from Common
+    for (struct QueuePtr *i = &MUTEX_BEGIN; i != &MUTEX_END; i = i->next) {
+        struct QueueStruct *queue = i;
+        if (pthread_mutex_init(&queue->mutex, 0) != 0) exitErrstr("cannot initialize mutex\n");}
     for (int i = 1; i < argc; i++) enlocxOption(argv[i]);
     enlocxCommand(&process);
 
@@ -551,7 +550,7 @@ int main(int argc, char **argv)
     sigaddset(&sigs, SIGUSR1);
     sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
-    // start threads
+    // TODO start threads
 
     while (1) {
         if (detrysCommanded(enlocvCommand(1),1) < 0) unlocvCommand(1);
@@ -567,8 +566,13 @@ int main(int argc, char **argv)
         if (!command) break;
         (*command)();
     }
-    // TODO finalize base mutex and cond from Common
-    // TODO finalize base from CommandBase
+    for (struct QueuePtr *i = &MUTEX_BEGIN; i != &MUTEX_END; i = i->next) {
+        struct QueueStruct *queue = i;
+        if (pthread_mutex_destroy(&queue->mutex) != 0) exitErrstr("cannot finalize mutex\n");}
+    for (struct QueuePtr *i = &LOCAL_BEGIN; i != &LOCAL_END; i = i->next) {
+        struct QueueStruct *queue = i;
+        free(queue->base);
+        queue->base = 0;}
     glfwTerminate();
 }
 

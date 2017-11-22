@@ -21,25 +21,36 @@
 
 #include "Queue.h"
 
+#define DEFINE_MSGSTR(NAME) \
+void msgstr##NAME(const char *fmt, ...) \
+{ \
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
+    entrys##NAME(buf,len); \
+}
+
+#define DEFINE_ERRSTR(NAME) \
+void errstr##NAME(const char *fmt, ...) \
+{ \
+    msgstr##NAME("error: "); \
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
+    entrys##NAME(buf,len); \
+}
+
 typedef void (*Command)();
 
-DECLARE_MUTEX(Output,char)
+#define LOCAL_END DECLARE_INST(Local)
+DECLARE_LOCAL(Command,Command)
+DECLARE_LOCAL(Output,char)
+#define LOCAL_BEGIN DECLARE_INST(Output)
+#define MUTEX_END DECLARE_INST(Mutex)
 DECLARE_MUTEX(Commanded,Command)
+DECLARE_MUTEX(Outputed,char)
+#define MUTEX_BEGIN DECLARE_INST(Outputed)
 
-static void enqueMsgstr(const char *fmt, ...)
-{
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    entrysOutput(buf,len);
-}
-
-static void enqueErrstr(const char *fmt, ...)
-{
-    enqueMsgstr("error: ");
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args);
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args);
-    entrysOutput(buf,len);
-}
+void msgstrOutputed(const char *fmt, ...);
+void errstrOutputed(const char *fmt, ...);
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):

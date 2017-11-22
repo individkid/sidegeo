@@ -20,13 +20,6 @@
 #include <termios.h>
 #include "Common.h"
 
-DEFINE_DUMMY(Common)
-DECLARE_MUTEX(Output,char,Common)
-DECLARE_MUTEX(Commanded,Command,Output)
-
-struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
-int validTermios = 0; // for whether to restore before exit
-
 void exitErrstr(const char *fmt, ...)
 {
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
@@ -34,6 +27,19 @@ void exitErrstr(const char *fmt, ...)
     va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
 }
+
+DEFINE_INST(Local)
+DEFINE_LOCAL(Command,Command,Local)
+DEFINE_LOCAL(Output,char,Command)
+DEFINE_INST(Mutex)
+DEFINE_MUTEX(Commanded,Command,Mutex)
+DEFINE_MUTEX(Outputed,char,Commanded)
+
+DEFINE_MSGSTR(Outputed);
+DEFINE_ERRSTR(Outputed);
+
+struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
+int validTermios = 0; // for whether to restore before exit
 
 enum Motion motionof(char code)
 {

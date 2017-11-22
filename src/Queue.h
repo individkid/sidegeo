@@ -21,7 +21,7 @@
 
 #include "pqueue.h"
 
-void exitErrstr(const char *fmt, ...);
+#define DECLARE_INST(NAME) NAME##Inst
 
 #define DECLARE_LOCAL(NAME,TYPE) \
 TYPE *enlocv##NAME(int siz); \
@@ -94,12 +94,7 @@ struct QueuePtr {
     struct QueuePtr *next;
 };
 
-#define DEFINE_DUMMY(NAME) \
-struct QueuePtr NAME##Inst = {0};
-
-#define QUEUE_STEP 10
-
-#define DEFINE_QUEUE(NAME,TYPE,NEXT) \
+#define QUEUE_STRUCT(NAME,TYPE) \
 struct NAME##Struct { \
     struct QueuePtr next; \
     TYPE *base; \
@@ -111,7 +106,17 @@ struct NAME##Struct { \
     pthread_cond_t cond; \
     int valid; \
     int seqnum; \
-} NAME##Inst = {.next.next = (struct QueuePtr *)&NEXT##Inst}; \
+}
+
+QUEUE_STRUCT(Queue,void);
+
+#define DEFINE_INST(NAME) \
+struct QueuePtr NAME##Inst = {0};
+
+#define QUEUE_STEP 10
+
+#define DEFINE_QUEUE(NAME,TYPE,NEXT) \
+QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next.next = (struct QueuePtr *)&NEXT##Inst}; \
 /*return pointer valid only until next call to en*##NAME */ \
 TYPE *enlocv##NAME(int siz) \
 { \
