@@ -20,6 +20,14 @@
 #include <termios.h>
 #include "Common.h"
 
+DEFINE_INST(Local)
+DEFINE_LOCAL(Command,Command,Local)
+DEFINE_LOCAL(Output,char,Command)
+DEFINE_LOCAL(CmdOutput,char,Output)
+DEFINE_INST(Mutex)
+DEFINE_MUTEX(Commanded,Command,Mutex)
+DEFINE_MUTEX(Outputed,char,Commanded)
+
 void exitErrstr(const char *fmt, ...)
 {
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
@@ -28,15 +36,8 @@ void exitErrstr(const char *fmt, ...)
     exit(-1);
 }
 
-DEFINE_INST(Local)
-DEFINE_LOCAL(Command,Command,Local)
-DEFINE_LOCAL(Output,char,Command)
-DEFINE_INST(Mutex)
-DEFINE_MUTEX(Commanded,Command,Mutex)
-DEFINE_MUTEX(Outputed,char,Commanded)
-
-DEFINE_MSGSTR(Outputed);
-DEFINE_ERRSTR(Outputed);
+DEFINE_MSGSTR(CmdOutput);
+DEFINE_ERRSTR(CmdOutput);
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit

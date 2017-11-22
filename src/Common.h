@@ -26,7 +26,7 @@ void msgstr##NAME(const char *fmt, ...) \
 { \
     va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
     char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
-    entrys##NAME(buf,len); \
+    enlocs##NAME(buf,len); \
 }
 
 #define DEFINE_ERRSTR(NAME) \
@@ -35,7 +35,7 @@ void errstr##NAME(const char *fmt, ...) \
     msgstr##NAME("error: "); \
     va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
     char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
-    entrys##NAME(buf,len); \
+    enlocs##NAME(buf,len); \
 }
 
 typedef void (*Command)();
@@ -43,14 +43,16 @@ typedef void (*Command)();
 #define LOCAL_END DECLARE_INST(Local)
 DECLARE_LOCAL(Command,Command)
 DECLARE_LOCAL(Output,char)
-#define LOCAL_BEGIN DECLARE_INST(Output)
+DECLARE_LOCAL(CmdOutput,char)
+#define LOCAL_BEGIN DECLARE_INST(CmdOutput)
 #define MUTEX_END DECLARE_INST(Mutex)
 DECLARE_MUTEX(Commanded,Command)
 DECLARE_MUTEX(Outputed,char)
 #define MUTEX_BEGIN DECLARE_INST(Outputed)
 
-void msgstrOutputed(const char *fmt, ...);
-void errstrOutputed(const char *fmt, ...);
+void exitErrstr(const char *fmt, ...);
+void msgstrCmdOutput(const char *fmt, ...);
+void errstrCmdOutput(const char *fmt, ...);
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):

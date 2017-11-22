@@ -231,6 +231,7 @@ void unlocs##NAME(TYPE *ptr, int siz) \
 } \
 \
 /* unlocz does not make sense */ \
+\
 int size##NAME() \
 { \
     return NAME##Inst.tail - NAME##Inst.head; \
@@ -429,12 +430,12 @@ void set##NAME(int link, int val) \
     array##NAME()[link].val = val; \
 } \
 \
-int head##NAME(int pool) \
+int begin##NAME(int pool) \
 { \
     return arrayHead##NAME()[pool]; \
 } \
 \
-int tail##NAME(int pool) \
+int rbegin##NAME(int pool) \
 { \
     return arrayTail##NAME()[pool]; \
 } \
@@ -482,31 +483,31 @@ struct Pqueue {
 
 #define PQUEUE_STEP 100
 
-void *int2void(int val)
-{
-    char *ptr = 0;
-    return (void *)(ptr+val);
-}
-
-int void2int(void *val)
-{
-    char *ptr = 0;
-    return ((char *)val-ptr);
-}
-
 #define DEFINE_PRIORITY(NAME,TYPE,NEXT) \
 DEFINE_POOL(Pool##NAME,TYPE,NEXT) \
 DEFINE_POOL(NAME,struct Pqueue,Pool##NAME) \
 \
+void *NAME##_int2void(int val) \
+{ \
+    char *ptr = 0; \
+    return (void *)(ptr+val); \
+} \
+\
+int NAME##_void2int(void *val) \
+{ \
+    char *ptr = 0; \
+    return ((char *)val-ptr); \
+} \
+\
 pqueue_pri_t NAME##_get_pri(void *sub) \
 { \
-    struct Pqueue *pq = cast##NAME(void2int(sub)); \
+    struct Pqueue *pq = cast##NAME(MANE##_void2int(sub)); \
     return pq->pri; \
 } \
 \
 void NAME##_set_pri(void *sub, pqueue_pri_t pri) \
 { \
-    struct Pqueue *pq = cast##NAME(void2int(sub)); \
+    struct Pqueue *pq = cast##NAME(MANE##_void2int(sub)); \
     pq->pri = pri; \
 } \
 \
@@ -517,19 +518,19 @@ int NAME##_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr) \
 \
 size_t NAME##_get_pos(void *sub) \
 { \
-    struct Pqueue *pq = cast##NAME(void2int(sub)); \
+    struct Pqueue *pq = cast##NAME(MANE##_void2int(sub)); \
     return pq->pos; \
 } \
 \
 void NAME##_set_pos(void *sub, size_t pos) \
 { \
-    struct Pqueue *pq = cast##NAME(void2int(sub)); \
+    struct Pqueue *pq = cast##NAME(MANE##_void2int(sub)); \
     pq->pos = pos; \
 } \
 \
 void NAME##_print_entry(FILE *out, void *sub) \
 { \
-    struct Pqueue *pq = cast##NAME(void2int(sub)); \
+    struct Pqueue *pq = cast##NAME(MANE##_void2int(sub)); \
     fprintf(out,"pri %llu pos %lu val %d\n",pq->pri,pq->pos,pq->val); \
 } \
 \
@@ -542,13 +543,13 @@ TYPE *schedule##NAME(pqueue_pri_t pri) \
     struct Pqueue *pq = cast##NAME(sub); \
     pq->pri = pri; \
     pq->val = val; \
-    pqueue_insert(pqueue_##NAME,int2void(sub)); \
+    pqueue_insert(pqueue_##NAME,NAME##_int2void(sub)); \
     return castPool##NAME(val); \
 } \
 \
 TYPE *advance##NAME() \
 { \
-    int sub = void2int(pqueue_pop(pqueue_##NAME)); \
+    int sub = NAME##_void2int(pqueue_pop(pqueue_##NAME)); \
     int val = cast##NAME(sub)->val; \
     free##NAME(sub); \
     freePool##NAME(val); \
@@ -557,7 +558,7 @@ TYPE *advance##NAME() \
 \
 int ready##NAME(pqueue_pri_t pri) \
 { \
-    int sub = void2int(pqueue_peek(pqueue_##NAME)); \
+    int sub = NAME##_void2int(pqueue_peek(pqueue_##NAME)); \
     return NAME##_cmp_pri(cast##NAME(sub)->pri,pri); \
 }
 

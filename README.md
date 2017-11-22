@@ -4,7 +4,7 @@ Notable functions in AffTopo/Naive.hs are topeFromSpace (classify space and regi
 
 Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a user to manipulate them. Sculpt.hs uses a foreign function interface to c code. The first of the following c files implements a thread intraface that communicates between the threads. Microcode is glsl code for graphics engines interfaced to with OpenGl.
 
-  * intraface is queue macro parameterized by type that declares and defines functions to add-to remove-from discard-from the head or tail of queues, in the same thread, with mutex, or with mutex and condition variable.  
+  * queue is macro parameterized by type that declares and defines functions to add-to remove-from discard-from the head or tail of queues, in the same thread, with mutex, or with mutex and condition variable.  
   * haskell is a separate thread because Haskell is a high level language with an rts. haskell thread uses condition variable to wait for requests from command thread. haskell thread sends responses with mutex queues to command thread.  
   * console is a separate thread because pselect is incompatible with glfwWait/Poll. console thread uses pselect to wait for user input or for signal from any other thread issuing output.  
   * timewheel is a separate thread because stocks and flows need realtime operation. timewheel thread uses pselect to wait for wallclock or for signal from a configure thread.  
@@ -46,7 +46,7 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -F \<file> switch to file for perspective  
   * -o pack out garbage in graphics buffers  
   * -O \<ext> save minimal commands to produce polytopes  
-  * -s prefix commands to save current state  
+  * -s \<ext> prefix commands to save current state  
   * -S \<ext> overwrite commands to save current state  
   * -e \<config> append to last file  
   * -E \<file> change last file to indicated  
