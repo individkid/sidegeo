@@ -566,6 +566,9 @@ int main(int argc, char **argv)
         if (!command) break;
         (*command)();
     }
+
+    // TODO join threads
+
     for (struct QueuePtr *i = &MUTEX_BEGIN; i != &MUTEX_END; i = i->next) {
         struct QueueStruct *queue = i;
         if (pthread_mutex_destroy(&queue->mutex) != 0) exitErrstr("cannot finalize mutex\n");}
@@ -573,6 +576,7 @@ int main(int argc, char **argv)
         struct QueueStruct *queue = i;
         free(queue->base);
         queue->base = 0;}
+
     glfwTerminate();
 }
 
