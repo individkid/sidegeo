@@ -21,6 +21,28 @@
 
 #include "Queue.h"
 
+#define BRINGUP
+//#define DEBUG
+#define PLANE_DIMENSIONS 3
+#define POINT_DIMENSIONS 3
+#define SCALAR_DIMENSIONS 1
+#define FACE_DIMENSIONS 6
+#define FRAME_DIMENSIONS 3
+#define INCIDENCE_DIMENSIONS 3
+#define CONSTRUCT_DIMENSIONS 3
+#define ELEMENT_DIMENSIONS 1
+#define PLANE_LOCATION 0
+#define VERSOR_LOCATION 1
+#define POINT_LOCATION 2
+#define INVALID_LOCATION 3
+#define POLL_DELAY 0.1
+#define NANO_SECONDS 1000000000
+#define MAX_ROTATE 0.999
+#define ROLLER_GRANULARITY 30.0
+#define NUM_FEEDBACK 3
+#define COMPASS_DELTA 10.0
+#define ROLLER_DELTA 1.0
+
 #define DEFINE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...) \
 { \

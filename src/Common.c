@@ -20,11 +20,15 @@
 
 DEFINE_INST(Local)
 DEFINE_LOCAL(Command,Command,Local)
-DEFINE_LOCAL(Output,char,Command)
+DEFINE_LOCAL(CommandChar,char,Command)
+DEFINE_LOCAL(CommandInt,int,CommandChar)
+DEFINE_LOCAL(Output,char,CommandInt)
 DEFINE_LOCAL(CmdOutput,char,Output)
 DEFINE_INST(Mutex)
 DEFINE_MUTEX(Commanded,Command,Mutex)
-DEFINE_MUTEX(Outputed,char,Commanded)
+DEFINE_MUTEX(CommandChared,char,Commanded)
+DEFINE_MUTEX(CommandInted,int,CommandChared)
+DEFINE_MUTEX(Outputed,char,CommandInted)
 
 void exitErrstr(const char *fmt, ...)
 {

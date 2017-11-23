@@ -38,8 +38,7 @@ Display *displayHandle = 0; // for XWarpPointer
 #endif
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 int classifyDone = 0; // number of points classifed
-enum Action {Defer,Reque,Advance};
-enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
+enum Action {Defer,Reque,Advance}; // command helper return value
 enum Shader { // one value per shader; state for bringup
     Diplane, // display planes
     Dipoint, // display points
@@ -108,33 +107,6 @@ int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
-
-void enqueLocate(GLfloat *point)
-{
-    glUseProgram(code[Adplane].program);
-    glUniform3f(code[Adplane].uniform[Feather],point[0],point[1],point[2]);
-    glUniform3f(code[Adplane].uniform[Arrow],0.0,0.0,1.0);
-    glUseProgram(0);
-    enqueShader(Adplane);
-
-}
-
-void classify()
-{
-    CHECK(classify,Classify)
-    if (pointBuf.done < pointSub.done) enqueShader(Coplane);
-    if (classifyDone < pointBuf.done && !code[Adplane].started) {
-        GLfloat buffer[pointBuf.dimn];
-        int size = pointBuf.dimn*bufferType(pointBuf.type);
-        if (sideBuf.done >= sideSub.done) exitErrstr("classify too done\n");
-        glBindBuffer(GL_ARRAY_BUFFER, pointBuf.handle);
-        glGetBufferSubData(GL_ARRAY_BUFFER, classifyDone*size, size, buffer);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        code[Adplane].limit = arrayCorrelate()[classifyDone]; enqueLocate(buffer);
-        classifyDone++;}
-    if (sideBuf.done < sideSub.done) {DEFER(classify)}
-    DEQUE(classify,Classify)
-}
 
 void wrap()
 {
@@ -277,6 +249,8 @@ enum Action renderWait(struct Render *arg, struct Buffer **vertex, struct Buffer
     return Advance;
 }
 
+void enqueShader(enum Shader shader);
+
 void render()
 {
     struct Render *arg = arrayRender();
@@ -284,7 +258,7 @@ void render()
     int size = arg->vertex+arg->element+arg->feedback;
     SWITCH(arg->state,RenderEnqued) {
         SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
-            requeRender(); relocBuffer(size); REQUE(render)}
+            requeRender(); relocBuffer(size); enqueCommand(&render);}
         CASE(Advance) arg->state = RenderDraw;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderDraw) {
@@ -292,12 +266,42 @@ void render()
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
         SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            requeRender(); relocBuffer(size); DEFER(render)}
+            requeRender(); relocBuffer(size); enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&render);}
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
     if (arg->restart && code[arg->shader].restart) {code[arg->shader].restart = 0; enqueShader(arg->shader);}
     code[arg->shader].started--; dequeRender(); delocBuffer(size);
+}
+
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
+{
+    struct Render *arg = enlocRender(1);
+    struct Buffer **buf = enlocBuffer(vertex+element+feedback);
+    arg->name = name;
+    arg->shader = shader;
+    arg->vertex = vertex;
+    arg->element = element;
+    arg->feedback = feedback;
+    for (int i = 0; i < vertex+element+feedback; i++) buf[i] = buffer[i];
+    for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
+    arg->restart = restart;
+    arg->state = RenderEnqued;
+}
+
+void enqueShader(enum Shader shader)
+{
+    if (code[shader].started) {code[shader].restart = 1; return;}
+    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&faceSub}; setupShader("diplane",Diplane,2,1,0,buf,1);}
+    CASE(Dipoint) {struct Buffer *buf[2] = {&pointBuf,&frameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,1);}
+    CASE(Coplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&pointSub,&pointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0);}
+    CASE(Copoint) {struct Buffer *buf[4] = {&pointBuf,&planeSub,&versorBuf,&planeBuf}; setupShader("copoint",Copoint,1,1,2,buf,0);}
+    CASE(Adplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&sideSub,&sideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0);}
+    CASE(Adpoint) {struct Buffer *buf[3] = {&pointBuf,&halfSub,&sideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
+    CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0);}
+    CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
+    DEFAULT(exitErrstr("invalid shader %d\n",shader);)
+    enqueCommand(render); code[shader].started++;
 }
 
 void pierce()
@@ -341,36 +345,6 @@ void debug()
     code[DEBUGS].started--;
 }
 #endif
-
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
-{
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(vertex+element+feedback);
-    arg->name = name;
-    arg->shader = shader;
-    arg->vertex = vertex;
-    arg->element = element;
-    arg->feedback = feedback;
-    for (int i = 0; i < vertex+element+feedback; i++) buf[i] = buffer[i];
-    for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
-    arg->restart = restart;
-    arg->state = RenderEnqued;
-}
-
-void enqueShader(enum Shader shader)
-{
-    if (code[shader].started) {code[shader].restart = 1; return;}
-    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&faceSub}; setupShader("diplane",Diplane,2,1,0,buf,1);}
-    CASE(Dipoint) {struct Buffer *buf[2] = {&pointBuf,&frameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,1);}
-    CASE(Coplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&pointSub,&pointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0);}
-    CASE(Copoint) {struct Buffer *buf[4] = {&pointBuf,&planeSub,&versorBuf,&planeBuf}; setupShader("copoint",Copoint,1,1,2,buf,0);}
-    CASE(Adplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&sideSub,&sideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0);}
-    CASE(Adpoint) {struct Buffer *buf[3] = {&pointBuf,&halfSub,&sideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
-    CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0);}
-    CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
-    DEFAULT(exitErrstr("invalid shader %d\n",shader);)
-    enqueCommand(render); code[shader].started++;
-}
 
 void warp(double xwarp, double ywarp)
 {
@@ -788,6 +762,101 @@ void menu()
     delocCommandChar(len+1);
 }
 
+#ifdef BRINGUP
+#define NUM_PLANES 4
+#define NUM_POINTS 4
+#define NUM_FACES 3
+#define NUM_FRAMES 3
+#define NUM_SIDES 3
+
+void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
+{
+    if (buffer->done+todo > room) todo = room-buffer->done;
+    if (buffer->room < buffer->done+todo) enqueWrap(buffer,buffer->done+todo);
+    if (buffer->done+todo <= buffer->room) {
+        int size = buffer->dimn*bufferType(buffer->type);
+        glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+        glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        buffer->done += todo;}
+}
+
+void bringup()
+{
+    // f = 1
+    // h^2 = f^2 - 0.5^2
+    // a + b = h
+    // a > b
+    // a^2 = b^2 + 0.5^2 = (h - a)^2 + 0.5^2 = h^2 - 2ha + a^2 + 0.5^2
+    // 2ha = h^2 + 0.5^2
+    // a = (h^2 + 0.5^2)/(2h) = 1/(2h)
+    // a^2 = (h^2 + 0.5^2)^2/(4h^2)
+    // i^2 = f^2 - a^2
+    // p + q = i
+    // p > q
+    // p^2 = q^2 + a^2 = (i - p)^2 + a^2 = i^2 - 2ip + p^2 + a^2
+    // 2ip = i^2 + a^2
+    // p = (i^2 + a^2)/(2i) = 1/(2i)
+    GLfloat z = 0.0;
+    GLfloat f = 1.0; // length of edges
+    GLfloat g = 0.5; // midpoint on edge from corner
+    GLfloat fs = f * f;
+    GLfloat gs = g * g;
+    GLfloat hs = fs - gs;
+    GLfloat h = sqrt(hs); // height of triangle
+    GLfloat hd = h + h;
+    GLfloat a = fs / hd; // distance from corner to center of triangle
+    GLfloat b = h - a; // distance from base to center of triangle
+    GLfloat as = a * a;
+    GLfloat is = fs - as;
+    GLfloat i = sqrt(is); // height of tetrahedron
+    GLfloat id = i + i;
+    GLfloat p = fs / id; // distance from vertex to center of tetrahedron
+    GLfloat q = i - p; // distance from base to center of tetrahedron
+    GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
+        -g,-b, q,
+         g,-b, q,
+         z, a, q,
+         z, z,-p,
+    };
+    GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
+ 0.204124, 0.204124, 0.204124,
+ 0.250000, -0.327350, 0.658248,
+ -0.250000, 0.327350, -0.658248,
+ -0.216506, -0.216506, -0.570060,
+    };
+    GLuint versor[NUM_PLANES*SCALAR_DIMENSIONS] = {
+        2,0,0,1,
+    };
+    GLuint face[NUM_FACES*FACE_DIMENSIONS] = {
+        0,1,2,3,2,3,
+        1,2,3,0,3,0,
+        2,3,0,1,0,1,
+    };
+    GLuint vertex[NUM_POINTS*INCIDENCE_DIMENSIONS] = {
+        0,1,2,
+        1,2,3,
+        2,3,0,
+        3,0,1,
+    };
+    GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
+        0,1,2,
+    };
+    if (planeBuf.done < NUM_PLANES) bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
+    if (versorBuf.done < NUM_PLANES) bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
+    bringupBuffer(&faceSub,1,NUM_FACES,face);
+    bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
+    bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
+ 
+    if (planeBuf.done < NUM_PLANES) {enlocxCommand(bringup); return;}
+    if (versorBuf.done < NUM_PLANES) {enlocxCommand(bringup); return;}
+    if (faceSub.done < NUM_FACES) {enlocxCommand(bringup); return;}
+    if (pointSub.done < NUM_POINTS) {enlocxCommand(bringup); return;}
+    if (sideSub.done < NUM_SIDES) {enlocxCommand(bringup); return;}
+    enlocxCommand(transformRight); enqueShader(dishader);
+}
+#endif
+
 const char *inputCode(enum Shader shader)
 {
     SWITCH(code[shader].input,GL_POINTS) return "#define INPUT points\n";
@@ -1025,8 +1094,12 @@ int main(int argc, char **argv)
     for (struct QueuePtr *i = &MUTEX_BEGIN; i != &MUTEX_END; i = i->next) {
         struct QueueStruct *queue = i;
         if (pthread_mutex_init(&queue->mutex, 0) != 0) exitErrstr("cannot initialize mutex\n");}
+
+#ifdef BRINGUP
+    enlocxCommand(&bringup);
+#endif
+
     for (int i = 1; i < argc; i++) enlocxOption(argv[i]);
-    enlocxCommand(&process);
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
@@ -1057,7 +1130,7 @@ int main(int argc, char **argv)
         (*command)();
     }
 
-    // TODO join threads
+    // TODO signal threads to finish and join threads
 
     for (struct QueuePtr *i = &MUTEX_BEGIN; i != &MUTEX_END; i = i->next) {
         struct QueueStruct *queue = i;

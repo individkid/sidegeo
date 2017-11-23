@@ -236,6 +236,18 @@ int unlocs##NAME(TYPE *ptr, int siz) \
 \
 /* unlocz does not make sense */ \
 \
+void relocv##NAME(int size) \
+{ \
+    TYPE *buf = enlocv##NAME(size); \
+    for (int i = 0; i < size; i++) buf[i] = array##NAME()[i]; \
+    delocv##NAME(size); \
+} \
+\
+void relocx##NAME() \
+{ \
+    relocv##NAME(1); \
+} \
+\
 int size##NAME() \
 { \
     return NAME##Inst.tail - NAME##Inst.head; \
