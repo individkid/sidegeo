@@ -42,11 +42,15 @@ typedef void (*Command)();
 
 #define LOCAL_END DECLARE_INST(Local)
 DECLARE_LOCAL(Command,Command)
+DECLARE_LOCAL(CommandChar,char)
+DECLARE_LOCAL(CommandInt,int)
 DECLARE_LOCAL(Output,char)
 DECLARE_LOCAL(CmdOutput,char)
 #define LOCAL_BEGIN DECLARE_INST(CmdOutput)
 #define MUTEX_END DECLARE_INST(Mutex)
 DECLARE_MUTEX(Commanded,Command)
+DECLARE_MUTEX(CommandChared,char)
+DECLARE_MUTEX(CommandInted,int)
 DECLARE_MUTEX(Outputed,char)
 #define MUTEX_BEGIN DECLARE_INST(Outputed)
 
@@ -74,9 +78,8 @@ enum Mode { // menu and menus; navigate and enter by keys
 #define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Configure}
 enum Motion {Escape,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
 
-void enqueMsgstr(const char *fmt, ...);
-void enqueErrstr(const char *fmt, ...);
-void exitErrstr(const char *fmt, ...);
+int isEndLine(char *chr);
+
 enum Motion motionof(char code);
 char alphaof(char code);
 int indexof(char code);

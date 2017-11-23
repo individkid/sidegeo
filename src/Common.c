@@ -16,8 +16,6 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
-#include <termios.h>
 #include "Common.h"
 
 DEFINE_INST(Local)
@@ -39,8 +37,10 @@ void exitErrstr(const char *fmt, ...)
 DEFINE_MSGSTR(CmdOutput);
 DEFINE_ERRSTR(CmdOutput);
 
-struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
-int validTermios = 0; // for whether to restore before exit
+int isEndLine(char *chr)
+{
+    return (*chr == '\n');
+}
 
 enum Motion motionof(char code)
 {

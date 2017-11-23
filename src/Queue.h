@@ -185,10 +185,12 @@ TYPE delocx##NAME() \
     return *delocv##NAME(1); \
 } \
 \
-void delocs##NAME(TYPE *ptr, int siz) \
+int delocs##NAME(TYPE *ptr, int siz) \
 { \
+    if (siz > size##NAME()) siz = size##NAME(); \
     TYPE *buf = delocv##NAME(siz); \
     for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
+    return siz; \
 } \
 \
 int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
@@ -224,10 +226,12 @@ TYPE unlocx##NAME() \
     return *(unlocv##NAME(1)); \
 } \
 \
-void unlocs##NAME(TYPE *ptr, int siz) \
+int unlocs##NAME(TYPE *ptr, int siz) \
 { \
+    if (siz > size##NAME()) siz = size##NAME(); \
 	TYPE *buf = unlocv##NAME(siz); \
 	for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
+    return siz; \
 } \
 \
 /* unlocz does not make sense */ \
@@ -287,7 +291,7 @@ int entryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
 { \
     if (pthread_mutex_lock(&NAME##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     int retval = enlocz##NAME(ptr,isterm,siz); \
-    if (NAME.signal && (retval > 0 || (retval == 0 && isterm == 0 && siz > 0))) (*signal)(); \
+    if (NAME##Inst.signal && (retval > 0 || (retval == 0 && isterm == 0 && siz > 0))) (*NAME##Inst.signal)(); \
     if (pthread_mutex_unlock(&NAME##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
     return retval; \
 } \
@@ -302,11 +306,12 @@ TYPE detryx##NAME() \
     return val; \
 } \
 \
-void detrys##NAME(TYPE *ptr, int siz) \
+int detrys##NAME(TYPE *ptr, int siz) \
 { \
     if (pthread_mutex_lock(&NAME##Inst.mutex) != 0) exitErrstr("detry lock failed: %s\n", strerror(errno)); \
-    delocs##NAME(ptr,siz); \
+    siz = delocs##NAME(ptr,siz); \
     if (pthread_mutex_unlock(&NAME##Inst.mutex) != 0) exitErrstr("detry unlock failed: %s\n", strerror(errno)); \
+    return siz; \
 } \
 \
 int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
@@ -367,8 +372,9 @@ void devars##NAME(TYPE *ptr, int siz) \
     if (pthread_mutex_lock(&NAME##Inst.mutex) != 0) exitErrstr("devar lock failed: %s\n", strerror(errno)); \
     while (NAME##Inst.tail-NAME##Inst.head<siz) \
         if (pthread_cond_wait(&NAME.cond,&NAME##Inst.mutex) != 0) exitErrstr("devar wait failed: %s\n", strerror(errno)); \
-    delocs##NAME(ptr,siz); \
+    siz = delocs##NAME(ptr,siz); \
     if (pthread_mutex_unlock(&NAME##Inst.mutex) != 0) exitErrstr("devar unlock failed: %s\n", strerror(errno)); \
+    return siz; \
 } \
 \
 int devarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
