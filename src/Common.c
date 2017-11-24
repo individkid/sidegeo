@@ -38,8 +38,8 @@ void exitErrstr(const char *fmt, ...)
     exit(-1);
 }
 
-DEFINE_MSGSTR(CmdOutput);
-DEFINE_ERRSTR(CmdOutput);
+DEFINE_MSGSTR(CmdOutput)
+DEFINE_ERRSTR(CmdOutput)
 
 int isEndLine(char *chr)
 {
