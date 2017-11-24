@@ -32,6 +32,7 @@
 #endif
 
 #include "Common.h"
+#include "Fold.h"
 
 #ifdef __linux__
 Display *displayHandle = 0; // for XWarpPointer
@@ -1108,8 +1109,10 @@ int main(int argc, char **argv)
     // TODO start threads
 
     while (1) {
-        while (strnstr(arrayCmdOutput(),"\n",sizeCmdOutput()))
-        delocsCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));
+        while (1) {char dummy = 0; char *ptr = &dummy; int found = 0;
+        find(&ptr, &found, arrayCmdOutput(), sizeCmdOutput(), &isEndLineFunc);
+        if (!found) break;
+        delocsCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));}
 
         int len = 0;
         while ((len = detrysCommanded(enlocsCommand(10),10)) == 10);
@@ -1136,6 +1139,10 @@ int main(int argc, char **argv)
         struct QueueStruct *queue = i;
         if (pthread_mutex_destroy(&queue->mutex) != 0) exitErrstr("cannot finalize mutex\n");}
     for (struct QueuePtr *i = &LOCAL_BEGIN; i != &LOCAL_END; i = i->next) {
+        struct QueueStruct *queue = i;
+        free(queue->base);
+        queue->base = 0;}
+    for (struct QueuePtr *i = &FOLD_BEGIN; i != &FOLD_END; i = i->next) {
         struct QueueStruct *queue = i;
         free(queue->base);
         queue->base = 0;}
