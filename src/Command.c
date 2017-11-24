@@ -844,9 +844,9 @@ void bringup()
     };
     if (planeBuf.done < NUM_PLANES) bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
     if (versorBuf.done < NUM_PLANES) bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
-    bringupBuffer(&faceSub,1,NUM_FACES,face);
-    bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
-    bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
+    if (faceSub.done < NUM_FACES) bringupBuffer(&faceSub,1,NUM_FACES,face);
+    if (pointSub.done < NUM_POINTS) bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
+    if (sideSub.done < NUM_SIDES) bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
  
     if (planeBuf.done < NUM_PLANES) {enlocxCommand(bringup); return;}
     if (versorBuf.done < NUM_PLANES) {enlocxCommand(bringup); return;}
@@ -1108,9 +1108,10 @@ int main(int argc, char **argv)
     // TODO start threads
 
     while (1) {
-        int len = sizeCmdOutput();
-        entrysOutputed(delocvCmdOutput(len),len);
+        while (strnstr(arrayCmdOutput(),"\n",sizeCmdOutput()))
+        delocsCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));
 
+        int len = 0;
         while ((len = detrysCommanded(enlocsCommand(10),10)) == 10);
         unlocsCommand(10-len);
         while ((len = detrysCommandChared(enlocsCommandChar(10),10)) == 10);
@@ -1127,8 +1128,7 @@ int main(int argc, char **argv)
         if (sizeDefer() > 0 && sequenceNumber == headDefer()) delocvDefer(1);
         sequenceNumber++;
         if (!command) break;
-        (*command)();
-    }
+        (*command)();}
 
     // TODO signal threads to finish and join threads
 

@@ -101,6 +101,7 @@ enum Mode { // menu and menus; navigate and enter by keys
 enum Motion {Escape,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
 
 int isEndLine(char *chr);
+char *strnstr(const char *haystack, const char *needle, size_t len);
 
 enum Motion motionof(char code);
 char alphaof(char code);
