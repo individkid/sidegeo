@@ -150,7 +150,6 @@ float aspect = 0;
 
 int sequenceNumber = 0;
 
-#define LOCAL_END ptrLocal()
 DEFINE_STUB(Local)
 DEFINE_LOCAL(Command,Command,Local)
 DEFINE_LOCAL(Defer,int,Command)
@@ -160,7 +159,14 @@ DEFINE_LOCAL(Buffer,struct Buffer *,CmdInt)
 DEFINE_LOCAL(Render,struct Render,Buffer)
 DEFINE_LOCAL(Option,char *,Render)
 DEFINE_LOCAL(CmdOutput,char,Option)
+
+#define LOCAL_END ptrLocal()
 #define LOCAL_BEGIN ptrCmdOutput()
+
+struct QueuePtr *ptrHaskell();
+struct QueuePtr *ptrEmbed();
+#define HASKELL_END ptrHaskell()
+#define HASKELL_BEGIN ptrEmbed()
 
 DEFINE_MSGSTR(CmdOutput)
 DEFINE_ERRSTR(CmdOutput)
