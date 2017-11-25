@@ -16,20 +16,39 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef FOLD_H
-#define FOLD_H
+#define FOLD(NAME,TYPE0,TYPE1) \
+TYPE0 fold##NAME(TYPE0 start, TYPE1 *list, int length, TYPE0 (*func)(TYPE0,TYPE1)) \
+{ \
+	TYPE0 result = start; \
+	for (int i = 0; i < length; i++) result = (*func)(result,list[i]); \
+	return result; \
+}
 
-#include "Queue.h"
+#define MAP(NAME,TYPE0,TYPE1) \
+void map##NAME(TYPE0 *result, TYPE1 *list, int length, TYPE0 (*func)(TYPE1)) \
+{ \
+	for (int i = 0; i < length; i++) result[i] = (*func)(list[i]); \
+}
 
-typedef void (*foldfunc)(void *result, void *start, void *element);
-void fold(void *result, void *start, void *list, int length, int size, foldfunc func);
-typedef void (*mapfunc)(void *result, void *element);
-void map(void *result, int rsize, void *list, int length, int lsize, mapfunc func);
-typedef void (*filterfunc)(int *keep, void *element);
-void filter(void *result, int *newlength, void *list, int length, int size, filterfunc func);
-typedef void (*findfunc)(int *found, void *element);
-void find(void *result, int *found, void *list, int length, int size, findfunc func);
-typedef int (*isfindfunc)(void *element);
-int isFind(void *list, int length, int size, isfindfunc func);
+#define FILTER(NAME,TYPE) \
+int filter##NAME(TYPE *result, TYPE *list, int length, int (*func)(TYPE)) \
+{ \
+	int retval = 0; \
+	for (int i = 0; i < length; i++) if ((*func)(list[i])) result[retval++] = list[i]; \
+	return retval; \
+}
 
-#endif
+#define FIND(NAME,TYPE) \
+TYPE find##FIND(TYPE *list, int length, int (*func)(TYPE)) \
+{ \
+	TYPE retval = {0}; \
+	for (int i = 0; i < length; i++) if ((*func)(list[i])) {retval = list[i]; break;} \
+	return retval; \
+}
+
+#define ISFIND(NAME,TYPE) \
+int isFind##NAME(TYPE *list, int length, int (*func)(TYPE)) \
+{ \
+	for (int i = 0; i < length; i++) if ((*func)(list[i])) return 1; \
+	return 0; \
+}

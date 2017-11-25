@@ -1165,7 +1165,7 @@ int main(int argc, char **argv)
     // TODO start threads
 
     while (1) {
-        while (isFind(arrayCmdOutput(), sizeCmdOutput(),1,&isEndLineFunc))
+        while (isFindChar(arrayCmdOutput(),sizeCmdOutput(),&isEndLineFunc))
         delocvCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));
 
         int len = 0;

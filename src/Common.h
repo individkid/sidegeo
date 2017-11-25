@@ -55,6 +55,8 @@ DECLARE_MUTEX(CmdInted,int)
 DECLARE_MUTEX(Outputed,char)
 #define MUTEX_BEGIN ptrOutputed()
 
+int isFindChar(char*,int,int(*)(char));
+
 #define DEFINE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...) \
 { \
@@ -105,7 +107,7 @@ struct Item { // per-menu-line info
 } item[Menus];
 
 int isEndLine(char *chr);
-int isEndLineFunc(void *ptr);
+int isEndLineFunc(char ptr);
 
 enum Motion motionof(char code);
 char alphaof(char code);

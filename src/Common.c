@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include "Common.h"
+#include "Fold.h"
 
 struct Item item[Menus] = {
     {Menus,Sculpt,0,"Sculpt","display and manipulate polytope"},
@@ -71,6 +72,8 @@ DEFINE_MUTEX(Outputed,char,CmdInted)
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
 
+ISFIND(Char,char)
+
 void exitErrstr(const char *fmt, ...)
 {
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
@@ -84,10 +87,9 @@ int isEndLine(char *chr)
     return (*chr == '\n');
 }
 
-int isEndLineFunc(void *ptr)
+int isEndLineFunc(char chr)
 {
-    char *chr = ptr;
-    return isEndLine(chr);
+    return (chr == '\n');
 }
 
 enum Motion motionof(char code)
