@@ -1109,10 +1109,8 @@ int main(int argc, char **argv)
     // TODO start threads
 
     while (1) {
-        while (1) {char dummy = 0; char *ptr = &dummy; int found = 0;
-        find(&ptr, &found, arrayCmdOutput(), sizeCmdOutput(), &isEndLineFunc);
-        if (!found) break;
-        delocsCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));}
+        while (isFind(arrayCmdOutput(), sizeCmdOutput(),1,&isEndLine))
+        delocsCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));
 
         int len = 0;
         while ((len = detrysCommanded(enlocsCommand(10),10)) == 10);

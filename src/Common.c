@@ -46,12 +46,6 @@ int isEndLine(char *chr)
     return (*chr == '\n');
 }
 
-void isEndLineFunc(int *found, void *element)
-{
-    char *chr = (char *)element;
-    *found = isEndLine(chr)
-}
-
 enum Motion motionof(char code)
 {
     int uchar = code; if (uchar < 0) uchar += 256;

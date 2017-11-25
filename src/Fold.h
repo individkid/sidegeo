@@ -21,10 +21,6 @@
 
 #include "Queue.h"
 
-#define FOLD_END DECLARE_INST(Fold)
-DECLARE_LOCAL(Stack,char)
-#define FOLD_BEGIN DECLARE_INST(Stack)
-
 typedef void (*foldfunc)(void *result, void *start, void *element);
 void fold(void *result, void *start, int size, void **list, int length, foldfunc func);
 typedef void (*mapfunc)(void *result, void *element);
@@ -33,5 +29,7 @@ typedef void (*filterfunc)(int *keep, void *element);
 void filter(void **result, int *newlength, void **list, int length, filterfunc func);
 typedef void (*findfunc)(int *found, void *element);
 void find(void **result, int *found, void **list, int length, findfunc func);
+typedef int (*isfindfunc)(void *element);
+int isFind(void *list, int length, int size, isfindfunc func);
 
 #endif

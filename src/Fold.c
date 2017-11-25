@@ -18,17 +18,16 @@
 
 #include "Fold.h"
 
-DEFINE_INST(Fold)
-DEFINE_LOCAL(Stack,char,Fold)
-
-void fold(void *result, void *start, int size, void **list, int length, foldfunc func)
+void fold(void *result, void *start, void *list, int length, int size, foldfunc func)
 {
+	char *buffer[size] = {0};
+	void *scratch = (void *)buffer;
 	void *last = start;
 	for (int i = 0; i < length; i++) {
-		void *scratch = (i == length-1 ? result : enlocsStack(size));
-		(*func)(scratch, last, list[i]);
-		if (last != start) unlocsStack(size);
-		last = scratch;
+		char *lptr = (char *)list+i*size;
+		void *vptr = (void *)cptr;
+		(*func)(scratch, last, vptr);
+		void *swap = scratch; scratch = last; last = swap;
 	}
 }
 
@@ -39,28 +38,43 @@ void map(void **result, void **list, int length, mapfunc func)
 	}
 }
 
-void filter(void **result, int *newlength, void **list, int length, filterfunc func)
+void filter(void *result, int *newlength, void *list, int length, int size, filterfunc func)
 {
+	char *rptr = (char *)result;
 	*newlength = 0;
 	for (int i = 0; i < length; i++) {
+		char *lptr = (char *)list+i*size;
+		void *vptr = (void *)cptr;
 		int keep = 0;
-		(*func)(&keep, list[i]);
+		(*func)(&keep, vptr);
 		if (keep) {
-			int j = *newlength;
-			result[j] = list[i];
-			*newlength = j+1;
+			for (int j = 0; j < size; j++, rptr++, lptr++) *rptr = *lptr;
+			*newlength += 1;
 		}
 	}
 }
 
-void find(void **result, int *found, void **list, int length, findfunc func)
+void find(void *result, int *found, void *list, int length, int size, findfunc func)
 {
+	char *rptr = (char *)result;
 	*found = 0;
 	for (int i = 0; i < length; i++) {
-		(*func)(found, list[i]);
+		char *lptr = (char *)list+i*size;
+		void *vptr = (void *)cptr;
+		(*func)(found, *vptr);
 		if (*found) {
-			*result = list[i];
+			for (int j = 0; j < size; j++, rptr++, lptr++) *rptr = *lptr;
 			break;
 		}
 	}
+}
+
+int isFind(void *list, int length, int size, isfindfunc func)
+{
+	for (int i = 0; i < length; i++) {
+		char *lptr = (char *)list+i*size;
+		void *vptr = (void *)cptr;
+		if ((*func)(*vptr)) return 1;
+	}
+	return 0;
 }
