@@ -19,22 +19,31 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "pqueue.h"
 
-#define DECLARE_INST(NAME) NAME##Inst
+struct QueuePtr {
+    struct QueuePtr *next;
+};
+
+#define DECLARE_STUB(NAME) \
+struct QueuePtr *ptr##NAME();
 
 #define DECLARE_LOCAL(NAME,TYPE) \
+struct QueuePtr *ptr##NAME(); \
 TYPE *enlocv##NAME(int siz); \
 void enlocx##NAME(TYPE val); \
 void enlocs##NAME(TYPE *ptr, int siz); \
 int enlocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
 TYPE *delocv##NAME(int siz); \
 TYPE delocx##NAME(); \
-void delocs##NAME(TYPE *ptr, int siz); \
+int delocs##NAME(TYPE *ptr, int siz); \
 int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
 TYPE *unlocv##NAME(int siz); \
 TYPE unlocx##NAME(); \
-void unlocs##NAME(TYPE *ptr, int siz); \
+int unlocs##NAME(TYPE *ptr, int siz); \
 /* unlocz does not make sense */ \
 int size##NAME(); \
 int valid##NAME(); \
@@ -44,28 +53,31 @@ TYPE head##NAME(); \
 TYPE tail##NAME();
 
 #define DECLARE_MUTEX(NAME,TYPE) \
+struct QueuePtr *ptr##NAME(); \
 /* entryv does not make sense */ \
 void entryx##NAME(TYPE val); \
 void entrys##NAME(TYPE *ptr, int siz); \
 int entryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
 /* detryv does not make sense */ \
 TYPE detryx##NAME(); \
-void detrys##NAME(TYPE *ptr, int siz); \
+int detrys##NAME(TYPE *ptr, int siz); \
 int detryz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
 /* untry does not make sense */
 
 #define DECLARE_CONDITION(NAME,TYPE) \
+struct QueuePtr *ptr##NAME(); \
 /* envarv does not make sense */ \
 void envarx##NAME(TYPE val); \
 void envars##NAME(TYPE *ptr, int siz); \
 int envarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
 /* devarv does not make sense */ \
 TYPE devarx##NAME(); \
-void devars##NAME(TYPE *ptr, int siz); \
+int devars##NAME(TYPE *ptr, int siz); \
 int devarz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
 /* unvar does not make sense */
 
 #define DECLARE_LINK(NAME) \
+struct QueuePtr *ptr##NAME(); \
 void move##NAME(int link, int pool); \
 int get##NAME(int link); \
 void set##NAME(int link, int val); \
@@ -75,24 +87,23 @@ int next##NAME(int link); \
 int last##NAME(int link);
 
 #define DECLARE_POOL(NAME,TYPE) \
+struct QueuePtr *ptr##NAME(); \
 int alloc##NAME(); \
 void free##NAME(int sub); \
 TYPE *cast##NAME(int sub);
 
 #define DECLARE_PRIORITY(NAME,TYPE) \
+struct QueuePtr *ptr##NAME(); \
 TYPE *schedule##NAME(pqueue_pri_t pri); \
 TYPE *advance##NAME(); \
 int ready##NAME(pqueue_pri_t pri);
 
 #define DECLARE_ACKNOWLEDGE(NAME,TYPE) \
+struct QueuePtr *ptr##NAME(); \
 void request##NAME(TYPE val); \
 TYPE listen##NAME(); \
 int poll##NAME(); \
 void respond##NAME();
-
-struct QueuePtr {
-    struct QueuePtr *next;
-};
 
 #define QUEUE_STRUCT(NAME,TYPE) \
 struct NAME##Struct { \
@@ -110,13 +121,20 @@ struct NAME##Struct { \
 
 QUEUE_STRUCT(Queue,void);
 
-#define DEFINE_INST(NAME) \
-struct QueuePtr NAME##Inst = {0};
+#define DEFINE_STUB(NAME) \
+struct QueuePtr NAME##Inst = {0}; \
+struct QueuePtr *ptr##NAME() { \
+    return &NAME##Inst; \
+}
 
 #define QUEUE_STEP 10
 
 #define DEFINE_QUEUE(NAME,TYPE,NEXT) \
 QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next.next = (struct QueuePtr *)&NEXT##Inst}; \
+\
+struct QueuePtr *ptr##NAME() { \
+    return &NAME##Inst.next; \
+} \
 /*return pointer valid only until next call to en*##NAME */ \
 TYPE *enlocv##NAME(int siz) \
 { \
@@ -177,7 +195,7 @@ TYPE *delocv##NAME(int siz) \
     if (siz < 0) exitErrstr("deloc too siz\n"); \
     NAME##Inst.head = NAME##Inst.head + siz; \
     if (NAME##Inst.head > NAME##Inst.tail) exitErrstr("deloc too siz\n"); \
-    return NAME##Inst.head-siz;
+    return NAME##Inst.head-siz; \
 } \
 \
 TYPE delocx##NAME() \
@@ -187,7 +205,8 @@ TYPE delocx##NAME() \
 \
 int delocs##NAME(TYPE *ptr, int siz) \
 { \
-    if (siz > size##NAME()) siz = size##NAME(); \
+    int size = NAME##Inst.tail - NAME##Inst.head; \
+    if (siz > size) siz = size; \
     TYPE *buf = delocv##NAME(siz); \
     for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
     return siz; \
@@ -228,7 +247,8 @@ TYPE unlocx##NAME() \
 \
 int unlocs##NAME(TYPE *ptr, int siz) \
 { \
-    if (siz > size##NAME()) siz = size##NAME(); \
+    int size = NAME##Inst.tail - NAME##Inst.head; \
+    if (siz > size) siz = size; \
 	TYPE *buf = unlocv##NAME(siz); \
 	for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
     return siz; \
@@ -239,7 +259,7 @@ int unlocs##NAME(TYPE *ptr, int siz) \
 void relocv##NAME(int size) \
 { \
     TYPE *buf = enlocv##NAME(size); \
-    for (int i = 0; i < size; i++) buf[i] = array##NAME()[i]; \
+    for (int i = 0; i < size; i++) buf[i] = NAME##Inst.head[i]; \
     delocv##NAME(size); \
 } \
 \
@@ -287,7 +307,7 @@ void entryx##NAME(TYPE val) \
 { \
     if (pthread_mutex_lock(&NAME##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     enlocx##NAME(val); \
-    if (NAME.signal) (*signal)(); \
+    if (NAME##Inst.signal) (*NAME##Inst.signal)(); \
     if (pthread_mutex_unlock(&NAME##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
 } \
 \
@@ -295,7 +315,7 @@ void entrys##NAME(TYPE *ptr, int siz) \
 { \
     if (pthread_mutex_lock(&NAME##Inst.mutex) != 0) exitErrstr("entry lock failed: %s\n", strerror(errno)); \
     enlocs##NAME(ptr,siz); \
-    if (NAME.signal) (*signal)(); \
+    if (NAME##Inst.signal) (*NAME##Inst.signal)(); \
     if (pthread_mutex_unlock(&NAME##Inst.mutex) != 0) exitErrstr("entry unlock failed: %s\n", strerror(errno)); \
 } \
 \

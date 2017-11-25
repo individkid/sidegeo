@@ -31,6 +31,10 @@
 #include <CoreGraphics/CoreGraphics.h>
 #endif
 
+#include <math.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdarg.h>
 #include "Common.h"
 #include "Fold.h"
 
@@ -38,8 +42,6 @@
 Display *displayHandle = 0; // for XWarpPointer
 #endif
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
-int classifyDone = 0; // number of points classifed
-enum Action {Defer,Reque,Advance}; // command helper return value
 enum Shader { // one value per shader; state for bringup
     Diplane, // display planes
     Dipoint, // display points
@@ -59,6 +61,44 @@ enum Shader pershader = Perplane;
 enum Shader dishader = Dipoint;
 enum Shader pershader = Perpoint;
 #endif
+enum Action {Defer,Reque,Advance}; // command helper return value
+enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
+struct Render {
+    int draw; // waiting for shader
+    int vertex; // number of input buffers que
+    int element; // primitives per output buffer
+    int feedback; // number of output buffers on que
+    enum Shader shader;
+    enum RenderState state;
+    int restart;
+    const char *name;
+}; // argument to render functions
+struct Buffer {
+    const char *name;
+    GLuint handle; // source memory handle
+    GLuint copy; // target memory handle
+    GLuint query; // feedback completion test
+    GLuint loc; // vertex shader input
+    int wrap; // desired vector count
+    int room; // current vector count
+    int done; // initialized vectors
+    int type; // type of data elements
+    int dimn; // elements per vector
+}; // argument to render functions
+#ifdef DEBUG
+struct Buffer debugBuf = {0};
+#endif
+struct Buffer planeBuf = {0}; // per boundary distances above base plane
+struct Buffer versorBuf = {0}; // per boundary base selector
+struct Buffer pointBuf = {0}; // shared point per boundary triple
+struct Buffer pierceBuf = {0}; // on line from focal point
+struct Buffer sideBuf = {0}; // vertices wrt prior planes
+struct Buffer faceSub = {0}; // subscripts into planes
+struct Buffer frameSub = {0}; // subscripts into points
+struct Buffer pointSub = {0}; // every triple of planes
+struct Buffer planeSub = {0}; // per plane triple of points
+struct Buffer sideSub = {0}; // per vertex prior planes
+struct Buffer halfSub = {0}; // per plane prior vertices
 enum Uniform { // one value per uniform; no associated state
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin
@@ -77,7 +117,6 @@ struct Code {
     int limit;
     int started;
     int restart;} code[Shaders] = {0};
-GLfloat invalid[2] = {1.0e38,1.0e37};
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
@@ -109,6 +148,42 @@ float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
 
+int sequenceNumber = 0;
+
+#define LOCAL_END ptrLocal()
+DEFINE_STUB(Local)
+DEFINE_LOCAL(Command,Command,Local)
+DEFINE_LOCAL(Defer,int,Command)
+DEFINE_LOCAL(CmdChar,char,Defer)
+DEFINE_LOCAL(CmdInt,int,CmdChar)
+DEFINE_LOCAL(Buffer,struct Buffer *,CmdInt)
+DEFINE_LOCAL(Render,struct Render,Buffer)
+DEFINE_LOCAL(Option,char *,Render)
+DEFINE_LOCAL(CmdOutput,char,Option)
+#define LOCAL_BEGIN ptrCmdOutput()
+
+DEFINE_MSGSTR(CmdOutput)
+DEFINE_ERRSTR(CmdOutput)
+
+size_t bufferType(int size)
+{
+    size_t retval = 0;
+    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
+    CASE(GL_FLOAT) retval = sizeof(GLfloat);
+    DEFAULT(exitErrstr("unknown render type\n");)
+    return retval;
+}
+
+int bufferPrimitive(int size)
+{
+    int retval = 0;
+    SWITCH(size,GL_POINTS) retval = 1;
+    CASE(GL_TRIANGLES) retval = 3;
+    CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
+    DEFAULT(exitErrstr("unknown render primitive\n");)
+    return retval;
+}
+
 void wrap()
 {
     struct Buffer *buffer = headBuffer();
@@ -134,10 +209,10 @@ void wrap()
         glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
         SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
         CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
-        DEFAULT(enqueMsgstr("unknown type\n");)
+        DEFAULT(msgstrCmdOutput("unknown type\n");)
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
-    dequeBuffer();
+    delocxBuffer();
 }
 
 void enqueWrap(struct Buffer *buffer, int room)
@@ -146,31 +221,12 @@ void enqueWrap(struct Buffer *buffer, int room)
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    enqueBuffer(buffer); enqueCommand(wrap);
+    enlocxBuffer(buffer); enlocxCommand(wrap);
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
 {
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
-}
-
-size_t bufferType(int size)
-{
-    size_t retval = 0;
-    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
-    CASE(GL_FLOAT) retval = sizeof(GLfloat);
-    DEFAULT(exitErrstr("unknown render type\n");)
-    return retval;
-}
-
-int bufferPrimitive(int size)
-{
-    int retval = 0;
-    SWITCH(size,GL_POINTS) retval = 1;
-    CASE(GL_TRIANGLES) retval = 3;
-    CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
-    DEFAULT(exitErrstr("unknown render primitive\n");)
-    return retval;
 }
 
 enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
@@ -259,7 +315,7 @@ void render()
     int size = arg->vertex+arg->element+arg->feedback;
     SWITCH(arg->state,RenderEnqued) {
         SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
-            requeRender(); relocBuffer(size); enqueCommand(&render);}
+            relocxRender(); relocxBuffer(size); enlocxCommand(&render);}
         CASE(Advance) arg->state = RenderDraw;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderDraw) {
@@ -267,18 +323,18 @@ void render()
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
         SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            requeRender(); relocBuffer(size); enqueDefer(sequenceNumber + sizeCommand()); enqueCommand(&render);}
+            relocxRender(); relocxBuffer(size); enlocxDefer(sequenceNumber + sizeCommand()); enlocxCommand(&render);}
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
     if (arg->restart && code[arg->shader].restart) {code[arg->shader].restart = 0; enqueShader(arg->shader);}
-    code[arg->shader].started--; dequeRender(); delocBuffer(size);
+    code[arg->shader].started--; delocxRender(); delocvBuffer(size);
 }
 
 void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
 {
-    struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(vertex+element+feedback);
+    struct Render *arg = enlocvRender(1);
+    struct Buffer **buf = enlocvBuffer(vertex+element+feedback);
     arg->name = name;
     arg->shader = shader;
     arg->vertex = vertex;
@@ -302,7 +358,7 @@ void enqueShader(enum Shader shader)
     CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0);}
     CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
-    enqueCommand(render); code[shader].started++;
+    enlocxCommand(render); code[shader].started++;
 }
 
 void pierce()
@@ -310,7 +366,7 @@ void pierce()
     int dimn = pierceBuf.dimn;
     int done = pierceBuf.done;
     GLfloat result[done*dimn];
-    if (done<faceSub.done) {enqueCommand(pierce); return;}
+    if (done<faceSub.done) {enlocxCommand(pierce); return;}
     glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(pierceBuf.type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -328,7 +384,7 @@ void pierce()
 #ifdef DEBUG
 void debug()
 {
-    if (debugBuf.done<faceSub.done) {enqueCommand(debug); return;}
+    if (debugBuf.done<faceSub.done) {enlocxCommand(debug); return;}
     int prim = bufferPrimitive(code[DEBUGS].output);
     int count = prim*debugBuf.dimn;
     DEBUGT result[debugBuf.done*count];
@@ -414,7 +470,7 @@ void transformRight()
     glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
     enqueShader(pershader);
-    enqueCommand(pierce); code[pershader].started++;
+    enlocxCommand(pierce); code[pershader].started++;
 }
 
 void matrixMatrix()
@@ -660,7 +716,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             FALL(Left) {rightLeft(); click = Right;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode\n");)}
-    DEFAULT(enqueMsgstr("displayClick %d\n",button);)
+    DEFAULT(msgstrCmdOutput("displayClick %d\n",button);)
 }
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
@@ -742,7 +798,7 @@ void compass(double xdelta, double ydelta) {
 
 void menu()
 {
-    char *buf = arrayCommandChar();
+    char *buf = arrayCmdChar();
     int len = 0;
     while (buf[len] != '\n') len++;
     if (len == 1 && motionof(buf[0]) < Motions) {
@@ -759,8 +815,8 @@ void menu()
         enum Menu line = indexof(buf[0]);
         click = Init; mode[item[line].mode] = line;}
     else {
-        buf[len] = 0; enqueMsgstr("menu: %s\n", buf);}
-    delocCommandChar(len+1);
+        buf[len] = 0; msgstrCmdOutput("menu: %s\n", buf);}
+    delocvCmdChar(len+1);
 }
 
 #ifdef BRINGUP
@@ -1092,8 +1148,8 @@ int main(int argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
 
-    for (struct QueuePtr *i = &MUTEX_BEGIN; i != &MUTEX_END; i = i->next) {
-        struct QueueStruct *queue = i;
+    for (struct QueuePtr *i = MUTEX_BEGIN; i != MUTEX_END; i = i->next) {
+        struct QueueStruct *queue = (struct QueueStruct *)i;
         if (pthread_mutex_init(&queue->mutex, 0) != 0) exitErrstr("cannot initialize mutex\n");}
 
 #ifdef BRINGUP
@@ -1109,16 +1165,16 @@ int main(int argc, char **argv)
     // TODO start threads
 
     while (1) {
-        while (isFind(arrayCmdOutput(), sizeCmdOutput(),1,&isEndLine))
-        delocsCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));
+        while (isFind(arrayCmdOutput(), sizeCmdOutput(),1,&isEndLineFunc))
+        delocvCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));
 
         int len = 0;
-        while ((len = detrysCommanded(enlocsCommand(10),10)) == 10);
-        unlocsCommand(10-len);
-        while ((len = detrysCommandChared(enlocsCommandChar(10),10)) == 10);
-        unlocsCommandChar(10-len);
-        while ((len = detrysCommandInted(enlocsCommandInt(10),10)) == 10);
-        unlocsCommandInt(10-len);
+        while ((len = detrysCommanded(enlocvCommand(10),10)) == 10);
+        unlocvCommand(10-len);
+        while ((len = detrysCmdChared(enlocvCmdChar(10),10)) == 10);
+        unlocvCmdChar(10-len);
+        while ((len = detrysCmdInted(enlocvCmdInt(10),10)) == 10);
+        unlocvCmdInt(10-len);
 
         if (sizeCommand() == 0) glfwWaitEvents();
         else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -1133,15 +1189,11 @@ int main(int argc, char **argv)
 
     // TODO signal threads to finish and join threads
 
-    for (struct QueuePtr *i = &MUTEX_BEGIN; i != &MUTEX_END; i = i->next) {
-        struct QueueStruct *queue = i;
+    for (struct QueuePtr *i = MUTEX_BEGIN; i != MUTEX_END; i = i->next) {
+        struct QueueStruct *queue = (struct QueueStruct *)i;
         if (pthread_mutex_destroy(&queue->mutex) != 0) exitErrstr("cannot finalize mutex\n");}
-    for (struct QueuePtr *i = &LOCAL_BEGIN; i != &LOCAL_END; i = i->next) {
-        struct QueueStruct *queue = i;
-        free(queue->base);
-        queue->base = 0;}
-    for (struct QueuePtr *i = &FOLD_BEGIN; i != &FOLD_END; i = i->next) {
-        struct QueueStruct *queue = i;
+    for (struct QueuePtr *i = LOCAL_BEGIN; i != LOCAL_END; i = i->next) {
+        struct QueueStruct *queue = (struct QueueStruct *)i;
         free(queue->base);
         queue->base = 0;}
 

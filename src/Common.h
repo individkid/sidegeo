@@ -43,6 +43,18 @@
 #define COMPASS_DELTA 10.0
 #define ROLLER_DELTA 1.0
 
+extern float invalid[2];
+
+typedef void (*Command)();
+
+#define MUTEX_END ptrMutex()
+DECLARE_STUB(Mutex)
+DECLARE_MUTEX(Commanded,Command)
+DECLARE_MUTEX(CmdChared,char)
+DECLARE_MUTEX(CmdInted,int)
+DECLARE_MUTEX(Outputed,char)
+#define MUTEX_BEGIN ptrOutputed()
+
 #define DEFINE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...) \
 { \
@@ -60,25 +72,10 @@ void errstr##NAME(const char *fmt, ...) \
     enlocs##NAME(buf,len); \
 }
 
-typedef void (*Command)();
-
-#define LOCAL_END DECLARE_INST(Local)
-DECLARE_LOCAL(Command,Command)
-DECLARE_LOCAL(CommandChar,char)
-DECLARE_LOCAL(CommandInt,int)
-DECLARE_LOCAL(Output,char)
-DECLARE_LOCAL(CmdOutput,char)
-#define LOCAL_BEGIN DECLARE_INST(CmdOutput)
-#define MUTEX_END DECLARE_INST(Mutex)
-DECLARE_MUTEX(Commanded,Command)
-DECLARE_MUTEX(CommandChared,char)
-DECLARE_MUTEX(CommandInted,int)
-DECLARE_MUTEX(Outputed,char)
-#define MUTEX_BEGIN DECLARE_INST(Outputed)
-
 void exitErrstr(const char *fmt, ...);
-void msgstrCmdOutput(const char *fmt, ...);
-void errstrCmdOutput(const char *fmt, ...);
+
+extern struct termios savedTermios;
+extern int validTermios;
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
@@ -99,8 +96,16 @@ enum Mode { // menu and menus; navigate and enter by keys
     Sculpt,Mouse,Roller,Level,Classify,Sample,Action,Modes};
 #define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Configure}
 enum Motion {Escape,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
+struct Item { // per-menu-line info
+    enum Menu collect; // item[item[x].collect].mode == item[x].mode
+    enum Mode mode; // item[mode[x]].mode == x
+    int level; // item[item[x].collect].level == item[x].level-1
+    char *name; // word to match console input against
+    char *comment; // text to print after matching word
+} item[Menus];
 
 int isEndLine(char *chr);
+int isEndLineFunc(void *ptr);
 
 enum Motion motionof(char code);
 char alphaof(char code);

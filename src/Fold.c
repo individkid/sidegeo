@@ -20,21 +20,22 @@
 
 void fold(void *result, void *start, void *list, int length, int size, foldfunc func)
 {
-	char *buffer[size] = {0};
+	char buffer[size];
 	void *scratch = (void *)buffer;
 	void *last = start;
 	for (int i = 0; i < length; i++) {
 		char *lptr = (char *)list+i*size;
-		void *vptr = (void *)cptr;
-		(*func)(scratch, last, vptr);
+		(*func)(scratch, last, (void *)lptr);
 		void *swap = scratch; scratch = last; last = swap;
 	}
 }
 
-void map(void **result, void **list, int length, mapfunc func)
+void map(void *result, int rsize, void *list, int length, int lsize, mapfunc func)
 {
 	for (int i = 0; i < length; i++) {
-		(*func)(result[i], list[i]);
+		char *rptr = (char *)result+i*rsize;
+		char *lptr = (char *)list+i*lsize;
+		(*func)((void *)rptr, (void *)lptr);
 	}
 }
 
@@ -44,9 +45,8 @@ void filter(void *result, int *newlength, void *list, int length, int size, filt
 	*newlength = 0;
 	for (int i = 0; i < length; i++) {
 		char *lptr = (char *)list+i*size;
-		void *vptr = (void *)cptr;
 		int keep = 0;
-		(*func)(&keep, vptr);
+		(*func)(&keep, (void *)lptr);
 		if (keep) {
 			for (int j = 0; j < size; j++, rptr++, lptr++) *rptr = *lptr;
 			*newlength += 1;
@@ -60,8 +60,7 @@ void find(void *result, int *found, void *list, int length, int size, findfunc f
 	*found = 0;
 	for (int i = 0; i < length; i++) {
 		char *lptr = (char *)list+i*size;
-		void *vptr = (void *)cptr;
-		(*func)(found, *vptr);
+		(*func)(found, (void *)lptr);
 		if (*found) {
 			for (int j = 0; j < size; j++, rptr++, lptr++) *rptr = *lptr;
 			break;
@@ -73,8 +72,7 @@ int isFind(void *list, int length, int size, isfindfunc func)
 {
 	for (int i = 0; i < length; i++) {
 		char *lptr = (char *)list+i*size;
-		void *vptr = (void *)cptr;
-		if ((*func)(*vptr)) return 1;
+		if ((*func)((void *)lptr)) return 1;
 	}
 	return 0;
 }

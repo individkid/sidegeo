@@ -22,13 +22,13 @@
 #include "Queue.h"
 
 typedef void (*foldfunc)(void *result, void *start, void *element);
-void fold(void *result, void *start, int size, void **list, int length, foldfunc func);
+void fold(void *result, void *start, void *list, int length, int size, foldfunc func);
 typedef void (*mapfunc)(void *result, void *element);
-void map(void **result, void **list, int length, mapfunc func);
+void map(void *result, int rsize, void *list, int length, int lsize, mapfunc func);
 typedef void (*filterfunc)(int *keep, void *element);
-void filter(void **result, int *newlength, void **list, int length, filterfunc func);
+void filter(void *result, int *newlength, void *list, int length, int size, filterfunc func);
 typedef void (*findfunc)(int *found, void *element);
-void find(void **result, int *found, void **list, int length, findfunc func);
+void find(void *result, int *found, void *list, int length, int size, findfunc func);
 typedef int (*isfindfunc)(void *element);
 int isFind(void *list, int length, int size, isfindfunc func);
 
