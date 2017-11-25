@@ -63,11 +63,11 @@ struct Item item[Menus] = {
 
 float invalid[2] = {1.0e38,1.0e37};
 
-DEFINE_STUB(Mutex)
 DEFINE_MUTEX(Commanded,Command,Mutex)
 DEFINE_MUTEX(CmdChared,char,Commanded)
 DEFINE_MUTEX(CmdInted,int,CmdChared)
 DEFINE_MUTEX(Outputed,char,CmdInted)
+DEFINE_STUB(Mutex,Outputed)
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit

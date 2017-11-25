@@ -150,7 +150,7 @@ float aspect = 0;
 
 int sequenceNumber = 0;
 
-DEFINE_STUB(Local)
+DECLARE_STUB(Local)
 DEFINE_LOCAL(Command,Command,Local)
 DEFINE_LOCAL(Defer,int,Command)
 DEFINE_LOCAL(CmdChar,char,Defer)
@@ -159,14 +159,9 @@ DEFINE_LOCAL(Buffer,struct Buffer *,CmdInt)
 DEFINE_LOCAL(Render,struct Render,Buffer)
 DEFINE_LOCAL(Option,char *,Render)
 DEFINE_LOCAL(CmdOutput,char,Option)
+DEFINE_STUB(Local,CmdOutput)
 
-#define LOCAL_END ptrLocal()
-#define LOCAL_BEGIN ptrCmdOutput()
-
-struct QueuePtr *ptrHaskell();
-struct QueuePtr *ptrEmbed();
-#define HASKELL_END ptrHaskell()
-#define HASKELL_BEGIN ptrEmbed()
+DECLARE_STUB(Haskell)
 
 DEFINE_MSGSTR(CmdOutput)
 DEFINE_ERRSTR(CmdOutput)
@@ -321,7 +316,7 @@ void render()
     int size = arg->vertex+arg->element+arg->feedback;
     SWITCH(arg->state,RenderEnqued) {
         SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
-            relocxRender(); relocxBuffer(size); enlocxCommand(&render);}
+            relocxRender(); relocvBuffer(size); enlocxCommand(&render);}
         CASE(Advance) arg->state = RenderDraw;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderDraw) {
@@ -329,7 +324,7 @@ void render()
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
         SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            relocxRender(); relocxBuffer(size); enlocxDefer(sequenceNumber + sizeCommand()); enlocxCommand(&render);}
+            relocxRender(); relocvBuffer(size); enlocxDefer(sequenceNumber + sizeCommand()); enlocxCommand(&render);}
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
@@ -1154,9 +1149,9 @@ int main(int argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
 
-    for (struct QueuePtr *i = MUTEX_BEGIN; i != MUTEX_END; i = i->next) {
-        struct QueueStruct *queue = (struct QueueStruct *)i;
-        if (pthread_mutex_init(&queue->mutex, 0) != 0) exitErrstr("cannot initialize mutex\n");}
+    for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->init) (*i->init)();
+    for (struct QueuePtr *i = BEGIN_STUB(Mutex); i != END_STUB(Mutex); i = (*i->next)()) if (i->init) (*i->init)();
+    for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->init) (*i->init)();
 
 #ifdef BRINGUP
     enlocxCommand(&bringup);
@@ -1195,13 +1190,9 @@ int main(int argc, char **argv)
 
     // TODO signal threads to finish and join threads
 
-    for (struct QueuePtr *i = MUTEX_BEGIN; i != MUTEX_END; i = i->next) {
-        struct QueueStruct *queue = (struct QueueStruct *)i;
-        if (pthread_mutex_destroy(&queue->mutex) != 0) exitErrstr("cannot finalize mutex\n");}
-    for (struct QueuePtr *i = LOCAL_BEGIN; i != LOCAL_END; i = i->next) {
-        struct QueueStruct *queue = (struct QueueStruct *)i;
-        free(queue->base);
-        queue->base = 0;}
+    for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->done) (*i->done)();
+    for (struct QueuePtr *i = BEGIN_STUB(Mutex); i != END_STUB(Mutex); i = (*i->next)()) if (i->done) (*i->done)();
+    for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->done) (*i->done)();
 
     glfwTerminate();
 }

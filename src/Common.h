@@ -47,13 +47,11 @@ extern float invalid[2];
 
 typedef void (*Command)();
 
-#define MUTEX_END ptrMutex()
 DECLARE_STUB(Mutex)
 DECLARE_MUTEX(Commanded,Command)
 DECLARE_MUTEX(CmdChared,char)
 DECLARE_MUTEX(CmdInted,int)
 DECLARE_MUTEX(Outputed,char)
-#define MUTEX_BEGIN ptrOutputed()
 
 int isFindChar(char*,int,int(*)(char));
 
