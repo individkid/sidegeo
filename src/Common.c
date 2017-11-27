@@ -24,6 +24,10 @@
 #include "Common.h"
 #include "Fold.h"
 
+struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
+int validTermios = 0; // for whether to restore before exit
+float invalid[2] = {1.0e38,1.0e37};
+
 struct Item item[Menus] = {
     {Menus,Sculpt,0,"Sculpt","display and manipulate polytope"},
     {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
@@ -61,16 +65,18 @@ struct Item item[Menus] = {
     {Performs,Action,2,"Hyperlink","jump through facet to another space"},
     {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
 
-float invalid[2] = {1.0e38,1.0e37};
-
-DEFINE_MUTEX(Commanded,Command,Mutex)
-DEFINE_MUTEX(CmdChared,char,Commanded)
-DEFINE_MUTEX(CmdInted,int,CmdChared)
-DEFINE_MUTEX(Outputed,char,CmdInted)
-DEFINE_STUB(Mutex,Outputed)
-
-struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
-int validTermios = 0; // for whether to restore before exit
+DEFINE_MUTEX(Commands,Common)
+DEFINE_LOCAL(Commanded,Command,Commands)
+DEFINE_LOCAL(CmdChared,char,Commanded)
+DEFINE_LOCAL(CmdInted,int,CmdChared)
+DEFINE_MUTEX(Outputs,CmdInted)
+DEFINE_LOCAL(Outputed,char,Outputs)
+DEFINE_COND(Events,Outputed)
+DEFINE_LOCAL(Evented,enum Event,Events)
+DEFINE_LOCAL(Kinded,enum Kind,Evented)
+DEFINE_LOCAL(HsChared,char,Kinded)
+DEFINE_LOCAL(HsInted,int,HsChared)
+DEFINE_STUB(Common,HsInted)
 
 ISFIND(Char,char)
 

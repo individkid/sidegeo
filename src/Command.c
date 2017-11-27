@@ -159,7 +159,14 @@ DEFINE_LOCAL(Buffer,struct Buffer *,CmdInt)
 DEFINE_LOCAL(Render,struct Render,Buffer)
 DEFINE_LOCAL(Option,char *,Render)
 DEFINE_LOCAL(CmdOutput,char,Option)
-DEFINE_STUB(Local,CmdOutput)
+DEFINE_LOCAL(CmdEvent,enum Event,CmdOutput)
+DEFINE_LOCAL(CmdKind,enum Kind,CmdEvent)
+DEFINE_LOCAL(CmdHsChar,char,CmdKind)
+DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
+DEFINE_STUB(Local,CmdHsInt)
+
+DEFINE_POINTER(CharPtr,char)
+DEFINE_POINTER(IntPtr,int)
 
 DECLARE_STUB(Haskell)
 
@@ -1166,16 +1173,23 @@ int main(int argc, char **argv)
     // TODO start threads
 
     while (1) {
-        while (isFindChar(arrayCmdOutput(),sizeCmdOutput(),&isEndLineFunc))
-        delocvCmdOutput(entryzOutputed(arrayCmdOutput(),&isEndLine,sizeCmdOutput()));
+        lockOutputs();
+        delocsCmdOutput(enlocvOutputed(sizeCmdOutput()),sizeCmdOutput());
+        unlockOutpus();
 
-        int len = 0;
-        while ((len = detrysCommanded(enlocvCommand(10),10)) == 10);
-        unlocvCommand(10-len);
-        while ((len = detrysCmdChared(enlocvCmdChar(10),10)) == 10);
-        unlocvCmdChar(10-len);
-        while ((len = detrysCmdInted(enlocvCmdInt(10),10)) == 10);
-        unlocvCmdInt(10-len);
+        lockEvents();
+        delocsCmdEvent(enlocvEvented(sizeCmdEvent()),sizeCmdEvent());
+        delocsCmdKind(enlocvKinded(sizeCmdKind()),sizeCmdKind());
+        delocsCmdHsChar(enlocvHsChared(sizeCmdHsChar()),sizeCmdHsChar());
+        delocsCmdHsInt(enlocvHsInted(sizeCmdHsInt()),sizeCmdHsInt());
+        if (sizeEvented() > 0) signalEvents();
+        unlockEvents();
+
+        lockCommands();
+        delocsCommanded(enlocvCommand(sizeCommanded()),sizeCommanded());
+        delocsCmdChared(enlocvCmdChar(sizeCmdChared()),sizeCmdChared());
+        delocsCmdInted(enlocvCmdInt(sizeCmdInted()),sizeCmdInted());
+        unlockCommands();
 
         if (sizeCommand() == 0) glfwWaitEvents();
         else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);

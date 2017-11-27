@@ -16,52 +16,82 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-QUEUE_STRUCT(Int,int)
+DECLARE_STUB(Haskell)
+DEFINE_META(Place,int,Haskell)
+DEFINE_META(Embed,int,Place)
+DEFINE_META(Sideband,int,Embed)
+DEFINE_META(Correlate,int,Sideband)
+DEFINE_LOCAL(HsCommand,Command,Correlate)
+DEFINE_LOCAL(Event,enum Event,HsCommand)
+DEFINE_LOCAL(Kind,enum Kind,HsEvent)
+DEFINE_LOCAL(HsChar,char,HsKind)
+DEFINE_LOCAL(HsInt,int,HsChar)
+DEFINE_STUB(Haskell,HsInt)
 
-DEFINE_STUB(Haskell)
-DEFINE_LOCAL(Place,struct IntStruct,Haskell)
-DEFINE_LOCAL(Embed,struct IntStruct,Place)
+DEFINE_POINTER(Meta,int)
+
+void *haskell(void *arg)
+{
+    hs_init(0,0);
+
+    while (1) {
+        lockCommands();
+        delocsHsCommand(enlocvCommanded(sizeHsCommand()),sizeHsCommand());
+        delocsHsChar(enlocvCmdChared(sizeHsChar()),sizeHsChar());
+        delocsHsInt(enlocvCmdInted(sizeHsInt()),sizeHsInt());
+        unlocCommands();
+
+        lockEvents();
+        while (sizeEvented() == 0) if (pthread_cond_wait(&eventer,&events) != 0) exitErrstr("eventer wait failed: %s\n",strerror(errno));
+        delocsEvented(enlocvEvent(sizeEvented()),sizeEvented());
+        delocsKinded(enlocvKind(sizeKinded()),sizeKinded());
+        delocsHsChared(enlocvHsChar(sizeHsChared()),sizeHsChared());
+        delocsHsInted(enlocvHsInt(sizeHsInted()),sizeHsInted());
+        unlockEvents();
+
+        int retval = handleEvent();
+        if (retval) break;}
+
+    hs_exit();
+    return 0;
+}
 
 int *accessQueue(int size)
 {
     // if size is not zero, resize data
     if (size == 0) size = sizeMeta();
-    if (size > sizeMeta()) enlocMeta(size-sizeMeta());
-    if (size < sizeMeta()) unlocMeta(sizeMeta()-size);
+    if (size > sizeMeta()) enlocvMeta(size-sizeMeta());
+    if (size < sizeMeta()) unlocvMeta(sizeMeta()-size);
     return arrayMeta();
 }
 
 int *place(int index, int size)
 {
-    while (sizePlace() <= index) {struct Ints initial = {0}; enquePlace(initial);}
-    metas = arrayPlace()+index;
+    presentMeta(usePlace(index));
     return accessQueue(size);
 }
 
 int places(int index)
 {
-    while (sizePlace() <= index) {struct Ints initial = {0}; enquePlace(initial);}
-    metas = arrayPlace()+index;
+    presentMeta(usePlace(index));
     return sizeMeta();
 }
 
 int *embed(int index, int size)
 {
-    while (sizeEmbed() <= index) {struct Ints initial = {0}; enqueEmbed(initial);}
-    metas = arrayEmbed()+index;
+    presentMeta(useEmbed(index));
     return accessQueue(size);
 }
 
 int embeds(int index)
 {
-    while (sizeEmbed() <= index) {struct Ints initial = {0}; enqueEmbed(initial);}
-    metas = arrayEmbed()+index;
+    presentMeta(useEmbed(index));
     return sizeMeta();
 }
 
 int *sideband(int size)
 {
-    metas = &todos;
+    referMeta(selfSideband());
     return accessQueue(size);
 }
 
@@ -72,7 +102,7 @@ int sidebands()
 
 int *correlate(int size)
 {
-    metas = &relates;
+    referMeta(selfCorrelate());
     return accessQueue(size);
 }
 
@@ -83,33 +113,31 @@ int correlates()
 
 int *boundary(int index, int size)
 {
-    while (sizeBoundary() <= index) {struct Ints initial = {0}; enqueBoundary(initial);}
-    metas = arrayBoundary()+index;
+    presentMeta(useBoundary(index));
     return accessQueue(size);
 }
 
 int boundaries(int index)
 {
-    while (sizeBoundary() <= index) {struct Ints initial = {0}; enqueBoundary(initial);}
-    metas = arrayBoundary()+index;
+    presentMeta(useBoundary(index));
     return sizeMeta();
 }
 
 int *faceToPlane(int size)
 {
-    metas = &face2planes;
+    referMeta(selfFace2Plane());
     return accessQueue(size);
 }
 
 int *frameToPlane(int size)
 {
-    metas = &frame2planes;
+    referMeta(selfFrame2Plane());
     return accessQueue(size);
 }
 
 int *planeToPlace(int size)
 {
-    metas = &plane2places;
+    referMeta(selfPlane2Place());
     return accessQueue(size);
 }
 
@@ -120,15 +148,13 @@ int planeToPlaces()
 
 int *planeToPoint(int index, int size)
 {
-    while (sizePlane2Point() <= index) {struct Ints initial = {0}; enquePlane2Point(initial);}
-    metas = arrayPlane2Point()+index;
+    presentMeta(usePlane2Point(index));
     return accessQueue(size);
 }
 
 int planeToPoints(int index)
 {
-    while (sizePlane2Point() <= index) {struct Ints initial = {0}; enquePlane2Point(initial);}
-    metas = arrayPlane2Point()+index;
+    presentMeta(usePlane2Point(index));
     return sizeMeta();
 }
 
@@ -241,7 +267,7 @@ int *writeSideSub(int start, int count)
 
 char *eventArgument()
 {
-    if (!validEvent()) exitErrstr("no valid event\n");
+    if (sizeEvent()) exitErrstr("no valid event\n");
     enum Event event = detry1Event();
     SWITCH(event,Side) return (char *)"Plane";
     CASE(Update) return (char *)"Classify";

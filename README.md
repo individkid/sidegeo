@@ -100,7 +100,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --fill adds faces attached to outside region and removes inside faces  
   * --hollow adds faces attached to inside region and removes outside faces  
   * --remove takes buffer type and subscript to invalidate  
-  * --test check current state agains given value  
+  * --test check current state against given value  
   * --sample takes per-boundary sidedness to sample with similar embed  
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
@@ -126,7 +126,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --flow --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables, saturated at maximum and minimum. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope. The values for the variables come from the following.
+The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --stock --flow --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope. The values for the variables come from the following.
 
   * --stock or --source value  
   * metric of facet qualified by topology  

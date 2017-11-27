@@ -43,15 +43,25 @@
 #define COMPASS_DELTA 10.0
 #define ROLLER_DELTA 1.0
 
+extern struct termios savedTermios;
+extern int validTermios;
 extern float invalid[2];
+extern struct Item item[Menus];
 
 typedef void (*Command)();
 
-DECLARE_STUB(Mutex)
-DECLARE_MUTEX(Commanded,Command)
-DECLARE_MUTEX(CmdChared,char)
-DECLARE_MUTEX(CmdInted,int)
+DECLARE_STUB(Common)
+DECLARE_MUTEX(Commands)
+DECLARE_LOCAL(Commanded,Command)
+DECLARE_LOCAL(CmdChared,char)
+DECLARE_LOCAL(CmdInted,int)
+DECLARE_MUTEX(Outputs)
 DECLARE_MUTEX(Outputed,char)
+DECLARE_COND(Events)
+DECLARE_LOCAL(Evented,enum Event)
+DECLARE_LOCAL(Kinded,enum Kind)
+DECLARE_LOCAL(HsChared,char)
+DECLARE_LOCAL(HsInted,int)
 
 int isFindChar(char*,int,int(*)(char));
 
@@ -73,9 +83,6 @@ void errstr##NAME(const char *fmt, ...) \
 }
 
 void exitErrstr(const char *fmt, ...);
-
-extern struct termios savedTermios;
-extern int validTermios;
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
@@ -103,6 +110,18 @@ struct Item { // per-menu-line info
     char *name; // word to match console input against
     char *comment; // text to print after matching word
 } item[Menus];
+
+enum Event {
+    Side, // fill in pointSub and sideSub
+    Update, // update symbolic representation
+    Inflate, // fill in faceSub and frameSub
+    Pierce, // repurpose sideSub for pierce point
+    Fill, // alter embed and refill faceSub and frameSub
+    Hollow, // alter embed and refill faceSub and frameSub
+    Remove, // pack out from faceSub and frameSub
+    Call, // allow given string to modify file
+    Done}; // terminate
+enum Kind {Poly,Boundary,Face,Other};
 
 int isEndLine(char *chr);
 int isEndLineFunc(char ptr);

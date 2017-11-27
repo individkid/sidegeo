@@ -3270,8 +3270,8 @@ int *setupBuffer(int start, int count, struct Buffer *buffer, struct Ints *array
 {
     int *buf = 0;
     enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count);
-    if (array) {metas = array; buf = accessQueue(start+count) + start; enqueInt(0);}
-    else {buf = enlocInt(count); enqueInt(count);}
+    if (array) {enqueInt(0); metas = array; buf = accessQueue(start+count) + start;}
+    else {enqueInt(count); buf = enlocInt(count);}
     enqueArray(buf); return buf;
 }
 
