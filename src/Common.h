@@ -45,6 +45,9 @@
 
 extern struct termios savedTermios;
 extern int validTermios;
+extern pthread_t consoleThread;
+extern pthread_t haskellThread;
+extern pthread_t timewheelThread;
 extern float invalid[2];
 extern struct Item item[Menus];
 
@@ -52,18 +55,27 @@ typedef void (*Command)();
 
 DECLARE_STUB(Common)
 DECLARE_MUTEX(Commands)
-DECLARE_LOCAL(Commanded,Command)
-DECLARE_LOCAL(CmdChared,char)
-DECLARE_LOCAL(CmdInted,int)
+DECLARE_LOCAL(CmnCommand,Command)
+DECLARE_LOCAL(CmnCmdChar,char)
+DECLARE_LOCAL(CmnCmdInt,int)
 DECLARE_MUTEX(Outputs)
-DECLARE_MUTEX(Outputed,char)
+DECLARE_MUTEX(CmnOutput,char)
 DECLARE_COND(Events)
-DECLARE_LOCAL(Evented,enum Event)
-DECLARE_LOCAL(Kinded,enum Kind)
-DECLARE_LOCAL(HsChared,char)
-DECLARE_LOCAL(HsInted,int)
+DECLARE_LOCAL(CmnEvent,enum Event)
+DECLARE_LOCAL(CmnKind,enum Kind)
+DECLARE_LOCAL(CmnData,enum Data)
+DECLARE_LOCAL(CmnHsCmd,Command)
+DECLARE_LOCAL(CmnHsChar,char)
+DECLARE_LOCAL(CmnHsInt,int)
+DECLARE_LOCAL(Type,const char *)
+
+extern int voidType;
+extern int intType;
 
 int isFindChar(char*,int,int(*)(char));
+
+void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
+void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);
 
 #define DEFINE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...) \
@@ -120,8 +132,28 @@ enum Event {
     Hollow, // alter embed and refill faceSub and frameSub
     Remove, // pack out from faceSub and frameSub
     Call, // allow given string to modify file
+    Acknowledge, // copy enque command and arguments
+    Upload, // copy to client copy of buffer
+    Download, // copy from client copy of buffer
+    Enumerate, // initialize maps between enum and int
     Done}; // terminate
 enum Kind {Poly,Boundary,Face,Other};
+enum Data {
+#ifdef DEBUG
+    DebugBuf,
+#endif
+    PlaneBuf, // per boundary distances above base plane
+    VersorBuf, // per boundary base selector
+    PointBuf, // shared point per boundary triple
+    PierceBuf, // on line from focal point
+    SideBuf, // vertices wrt prior planes
+    FaceSub, // subscripts into planes
+    FrameSub, // subscripts into points
+    PointSub, // every triple of planes
+    PlaneSub, // per plane triple of points
+    SideSub, // per vertex prior planes
+    HalfSub, // per plane prior vertices
+    Datas};
 
 int isEndLine(char *chr);
 int isEndLineFunc(char ptr);

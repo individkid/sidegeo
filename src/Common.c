@@ -26,6 +26,9 @@
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
+pthread_t consoleThread = 0; // for io in the console
+pthread_t haskellThread = 0; // for haskell runtime system
+pthread_t timewheelThread = 0; // for stock flow delay
 float invalid[2] = {1.0e38,1.0e37};
 
 struct Item item[Menus] = {
@@ -66,19 +69,47 @@ struct Item item[Menus] = {
     {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
 
 DEFINE_MUTEX(Commands,Common)
-DEFINE_LOCAL(Commanded,Command,Commands)
-DEFINE_LOCAL(CmdChared,char,Commanded)
-DEFINE_LOCAL(CmdInted,int,CmdChared)
-DEFINE_MUTEX(Outputs,CmdInted)
-DEFINE_LOCAL(Outputed,char,Outputs)
-DEFINE_COND(Events,Outputed)
-DEFINE_LOCAL(Evented,enum Event,Events)
-DEFINE_LOCAL(Kinded,enum Kind,Evented)
-DEFINE_LOCAL(HsChared,char,Kinded)
-DEFINE_LOCAL(HsInted,int,HsChared)
-DEFINE_STUB(Common,HsInted)
+DEFINE_LOCAL(CmnCommand,Command,Commands)
+DEFINE_LOCAL(CmnCmdChar,char,CmnCommand)
+DEFINE_LOCAL(CmnCmdInt,int,CmnCmdChar)
+DEFINE_MUTEX(Outputs,CmnCmdInt)
+DEFINE_LOCAL(CmnOutput,char,Outputs)
+DEFINE_COND(Events,CmnOutput)
+DEFINE_LOCAL(CmnEvent,enum Event,Events)
+DEFINE_LOCAL(CmnKind,enum Kind,CmnEvent)
+DEFINE_LOCAL(CmnData,enum Data,CmnKind)
+DEFINE_LOCAL(CmnHsCmd,Command,CmnData)
+DEFINE_LOCAL(CmnHsChar,char,CmnHsCmd)
+DEFINE_LOCAL(CmnHsInt,int,CmnHsChar)
+DEFINE_LOCAL(Type,const char *,CmnHsInt)
+DEFINE_STUB(Common,Type)
+
+DEFINE_POINTER(CmnInt,int)
+int voidType = 0;
+int intType = 0;
 
 ISFIND(Char,char)
+
+void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num)
+{
+    referCmnInt(arg); // TODO get all sizes first so they are not interleaved with copied arguments
+    if (arg->type != intType) exitErrstr("stageque too int\n");
+    for (int i = 0; i < num; i++) {
+        if (dst->type != src->type) exitErrstr("ackques too type\n");
+        (*dst->copy)(src,*delocCmnInt(1));
+        dst = (*dst->next)();
+        src = (*src->next)();}
+}
+
+void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num)
+{
+    for (int i = 0; i < num; i++) {
+        referCmnInt(src);
+        if (dst->type != src->type) exitErrstr("cpyques too type\n");
+        (*dst->copy)(src,sizeCmnInt());
+        dst = (*dst->next)();
+        src = (*src->next)();}
+}
 
 void exitErrstr(const char *fmt, ...)
 {

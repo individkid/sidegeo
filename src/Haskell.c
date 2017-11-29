@@ -19,14 +19,31 @@
 DECLARE_STUB(Haskell)
 DEFINE_META(Place,int,Haskell)
 DEFINE_META(Embed,int,Place)
-DEFINE_META(Sideband,int,Embed)
-DEFINE_META(Correlate,int,Sideband)
-DEFINE_LOCAL(HsCommand,Command,Correlate)
-DEFINE_LOCAL(Event,enum Event,HsCommand)
-DEFINE_LOCAL(Kind,enum Kind,HsEvent)
-DEFINE_LOCAL(HsChar,char,HsKind)
+DEFINE_LOCAL(Sideband,int,Embed)
+DEFINE_LOCAL(Correlate,int,Sideband)
+DEFINE_META(Boundary,int,Correlate)
+DEFINE_LOCAL(FaceToPlane,int,Boundary)
+DEFINE_LOCAL(FrameToPlane,int,FaceToPlane)
+DEFINE_META(PlaneToPlace,int,FrameToPlane)
+DEFINE_META(PlaneToPoint,int,PlaneToPlace)
+DEFINE_META(Client,int,PlaneToPoint)
+DEFINE_META(EventName,char,Client)
+DEFINE_META(KindName,char,EventName)
+DEFINE_META(DataName,char,KindName)
+DEFINE_LOCAL(EventMap,int,DataName)
+DEFINE_LOCAL(KindMap,int,EventMap)
+DEFINE_LOCAL(DataMap,enum Data,KindMap)
+DEFINE_LOCAL(Event,enum Event,DataMap)
+DEFINE_LOCAL(Kind,enum Kind,Event)
+DEFINE_LOCAL(Data,enum Data,Kind)
+DEFINE_LOCAL(HsOutput,char,Data)
+DEFINE_LOCAL(HsCmd,Command,HsOutput)
+DEFINE_LOCAL(HsChar,char,HsCmd)
 DEFINE_LOCAL(HsInt,int,HsChar)
-DEFINE_STUB(Haskell,HsInt)
+DEFINE_LOCAL(HsCommand,Command,HsInt)
+DEFINE_LOCAL(HsCmdChar,char,HsCommand)
+DEFINE_LOCAL(HsCmdInt,int,HsCmdChar)
+DEFINE_STUB(Haskell,HsCmdInt)
 
 DEFINE_POINTER(Meta,int)
 
@@ -35,22 +52,59 @@ void *haskell(void *arg)
     hs_init(0,0);
 
     while (1) {
+        lockOutputs();
+        cpyques(selfCmnOutput(),selfHsOutput(),1);
+        if (sizeCmnOutput() > 0 && pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+        unlockOutputs();
+
         lockCommands();
-        delocsHsCommand(enlocvCommanded(sizeHsCommand()),sizeHsCommand());
-        delocsHsChar(enlocvCmdChared(sizeHsChar()),sizeHsChar());
-        delocsHsInt(enlocvCmdInted(sizeHsInt()),sizeHsInt());
+        cpyques(selfCmnCommand(),selfHsCommand(),3);
+        if (sizeCmnCommand() > 0) glfwPostEmptyEvent();
         unlocCommands();
 
         lockEvents();
-        while (sizeEvented() == 0) if (pthread_cond_wait(&eventer,&events) != 0) exitErrstr("eventer wait failed: %s\n",strerror(errno));
-        delocsEvented(enlocvEvent(sizeEvented()),sizeEvented());
-        delocsKinded(enlocvKind(sizeKinded()),sizeKinded());
-        delocsHsChared(enlocvHsChar(sizeHsChared()),sizeHsChared());
-        delocsHsInted(enlocvHsInt(sizeHsInted()),sizeHsInted());
+        while (sizeCmnEvent() == 0) waitEvents();
+        cpyques(selfEvent(),selfCmnEvent(),6);
         unlockEvents();
 
-        int retval = handleEvent();
-        if (retval) break;}
+        if (*arrayEvent(0,1) == Done) break;
+        while (sizeEvent() > 0) {
+            if (*arrayEvent(0,1) == Acknowledge) {
+                ackques(selfHsCommand(),selfHsCmd(),selfHsInt(),3);
+                delocEvent(1); continue;}
+            // TODO handle Upload Download and continue
+            if (*arrayEvent(0,1) == Enumerate) {
+                if (handleEvent() != 0) exitErrstr("haskell return true\n");
+                enlocEventMap(Acknowledge);
+                for (int i = 0; i < sizeEventName(); i++) {
+                if (strcmp(arrayEventName(i,1),"Plane") == 0) *arrayEventMap(Side,1) = i;
+                if (strcmp(arrayEventName(i,1),"Classify") == 0) *arrayEventMap(Update,1) = i;
+                if (strcmp(arrayEventName(i,1),"Inflate") == 0) *arrayEventMap(Inflate,1) = i;
+                if (strcmp(arrayEventName(i,1),"Pierce") == 0) *arrayEventMap(Pierce,1) = i;
+                if (strcmp(arrayEventName(i,1),"Fill") == 0) *arrayEventMap(Fill,1) = i;
+                if (strcmp(arrayEventName(i,1),"Hollow") == 0) *arrayEventMap(Hollow,1) = i;
+                if (strcmp(arrayEventName(i,1),"Remove") == 0) *arrayEventMap(Remove,1) = i;
+                if (strcmp(arrayEventName(i,1),"Call") == 0) *arrayEventMap(Call,1) = i;}
+                enlocKindMap(Other+1);
+                for (int i = 0; i < sizeKindName(); i++) {
+                if (strcmp(arrayKindName(i,1),"Place") == 0) *arrayDataMap(Poly,1) = i;
+                if (strcmp(arrayKindName(i,1),"Boundary") == 0) *arrayDataMap(Boundary,1) = i;
+                if (strcmp(arrayKindName(i,1),"Face") == 0) *arrayDataMap(Face,1) = i;
+                if (strcmp(arrayKindName(i,1),"Other") == 0) *arrayDataMap(Other,1) = i;}
+                enlocDataMap(Datas);
+                for (int i = 0; i < sizeDataName(); i++) {
+                if (strcmp(arrayDataName(i,1),"PlaneBuf") == 0) *arrayDataMap(i,1) = PlaneBuf;
+                if (strcmp(arrayDataName(i,1),"VersorBuf") == 0) *arrayDataMap(i,1) = VersorBuf;
+                if (strcmp(arrayDataName(i,1),"PointBuf") == 0) *arrayDataMap(i,1) = PointBuf;
+                if (strcmp(arrayDataName(i,1),"PierceBuf") == 0) *arrayDataMap(i,1) = PierceBuf;
+                if (strcmp(arrayDataName(i,1),"SideBuf") == 0) *arrayDataMap(i,1) = SideBuf;
+                if (strcmp(arrayDataName(i,1),"FaceSub") == 0) *arrayDataMap(i,1) = FaceSub;
+                if (strcmp(arrayDataName(i,1),"FrameSub") == 0) *arrayDataMap(i,1) = FrameSub;
+                if (strcmp(arrayDataName(i,1),"PointSub") == 0) *arrayDataMap(i,1) = PointSub;
+                if (strcmp(arrayDataName(i,1),"PlaneSub") == 0) *arrayDataMap(i,1) = PlaneSub;
+                if (strcmp(arrayDataName(i,1),"SideSub") == 0) *arrayDataMap(i,1) = SideSub;
+                if (strcmp(arrayDataName(i,1),"HalfSub") == 0) *arrayDataMap(i,1) = HalfSub;}}
+            if (handleEvent() != 0) exitErrstr("haskell return true\n");}}
 
     hs_exit();
     return 0;
@@ -60,9 +114,9 @@ int *accessQueue(int size)
 {
     // if size is not zero, resize data
     if (size == 0) size = sizeMeta();
-    if (size > sizeMeta()) enlocvMeta(size-sizeMeta());
-    if (size < sizeMeta()) unlocvMeta(sizeMeta()-size);
-    return arrayMeta();
+    if (size > sizeMeta()) enlocMeta(size-sizeMeta());
+    if (size < sizeMeta()) unlocMeta(sizeMeta()-size);
+    return arrayMeta(0,size);
 }
 
 int *place(int index, int size)
@@ -125,183 +179,97 @@ int boundaries(int index)
 
 int *faceToPlane(int size)
 {
-    referMeta(selfFace2Plane());
+    referMeta(selfFaceToPlane());
     return accessQueue(size);
 }
 
 int *frameToPlane(int size)
 {
-    referMeta(selfFrame2Plane());
+    referMeta(selfFrameToPlane());
     return accessQueue(size);
 }
 
 int *planeToPlace(int size)
 {
-    referMeta(selfPlane2Place());
+    referMeta(selfPlaneToPlace());
     return accessQueue(size);
 }
 
 int planeToPlaces()
 {
-    return sizePlane2Place();
+    return sizePlaneToPlace();
 }
 
 int *planeToPoint(int index, int size)
 {
-    presentMeta(usePlane2Point(index));
+    presentMeta(usePlaneToPoint(index));
     return accessQueue(size);
 }
 
 int planeToPoints(int index)
 {
-    presentMeta(usePlane2Point(index));
+    presentMeta(usePlaneToPoint(index));
     return sizeMeta();
 }
 
-int *readFaceSub()
+int *client(int index, int size)
 {
-    return arrayFaceSub();
+    if (index < 0 || index >= sizeDataMap()) exitErrstr("client too data\n");
+    presentMeta(useClient(*arrayDataMap(index,1)));
+    return accessQueue(size);
 }
 
-int readFaces()
+int clients(int index)
 {
-    return sizeFaceSub();
+    if (index < 0 || index >= sizeDataMap()) exitErrstr("client too data\n");
+    presentMeta(useClient(*arrayDataMap(index,1)));
+    return sizeMeta();
 }
 
-int *readFrameSub()
+char *eventName(int index, int size)
 {
-    return arrayFrameSub();
+    presentMeta(useEventName(index));
+    return accessQueue(size);
 }
 
-int readFrames()
+char *kindName(int index, int size)
 {
-    return sizeFrameSub();
+    presentMeta(useKindName(index));
+    return accessQueue(size);
 }
 
-int *getBuffer(struct Buffer *buffer)
+char *dataName(int index, int size)
 {
-    int count = buffer->done*buffer->dimn;
-    GLuint temp[count];
-    if (buffer->type != GL_UNSIGNED_INT) exitErrstr("get %s too type %d %d\n",buffer->name,buffer->type,GL_UNSIGNED_INT);
-    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER,0,count*sizeof(GLuint),temp);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    int *buf = enlocInt(count); unlocInt(count);
-    for (int i = 0; i < count; i++) buf[i] = temp[i];
-    return buf;
+    presentMeta(useDataName(index));
+    return accessQueue(size);
 }
 
-int readPoints()
+int eventArgument()
 {
-    return pointSub.done*pointSub.dimn;
+    if (sizeEvent() == 0) exitErrstr("no valid event\n");
+    int event = delocEvent(1);
+    if (event < 0 || event >= sizeEventMap()) exitErrstr("event too map\n");
+    return *arrayEventMap(event,1);
 }
 
-int readPlanes()
+int kindArgument()
 {
-    return planeSub.done*planeSub.dimn;
-}
-
-int *readSideSub()
-{
-    return getBuffer(&sideSub);
-}
-
-int readSides()
-{
-    return sideSub.done*sideSub.dimn;
-}
-
-void putBuffer()
-{
-    struct Buffer *buffer = headBuffer();
-    int start = arrayInt()[0];
-    int count = arrayInt()[1];
-    int extra = arrayInt()[2];
-    int *buf = headArray();
-    int dimn = buffer->dimn;
-    int type = buffer->type;
-    int done = (start+count)/dimn;
-    if ((start+count)%dimn) enqueErrstr("%s to mod\n",buffer->name);
-    if (type != GL_UNSIGNED_INT) exitErrstr("put %s too type %d %d\n",buffer->name,type,GL_UNSIGNED_INT);
-    if (done > buffer->room) {enqueWrap(buffer,done); requeBuffer(); relocInt(3+extra); requeArray(); DEFER(putBuffer)}
-    GLuint temp[count]; for (int i = 0; i < count; i++) temp[i] = buf[i];
-    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-    glBufferSubData(GL_ARRAY_BUFFER,start*sizeof(GLuint),count*sizeof(GLuint),temp);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    buffer->done = done; dequeBuffer(); delocInt(3+extra); dequeArray();
-}
-
-int *setupBuffer(int start, int count, struct Buffer *buffer, struct Ints *array)
-{
-    int *buf = 0;
-    enqueCommand(putBuffer); enqueBuffer(buffer); enqueInt(start); enqueInt(count);
-    if (array) {metas = array; buf = accessQueue(start+count) + start; enqueInt(0);}
-    else {buf = enlocInt(count); enqueInt(count);}
-    enqueArray(buf); return buf;
-}
-
-int *writeFaceSub(int start, int count)
-{
-    return setupBuffer(start,count,&faceSub,&faceSubs);
-}
-
-int *writeFrameSub(int start, int count)
-{
-    return setupBuffer(start,count,&frameSub,&frameSubs);
-}
-
-int *writePointSub(int start, int count)
-{
-    return setupBuffer(start,count,&pointSub,0);
-}
-
-int *writePlaneSub(int start, int count)
-{
-    return setupBuffer(start,count,&planeSub,0);
-}
-
-int *writeSideSub(int start, int count)
-{
-    return setupBuffer(start,count,&sideSub,0);
-}
-
-char *eventArgument()
-{
-    if (sizeEvent()) exitErrstr("no valid event\n");
-    enum Event event = detry1Event();
-    SWITCH(event,Side) return (char *)"Plane";
-    CASE(Update) return (char *)"Classify";
-    CASE(Inflate) return (char *)"Inflate";
-    CASE(Pierce) return (char *)"Pierce";
-    CASE(Fill) return (char *)"Fill";
-    CASE(Hollow) return (char *)"Hollow";
-    CASE(Remove) return (char *)"Remove";
-    CASE(Call) return (char *)"Call";
-    CASE(Done) return (char *)"Done";
-    DEFAULT(exitErrstr("invalid event\n");)
-    return (char *)"";
+    if (sizeKind() == 0) exitErrstr("no valid event\n");
+    int event = delocKind(1);
+    if (event < 0 || event >= sizeKindMap()) exitErrstr("event too map\n");
+    return *arrayKindMap(event,1);
 }
 
 char *stringArgument()
 {
-    if (!validKind()) exitErrstr("no valid string\n");
-    enum Kind kind = headKind(); dequeKind();
-    SWITCH(kind,Poly) return (char *)"Place";
-    CASE(Boundary) return (char *)"Boundary";
-    CASE(Face) return (char *)"Face";
-    CASE(Other) {
-        if (!validInt()) exitErrstr("no valid other\n");
-        int len = headInt(); dequeInt();
-        if (sizeChar() < len) exitErrstr("no valid other\n");
-        char *buf = arrayChar(); delocChar(len);
-        return buf;}
-    DEFAULT(exitErrstr("invalid kind\n");)
-    return (char *)"";
+    if (sizeHsInt() == 0) exitErrstr("no valid other\n");
+    int len = *delocHsInt(1);
+    if (sizeHsChar() < len) exitErrstr("no valid string\n");
+    return delocHsChar(0,len);
 }
 
 int intArgument()
 {
-    if (!validInt()) return -1;
-    int head = headInt(); dequeInt();
-    return head;
+    if (sizeHsInt() == 0) exitErrstr("no valid int\n");
+    return *delocHsInt(1);
 }

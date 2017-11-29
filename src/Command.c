@@ -85,20 +85,7 @@ struct Buffer {
     int type; // type of data elements
     int dimn; // elements per vector
 }; // argument to render functions
-#ifdef DEBUG
-struct Buffer debugBuf = {0};
-#endif
-struct Buffer planeBuf = {0}; // per boundary distances above base plane
-struct Buffer versorBuf = {0}; // per boundary base selector
-struct Buffer pointBuf = {0}; // shared point per boundary triple
-struct Buffer pierceBuf = {0}; // on line from focal point
-struct Buffer sideBuf = {0}; // vertices wrt prior planes
-struct Buffer faceSub = {0}; // subscripts into planes
-struct Buffer frameSub = {0}; // subscripts into points
-struct Buffer pointSub = {0}; // every triple of planes
-struct Buffer planeSub = {0}; // per plane triple of points
-struct Buffer sideSub = {0}; // per vertex prior planes
-struct Buffer halfSub = {0}; // per plane prior vertices
+struct Buffer Server[Datas] = {0};
 enum Uniform { // one value per uniform; no associated state
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin
@@ -151,9 +138,9 @@ float aspect = 0;
 int sequenceNumber = 0;
 
 DECLARE_STUB(Local)
-DEFINE_LOCAL(Command,Command,Local)
 DEFINE_LOCAL(Defer,int,Command)
-DEFINE_LOCAL(CmdChar,char,Defer)
+DEFINE_LOCAL(Command,Command,Defer)
+DEFINE_LOCAL(CmdChar,char,Command)
 DEFINE_LOCAL(CmdInt,int,CmdChar)
 DEFINE_LOCAL(Buffer,struct Buffer *,CmdInt)
 DEFINE_LOCAL(Render,struct Render,Buffer)
@@ -161,7 +148,9 @@ DEFINE_LOCAL(Option,char *,Render)
 DEFINE_LOCAL(CmdOutput,char,Option)
 DEFINE_LOCAL(CmdEvent,enum Event,CmdOutput)
 DEFINE_LOCAL(CmdKind,enum Kind,CmdEvent)
-DEFINE_LOCAL(CmdHsChar,char,CmdKind)
+DEFINE_LOCAL(CmdData,enum Data,CmdKind)
+DEFINE_LOCAL(CmdHsCmd,Command,CmdData)
+DEFINE_LOCAL(CmdHsChar,char,CmdHsCmd)
 DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
 DEFINE_STUB(Local,CmdHsInt)
 
@@ -1156,8 +1145,11 @@ int main(int argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
 
+    voidType = sizeType(); *enlocType(1) = "void";
+    intType = sizeType(); *enlocType(1) = "int";
+
     for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->init) (*i->init)();
-    for (struct QueuePtr *i = BEGIN_STUB(Mutex); i != END_STUB(Mutex); i = (*i->next)()) if (i->init) (*i->init)();
+    for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->init) (*i->init)();
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->init) (*i->init)();
 
 #ifdef BRINGUP
@@ -1174,21 +1166,17 @@ int main(int argc, char **argv)
 
     while (1) {
         lockOutputs();
-        delocsCmdOutput(enlocvOutputed(sizeCmdOutput()),sizeCmdOutput());
-        unlockOutpus();
+        cpyques(selfCmnOutput(),selfCmdOutput(),1);
+        if (sizeCmnOutput() > 0 && pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+        unlockOutputs();
 
         lockEvents();
-        delocsCmdEvent(enlocvEvented(sizeCmdEvent()),sizeCmdEvent());
-        delocsCmdKind(enlocvKinded(sizeCmdKind()),sizeCmdKind());
-        delocsCmdHsChar(enlocvHsChared(sizeCmdHsChar()),sizeCmdHsChar());
-        delocsCmdHsInt(enlocvHsInted(sizeCmdHsInt()),sizeCmdHsInt());
-        if (sizeEvented() > 0) signalEvents();
+        cpyques(selfCmnEvent(),selfCmdEvent(),6);
+        if (sizeCmnEvent() > 0) signalEvents();
         unlockEvents();
 
         lockCommands();
-        delocsCommanded(enlocvCommand(sizeCommanded()),sizeCommanded());
-        delocsCmdChared(enlocvCmdChar(sizeCmdChared()),sizeCmdChared());
-        delocsCmdInted(enlocvCmdInt(sizeCmdInted()),sizeCmdInted());
+        cpyques(selfCommand(),selfCmnCommand(),3);
         unlockCommands();
 
         if (sizeCommand() == 0) glfwWaitEvents();
@@ -1196,8 +1184,8 @@ int main(int argc, char **argv)
         else glfwPollEvents();
 
         if (sizeCommand() == 0) continue;
-        Command command = delocxCommand();
-        if (sizeDefer() > 0 && sequenceNumber == headDefer()) delocvDefer(1);
+        Command command = *delocCommand(1);
+        if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(1)) delocDefer(1);
         sequenceNumber++;
         if (!command) break;
         (*command)();}
@@ -1205,7 +1193,7 @@ int main(int argc, char **argv)
     // TODO signal threads to finish and join threads
 
     for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->done) (*i->done)();
-    for (struct QueuePtr *i = BEGIN_STUB(Mutex); i != END_STUB(Mutex); i = (*i->next)()) if (i->done) (*i->done)();
+    for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->done) (*i->done)();
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->done) (*i->done)();
 
     glfwTerminate();

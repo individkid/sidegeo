@@ -29,6 +29,7 @@ struct QueuePtr {
     struct QueuePtr *(*self)();
     void (*init)();
     void (*done)();
+    int type;
 };
 
 #define BEGIN_STUB(NAME) begin##NAME()
@@ -52,24 +53,12 @@ void signal##NAME();
 
 #define DECLARE_LOCAL(NAME,TYPE) \
 struct QueuePtr *self##NAME(); \
-TYPE *enlocv##NAME(int siz); \
-void enlocx##NAME(TYPE val); \
-void enlocs##NAME(TYPE *ptr, int siz); \
-int enlocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
-TYPE *delocv##NAME(int siz); \
-TYPE delocx##NAME(); \
-int delocs##NAME(TYPE *ptr, int siz); \
-int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz); \
-TYPE *unlocv##NAME(int siz); \
-TYPE unlocx##NAME(); \
-int unlocs##NAME(TYPE *ptr, int siz); \
-/* unlocz does not make sense */ \
+TYPE *enloc##NAME(int siz); \
+TYPE *deloc##NAME(int siz); \
+TYPE *unloc##NAME(int siz); \
+void reloc##NAME(int siz); \
 int size##NAME(); \
-int valid##NAME(); \
-TYPE *array##NAME(); \
-TYPE *stack##NAME(); \
-TYPE head##NAME(); \
-TYPE tail##NAME();
+TYPE *array##NAME(int sub, int siz);
 
 #define DECLARE_META(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
@@ -109,8 +98,6 @@ struct NAME##Struct { \
     TYPE *limit; \
     TYPE *head; \
     TYPE *tail; \
-    int valid; \
-    int seqnum; \
 }
 
 #define MUTEX_STRUCT(NAME) \
@@ -149,12 +136,12 @@ struct QueuePtr *begin##NAME() \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = { \
-    .next.next = &self##NEXT, \
-    .next.self = &self##NAME, \
-    .next.init = &init##NAME, \
-    .next.done = &done##NAME \
-}; \
+QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
+    .next = &self##NEXT, \
+    .self = &self##NAME, \
+    .init = &init##NAME, \
+    .done = &done##NAME \
+}}; \
 \
 struct QueuePtr *self##NAME() \
 { \
@@ -185,12 +172,12 @@ void unlock##NAME() \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = { \
+QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
     .next.next = &self##NEXT, \
     .next.self = &self##NAME, \
     .next.init = &init##NAME, \
     .next.done = &done##NAME \
-}; \
+}}; \
 \
 struct QueuePtr *self##NAME() \
 { \
@@ -200,11 +187,13 @@ struct QueuePtr *self##NAME() \
 void init##NAME() \
 { \
     if (pthread_mutex_init(&NAME##Inst.mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno)); \
+    if (pthread_cond_init(&NAME##Inst.cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno)); \
 } \
 \
 void done##NAME() \
 { \
     if (pthread_mutex_destroy(&NAME##Inst.mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno)); \
+    if (pthread_cond_destroy(&NAME##Inst.cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno)); \
 } \
 \
 void lock##NAME() \
@@ -231,7 +220,7 @@ void signal##NAME() \
 
 #define DEFINE_QUEUE(NAME,TYPE,INST) \
 /*return pointer valid only until next call to en*##NAME */ \
-TYPE *enlocv##NAME(int siz) \
+TYPE *enloc##NAME(int siz) \
 { \
     if (INST.base == 0) { \
         INST.base = malloc(QUEUE_STEP*sizeof*INST.base); \
@@ -258,34 +247,7 @@ TYPE *enlocv##NAME(int siz) \
     return INST.tail - siz; \
 } \
 \
-void enlocx##NAME(TYPE val) \
-{ \
-    *enlocv##NAME(1) = val; \
-} \
-\
-void enlocs##NAME(TYPE *ptr, int siz) \
-{ \
-    TYPE *buf = enlocv##NAME(siz); \
-    for (int i = 0; i < siz; i++) buf[i] = ptr[i]; \
-} \
-\
-/*0: all taken but no terminator; >0: given number taken with terminator*/ \
-int enlocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
-{ \
-    TYPE *buf = enlocv##NAME(siz); \
-    int retval = 0; \
-    for (int i = 0; i < siz; i++) { \
-        buf[i] = ptr[i]; \
-        if (isterm && (*isterm)(ptr+i)) { \
-            INST.valid++; \
-            retval = i+1; \
-            break;}} \
-    if (retval > 0 && retval < siz) INST.tail -= siz-retval; \
-    if (retval == 0 && isterm == 0 && siz > 0) INST.valid++; \
-    return retval; \
-} \
-\
-TYPE *delocv##NAME(int siz) \
+TYPE *deloc##NAME(int siz) \
 { \
     if (siz < 0) exitErrstr("deloc too siz\n"); \
     INST.head = INST.head + siz; \
@@ -293,38 +255,7 @@ TYPE *delocv##NAME(int siz) \
     return INST.head-siz; \
 } \
 \
-TYPE delocx##NAME() \
-{ \
-    return *delocv##NAME(1); \
-} \
-\
-int delocs##NAME(TYPE *ptr, int siz) \
-{ \
-    int size = INST.tail - INST.head; \
-    if (siz > size) siz = size; \
-    TYPE *buf = delocv##NAME(siz); \
-    for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
-    return siz; \
-} \
-\
-int delocz##NAME(TYPE *ptr, int(*isterm)(TYPE*), int siz) \
-{ \
-    if (siz < 0) exitErrstr("deloc too siz\n"); \
-    TYPE *buf = INST.head; \
-    int retval = 0; \
-    for (int i = 0; i < siz && buf+i != INST.tail; i++) { \
-        ptr[i] = buf[i]; \
-        if (isterm && (*isterm)(buf+i)) { \
-            INST.seqnum++; \
-            retval = i+1; \
-            break;}} \
-    if (retval == 0) INST.head += siz; \
-    else INST.head += retval; \
-    if (retval == 0 && isterm == 0 && siz > 0) INST.seqnum++; \
-    return retval; \
-} \
-\
-TYPE *unlocv##NAME(int siz) \
+TYPE *unloc##NAME(int siz) \
 { \
     if (siz < 0) exitErrstr("unloc too siz\n"); \
     INST.tail = INST.tail - siz; \
@@ -332,32 +263,11 @@ TYPE *unlocv##NAME(int siz) \
     return INST.tail; \
 } \
 \
-TYPE unlocx##NAME() \
+void reloc##NAME(int siz) \
 { \
-    return *(unlocv##NAME(1)); \
-} \
-\
-int unlocs##NAME(TYPE *ptr, int siz) \
-{ \
-    int size = INST.tail - INST.head; \
-    if (siz > size) siz = size; \
-	TYPE *buf = unlocv##NAME(siz); \
-	for (int i = 0; i < siz; i++) ptr[i] = buf[i]; \
-    return siz; \
-} \
-\
-/* unlocz does not make sense */ \
-\
-void relocv##NAME(int size) \
-{ \
-    TYPE *buf = enlocv##NAME(size); \
-    for (int i = 0; i < size; i++) buf[i] = INST.head[i]; \
-    delocv##NAME(size); \
-} \
-\
-void relocx##NAME() \
-{ \
-    relocv##NAME(1); \
+    TYPE *buf = enlocv##NAME(siz); \
+    for (int i = 0; i < siz; i++) buf[i] = INST.head[i]; \
+    delocv##NAME(siz); \
 } \
 \
 int size##NAME() \
@@ -365,43 +275,33 @@ int size##NAME() \
     return INST.tail - INST.head; \
 } \
 \
-int valid##NAME() \
+TYPE *array##NAME(int sub, int siz) \
 { \
-    return INST.valid - INST.seqnum; \
-} \
-\
-TYPE *array##NAME() \
-{ \
-    return INST.head; \
-} \
-\
-TYPE *stack##NAME() \
-{ \
-    return INST.tail; \
-} \
-\
-TYPE head##NAME() \
-{ \
-    return *array##NAME(); \
-} \
-\
-TYPE tail##NAME() \
-{ \
-    return *(stack##NAME()-1); \
+    return INST.head+sub; \
 }
 
 #define DEFINE_LOCAL(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
+void init##NAME(); \
 void done##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = { \
-    .next.next = &self##NEXT, \
-    .next.self = &self##NAME, \
-    .next.done = &done##NAME \
-}; \
+QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
+    .next = &self##NEXT, \
+    .self = &self##NAME, \
+    .init = &init##NAME, \
+    .done = &done##NAME \
+}}; \
 \
 struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst.next; \
+} \
+\
+void init##NAME() \
+{ \
+    int i = 0; for (; i < sizeType(); i++) \
+    if (strcmp(#TYPE,arrayType(i,1)) == 0) break; \
+    if (i == sizeType()) enlocType(#TYPE); \
+    NAME##Inst.next.type = i; \
 } \
 \
 void done##NAME() \
@@ -414,11 +314,11 @@ DEFINE_QUEUE(NAME,TYPE,NAME##Inst)
 #define DEFINE_META(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
 void done##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = { \
+QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
     .next.next = &self##NEXT, \
     .next.self = &self##NAME, \
     .next.done = &done##NAME \
-}; \
+}}; \
 \
 struct QueuePtr *self##NAME() \
 { \
@@ -438,16 +338,11 @@ struct NAME##Struct *use##NAME(int sub) \
 { \
     QUEUE_STRUCT(NAME,TYPE) inst = {0}; \
     while (sub >= size##NAME()) enlocx##NAME(inst); \
-    return array##NAME()+sub; \
+    return array##NAME(sub,1); \
 }
 
 #define DEFINE_POINTER(NAME,TYPE) \
 QUEUE_STRUCT(NAME,TYPE) *NAME##Inst = 0; \
-\
-struct NAME##Struct **pointer##NAME() \
-{ \
-    return &NAME##Inst; \
-} \
 \
 void present##NAME(struct NAME##Struct *ptr) \
 { \
@@ -460,7 +355,7 @@ void refer##NAME(struct QueuePtr *ptr) \
     NAME##Inst = (struct NAME##Struct *)ptr; \
 } \
 \
-DEFINE_QUEUE(NAME,TYPE,*NAME##Inst)
+DEFINE_QUEUE(NAME,TYPE,(*NAME##Inst))
 
 struct Link {
     int next,last; // links if positive, index into head or tail if negative
