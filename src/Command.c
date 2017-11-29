@@ -85,7 +85,7 @@ struct Buffer {
     int type; // type of data elements
     int dimn; // elements per vector
 }; // argument to render functions
-struct Buffer Server[Datas] = {0};
+struct Buffer server[Datas] = {0};
 enum Uniform { // one value per uniform; no associated state
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin
@@ -138,7 +138,7 @@ float aspect = 0;
 int sequenceNumber = 0;
 
 DECLARE_STUB(Local)
-DEFINE_LOCAL(Defer,int,Command)
+DEFINE_LOCAL(Defer,int,Local)
 DEFINE_LOCAL(Command,Command,Defer)
 DEFINE_LOCAL(CmdChar,char,Command)
 DEFINE_LOCAL(CmdInt,int,CmdChar)
@@ -183,7 +183,7 @@ int bufferPrimitive(int size)
 
 void wrap()
 {
-    struct Buffer *buffer = headBuffer();
+    struct Buffer *buffer = *arrayBuffer(0,1);
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
         glGenBuffers(1,&buffer->copy);
@@ -209,7 +209,7 @@ void wrap()
         DEFAULT(msgstrCmdOutput("unknown type\n");)
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
-    delocxBuffer();
+    delocBuffer(1);
 }
 
 void enqueWrap(struct Buffer *buffer, int room)
@@ -218,7 +218,7 @@ void enqueWrap(struct Buffer *buffer, int room)
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    enlocxBuffer(buffer); enlocxCommand(wrap);
+    *enlocBuffer(1) = buffer; *enlocCommand(1) = wrap;
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
@@ -307,12 +307,12 @@ void enqueShader(enum Shader shader);
 
 void render()
 {
-    struct Render *arg = arrayRender();
-    struct Buffer **buf = arrayBuffer();
+    struct Render *arg = arrayRender(0,1);
     int size = arg->vertex+arg->element+arg->feedback;
+    struct Buffer **buf = arrayBuffer(0,size);
     SWITCH(arg->state,RenderEnqued) {
         SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
-            relocxRender(); relocvBuffer(size); enlocxCommand(&render);}
+            relocRender(1); relocBuffer(size); *enlocCommand(1) = &render;}
         CASE(Advance) arg->state = RenderDraw;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderDraw) {
@@ -320,18 +320,18 @@ void render()
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
         SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            relocxRender(); relocvBuffer(size); enlocxDefer(sequenceNumber + sizeCommand()); enlocxCommand(&render);}
+            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &render;}
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
     if (arg->restart && code[arg->shader].restart) {code[arg->shader].restart = 0; enqueShader(arg->shader);}
-    code[arg->shader].started--; delocxRender(); delocvBuffer(size);
+    code[arg->shader].started--; delocRender(1); delocBuffer(size);
 }
 
 void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
 {
-    struct Render *arg = enlocvRender(1);
-    struct Buffer **buf = enlocvBuffer(vertex+element+feedback);
+    struct Render *arg = enlocRender(1);
+    struct Buffer **buf = enlocBuffer(vertex+element+feedback);
     arg->name = name;
     arg->shader = shader;
     arg->vertex = vertex;
@@ -346,26 +346,26 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
 void enqueShader(enum Shader shader)
 {
     if (code[shader].started) {code[shader].restart = 1; return;}
-    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&planeBuf,&versorBuf,&faceSub}; setupShader("diplane",Diplane,2,1,0,buf,1);}
-    CASE(Dipoint) {struct Buffer *buf[2] = {&pointBuf,&frameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,1);}
-    CASE(Coplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&pointSub,&pointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0);}
-    CASE(Copoint) {struct Buffer *buf[4] = {&pointBuf,&planeSub,&versorBuf,&planeBuf}; setupShader("copoint",Copoint,1,1,2,buf,0);}
-    CASE(Adplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&sideSub,&sideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0);}
-    CASE(Adpoint) {struct Buffer *buf[3] = {&pointBuf,&halfSub,&sideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
-    CASE(Perplane) {struct Buffer *buf[4] = {&planeBuf,&versorBuf,&faceSub,&pierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0);}
-    CASE(Perpoint) {struct Buffer *buf[3] = {&pointBuf,&frameSub,&pierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
+    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub]}; setupShader("diplane",Diplane,2,1,0,buf,1);}
+    CASE(Dipoint) {struct Buffer *buf[2] = {&server[PointBuf],&server[FrameSub]}; setupShader("dipoint",Dipoint,1,1,0,buf,1);}
+    CASE(Coplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[PointSub],&server[PointBuf]}; setupShader("coplane",Coplane,2,1,1,buf,0);}
+    CASE(Copoint) {struct Buffer *buf[4] = {&server[PointBuf],&server[PlaneSub],&server[VersorBuf],&server[PlaneBuf]}; setupShader("copoint",Copoint,1,1,2,buf,0);}
+    CASE(Adplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[SideSub],&server[SideBuf]}; setupShader("adplane",Adplane,2,1,1,buf,0);}
+    CASE(Adpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[HalfSub],&server[SideBuf]}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
+    CASE(Perplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub],&server[PierceBuf]}; setupShader("perplane",Perplane,2,1,1,buf,0);}
+    CASE(Perpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[FrameSub],&server[PierceBuf]}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
-    enlocxCommand(render); code[shader].started++;
+    *enlocCommand(1) = render; code[shader].started++;
 }
 
 void pierce()
 {
-    int dimn = pierceBuf.dimn;
-    int done = pierceBuf.done;
+    int dimn = server[PierceBuf].dimn;
+    int done = server[PierceBuf].done;
     GLfloat result[done*dimn];
-    if (done<faceSub.done) {enlocxCommand(pierce); return;}
-    glBindBuffer(GL_ARRAY_BUFFER, pierceBuf.handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(pierceBuf.type), result);
+    if (done<server[FaceSub].done) {*enlocCommand(1) = &pierce; return;}
+    glBindBuffer(GL_ARRAY_BUFFER, server[PierceBuf].handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(server[PierceBuf].type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     float xFound = 0;
     float yFound = 0;
@@ -381,7 +381,7 @@ void pierce()
 #ifdef DEBUG
 void debug()
 {
-    if (debugBuf.done<faceSub.done) {enlocxCommand(debug); return;}
+    if (debugBuf.done<server[FaceSub].done) {*enlocCommand(1) = &debug; return;}
     int prim = bufferPrimitive(code[DEBUGS].output);
     int count = prim*debugBuf.dimn;
     DEBUGT result[debugBuf.done*count];
@@ -467,7 +467,7 @@ void transformRight()
     glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
     enqueShader(pershader);
-    enlocxCommand(pierce); code[pershader].started++;
+    *enlocCommand(1) = &pierce; code[pershader].started++;
 }
 
 void matrixMatrix()
@@ -656,32 +656,32 @@ void manipulateDrive()
 
 void displayClose(GLFWwindow* window)
 {
-    enlocxCommand(0);
+    *enlocCommand(1) = 0;
 }
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) enlocxCommand(0);
-        DEFAULT(enlocxCmdOutput(ofmotion(Space)); enlocxCmdOutput('\n');)
+        SWITCH(key,GLFW_KEY_ENTER) *enlocCommand(1) = 0;
+        DEFAULT(*enlocCmdOutput(1) = ofmotion(Space); *enlocCmdOutput(1) = '\n';)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-        enlocxCmdOutput(ofalpha(key-GLFW_KEY_A+'a')); enlocxCmdOutput('\n');}
+        *enlocCmdOutput(1) = ofalpha(key-GLFW_KEY_A+'a'); *enlocCmdOutput(1) = '\n';}
     else {
         SWITCH(key,GLFW_KEY_ESCAPE) escape = 1;
-        CASE(GLFW_KEY_ENTER) {enlocxCmdOutput(ofmotion(Enter)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_RIGHT) {enlocxCmdOutput(ofmotion(East)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_LEFT) {enlocxCmdOutput(ofmotion(West)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_DOWN) {enlocxCmdOutput(ofmotion(South)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_UP) {enlocxCmdOutput(ofmotion(North)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_PAGE_UP) {enlocxCmdOutput(ofmotion(Counter)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_PAGE_DOWN) {enlocxCmdOutput(ofmotion(Wise)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_HOME) {enlocxCmdOutput(ofmotion(Click)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_END) {enlocxCmdOutput(ofmotion(Suspend)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_BACKSPACE) {enlocxCmdOutput(ofmotion(Back)); enlocxCmdOutput('\n');}
-        CASE(GLFW_KEY_SPACE) {enlocxCmdOutput(ofmotion(Space)); enlocxCmdOutput('\n');}
-        DEFAULT(enlocxCmdOutput(ofmotion(Space)); enlocxCmdOutput('\n');)}
+        CASE(GLFW_KEY_ENTER) {*enlocCmdOutput(1) = ofmotion(Enter); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_RIGHT) {*enlocCmdOutput(1) = ofmotion(East); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_LEFT) {*enlocCmdOutput(1) = ofmotion(West); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_DOWN) {*enlocCmdOutput(1) = ofmotion(South); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_UP) {*enlocCmdOutput(1) = ofmotion(North); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_PAGE_UP) {*enlocCmdOutput(1) = ofmotion(Counter); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_PAGE_DOWN) {*enlocCmdOutput(1) = ofmotion(Wise); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_HOME) {*enlocCmdOutput(1) = ofmotion(Click); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_END) {*enlocCmdOutput(1) = ofmotion(Suspend); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_BACKSPACE) {*enlocCmdOutput(1) = ofmotion(Back); *enlocCmdOutput(1) = '\n';}
+        CASE(GLFW_KEY_SPACE) {*enlocCmdOutput(1) = ofmotion(Space); *enlocCmdOutput(1) = '\n';}
+        DEFAULT(*enlocCmdOutput(1) = ofmotion(Space); *enlocCmdOutput(1) = '\n';)}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
@@ -795,7 +795,7 @@ void compass(double xdelta, double ydelta) {
 
 void menu()
 {
-    char *buf = arrayCmdChar();
+    char *buf = arrayCmdChar(0,sizeCmdChar());
     int len = 0;
     while (buf[len] != '\n') len++;
     if (len == 1 && motionof(buf[0]) < Motions) {
@@ -813,7 +813,7 @@ void menu()
         click = Init; mode[item[line].mode] = line;}
     else {
         buf[len] = 0; msgstrCmdOutput("menu: %s\n", buf);}
-    delocvCmdChar(len+1);
+    delocCmdChar(len+1);
 }
 
 #ifdef BRINGUP
@@ -896,18 +896,18 @@ void bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
-    if (planeBuf.done < NUM_PLANES) bringupBuffer(&planeBuf,1,NUM_PLANES,plane);
-    if (versorBuf.done < NUM_PLANES) bringupBuffer(&versorBuf,1,NUM_PLANES,versor);
-    if (faceSub.done < NUM_FACES) bringupBuffer(&faceSub,1,NUM_FACES,face);
-    if (pointSub.done < NUM_POINTS) bringupBuffer(&pointSub,1,NUM_POINTS,vertex);
-    if (sideSub.done < NUM_SIDES) bringupBuffer(&sideSub,1,NUM_SIDES,wrt);
+    if (server[PlaneBuf].done < NUM_PLANES) bringupBuffer(&server[PlaneBuf],1,NUM_PLANES,plane);
+    if (server[VersorBuf].done < NUM_PLANES) bringupBuffer(&server[VersorBuf],1,NUM_PLANES,versor);
+    if (server[FaceSub].done < NUM_FACES) bringupBuffer(&server[FaceSub],1,NUM_FACES,face);
+    if (server[PointSub].done < NUM_POINTS) bringupBuffer(&server[PointSub],1,NUM_POINTS,vertex);
+    if (server[SideSub].done < NUM_SIDES) bringupBuffer(&server[SideSub],1,NUM_SIDES,wrt);
  
-    if (planeBuf.done < NUM_PLANES) {enlocxCommand(bringup); return;}
-    if (versorBuf.done < NUM_PLANES) {enlocxCommand(bringup); return;}
-    if (faceSub.done < NUM_FACES) {enlocxCommand(bringup); return;}
-    if (pointSub.done < NUM_POINTS) {enlocxCommand(bringup); return;}
-    if (sideSub.done < NUM_SIDES) {enlocxCommand(bringup); return;}
-    enlocxCommand(transformRight); enqueShader(dishader);
+    if (server[PlaneBuf].done < NUM_PLANES) {*enlocCommand(1) = &bringup; return;}
+    if (server[VersorBuf].done < NUM_PLANES) {*enlocCommand(1) = &bringup; return;}
+    if (server[FaceSub].done < NUM_FACES) {*enlocCommand(1) = &bringup; return;}
+    if (server[PointSub].done < NUM_POINTS) {*enlocCommand(1) = &bringup; return;}
+    if (server[SideSub].done < NUM_SIDES) {*enlocCommand(1) = &bringup; return;}
+    *enlocCommand(1) = &transformRight; enqueShader(dishader);
 }
 #endif
 
@@ -1086,19 +1086,19 @@ int main(int argc, char **argv)
     glBindVertexArray(VAO);
 
 #ifdef DEBUG
-    buffer(&debugBuf,"debug",INVALID_LOCATION,DEBUG_TYPE,DEBUG_DIMENSION);
+    buffer(&server[DebugBuf],"debug",INVALID_LOCATION,DEBUG_TYPE,DEBUG_DIMENSION);
 #endif
-    buffer(&planeBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
-    buffer(&versorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
-    buffer(&pointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-    buffer(&pierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-    buffer(&sideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
-    buffer(&faceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
-    buffer(&frameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
-    buffer(&pointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
-    buffer(&planeSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
-    buffer(&sideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-    buffer(&halfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+    buffer(&server[PlaneBuf],"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
+    buffer(&server[VersorBuf],"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
+    buffer(&server[PointBuf],"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    buffer(&server[PierceBuf],"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    buffer(&server[SideBuf],"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
+    buffer(&server[FaceSub],"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
+    buffer(&server[FrameSub],"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
+    buffer(&server[PointSub],"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
+    buffer(&server[PlaneSub],"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
+    buffer(&server[SideSub],"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+    buffer(&server[HalfSub],"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 
     compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane,0,0);
     compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint,0,0);
@@ -1153,10 +1153,10 @@ int main(int argc, char **argv)
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->init) (*i->init)();
 
 #ifdef BRINGUP
-    enlocxCommand(&bringup);
+    *enlocCommand(1) = &bringup;
 #endif
 
-    for (int i = 1; i < argc; i++) enlocxOption(argv[i]);
+    for (int i = 1; i < argc; i++) *enlocOption(1) = argv[i];
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
@@ -1167,7 +1167,7 @@ int main(int argc, char **argv)
     while (1) {
         lockOutputs();
         cpyques(selfCmnOutput(),selfCmdOutput(),1);
-        if (sizeCmnOutput() > 0 && pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+        if (sizeCmnOutput() > 0) signalOutputs();
         unlockOutputs();
 
         lockEvents();
@@ -1185,7 +1185,7 @@ int main(int argc, char **argv)
 
         if (sizeCommand() == 0) continue;
         Command command = *delocCommand(1);
-        if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(1)) delocDefer(1);
+        if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
         sequenceNumber++;
         if (!command) break;
         (*command)();}

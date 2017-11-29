@@ -43,65 +43,6 @@
 #define COMPASS_DELTA 10.0
 #define ROLLER_DELTA 1.0
 
-extern struct termios savedTermios;
-extern int validTermios;
-extern pthread_t consoleThread;
-extern pthread_t haskellThread;
-extern pthread_t timewheelThread;
-extern float invalid[2];
-extern struct Item item[Menus];
-
-typedef void (*Command)();
-
-DECLARE_STUB(Common)
-DECLARE_MUTEX(Commands)
-DECLARE_LOCAL(CmnCommand,Command)
-DECLARE_LOCAL(CmnCmdChar,char)
-DECLARE_LOCAL(CmnCmdInt,int)
-DECLARE_MUTEX(Outputs)
-DECLARE_MUTEX(CmnOutput,char)
-DECLARE_COND(Events)
-DECLARE_LOCAL(CmnEvent,enum Event)
-DECLARE_LOCAL(CmnKind,enum Kind)
-DECLARE_LOCAL(CmnData,enum Data)
-DECLARE_LOCAL(CmnHsCmd,Command)
-DECLARE_LOCAL(CmnHsChar,char)
-DECLARE_LOCAL(CmnHsInt,int)
-DECLARE_LOCAL(Type,const char *)
-
-extern int voidType;
-extern int intType;
-
-int isFindChar(char*,int,int(*)(char));
-
-void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
-void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);
-
-#define DEFINE_MSGSTR(NAME) \
-void msgstr##NAME(const char *fmt, ...) \
-{ \
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
-    enlocs##NAME(buf,len); \
-}
-
-#define DEFINE_ERRSTR(NAME) \
-void errstr##NAME(const char *fmt, ...) \
-{ \
-    msgstr##NAME("error: "); \
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
-    enlocs##NAME(buf,len); \
-}
-
-void exitErrstr(const char *fmt, ...);
-
-#define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
-#define CASE(VAL) break; case (VAL):
-#define FALL(VAL) case (VAL):
-#define BRANCH(VAL) continue; case(VAL):
-#define DEFAULT(SMT) break; default: SMT break;} break;}
-
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Alternate,Transform,
     Mouses,Rotate,Translate,Look,
@@ -121,13 +62,12 @@ struct Item { // per-menu-line info
     int level; // item[item[x].collect].level == item[x].level-1
     char *name; // word to match console input against
     char *comment; // text to print after matching word
-} item[Menus];
+};
 
 enum Event {
     Side, // fill in pointSub and sideSub
-    Update, // update symbolic representation
+    Update, // update symbolic from sideBuf
     Inflate, // fill in faceSub and frameSub
-    Pierce, // repurpose sideSub for pierce point
     Fill, // alter embed and refill faceSub and frameSub
     Hollow, // alter embed and refill faceSub and frameSub
     Remove, // pack out from faceSub and frameSub
@@ -137,7 +77,7 @@ enum Event {
     Download, // copy from client copy of buffer
     Enumerate, // initialize maps between enum and int
     Done}; // terminate
-enum Kind {Poly,Boundary,Face,Other};
+enum Kind {Poly,Boundary,Face,Other,Kinds};
 enum Data {
 #ifdef DEBUG
     DebugBuf,
@@ -154,6 +94,68 @@ enum Data {
     SideSub, // per vertex prior planes
     HalfSub, // per plane prior vertices
     Datas};
+
+typedef void (*Command)();
+
+extern struct termios savedTermios;
+extern int validTermios;
+extern pthread_t consoleThread;
+extern pthread_t haskellThread;
+extern pthread_t timewheelThread;
+extern float invalid[2];
+extern struct Item item[Menus];
+
+DECLARE_STUB(Common)
+DECLARE_MUTEX(Commands)
+DECLARE_LOCAL(CmnCommand,Command)
+DECLARE_LOCAL(CmnCmdChar,char)
+DECLARE_LOCAL(CmnCmdInt,int)
+DECLARE_MUTEX(Outputs)
+DECLARE_LOCAL(CmnOutput,char)
+DECLARE_COND(Events)
+DECLARE_LOCAL(CmnEvent,enum Event)
+DECLARE_LOCAL(CmnKind,enum Kind)
+DECLARE_LOCAL(CmnData,enum Data)
+DECLARE_LOCAL(CmnHsCmd,Command)
+DECLARE_LOCAL(CmnHsChar,char)
+DECLARE_LOCAL(CmnHsInt,int)
+DECLARE_LOCAL(Type,const char *)
+
+extern int voidType;
+extern int intType;
+
+int isFindChar(char*,int,int(*)(char));
+
+void signalCommands();
+void signalOutputs();
+
+void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
+void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);
+
+#define DEFINE_MSGSTR(NAME) \
+void msgstr##NAME(const char *fmt, ...) \
+{ \
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
+    memcpy(enloc##NAME(len),buf,len); \
+}
+
+#define DEFINE_ERRSTR(NAME) \
+void errstr##NAME(const char *fmt, ...) \
+{ \
+    msgstr##NAME("error: "); \
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
+    memcpy(enloc##NAME(len),buf,len); \
+}
+
+void exitErrstr(const char *fmt, ...);
+
+#define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
+#define CASE(VAL) break; case (VAL):
+#define FALL(VAL) case (VAL):
+#define BRANCH(VAL) continue; case(VAL):
+#define DEFAULT(SMT) break; default: SMT break;} break;}
 
 int isEndLine(char *chr);
 int isEndLineFunc(char ptr);

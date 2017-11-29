@@ -90,13 +90,24 @@ int intType = 0;
 
 ISFIND(Char,char)
 
+void glfwPostEmptyEvent();
+void signalCommands()
+{
+    glfwPostEmptyEvent();
+}
+
+void signalOutputs()
+{
+    if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+}
+
 void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num)
 {
-    referCmnInt(arg); // TODO get all sizes first so they are not interleaved with copied arguments
-    if (arg->type != intType) exitErrstr("stageque too int\n");
+    if (siz->type != intType) exitErrstr("stageque too int\n");
+    referCmnInt(siz);
+    int *size = delocCmnInt(num);
     for (int i = 0; i < num; i++) {
-        if (dst->type != src->type) exitErrstr("ackques too type\n");
-        (*dst->copy)(src,*delocCmnInt(1));
+        (*dst->copy)(src,size[i]);
         dst = (*dst->next)();
         src = (*src->next)();}
 }
@@ -105,7 +116,6 @@ void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num)
 {
     for (int i = 0; i < num; i++) {
         referCmnInt(src);
-        if (dst->type != src->type) exitErrstr("cpyques too type\n");
         (*dst->copy)(src,sizeCmnInt());
         dst = (*dst->next)();
         src = (*src->next)();}

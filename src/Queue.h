@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include "pqueue.h"
 
 struct QueuePtr {
@@ -29,6 +30,7 @@ struct QueuePtr {
     struct QueuePtr *(*self)();
     void (*init)();
     void (*done)();
+    void (*copy)(struct QueuePtr *src, int siz);
     int type;
 };
 
@@ -136,7 +138,7 @@ struct QueuePtr *begin##NAME() \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
+MUTEX_STRUCT(NAME) NAME##Inst = {.next = { \
     .next = &self##NEXT, \
     .self = &self##NAME, \
     .init = &init##NAME, \
@@ -172,11 +174,11 @@ void unlock##NAME() \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
-    .next.next = &self##NEXT, \
-    .next.self = &self##NAME, \
-    .next.init = &init##NAME, \
-    .next.done = &done##NAME \
+COND_STRUCT(NAME) NAME##Inst = {.next = { \
+    .next = &self##NEXT, \
+    .self = &self##NAME, \
+    .init = &init##NAME, \
+    .done = &done##NAME \
 }}; \
 \
 struct QueuePtr *self##NAME() \
@@ -208,12 +210,12 @@ void unlock##NAME() \
 \
 void wait##NAME() \
 { \
-    if (pthread_mutex_wait(&NAME##Inst.cond,&NAME##Inst.mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno)); \
+    if (pthread_cond_wait(&NAME##Inst.cond,&NAME##Inst.mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno)); \
 } \
 \
 void signal##NAME() \
 { \
-    if (pthread_mutex_signal(&NAME##Inst.cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno)); \
+    if (pthread_cond_signal(&NAME##Inst.cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno)); \
 }
 
 #define QUEUE_STEP 10
@@ -265,9 +267,9 @@ TYPE *unloc##NAME(int siz) \
 \
 void reloc##NAME(int siz) \
 { \
-    TYPE *buf = enlocv##NAME(siz); \
+    TYPE *buf = enloc##NAME(siz); \
     for (int i = 0; i < siz; i++) buf[i] = INST.head[i]; \
-    delocv##NAME(siz); \
+    deloc##NAME(siz); \
 } \
 \
 int size##NAME() \
@@ -284,11 +286,13 @@ TYPE *array##NAME(int sub, int siz) \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
+void copy##NAME(); \
 QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
     .next = &self##NEXT, \
     .self = &self##NAME, \
     .init = &init##NAME, \
-    .done = &done##NAME \
+    .done = &done##NAME, \
+    .copy = &copy##NAME \
 }}; \
 \
 struct QueuePtr *self##NAME() \
@@ -299,8 +303,8 @@ struct QueuePtr *self##NAME() \
 void init##NAME() \
 { \
     int i = 0; for (; i < sizeType(); i++) \
-    if (strcmp(#TYPE,arrayType(i,1)) == 0) break; \
-    if (i == sizeType()) enlocType(#TYPE); \
+    if (strcmp(#TYPE,*arrayType(i,1)) == 0) break; \
+    if (i == sizeType()) *enlocType(1) = #TYPE; \
     NAME##Inst.next.type = i; \
 } \
 \
@@ -309,15 +313,25 @@ void done##NAME() \
     if (&NAME##Inst.base) free(&NAME##Inst.base); \
 } \
 \
-DEFINE_QUEUE(NAME,TYPE,NAME##Inst)
+DEFINE_QUEUE(NAME,TYPE,NAME##Inst) \
+\
+void copy##NAME(struct QueuePtr *src, int siz) \
+{ \
+    if (NAME##Inst.next.type != src->type) exitErrstr("copy too type\n"); \
+    struct NAME##Struct *source = (struct NAME##Struct *)src; \
+    source->head = source->head + siz; \
+    if (source->head > source->tail) exitErrstr("copy too siz\n"); \
+    memcpy(enloc##NAME(siz),source->head-siz,siz); \
+}
 
 #define DEFINE_META(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
 void done##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
-    .next.next = &self##NEXT, \
-    .next.self = &self##NAME, \
-    .next.done = &done##NAME \
+QUEUE_STRUCT(NAME##Meta,TYPE); \
+QUEUE_STRUCT(NAME,struct NAME##MetaStruct) NAME##Inst = {.next = { \
+    .next = &self##NEXT, \
+    .self = &self##NAME, \
+    .done = &done##NAME \
 }}; \
 \
 struct QueuePtr *self##NAME() \
@@ -325,31 +339,25 @@ struct QueuePtr *self##NAME() \
     return &NAME##Inst.next; \
 } \
 \
-DEFINE_QUEUE(NAME,struct NAME##Struct,NAME##Inst) \
+DEFINE_QUEUE(NAME,struct NAME##MetaStruct,NAME##Inst) \
 \
 void done##NAME() \
 { \
     for (int i = 0; i < size##NAME(); i++) \
-    if (array##NAME()[i].base) free(array##NAME()[i].base); \
+    if (array##NAME(i,1)->base) free(array##NAME(i,1)->base); \
     if (&NAME##Inst.base) free(&NAME##Inst.base); \
 } \
 \
-struct NAME##Struct *use##NAME(int sub) \
+struct QueuePtr *use##NAME(int sub) \
 { \
-    QUEUE_STRUCT(NAME,TYPE) inst = {0}; \
+    struct NAME##MetaStruct inst = {0}; \
     while (sub >= size##NAME()) *enloc##NAME(1) = inst; \
-    return array##NAME(sub,1); \
+    return &array##NAME(sub,1)->next; \
 }
 
 #define DEFINE_POINTER(NAME,TYPE) \
 QUEUE_STRUCT(NAME,TYPE) *NAME##Inst = 0; \
 \
-void present##NAME(struct NAME##Struct *ptr) \
-{ \
-    NAME##Inst = ptr; \
-} \
-\
-/*TODO change self to base, have self return derived, and remove this*/ \
 void refer##NAME(struct QueuePtr *ptr) \
 { \
     NAME##Inst = (struct NAME##Struct *)ptr; \
