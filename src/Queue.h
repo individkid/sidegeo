@@ -337,7 +337,7 @@ void done##NAME() \
 struct NAME##Struct *use##NAME(int sub) \
 { \
     QUEUE_STRUCT(NAME,TYPE) inst = {0}; \
-    while (sub >= size##NAME()) enlocx##NAME(inst); \
+    while (sub >= size##NAME()) *enloc##NAME(1) = inst; \
     return array##NAME(sub,1); \
 }
 
@@ -377,11 +377,11 @@ void move##NAME(int link, int pool) \
     if (pool < 0) pool = sizeHead##NAME(); \
     while (link >= sizeLink##NAME()) { \
         struct Link empty = {0}; \
-        enlocxLink##NAME(empty);} \
+        *enlocLink##NAME(1) = empty} \
     while (pool >= sizeHead##NAME()) { \
         int init = -1-sizeHead##NAME(); \
-        enlocxHead##NAME(-1-sizeTail##NAME()); \
-        enlocxTail##NAME(init);} \
+        *enlocHead##NAME(1) = -1-sizeTail##NAME() \
+        *enlocTail##NAME(1) = init} \
     int next = arrayLink##NAME()[link].next; \
     int last = arrayLink##NAME()[link].last; \
     if ((next == 0) != (last == 0)) exitErrstr("link too different\n"); \
