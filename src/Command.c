@@ -65,8 +65,15 @@ enum Shader pershader = Perplane;
 enum Shader dishader = Dipoint;
 enum Shader pershader = Perpoint;
 #endif
-enum Action {Defer,Reque,Advance}; // command helper return value
-enum RenderState {RenderIdle,RenderEnqued,RenderWrap,RenderDraw,RenderWait};
+enum Action {
+    Reque, // be polite to other commands
+    Defer, // wait for other commands engines threads
+    Advance, // go to next command in chain if any
+    Continue, // increment state and call again
+    Terminate // end program
+}; // multi command return value
+typedef enum Action (*Machine) (int state);
+enum RenderState {RenderIdle,RenderEnqued,RenderWrap,RenderDraw,RenderWait}; // TODO remove
 struct Render {
     int draw; // waiting for shader
     int vertex; // number of input buffers que
@@ -75,6 +82,7 @@ struct Render {
     enum Shader shader;
     enum RenderState state;
     int restart;
+    Command follow;
     const char *name;
 }; // argument to render functions
 struct Buffer {
@@ -145,7 +153,10 @@ int sequenceNumber = 0;
 
 DECLARE_STUB(Local)
 DEFINE_LOCAL(Defer,int,Local)
-DEFINE_LOCAL(Command,Command,Defer)
+DEFINE_LOCAL(State,int,Defer)
+DEFINE_LOCAL(Cluster,int,State)
+DEFINE_LOCAL(Machine,Machine,Cluster)
+DEFINE_LOCAL(Command,Command,Machine)
 DEFINE_LOCAL(CmdChar,char,Command)
 DEFINE_LOCAL(CmdInt,int,CmdChar)
 DEFINE_LOCAL(Buffer,struct Buffer *,CmdInt)
@@ -158,7 +169,8 @@ DEFINE_LOCAL(CmdData,enum Data,CmdKind)
 DEFINE_LOCAL(CmdHsCmd,Command,CmdData)
 DEFINE_LOCAL(CmdHsChar,char,CmdHsCmd)
 DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
-DEFINE_POINTER(CharPtr,char,CmdHsInt)
+DEFINE_POINTER(MachPtr,Machine,CmdHsInt)
+DEFINE_POINTER(CharPtr,char,MachPtr)
 DEFINE_POINTER(IntPtr,int,CharPtr)
 DEFINE_STUB(Local,IntPtr)
 
@@ -166,6 +178,31 @@ DECLARE_STUB(Haskell)
 
 DEFINE_MSGSTR(CmdOutput)
 DEFINE_ERRSTR(CmdOutput)
+
+void enqueMachine(Machine machine)
+{
+    *enlocState(1) = 0;
+    *enlocCluster(1) = 1;
+    *enlocMachine(1) = machine;
+}
+
+void followMachine(Machine machine)
+{
+    *arrayCluster(sizeCluster()-1,1) += 1;
+    *enlocMachine(1) = machine;
+}
+
+enum Action command(int state)
+{
+    (*delocCommand(1))();
+    return Advance;
+}
+
+void enqueCommand(Command cmd)
+{
+    *enlocCommand(1) = cmd;
+    enqueMachine(command);
+}
 
 size_t bufferType(int size)
 {
@@ -223,7 +260,7 @@ void enqueWrap(struct Buffer *buffer, int room)
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    *enlocBuffer(1) = buffer; *enlocCommand(1) = wrap;
+    *enlocBuffer(1) = buffer; enqueCommand(wrap);
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
@@ -335,7 +372,7 @@ void render()
     struct Buffer **buf = arrayBuffer(0,size);
     SWITCH(arg->state,RenderEnqued) {
         SWITCH(renderLock(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &render; return;}
+            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&render); return;}
         CASE(Advance) arg->state = RenderWrap;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWrap) {
@@ -348,13 +385,15 @@ void render()
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
         SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &render; return;}
+            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&render); return;}
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
     renderUnlock(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element);
+    if (arg->follow) enqueCommand(arg->follow);
+    code[arg->shader].started--;
     if (arg->restart && code[arg->shader].restart) {code[arg->shader].restart = 0; enqueShader(arg->shader);}
-    code[arg->shader].started--; delocRender(1); delocBuffer(size);
+    delocRender(1); delocBuffer(size);
 }
 
 void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
@@ -384,7 +423,14 @@ void enqueShader(enum Shader shader)
     CASE(Perplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub],&server[PierceBuf]}; setupShader("perplane",Perplane,2,1,1,buf,0);}
     CASE(Perpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[FrameSub],&server[PierceBuf]}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
-    *enlocCommand(1) = render; code[shader].started++;
+    enqueCommand(&render); code[shader].started++;
+}
+
+void enqueFollow(enum Shader shader, Command follow)
+{
+    enqueShader(shader);
+    struct Render *arg = arrayRender(sizeRender()-1,1);
+    arg->follow = follow;
 }
 
 void pierce()
@@ -392,8 +438,7 @@ void pierce()
     int dimn = server[PierceBuf].dimn;
     int done = server[PierceBuf].done;
     GLfloat result[done*dimn];
-    if (done<server[FaceSub].done || server[FaceSub].read == 0) {
-        *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &pierce; return;}
+    if (server[PierceBuf].read == 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&pierce); return;}
     server[FaceSub].read--;
     glBindBuffer(GL_ARRAY_BUFFER, server[PierceBuf].handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(server[PierceBuf].type), result);
@@ -406,13 +451,12 @@ void pierce()
         if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
             xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
     if (zFound<invalid[1]) {xPos = xFound; yPos = yFound; zPos = zFound;}
-    code[pershader].started--;
 }
 
 #ifdef DEBUG
 void debug()
 {
-    if (debugBuf.done<server[FaceSub].done) {*enlocCommand(1) = &debug; return;}
+    if (debugBuf.done<server[FaceSub].done) {enqueCommand(&debug); return;}
     int prim = bufferPrimitive(code[DEBUGS].output);
     int count = prim*debugBuf.dimn;
     DEBUGT result[debugBuf.done*count];
@@ -497,8 +541,7 @@ void transformRight()
     glUniform3f(code[pershader].uniform[Feather],xPos,yPos,zPos);
     glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
-    enqueShader(pershader);
-    *enlocCommand(1) = &pierce; code[pershader].started++;
+    enqueFollow(pershader,&pierce);
 }
 
 void matrixMatrix()
@@ -687,14 +730,14 @@ void manipulateDrive()
 
 void displayClose(GLFWwindow* window)
 {
-    *enlocCommand(1) = 0;
+    enqueMachine(0);
 }
 
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) *enlocCommand(1) = 0;
+        SWITCH(key,GLFW_KEY_ENTER) enqueMachine(0);
         DEFAULT(*enlocCmdOutput(1) = ofmotion(Space); *enlocCmdOutput(1) = '\n';)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
@@ -928,11 +971,11 @@ void bringup()
         0,1,2,
     };
 
-    if (server[PlaneBuf].read > 0 || server[PlaneBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
-    if (server[VersorBuf].read > 0 || server[VersorBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
-    if (server[FaceSub].read > 0 || server[FaceSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
-    if (server[PointSub].read > 0 || server[PointSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
-    if (server[SideSub].read > 0 || server[SideSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
+    if (server[PlaneBuf].read > 0 || server[PlaneBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
+    if (server[VersorBuf].read > 0 || server[VersorBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
+    if (server[FaceSub].read > 0 || server[FaceSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
+    if (server[PointSub].read > 0 || server[PointSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
+    if (server[SideSub].read > 0 || server[SideSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
 
     server[PlaneBuf].write++;
     server[VersorBuf].write++;
@@ -946,11 +989,11 @@ void bringup()
     if (server[PointSub].done < NUM_POINTS) bringupBuffer(&server[PointSub],1,NUM_POINTS,vertex);
     if (server[SideSub].done < NUM_SIDES) bringupBuffer(&server[SideSub],1,NUM_SIDES,wrt);
  
-    if (server[PlaneBuf].done < NUM_PLANES) {*enlocCommand(1) = &bringup; return;}
-    if (server[VersorBuf].done < NUM_PLANES) {*enlocCommand(1) = &bringup; return;}
-    if (server[FaceSub].done < NUM_FACES) {*enlocCommand(1) = &bringup; return;}
-    if (server[PointSub].done < NUM_POINTS) {*enlocCommand(1) = &bringup; return;}
-    if (server[SideSub].done < NUM_SIDES) {*enlocCommand(1) = &bringup; return;}
+    if (server[PlaneBuf].done < NUM_PLANES) {enqueCommand(&bringup); return;}
+    if (server[VersorBuf].done < NUM_PLANES) {enqueCommand(&bringup); return;}
+    if (server[FaceSub].done < NUM_FACES) {enqueCommand(&bringup); return;}
+    if (server[PointSub].done < NUM_POINTS) {enqueCommand(&bringup); return;}
+    if (server[SideSub].done < NUM_SIDES) {enqueCommand(&bringup); return;}
 
     server[PlaneBuf].write--;
     server[VersorBuf].write--;
@@ -958,7 +1001,7 @@ void bringup()
     server[PointSub].write--;
     server[SideSub].write--;
 
-    *enlocCommand(1) = &transformRight; enqueShader(dishader);
+    enqueCommand(&transformRight); enqueShader(dishader);
 }
 #endif
 
@@ -1204,7 +1247,7 @@ int main(int argc, char **argv)
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->init) (*i->init)();
 
 #ifdef BRINGUP
-    *enlocCommand(1) = &bringup;
+    enqueCommand(&bringup);
 #endif
 
     for (int i = 1; i < argc; i++) *enlocOption(1) = argv[i];
@@ -1227,19 +1270,39 @@ int main(int argc, char **argv)
         unlockEvents();
 
         lockCommands();
+        for (int i = 0; i < sizeCmnCommand(); i++) enqueMachine(command);
         cpyques(selfCommand(),selfCmnCommand(),3);
         unlockCommands();
 
         if (sizeCommand() == 0) glfwWaitEvents();
-        else if (sizeDefer() == sizeCommand()) glfwWaitEventsTimeout(POLL_DELAY);
+        else if (sizeDefer() == sizeCluster()) glfwWaitEventsTimeout(POLL_DELAY);
         else glfwPollEvents();
 
-        if (sizeCommand() == 0) continue;
-        Command command = *delocCommand(1);
+        if (sizeCluster() == 0) continue;
+        int state = *delocState(1);
+        int cluster = *delocCluster(1);
+        Machine *machine = delocMachine(cluster);
         if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
         sequenceNumber++;
-        if (!command) break;
-        (*command)();}
+        int done = 0;
+        for (int i = 0; i < cluster; i++) {
+            if (!machine[i]) done = 2; // TODO remove
+            else while (1) {
+                SWITCH((*machine[i])(state),Reque) {
+                    Machine *reloc = enlocMachine(cluster-i);
+                    for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
+                    *enlocState(1) = state;
+                    *enlocCluster(1) = cluster-i;}
+                FALL(Defer) {
+                    *enlocDefer(1) = sequenceNumber;
+                    done = 2;}
+                CASE(Advance) {state = 0; done = 1;}
+                CASE(Continue) state++;
+                CASE(Terminate) done = 3;
+                DEFAULT(exitErrstr("invalid machine action\n");)
+                if (done) {done--; break;}}
+            if (done) {done--; break;}}
+        if (done) {done--; break;}}
 
     // TODO signal threads to finish and join threads
 
