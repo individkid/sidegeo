@@ -246,7 +246,7 @@ void renderUnlock(struct Render *arg, struct Buffer **vertex, struct Buffer **el
 {
     for (int i = 0; i < arg->vertex; i++) vertex[i]->read--;
     for (int i = 0; i < arg->element; i++) element[i]->read--;
-    for (int i = 0; i < arg->feedback; i++) feedback[i]->write--;
+    for (int i = 0; i < arg->feedback; i++) {feedback[i]->read++; feedback[i]->write--;}
 }
 
 enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
@@ -392,7 +392,9 @@ void pierce()
     int dimn = server[PierceBuf].dimn;
     int done = server[PierceBuf].done;
     GLfloat result[done*dimn];
-    if (done<server[FaceSub].done) {*enlocCommand(1) = &pierce; return;}
+    if (done<server[FaceSub].done || server[FaceSub].read == 0) {
+        *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &pierce; return;}
+    server[FaceSub].read--;
     glBindBuffer(GL_ARRAY_BUFFER, server[PierceBuf].handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(server[PierceBuf].type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
