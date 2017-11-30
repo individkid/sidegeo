@@ -19,8 +19,8 @@
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
 #include "AffTopo/Sculpt_stub.h"
-//extern void ___stginit_AffTopoziSculpt(void);
 #endif
+
 #include <stdio.h>
 #include "pqueue.h"
 #include "Queue.h"
