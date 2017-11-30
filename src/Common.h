@@ -20,7 +20,6 @@
 #define COMMON_H
 
 #define BRINGUP
-//#define DEBUG
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
 #define SCALAR_DIMENSIONS 1
@@ -77,9 +76,6 @@ enum Event {
     Done}; // terminate
 enum Kind {Poly,Boundary,Face,Other,Kinds};
 enum Data {
-#ifdef DEBUG
-    DebugBuf,
-#endif
     PlaneBuf, // per boundary distances above base plane
     VersorBuf, // per boundary base selector
     PointBuf, // shared point per boundary triple
