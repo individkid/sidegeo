@@ -927,6 +927,19 @@ void bringup()
     GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
+
+    if (server[PlaneBuf].read > 0 || server[PlaneBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
+    if (server[VersorBuf].read > 0 || server[VersorBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
+    if (server[FaceSub].read > 0 || server[FaceSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
+    if (server[PointSub].read > 0 || server[PointSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
+    if (server[SideSub].read > 0 || server[SideSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &bringup; return;}
+
+    server[PlaneBuf].write++;
+    server[VersorBuf].write++;
+    server[FaceSub].write++;
+    server[PointSub].write++;
+    server[SideSub].write++;
+
     if (server[PlaneBuf].done < NUM_PLANES) bringupBuffer(&server[PlaneBuf],1,NUM_PLANES,plane);
     if (server[VersorBuf].done < NUM_PLANES) bringupBuffer(&server[VersorBuf],1,NUM_PLANES,versor);
     if (server[FaceSub].done < NUM_FACES) bringupBuffer(&server[FaceSub],1,NUM_FACES,face);
@@ -938,6 +951,13 @@ void bringup()
     if (server[FaceSub].done < NUM_FACES) {*enlocCommand(1) = &bringup; return;}
     if (server[PointSub].done < NUM_POINTS) {*enlocCommand(1) = &bringup; return;}
     if (server[SideSub].done < NUM_SIDES) {*enlocCommand(1) = &bringup; return;}
+
+    server[PlaneBuf].write--;
+    server[VersorBuf].write--;
+    server[FaceSub].write--;
+    server[PointSub].write--;
+    server[SideSub].write--;
+
     *enlocCommand(1) = &transformRight; enqueShader(dishader);
 }
 #endif
