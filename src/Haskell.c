@@ -53,42 +53,35 @@ DEFINE_STUB(Haskell,Name)
 
 void setupEventMap()
 {
+    const char *eventName[] = {"Plane","Classify","Inflate","Fill","Hollow","Remove","Call"};
+    const enum Event eventEnum[] = {Side,Update,Inflate,Fill,Hollow,Remove,Call};
+    int len = sizeof(eventName)/sizeof(eventName[0]);
     enlocEventMap(Acknowledge);
-    for (int i = 0; i < sizeEventName(); i++) {
-    referName(useEventName(i)); if (strcmp(*arrayName(0,sizeName()),"Plane") == 0) *arrayEventMap(Side,1) = i;
-    referName(useEventName(i)); if (strcmp(*arrayName(0,sizeName()),"Classify") == 0) *arrayEventMap(Update,1) = i;
-    referName(useEventName(i)); if (strcmp(*arrayName(0,sizeName()),"Inflate") == 0) *arrayEventMap(Inflate,1) = i;
-    referName(useEventName(i)); if (strcmp(*arrayName(0,sizeName()),"Fill") == 0) *arrayEventMap(Fill,1) = i;
-    referName(useEventName(i)); if (strcmp(*arrayName(0,sizeName()),"Hollow") == 0) *arrayEventMap(Hollow,1) = i;
-    referName(useEventName(i)); if (strcmp(*arrayName(0,sizeName()),"Remove") == 0) *arrayEventMap(Remove,1) = i;
-    referName(useEventName(i)); if (strcmp(*arrayName(0,sizeName()),"Call") == 0) *arrayEventMap(Call,1) = i;}
+    for (int i = 0; i < sizeEventName(); i++)
+    for (int j = 0; j < len; j++) {referName(useEventName(i));
+    if (strcmp(*arrayName(0,sizeName()),eventName[j]) == 0) *arrayEventMap(eventEnum[j],1) = i;}
 }
 
 void setupKindMap()
 {
+    const char *kindName[] = {"Place","Boundary","Face","Other"};
+    const enum Kind kindEnum[] = {Poly,Boundary,Face,Other};
+    int len = sizeof(kindName)/sizeof(kindName[0]);
     enlocKindMap(Kinds);
-    for (int i = 0; i < sizeKindName(); i++) {
-    referName(useKindName(i)); if (strcmp(*arrayName(0,sizeName()),"Place") == 0) *arrayDataMap(Poly,1) = i;
-    referName(useKindName(i)); if (strcmp(*arrayName(0,sizeName()),"Boundary") == 0) *arrayDataMap(Boundary,1) = i;
-    referName(useKindName(i)); if (strcmp(*arrayName(0,sizeName()),"Face") == 0) *arrayDataMap(Face,1) = i;
-    referName(useKindName(i)); if (strcmp(*arrayName(0,sizeName()),"Other") == 0) *arrayDataMap(Other,1) = i;}
+    for (int i = 0; i < sizeKindName(); i++)
+    for (int j = 0; j < len; j++) {referName(useKindName(i));
+    if (strcmp(*arrayName(0,sizeName()),kindName[j]) == 0) *arrayDataMap(kindEnum[j],1) = i;}
 }
 
 void setupDataMap()
 {
+    const char *dataName[] = {"PlaneBuf","VersorBuf","PointBuf","PierceBuf","SideBuf","FaceSub","FrameSub","PointSub","PlaneSub","SideSub","HalfSub"};
+    const enum Data dataEnum[] = {PlaneBuf,VersorBuf,PointBuf,PierceBuf,SideBuf,FaceSub,FrameSub,PointSub,PlaneSub,SideSub,HalfSub};
+    int len = sizeof(dataName)/sizeof(dataName[0]);
     enlocDataMap(Datas);
-    for (int i = 0; i < sizeDataName(); i++) {
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"PlaneBuf") == 0) *arrayDataMap(i,1) = PlaneBuf;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"VersorBuf") == 0) *arrayDataMap(i,1) = VersorBuf;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"PointBuf") == 0) *arrayDataMap(i,1) = PointBuf;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"PierceBuf") == 0) *arrayDataMap(i,1) = PierceBuf;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"SideBuf") == 0) *arrayDataMap(i,1) = SideBuf;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"FaceSub") == 0) *arrayDataMap(i,1) = FaceSub;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"FrameSub") == 0) *arrayDataMap(i,1) = FrameSub;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"PointSub") == 0) *arrayDataMap(i,1) = PointSub;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"PlaneSub") == 0) *arrayDataMap(i,1) = PlaneSub;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"SideSub") == 0) *arrayDataMap(i,1) = SideSub;
-    referName(useDataName(i)); if (strcmp(*arrayName(0,sizeName()),"HalfSub") == 0) *arrayDataMap(i,1) = HalfSub;}
+    for (int i = 0; i < sizeDataName(); i++)
+    for (int j = 0; j < len; j++) {referName(useDataName(i));
+    if (strcmp(*arrayName(0,sizeName()),dataName[j]) == 0) *arrayDataMap(i,1) = dataEnum[j];}
 }
 
 void *haskell(void *arg)
