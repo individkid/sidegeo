@@ -21,6 +21,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <signal.h>
 #include "Common.h"
 #include "Fold.h"
 
@@ -82,9 +83,9 @@ DEFINE_LOCAL(CmnHsCmd,Command,CmnData)
 DEFINE_LOCAL(CmnHsChar,char,CmnHsCmd)
 DEFINE_LOCAL(CmnHsInt,int,CmnHsChar)
 DEFINE_LOCAL(Type,const char *,CmnHsInt)
-DEFINE_STUB(Common,Type)
+DEFINE_POINTER(CmnInt,int,Type)
+DEFINE_STUB(Common,CmnInt)
 
-DEFINE_POINTER(CmnInt,int)
 int voidType = 0;
 int intType = 0;
 

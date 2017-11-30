@@ -152,10 +152,9 @@ DEFINE_LOCAL(CmdData,enum Data,CmdKind)
 DEFINE_LOCAL(CmdHsCmd,Command,CmdData)
 DEFINE_LOCAL(CmdHsChar,char,CmdHsCmd)
 DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
-DEFINE_STUB(Local,CmdHsInt)
-
-DEFINE_POINTER(CharPtr,char)
-DEFINE_POINTER(IntPtr,int)
+DEFINE_POINTER(CharPtr,char,CmdHsInt)
+DEFINE_POINTER(IntPtr,int,CharPtr)
+DEFINE_STUB(Local,IntPtr)
 
 DECLARE_STUB(Haskell)
 

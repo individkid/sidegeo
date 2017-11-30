@@ -46,11 +46,10 @@ DEFINE_LOCAL(HsInt,int,HsChar)
 DEFINE_LOCAL(HsCommand,Command,HsInt)
 DEFINE_LOCAL(HsCmdChar,char,HsCommand)
 DEFINE_LOCAL(HsCmdInt,int,HsCmdChar)
-DEFINE_STUB(Haskell,HsCmdInt)
-
-DEFINE_POINTER(Meta,int)
-DEFINE_POINTER(Sudo,char)
-DEFINE_POINTER(Name,char *)
+DEFINE_POINTER(Meta,int,HsCmdInt)
+DEFINE_POINTER(Sudo,char,Meta)
+DEFINE_POINTER(Name,char *,Sudo)
+DEFINE_STUB(Haskell,Name)
 
 void setupEventMap()
 {

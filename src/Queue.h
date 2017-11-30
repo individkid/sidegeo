@@ -26,20 +26,20 @@
 #include "pqueue.h"
 
 struct QueuePtr {
-    struct QueuePtr *(*next)();
     struct QueuePtr *(*self)();
+    struct QueuePtr *(*next)();
     void (*init)();
     void (*done)();
     void (*copy)(struct QueuePtr *src, int siz);
     int type;
 };
 
-#define BEGIN_STUB(NAME) begin##NAME()
+#define BEGIN_STUB(NAME) other##NAME()
 #define END_STUB(NAME) self##NAME()
 
 #define DECLARE_STUB(NAME) \
-struct QueuePtr *self##NAME(); \
-struct QueuePtr *begin##NAME();
+struct QueuePtr *other##NAME(); \
+struct QueuePtr *self##NAME();
 
 #define DECLARE_MUTEX(NAME) \
 struct QueuePtr *self##NAME(); \
@@ -55,6 +55,7 @@ void signal##NAME();
 
 #define DECLARE_LOCAL(NAME,TYPE) \
 struct QueuePtr *self##NAME(); \
+int type##NAME(); \
 TYPE *enloc##NAME(int siz); \
 TYPE *deloc##NAME(int siz); \
 TYPE *unloc##NAME(int siz); \
@@ -64,11 +65,10 @@ TYPE *array##NAME(int sub, int siz);
 
 #define DECLARE_META(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
-struct NAME##Struct *use##NAME(int sub);
+struct QueuePtr *use##NAME(int sub);
 
 #define DECLARE_POINTER(NAME,TYPE) \
 struct NAME##Struct **pointer##NAME(); \
-void present##NAME(struct NAME##Struct *ptr); \
 void refer##NAME(struct QueuePtr *ptr);
 
 #define DECLARE_LINK(NAME) \
@@ -95,7 +95,7 @@ int ready##NAME(pqueue_pri_t pri);
 
 #define QUEUE_STRUCT(NAME,TYPE) \
 struct NAME##Struct { \
-    struct QueuePtr next; \
+    struct QueuePtr self; \
     TYPE *base; \
     TYPE *limit; \
     TYPE *head; \
@@ -104,15 +104,13 @@ struct NAME##Struct { \
 
 #define MUTEX_STRUCT(NAME) \
 struct NAME##Struct { \
-    struct QueuePtr next; \
-    void (*signal)(); \
+    struct QueuePtr self; \
     pthread_mutex_t mutex; \
 }
 
 #define COND_STRUCT(NAME) \
 struct NAME##Struct { \
-    struct QueuePtr next; \
-    void (*signal)(); \
+    struct QueuePtr self; \
     pthread_mutex_t mutex; \
     pthread_cond_t cond; \
 }
@@ -120,34 +118,32 @@ struct NAME##Struct { \
 #define DEFINE_STUB(NAME,NEXT) \
 struct QueuePtr *self##NAME(); \
 struct QueuePtr NAME##Inst = { \
-    .next = &self##NEXT, \
-    .self = &self##NAME \
-}; \
+    .self = &self##NAME, \
+    .next = &self##NEXT}; \
 \
 struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst; \
 } \
 \
-struct QueuePtr *begin##NAME() \
+struct QueuePtr *other##NAME() \
 { \
-    return (*NAME##Inst.next)(); \
+    return (*NAME##Inst.self)(); \
 }
 
 #define DEFINE_MUTEX(NAME,NEXT) \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
-MUTEX_STRUCT(NAME) NAME##Inst = {.next = { \
-    .next = &self##NEXT, \
+MUTEX_STRUCT(NAME) NAME##Inst = {.self = { \
     .self = &self##NAME, \
+    .next = &self##NEXT, \
     .init = &init##NAME, \
-    .done = &done##NAME \
-}}; \
+    .done = &done##NAME}}; \
 \
 struct QueuePtr *self##NAME() \
 { \
-    return &NAME##Inst.next; \
+    return &NAME##Inst.self; \
 } \
 \
 void init##NAME() \
@@ -174,16 +170,15 @@ void unlock##NAME() \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
-COND_STRUCT(NAME) NAME##Inst = {.next = { \
-    .next = &self##NEXT, \
+COND_STRUCT(NAME) NAME##Inst = {.self = { \
     .self = &self##NAME, \
+    .next = &self##NEXT, \
     .init = &init##NAME, \
-    .done = &done##NAME \
-}}; \
+    .done = &done##NAME}}; \
 \
 struct QueuePtr *self##NAME() \
 { \
-    return &NAME##Inst.next; \
+    return &NAME##Inst.self; \
 } \
 \
 void init##NAME() \
@@ -287,17 +282,16 @@ struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
 void copy##NAME(); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.next = { \
-    .next = &self##NEXT, \
+QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.self = { \
     .self = &self##NAME, \
+    .next = &self##NEXT, \
     .init = &init##NAME, \
     .done = &done##NAME, \
-    .copy = &copy##NAME \
-}}; \
+    .copy = &copy##NAME}}; \
 \
 struct QueuePtr *self##NAME() \
 { \
-    return &NAME##Inst.next; \
+    return &NAME##Inst.self; \
 } \
 \
 void init##NAME() \
@@ -305,19 +299,19 @@ void init##NAME() \
     int i = 0; for (; i < sizeType(); i++) \
     if (strcmp(#TYPE,*arrayType(i,1)) == 0) break; \
     if (i == sizeType()) *enlocType(1) = #TYPE; \
-    NAME##Inst.next.type = i; \
+    NAME##Inst.self.type = i; \
 } \
 \
 void done##NAME() \
 { \
-    if (&NAME##Inst.base) free(&NAME##Inst.base); \
+    if (NAME##Inst.base) free(NAME##Inst.base); \
 } \
 \
 DEFINE_QUEUE(NAME,TYPE,NAME##Inst) \
 \
 void copy##NAME(struct QueuePtr *src, int siz) \
 { \
-    if (NAME##Inst.next.type != src->type) exitErrstr("copy too type\n"); \
+    if (NAME##Inst.self.type != src->type) exitErrstr("copy too type\n"); \
     struct NAME##Struct *source = (struct NAME##Struct *)src; \
     source->head = source->head + siz; \
     if (source->head > source->tail) exitErrstr("copy too siz\n"); \
@@ -326,44 +320,76 @@ void copy##NAME(struct QueuePtr *src, int siz) \
 
 #define DEFINE_META(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
+void init##NAME(); \
 void done##NAME(); \
 QUEUE_STRUCT(NAME##Meta,TYPE); \
-QUEUE_STRUCT(NAME,struct NAME##MetaStruct) NAME##Inst = {.next = { \
-    .next = &self##NEXT, \
+QUEUE_STRUCT(NAME,struct NAME##MetaStruct) NAME##Inst = {.self = { \
     .self = &self##NAME, \
-    .done = &done##NAME \
-}}; \
+    .next = &self##NEXT, \
+    .init = &init##NAME, \
+    .done = &done##NAME}}; \
+int NAME##Type = 0; \
 \
 struct QueuePtr *self##NAME() \
 { \
-    return &NAME##Inst.next; \
+    return &NAME##Inst.self; \
 } \
 \
 DEFINE_QUEUE(NAME,struct NAME##MetaStruct,NAME##Inst) \
+\
+void init##NAME() \
+{ \
+    int i = 0; for (; i < sizeType(); i++) \
+    if (strcmp(#TYPE,*arrayType(i,1)) == 0) break; \
+    if (i == sizeType()) *enlocType(1) = #TYPE; \
+    NAME##Type = i; \
+} \
 \
 void done##NAME() \
 { \
     for (int i = 0; i < size##NAME(); i++) \
     if (array##NAME(i,1)->base) free(array##NAME(i,1)->base); \
-    if (&NAME##Inst.base) free(&NAME##Inst.base); \
+    if (NAME##Inst.base) free(NAME##Inst.base); \
 } \
 \
 struct QueuePtr *use##NAME(int sub) \
 { \
-    struct NAME##MetaStruct inst = {0}; \
+    struct NAME##MetaStruct inst = {.self = { \
+        .type = NAME##Type}}; \
     while (sub >= size##NAME()) *enloc##NAME(1) = inst; \
-    return &array##NAME(sub,1)->next; \
+    return &array##NAME(sub,1)->self; \
 }
 
-#define DEFINE_POINTER(NAME,TYPE) \
-QUEUE_STRUCT(NAME,TYPE) *NAME##Inst = 0; \
+#define DEFINE_POINTER(NAME,TYPE,NEXT) \
+struct QueuePtr *self##NAME(); \
+void init##NAME(); \
+struct QueuePtr NAME##Inst = { \
+    .self = &self##NAME, \
+    .next = &self##NEXT, \
+    .init = &init##NAME}; \
+QUEUE_STRUCT(NAME,TYPE) *NAME##Ptr = 0; \
+int NAME##Type = 0; \
+\
+struct QueuePtr *self##NAME() \
+{ \
+    return &NAME##Inst; \
+} \
+\
+void init##NAME() \
+{ \
+    int i = 0; for (; i < sizeType(); i++) \
+    if (strcmp(#TYPE,*arrayType(i,1)) == 0) break; \
+    if (i == sizeType()) *enlocType(1) = #TYPE; \
+    NAME##Type = i; \
+} \
 \
 void refer##NAME(struct QueuePtr *ptr) \
 { \
-    NAME##Inst = (struct NAME##Struct *)ptr; \
+    if (NAME##Type != ptr->type) exitErrstr("pointer too type\n"); \
+    NAME##Ptr = (struct NAME##Struct *)ptr; \
 } \
 \
-DEFINE_QUEUE(NAME,TYPE,(*NAME##Inst))
+DEFINE_QUEUE(NAME,TYPE,(*NAME##Ptr))
 
 struct Link {
     int next,last; // links if positive, index into head or tail if negative
@@ -535,15 +561,14 @@ void done##NAME() { \
 } \
 \
 struct QueuePtr *self##NAME(); \
-QUEUE_STRUCT(NAME,void) NAME##Inst = { \
-    .next.next = &selfPqueue##NAME, \
-    .next.self = &self##NAME, \
-    .next.init = &init##NAME, \
-    .next.done = &done##NAME \
-}; \
+QUEUE_STRUCT(NAME,void) NAME##Inst = {.self = { \
+    .self = &self##NAME, \
+    .next = &selfPqueue##NAME, \
+    .init = &init##NAME, \
+    .done = &done##NAME}}; \
 \
 struct QueuePtr *self##NAME() { \
-    return &NAME##Inst.next; \
+    return &NAME##Inst.self; \
 } \
 \
 TYPE *schedule##NAME(pqueue_pri_t pri) \
