@@ -54,7 +54,7 @@ executable test
     extra-lib-dirs:    /usr/lib
 
 executable sculpt
-  main-is:             Intf.c
+  main-is:             Command.c
   other-modules:       AffTopo.Sculpt,
                        AffTopo.Naive
   default-language:    Haskell2010
@@ -65,7 +65,8 @@ executable sculpt
                        random,
                        hint
   hs-source-dirs:      src
-  c-sources:           src/Intf.c,
+  c-sources:           src/Haskell.c,
+                       src/Common.c,
                        src/Microcode.c,
                        libpqueue/src/pqueue.c
   include-dirs:        libpqueue/src

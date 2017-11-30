@@ -62,7 +62,7 @@ enum Shader dishader = Dipoint;
 enum Shader pershader = Perpoint;
 #endif
 enum Action {Defer,Reque,Advance}; // command helper return value
-enum RenderState {RenderIdle,RenderEnqued,RenderDraw,RenderWait};
+enum RenderState {RenderIdle,RenderEnqued,RenderWrap,RenderDraw,RenderWait};
 struct Render {
     int draw; // waiting for shader
     int vertex; // number of input buffers que
@@ -84,6 +84,8 @@ struct Buffer {
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
+    int read; // count of readers
+    int write; // count of writers
 }; // argument to render functions
 struct Buffer server[Datas] = {0};
 enum Uniform { // one value per uniform; no associated state
@@ -225,6 +227,24 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
+enum Action renderLock(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
+{
+    for (int i = 0; i < arg->vertex; i++) if (vertex[i]->write > 0) return Defer;
+    for (int i = 0; i < arg->element; i++) if (element[i]->write > 0) return Defer;
+    for (int i = 0; i < arg->feedback; i++) if (feedback[i]->write > 0 || feedback[i]->read > 0) return Defer;
+    for (int i = 0; i < arg->vertex; i++) vertex[i]->read++;
+    for (int i = 0; i < arg->element; i++) element[i]->read++;
+    for (int i = 0; i < arg->feedback; i++) feedback[i]->write++;
+    return Advance;
+}
+
+void renderUnlock(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
+{
+    for (int i = 0; i < arg->vertex; i++) vertex[i]->read--;
+    for (int i = 0; i < arg->element; i++) element[i]->read--;
+    for (int i = 0; i < arg->feedback; i++) feedback[i]->write--;
+}
+
 enum Action renderWrap(struct Render *arg, struct Buffer **vertex, struct Buffer **element, struct Buffer **feedback)
 {
     for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
@@ -310,8 +330,13 @@ void render()
     int size = arg->vertex+arg->element+arg->feedback;
     struct Buffer **buf = arrayBuffer(0,size);
     SWITCH(arg->state,RenderEnqued) {
+        SWITCH(renderLock(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
+            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &render; return;}
+        CASE(Advance) arg->state = RenderWrap;
+        DEFAULT(exitErrstr("invalid render action\n");)}
+    FALL(RenderWrap) {
         SWITCH(renderWrap(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Reque) {
-            relocRender(1); relocBuffer(size); *enlocCommand(1) = &render;}
+            relocRender(1); relocBuffer(size); *enlocCommand(1) = &render; return;}
         CASE(Advance) arg->state = RenderDraw;
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderDraw) {
@@ -319,10 +344,11 @@ void render()
         DEFAULT(exitErrstr("invalid render action\n");)}
     FALL(RenderWait) {
         SWITCH(renderWait(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element),Defer) {
-            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &render;}
+            relocRender(1); relocBuffer(size); *enlocDefer(1) = sequenceNumber + sizeCommand(); *enlocCommand(1) = &render; return;}
         CASE(Advance) arg->state = RenderIdle;
         DEFAULT(exitErrstr("invalid render action\n");)}
     DEFAULT(exitErrstr("invalid render state\n");)
+    renderUnlock(arg,buf,buf+arg->vertex,buf+arg->vertex+arg->element);
     if (arg->restart && code[arg->shader].restart) {code[arg->shader].restart = 0; enqueShader(arg->shader);}
     code[arg->shader].started--; delocRender(1); delocBuffer(size);
 }
