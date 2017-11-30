@@ -459,7 +459,7 @@ void pierce()
     DEFAULT(exitErrstr("invalid pierce action\n");)
 }
 
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart)
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart, Command follow)
 {
     struct Render *arg = enlocRender(1);
     struct Buffer **buf = enlocBuffer(vertex+element+feedback);
@@ -472,28 +472,22 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
     arg->restart = restart;
     arg->state = RenderEnqued;
+    arg->follow = follow;
     enqueCommand(&render); code[shader].started++;
 }
 
 void enqueShader(enum Shader shader)
 {
     if (code[shader].started) {code[shader].restart = 1; return;}
-    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub]}; setupShader("diplane",Diplane,2,1,0,buf,1);}
-    CASE(Dipoint) {struct Buffer *buf[2] = {&server[PointBuf],&server[FrameSub]}; setupShader("dipoint",Dipoint,1,1,0,buf,1);}
-    CASE(Coplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[PointSub],&server[PointBuf]}; setupShader("coplane",Coplane,2,1,1,buf,0);}
-    CASE(Copoint) {struct Buffer *buf[4] = {&server[PointBuf],&server[PlaneSub],&server[VersorBuf],&server[PlaneBuf]}; setupShader("copoint",Copoint,1,1,2,buf,0);}
-    CASE(Adplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[SideSub],&server[SideBuf]}; setupShader("adplane",Adplane,2,1,1,buf,0);}
-    CASE(Adpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[HalfSub],&server[SideBuf]}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
-    CASE(Perplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub],&server[PierceBuf]}; setupShader("perplane",Perplane,2,1,1,buf,0);}
-    CASE(Perpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[FrameSub],&server[PierceBuf]}; setupShader("perpoint",Perpoint,1,1,1,buf,0);}
+    SWITCH(shader,Diplane) {struct Buffer *buf[3] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub]}; setupShader("diplane",Diplane,2,1,0,buf,1,0);}
+    CASE(Dipoint) {struct Buffer *buf[2] = {&server[PointBuf],&server[FrameSub]}; setupShader("dipoint",Dipoint,1,1,0,buf,1,0);}
+    CASE(Coplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[PointSub],&server[PointBuf]}; setupShader("coplane",Coplane,2,1,1,buf,0,0);}
+    CASE(Copoint) {struct Buffer *buf[4] = {&server[PointBuf],&server[PlaneSub],&server[VersorBuf],&server[PlaneBuf]}; setupShader("copoint",Copoint,1,1,2,buf,0,0);}
+    CASE(Adplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[SideSub],&server[SideBuf]}; setupShader("adplane",Adplane,2,1,1,buf,0,0);}
+    CASE(Adpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[HalfSub],&server[SideBuf]}; setupShader("adpoint",Adpoint,1,1,1,buf,0,0);}
+    CASE(Perplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub],&server[PierceBuf]}; setupShader("perplane",Perplane,2,1,1,buf,0,&pierce);}
+    CASE(Perpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[FrameSub],&server[PierceBuf]}; setupShader("perpoint",Perpoint,1,1,1,buf,0,&pierce);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
-}
-
-void enqueFollow(enum Shader shader, Command follow)
-{
-    enqueShader(shader);
-    struct Render *arg = arrayRender(sizeRender()-1,1);
-    arg->follow = follow;
 }
 
 void warp(double xwarp, double ywarp)
@@ -562,7 +556,7 @@ void transformRight()
     glUniform3f(code[pershader].uniform[Feather],xPos,yPos,zPos);
     glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
-    enqueFollow(pershader,&pierce);
+    enqueShader(pershader);
 }
 
 void matrixMatrix()
