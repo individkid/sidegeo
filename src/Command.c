@@ -73,16 +73,13 @@ enum Action {
     Terminate // end program
 }; // multi command return value
 typedef enum Action (*Machine) (int state);
-enum RenderState {RenderIdle,RenderEnqued,RenderWrap,RenderDraw,RenderWait}; // TODO remove
 struct Render {
     int draw; // waiting for shader
     int vertex; // number of input buffers que
     int element; // primitives per output buffer
     int feedback; // number of output buffers on que
     enum Shader shader;
-    enum RenderState state; // TODO remove
     int restart;
-    Command follow; // TODO remove
     const char *name;
 }; // argument to render functions
 struct Buffer {
@@ -381,6 +378,8 @@ enum Action renderWait(int state)
     return Advance;
 }
 
+void enqueShader(enum Shader shader);
+
 enum Action renderUnlock(int state)
 {
     struct Render *arg = arrayRender(0,1);
@@ -392,15 +391,6 @@ enum Action renderUnlock(int state)
     for (int i = 0; i < arg->vertex; i++) vertex[i]->read--;
     for (int i = 0; i < arg->element; i++) element[i]->read--;
     for (int i = 0; i < arg->feedback; i++) {feedback[i]->read++; feedback[i]->write--;}
-    return Advance;
-}
-
-void enqueShader(enum Shader shader);
-
-enum Action renderDone(int state)
-{
-    struct Render *arg = arrayRender(0,1);
-    int size = arg->vertex+arg->element+arg->feedback;
     code[arg->shader].started--;
     if (arg->restart && code[arg->shader].restart) {code[arg->shader].restart = 0; enqueShader(arg->shader);}
     delocRender(1); delocBuffer(size);
@@ -428,38 +418,7 @@ enum Action renderPierce(int state)
     return Advance;
 }
 
-void render()
-{
-    struct Render *arg = arrayRender(0,1);
-    SWITCH(arg->state,RenderEnqued) {
-        SWITCH(renderLock(0),Defer) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&render); return;}
-        CASE(Advance) arg->state = RenderWrap;
-        DEFAULT(exitErrstr("invalid render action\n");)}
-    FALL(RenderWrap) {
-        SWITCH(renderWrap(0),Reque) {enqueCommand(&render); return;}
-        CASE(Advance) arg->state = RenderDraw;
-        DEFAULT(exitErrstr("invalid render action\n");)}
-    FALL(RenderDraw) {
-        SWITCH(renderDraw(0),Advance) arg->state = RenderWait;
-        DEFAULT(exitErrstr("invalid render action\n");)}
-    FALL(RenderWait) {
-        SWITCH(renderWait(0),Defer) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&render); return;}
-        CASE(Advance) arg->state = RenderIdle;
-        DEFAULT(exitErrstr("invalid render action\n");)}
-    DEFAULT(exitErrstr("invalid render state\n");)
-    renderUnlock(0);
-    renderDone(0);
-    if (arg->follow) enqueCommand(arg->follow);
-}
-
-void pierce()
-{
-    SWITCH(renderPierce(0),Defer) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&render); return;}
-    CASE(Advance) return;
-    DEFAULT(exitErrstr("invalid pierce action\n");)
-}
-
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart, Command follow)
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, struct Buffer **buffer, int restart, Machine follow)
 {
     struct Render *arg = enlocRender(1);
     struct Buffer **buf = enlocBuffer(vertex+element+feedback);
@@ -471,9 +430,13 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     for (int i = 0; i < vertex+element+feedback; i++) buf[i] = buffer[i];
     for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
     arg->restart = restart;
-    arg->state = RenderEnqued;
-    arg->follow = follow;
-    enqueCommand(&render); code[shader].started++;
+    code[shader].started++;
+    enqueMachine(&renderLock);
+    if (feedback > 0) followMachine(&renderWrap);
+    followMachine(&renderDraw);
+    if (feedback > 0) followMachine(&renderWait);
+    followMachine(&renderUnlock);
+    if (follow) followMachine(follow);
 }
 
 void enqueShader(enum Shader shader)
@@ -485,8 +448,8 @@ void enqueShader(enum Shader shader)
     CASE(Copoint) {struct Buffer *buf[4] = {&server[PointBuf],&server[PlaneSub],&server[VersorBuf],&server[PlaneBuf]}; setupShader("copoint",Copoint,1,1,2,buf,0,0);}
     CASE(Adplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[SideSub],&server[SideBuf]}; setupShader("adplane",Adplane,2,1,1,buf,0,0);}
     CASE(Adpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[HalfSub],&server[SideBuf]}; setupShader("adpoint",Adpoint,1,1,1,buf,0,0);}
-    CASE(Perplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub],&server[PierceBuf]}; setupShader("perplane",Perplane,2,1,1,buf,0,&pierce);}
-    CASE(Perpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[FrameSub],&server[PierceBuf]}; setupShader("perpoint",Perpoint,1,1,1,buf,0,&pierce);}
+    CASE(Perplane) {struct Buffer *buf[4] = {&server[PlaneBuf],&server[VersorBuf],&server[FaceSub],&server[PierceBuf]}; setupShader("perplane",Perplane,2,1,1,buf,0,&renderPierce);}
+    CASE(Perpoint) {struct Buffer *buf[3] = {&server[PointBuf],&server[FrameSub],&server[PierceBuf]}; setupShader("perpoint",Perpoint,1,1,1,buf,0,&renderPierce);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
