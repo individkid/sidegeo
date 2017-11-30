@@ -19,12 +19,6 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <pthread.h>
-#include "pqueue.h"
-
 struct QueuePtr {
     struct QueuePtr *(*self)();
     struct QueuePtr *(*next)();

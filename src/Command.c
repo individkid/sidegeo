@@ -31,12 +31,16 @@
 #include <CoreGraphics/CoreGraphics.h>
 #endif
 
-#include <math.h>
+#include <stdio.h>
+#include "pqueue.h"
 #include <pthread.h>
-#include <signal.h>
-#include <stdarg.h>
+#include "Queue.h"
 #include "Common.h"
-#include "Fold.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <signal.h>
+#include <math.h>
 
 #ifdef __linux__
 Display *displayHandle = 0; // for XWarpPointer

@@ -16,14 +16,19 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "Fold.h"
+#include <stdio.h>
+#include "pqueue.h"
 #include <pthread.h>
-#include <errno.h>
-#include <termios.h>
-#include <unistd.h>
+#include "Queue.h"
+#include "Common.h"
+#include <stdlib.h>
+#include <string.h>
 #include <stdarg.h>
 #include <signal.h>
-#include "Common.h"
-#include "Fold.h"
+#include <termios.h>
+#include <unistd.h>
+#include <errno.h>
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit

@@ -21,7 +21,13 @@
 #include "AffTopo/Sculpt_stub.h"
 //extern void ___stginit_AffTopoziSculpt(void);
 #endif
+#include <stdio.h>
+#include "pqueue.h"
+#include <pthread.h>
+#include "Queue.h"
 #include "Common.h"
+#include <stdlib.h>
+#include <string.h>
 
 DECLARE_STUB(Haskell)
 DEFINE_META(Place,int,Haskell)

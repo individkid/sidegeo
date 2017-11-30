@@ -19,8 +19,6 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include "Queue.h"
-
 #define BRINGUP
 //#define DEBUG
 #define PLANE_DIMENSIONS 3
