@@ -33,8 +33,8 @@
 
 #include <stdio.h>
 #include "pqueue.h"
-#include <pthread.h>
 #include "Queue.h"
+#include <pthread.h>
 #include "Common.h"
 #include <stdlib.h>
 #include <string.h>
