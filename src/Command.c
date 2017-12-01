@@ -188,7 +188,9 @@ void followMachine(Machine machine)
 
 enum Action command(int state)
 {
-    (*delocCommand(1))();
+    Command cmd = *delocCommand(1);
+    if (cmd) (*cmd)();
+    else return Terminate;
     return Advance;
 }
 
@@ -718,7 +720,7 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) enqueCommand(0);
+        SWITCH(key,GLFW_KEY_ENTER) enqueMachine(0);
         DEFAULT(*enlocCmdChar(1) = ofmotion(Space); *enlocCmdChar(1) = '\n'; enqueCommand(inject);)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
@@ -1273,21 +1275,20 @@ int main(int argc, char **argv)
         sequenceNumber++;
         int done = 0;
         for (int i = 0; i < cluster; i++) {
-            if (!machine[i]) done = 2; // TODO use terminate machine instead
-            else while (1) {
-                SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = sequenceNumber + sizeCluster();
-                FALL(Reque) {
-                    Machine *reloc = enlocMachine(cluster-i);
-                    for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
-                    *enlocState(1) = state;
-                    *enlocCluster(1) = cluster-i;
-                    done = 2;}
-                CASE(Advance) {state = 0; done = 1;}
-                CASE(Continue) state++;
-                CASE(Terminate) done = 3;
-                DEFAULT(exitErrstr("invalid machine action\n");)
-                if (done) {done--; break;}}
-            if (done) {done--; break;}}
+        while (1) {
+        SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = sequenceNumber + sizeCluster();
+        FALL(Reque) {
+        Machine *reloc = enlocMachine(cluster-i);
+        for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
+        *enlocState(1) = state;
+        *enlocCluster(1) = cluster-i;
+        done = 2;}
+        CASE(Advance) {state = 0; done = 1;}
+        CASE(Continue) state++;
+        CASE(Terminate) done = 3;
+        DEFAULT(exitErrstr("invalid machine action\n");)
+        if (done) {done--; break;}}
+        if (done) {done--; break;}}
         if (done) {done--; break;}}
 
     // TODO signal threads to finish and join threads
