@@ -172,6 +172,7 @@ DEFINE_POINTER(IntPtr,int,CharPtr)
 DEFINE_STUB(Local,IntPtr)
 
 DECLARE_STUB(Haskell)
+DEFINE_MSGSTR(CmdChar)
 
 void enqueMachine(Machine machine)
 {
@@ -198,6 +199,68 @@ void enqueCommand(Command cmd)
 {
     *enlocCommand(1) = cmd;
     enqueMachine(command);
+}
+
+void warp(double xwarp, double ywarp)
+{
+#ifdef __linux__
+    double xpos, ypos;
+    glfwGetCursorPos(windowHandle,&xpos,&ypos);
+    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
+#endif
+#ifdef __APPLE__
+    int xloc, yloc;
+    glfwGetWindowPos(windowHandle,&xloc,&yloc);
+    struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
+    CGWarpMouseCursorPosition(point);
+#endif
+}
+
+void displayCursor(GLFWwindow *window, double xpos, double ypos);
+void compass(double xdelta, double ydelta) {
+    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
+    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
+    xwarp += xdelta;
+    ywarp += ydelta;
+    warp(xwarp,ywarp);
+    displayCursor(windowHandle,xwarp,ywarp);
+}
+
+void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
+void displayClick(GLFWwindow *window, int button, int action, int mods);
+void menu()
+{
+    char chr = *delocCmdChar(1);
+    if (motionof(chr) < Motions) {
+        SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
+        CASE(South) compass(0.0,COMPASS_DELTA);
+        CASE(West) compass(-COMPASS_DELTA,0.0);
+        CASE(East) compass(COMPASS_DELTA,0.0);
+        CASE(Counter) displayScroll(windowHandle,0.0,ROLLER_DELTA);
+        CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
+        CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
+        CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
+        DEFAULT(exitErrstr("unexpected menu motion\n");)}
+    else if (indexof(chr) >= 0) {
+        enum Menu line = indexof(chr);
+        click = Init; mode[item[line].mode] = line;}
+    else exitErrstr("invalid menu char\n");
+}
+
+void inject()
+{
+    char *buf = arrayCmdChar(0,sizeCmdChar());
+    int len = 0;
+    while (len == 0 || buf[len-1] != '\n')
+    if (len < sizeCmdChar()) len++;
+    else exitErrstr("unterminated inject line\n");
+    if (len == 2 && motionof(buf[0]) < Motions) {
+        enqueCommand(&menu);
+        relocCmdChar(1);
+        delocCmdChar(1);}
+    else {
+        memcpy(enlocCmdOutput(len),buf,len);
+        delocCmdChar(len);}
 }
 
 size_t bufferType(int size)
@@ -316,6 +379,7 @@ enum Action renderDraw(int state)
     struct Buffer **feedback = buf+arg->vertex+arg->element;
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
+    msgstrCmdChar("hello draw %d %d %d\n",arg->vertex,arg->element,arg->feedback); enqueCommand(&inject);
     if (arg->feedback) done = feedback[0]->done;
     if (arg->element) todo = element[0]->done - done;
     else if (arg->vertex) todo = vertex[0]->done - done;
@@ -449,68 +513,6 @@ void enqueShader(enum Shader shader)
     CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0,&renderPierce);}
     CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0,&renderPierce);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
-}
-
-void warp(double xwarp, double ywarp)
-{
-#ifdef __linux__
-    double xpos, ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
-#endif
-#ifdef __APPLE__
-    int xloc, yloc;
-    glfwGetWindowPos(windowHandle,&xloc,&yloc);
-    struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
-    CGWarpMouseCursorPosition(point);
-#endif
-}
-
-void displayCursor(GLFWwindow *window, double xpos, double ypos);
-void compass(double xdelta, double ydelta) {
-    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
-    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
-    xwarp += xdelta;
-    ywarp += ydelta;
-    warp(xwarp,ywarp);
-    displayCursor(windowHandle,xwarp,ywarp);
-}
-
-void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
-void displayClick(GLFWwindow *window, int button, int action, int mods);
-void menu()
-{
-    char chr = *delocCmdChar(1);
-    if (motionof(chr) < Motions) {
-        SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
-        CASE(South) compass(0.0,COMPASS_DELTA);
-        CASE(West) compass(-COMPASS_DELTA,0.0);
-        CASE(East) compass(COMPASS_DELTA,0.0);
-        CASE(Counter) displayScroll(windowHandle,0.0,ROLLER_DELTA);
-        CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
-        CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
-        CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
-        DEFAULT(exitErrstr("unexpected menu motion\n");)}
-    else if (indexof(chr) >= 0) {
-        enum Menu line = indexof(chr);
-        click = Init; mode[item[line].mode] = line;}
-    else exitErrstr("invalid menu char\n");
-}
-
-void inject()
-{
-    char *buf = arrayCmdChar(0,sizeCmdChar());
-    int len = 0;
-    while (len == 0 || buf[len-1] != '\n')
-    if (len < sizeCmdChar()) len++;
-    else exitErrstr("unterminated inject line\n");
-    if (len == 2 && motionof(buf[0]) < Motions) {
-        enqueCommand(&menu);
-        relocCmdChar(1);
-        delocCmdChar(1);}
-    else {
-        memcpy(enlocCmdOutput(len),buf,len);
-        delocCmdChar(len);}
 }
 
 void leftAdditive()
