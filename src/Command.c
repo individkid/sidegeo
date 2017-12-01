@@ -706,34 +706,40 @@ void manipulateDrive()
     // TODO
 }
 
+void displayError(int error, const char *description)
+{
+   printf("GLFW error %d %s\n", error, description);
+}
+
 void displayClose(GLFWwindow* window)
 {
     enqueMachine(0);
 }
 
+void inject();
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) enqueMachine(0);
-        DEFAULT(*enlocCmdOutput(1) = ofmotion(Space); *enlocCmdOutput(1) = '\n';)
+        SWITCH(key,GLFW_KEY_ENTER) enqueCommand(0);
+        DEFAULT(*enlocCmdChar(1) = ofmotion(Space); *enlocCmdChar(1) = '\n'; enqueCommand(inject);)
         escape = 0;}
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-        *enlocCmdOutput(1) = ofalpha(key-GLFW_KEY_A+'a'); *enlocCmdOutput(1) = '\n';}
+        *enlocCmdChar(1) = ofalpha(key-GLFW_KEY_A+'a'); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
     else {
         SWITCH(key,GLFW_KEY_ESCAPE) escape = 1;
-        CASE(GLFW_KEY_ENTER) {*enlocCmdOutput(1) = ofmotion(Enter); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_RIGHT) {*enlocCmdOutput(1) = ofmotion(East); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_LEFT) {*enlocCmdOutput(1) = ofmotion(West); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_DOWN) {*enlocCmdOutput(1) = ofmotion(South); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_UP) {*enlocCmdOutput(1) = ofmotion(North); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_PAGE_UP) {*enlocCmdOutput(1) = ofmotion(Counter); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_PAGE_DOWN) {*enlocCmdOutput(1) = ofmotion(Wise); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_HOME) {*enlocCmdOutput(1) = ofmotion(Click); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_END) {*enlocCmdOutput(1) = ofmotion(Suspend); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_BACKSPACE) {*enlocCmdOutput(1) = ofmotion(Back); *enlocCmdOutput(1) = '\n';}
-        CASE(GLFW_KEY_SPACE) {*enlocCmdOutput(1) = ofmotion(Space); *enlocCmdOutput(1) = '\n';}
-        DEFAULT(*enlocCmdOutput(1) = ofmotion(Space); *enlocCmdOutput(1) = '\n';)}
+        CASE(GLFW_KEY_ENTER) {*enlocCmdChar(1) = ofmotion(Enter); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_RIGHT) {*enlocCmdChar(1) = ofmotion(East); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_LEFT) {*enlocCmdChar(1) = ofmotion(West); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_DOWN) {*enlocCmdChar(1) = ofmotion(South); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_UP) {*enlocCmdChar(1) = ofmotion(North); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_PAGE_UP) {*enlocCmdChar(1) = ofmotion(Counter); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_PAGE_DOWN) {*enlocCmdChar(1) = ofmotion(Wise); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_HOME) {*enlocCmdChar(1) = ofmotion(Click); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_END) {*enlocCmdChar(1) = ofmotion(Suspend); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_BACKSPACE) {*enlocCmdChar(1) = ofmotion(Back); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        CASE(GLFW_KEY_SPACE) {*enlocCmdChar(1) = ofmotion(Space); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
+        DEFAULT(*enlocCmdChar(1) = ofmotion(Space); *enlocCmdChar(1) = '\n'; enqueCommand(inject);)}
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
@@ -831,11 +837,6 @@ void displayRefresh(GLFWwindow *window)
     enqueShader(dishader);
 }
 
-void glfwErrorCallback(int error, const char *description)
-{
-   printf("GLFW error %d %s\n", error, description);
-}
-
 void compass(double xdelta, double ydelta) {
     double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
     double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
@@ -849,8 +850,9 @@ void menu()
 {
     char *buf = arrayCmdChar(0,sizeCmdChar());
     int len = 0;
-    while (buf[len] != '\n') len++;
-    if (len == 1 && motionof(buf[0]) < Motions) {
+    while (buf[len] != '\n' && len < sizeCmdChar()) len++;
+    if (buf[len] == '\n') len++;
+    if (len == 2 && motionof(buf[0]) < Motions) {
         SWITCH(motionof(buf[0]),North) compass(0.0,-COMPASS_DELTA);
         CASE(South) compass(0.0,COMPASS_DELTA);
         CASE(West) compass(-COMPASS_DELTA,0.0);
@@ -860,12 +862,25 @@ void menu()
         CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
         CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
         DEFAULT(exitErrstr("unexpected menu motion\n");)}
-    else if (len == 1 && indexof(buf[0]) >= 0) {
+    else if (len == 2 && indexof(buf[0]) >= 0) {
         enum Menu line = indexof(buf[0]);
         click = Init; mode[item[line].mode] = line;}
+    else memcpy(enlocCmdOutput(len),buf,len);
+    delocCmdChar(len);
+}
+
+void inject()
+{
+    char *buf = arrayCmdChar(0,sizeCmdChar());
+    int len = 0;
+    while (buf[len] != '\n' && len < sizeCmdChar()) len++;
+    if (buf[len] == '\n') len++;
+    if (len == 2 && alphaof(buf[0]) > 0) {
+        memcpy(enlocCmdOutput(2),buf,2);
+        delocCmdChar(len);}
     else {
-        buf[len] = 0; msgstrCmdOutput("menu: %s\n", buf);}
-    delocCmdChar(len+1);
+        enqueCommand(&menu);
+        relocCmdChar(len);}
 }
 
 #ifdef BRINGUP
@@ -1115,7 +1130,7 @@ extern const GLchar *repointFragment;
 
 int main(int argc, char **argv)
 {
-    glfwSetErrorCallback(glfwErrorCallback);
+    glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
