@@ -45,8 +45,7 @@ DEFINE_LOCAL(DataMap,enum Data,KindMap)
 DEFINE_LOCAL(Event,enum Event,DataMap)
 DEFINE_LOCAL(Kind,enum Kind,Event)
 DEFINE_LOCAL(Data,enum Data,Kind)
-DEFINE_LOCAL(HsOutput,char,Data)
-DEFINE_LOCAL(HsCmd,Command,HsOutput)
+DEFINE_LOCAL(HsCmd,Command,Data)
 DEFINE_LOCAL(HsChar,char,HsCmd)
 DEFINE_LOCAL(HsInt,int,HsChar)
 DEFINE_LOCAL(HsCommand,Command,HsInt)
@@ -95,11 +94,6 @@ void *haskell(void *arg)
     hs_init(0,0);
 
     while (1) {
-        lockOutputs();
-        cpyques(selfCmnOutput(),selfHsOutput(),1);
-        if (sizeCmnOutput() > 0) signalOutputs();
-        unlockOutputs();
-
         lockCommands();
         cpyques(selfCmnCommand(),selfHsCommand(),3);
         if (sizeCmnCommand() > 0) signalCommands();

@@ -134,15 +134,6 @@ void msgstr##NAME(const char *fmt, ...) \
     memcpy(enloc##NAME(len),buf,len); \
 }
 
-#define DEFINE_ERRSTR(NAME) \
-void errstr##NAME(const char *fmt, ...) \
-{ \
-    msgstr##NAME("error: "); \
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
-    memcpy(enloc##NAME(len),buf,len); \
-}
-
 void exitErrstr(const char *fmt, ...);
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):

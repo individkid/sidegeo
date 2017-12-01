@@ -173,9 +173,6 @@ DEFINE_STUB(Local,IntPtr)
 
 DECLARE_STUB(Haskell)
 
-DEFINE_MSGSTR(CmdOutput)
-DEFINE_ERRSTR(CmdOutput)
-
 void enqueMachine(Machine machine)
 {
     *enlocState(1) = 0;
@@ -245,7 +242,7 @@ void wrap()
         glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
         SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
         CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
-        DEFAULT(msgstrCmdOutput("unknown type\n");)
+        DEFAULT(exitErrstr("unknown type\n");)
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
     delocBuffer(1);
@@ -771,7 +768,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             FALL(Left) {rightLeft(); click = Right;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode\n");)}
-    DEFAULT(msgstrCmdOutput("displayClick %d\n",button);)
+    DEFAULT(exitErrstr("displayClick %d\n",button);)
 }
 
 void displayCursor(GLFWwindow *window, double xpos, double ypos)
