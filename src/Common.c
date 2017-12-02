@@ -166,6 +166,21 @@ int indexof(char code)
     return uchar - 128 - Motions;
 }
 
+char ofglfw(int key)
+{
+    int uchar = key;
+    if (key < 32 || key > 96) uchar = 128;
+    if (key >= 65 && key <= 90) uchar += 32;
+    return uchar;
+}
+
+char ofshift(int key)
+{
+    int uchar = key;
+    if (key < 32 || key > 96) uchar = 128;
+    return uchar;
+}
+
 char ofmotion(enum Motion code)
 {
     int uchar = (int)code + 128;

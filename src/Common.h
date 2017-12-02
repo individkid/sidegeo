@@ -148,6 +148,8 @@ int isEndLineFunc(char ptr);
 enum Motion motionof(char code);
 char alphaof(char code);
 int indexof(char code);
+char ofglfw(int key);
+char ofshift(int key);
 char ofmotion(enum Motion code);
 char ofalpha(char code);
 char ofindex(int code);

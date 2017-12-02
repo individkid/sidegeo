@@ -123,6 +123,8 @@ enum Click { // mode changed by mouse buttons
     Clicks} click = Init;
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 int escape = 0; // escape sequence from OpenGL
+int dash = 0; // inject sequence from OpenGL
+int sequenceNumber = 0; // for defering commands
 float affineMat[16] = {0}; // transformation state at click time
 float affineMata[16] = {0}; // left transformation state
 float affineMatb[16] = {0}; // right transformation state
@@ -145,8 +147,6 @@ int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
-
-int sequenceNumber = 0;
 
 DECLARE_STUB(Local)
 DEFINE_LOCAL(Defer,int,Local)
@@ -172,7 +172,7 @@ DEFINE_POINTER(IntPtr,int,CharPtr)
 DEFINE_STUB(Local,IntPtr)
 
 DECLARE_STUB(Haskell)
-DEFINE_MSGSTR(CmdChar)
+DEFINE_MSGSTR(CmdOutput)
 
 void enqueMachine(Machine machine)
 {
@@ -214,53 +214,6 @@ void warp(double xwarp, double ywarp)
     struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
     CGWarpMouseCursorPosition(point);
 #endif
-}
-
-void displayCursor(GLFWwindow *window, double xpos, double ypos);
-void compass(double xdelta, double ydelta) {
-    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
-    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
-    xwarp += xdelta;
-    ywarp += ydelta;
-    warp(xwarp,ywarp);
-    displayCursor(windowHandle,xwarp,ywarp);
-}
-
-void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
-void displayClick(GLFWwindow *window, int button, int action, int mods);
-void menu()
-{
-    char chr = *delocCmdChar(1);
-    if (motionof(chr) < Motions) {
-        SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
-        CASE(South) compass(0.0,COMPASS_DELTA);
-        CASE(West) compass(-COMPASS_DELTA,0.0);
-        CASE(East) compass(COMPASS_DELTA,0.0);
-        CASE(Counter) displayScroll(windowHandle,0.0,ROLLER_DELTA);
-        CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
-        CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
-        CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
-        DEFAULT(exitErrstr("unexpected menu motion\n");)}
-    else if (indexof(chr) >= 0) {
-        enum Menu line = indexof(chr);
-        click = Init; mode[item[line].mode] = line;}
-    else exitErrstr("invalid menu char\n");
-}
-
-void inject()
-{
-    char *buf = arrayCmdChar(0,sizeCmdChar());
-    int len = 0;
-    while (len == 0 || buf[len-1] != '\n')
-    if (len < sizeCmdChar()) len++;
-    else exitErrstr("unterminated inject line\n");
-    if (len == 2 && motionof(buf[0]) < Motions) {
-        enqueCommand(&menu);
-        relocCmdChar(1);
-        delocCmdChar(1);}
-    else {
-        memcpy(enlocCmdOutput(len),buf,len);
-        delocCmdChar(len);}
 }
 
 size_t bufferType(int size)
@@ -379,7 +332,7 @@ enum Action renderDraw(int state)
     struct Buffer **feedback = buf+arg->vertex+arg->element;
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
-    msgstrCmdChar("hello draw %d %d %d\n",arg->vertex,arg->element,arg->feedback); enqueCommand(&inject);
+    msgstrCmdOutput("\rhello draw %d %d %d\n",arg->vertex,arg->element,arg->feedback);
     if (arg->feedback) done = feedback[0]->done;
     if (arg->element) todo = element[0]->done - done;
     else if (arg->vertex) todo = vertex[0]->done - done;
@@ -763,31 +716,6 @@ void displayClose(GLFWwindow* window)
     enqueMachine(0);
 }
 
-void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
-    if (escape) {
-        SWITCH(key,GLFW_KEY_ENTER) enqueMachine(0);
-        DEFAULT(*enlocCmdChar(1) = ofmotion(Space); *enlocCmdChar(1) = '\n'; enqueCommand(inject);)
-        escape = 0;}
-    else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-        *enlocCmdChar(1) = ofalpha(key-GLFW_KEY_A+'a'); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-    else {
-        SWITCH(key,GLFW_KEY_ESCAPE) escape = 1;
-        CASE(GLFW_KEY_ENTER) {*enlocCmdChar(1) = ofmotion(Enter); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_RIGHT) {*enlocCmdChar(1) = ofmotion(East); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_LEFT) {*enlocCmdChar(1) = ofmotion(West); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_DOWN) {*enlocCmdChar(1) = ofmotion(South); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_UP) {*enlocCmdChar(1) = ofmotion(North); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_PAGE_UP) {*enlocCmdChar(1) = ofmotion(Counter); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_PAGE_DOWN) {*enlocCmdChar(1) = ofmotion(Wise); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_HOME) {*enlocCmdChar(1) = ofmotion(Click); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_END) {*enlocCmdChar(1) = ofmotion(Suspend); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_BACKSPACE) {*enlocCmdChar(1) = ofmotion(Back); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        CASE(GLFW_KEY_SPACE) {*enlocCmdChar(1) = ofmotion(Space); *enlocCmdChar(1) = '\n'; enqueCommand(inject);}
-        DEFAULT(*enlocCmdChar(1) = ofmotion(Space); *enlocCmdChar(1) = '\n'; enqueCommand(inject);)}
-}
-
 void displayClick(GLFWwindow *window, int button, int action, int mods)
 {
     if (action != GLFW_PRESS) return;
@@ -881,6 +809,64 @@ void displaySize(GLFWwindow *window, int width, int height)
 void displayRefresh(GLFWwindow *window)
 {
     enqueShader(dishader);
+}
+
+void compass(double xdelta, double ydelta) {
+    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
+    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
+    xwarp += xdelta;
+    ywarp += ydelta;
+    warp(xwarp,ywarp);
+    displayCursor(windowHandle,xwarp,ywarp);
+}
+
+void inject()
+{
+    char chr = *delocCmdChar(1);
+    SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
+    CASE(South) compass(0.0,COMPASS_DELTA);
+    CASE(West) compass(-COMPASS_DELTA,0.0);
+    CASE(East) compass(COMPASS_DELTA,0.0);
+    CASE(Counter) displayScroll(windowHandle,0.0,ROLLER_DELTA);
+    CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
+    CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
+    CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
+    DEFAULT(exitErrstr("invalid inject char\n");)
+}
+
+void menu()
+{
+    char chr = *delocCmdChar(1);
+    if (indexof(chr) >= 0) {
+        enum Menu line = indexof(chr);
+        click = Init; mode[item[line].mode] = line;}
+    else exitErrstr("invalid menu char\n");
+}
+
+void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
+    if (escape && key == GLFW_KEY_ENTER) {escape = 0; enqueMachine(0);}
+    else if (escape) *enlocCmdOutput(1) = ofmotion(Space);
+    else if (key == GLFW_KEY_ESCAPE) escape = 1;
+    else if (dash && key == GLFW_KEY_ENTER) {dash = 0; *enlocCmdOutput(1) = '\n';}
+    else if (dash && mods == GLFW_MOD_SHIFT && ofshift(key) > 0) *enlocCmdOutput(1) = ofshift(key);
+    else if (dash && mods == 0 && ofglfw(key) > 0) *enlocCmdOutput(1) = ofglfw(key);
+    else if (dash) *enlocCmdOutput(1) = ofmotion(Space);
+    else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) *enlocCmdOutput(1) = ofalpha(key-GLFW_KEY_A+'a');
+    else if (key == GLFW_KEY_MINUS) {dash = 1; *enlocCmdOutput(1) = '\r'; *enlocCmdOutput(1) = '-';}
+    else if (key == GLFW_KEY_ENTER) *enlocCmdOutput(1) = ofmotion(Enter);
+    else if (key == GLFW_KEY_RIGHT) compass(COMPASS_DELTA,0.0);
+    else if (key == GLFW_KEY_LEFT) compass(-COMPASS_DELTA,0.0);
+    else if (key == GLFW_KEY_DOWN) compass(0.0,COMPASS_DELTA);
+    else if (key == GLFW_KEY_UP) compass(0.0,-COMPASS_DELTA);
+    else if (key == GLFW_KEY_PAGE_UP) displayScroll(windowHandle,0.0,ROLLER_DELTA);
+    else if (key == GLFW_KEY_PAGE_DOWN) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
+    else if (key == GLFW_KEY_HOME) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
+    else if (key == GLFW_KEY_END) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
+    else if (key == GLFW_KEY_BACKSPACE) *enlocCmdOutput(1) = ofmotion(Back);
+    else if (key == GLFW_KEY_SPACE) *enlocCmdOutput(1) = ofmotion(Space);
+    else *enlocCmdOutput(1) = ofmotion(Space);
 }
 
 #ifdef BRINGUP
