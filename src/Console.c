@@ -32,13 +32,111 @@ DECLARE_STUB(Console)
 DEFINE_LOCAL(ConCommand,Command,Console)
 DEFINE_LOCAL(ConCmdChar,char,ConCommand)
 DEFINE_LOCAL(Output,char,ConCmdChar)
-DEFINE_STUB(Console,Output)
+DEFINE_LOCAL(Line,enum Menu,Output)
+DEFINE_LOCAL(Match,int,Line)
+DEFINE_STUB(Console,Match)
 
 int esc = 0;
 int inj = 0;
 int last[4] = {0};
+enum Menu mark[Modes] = INIT;
+int done = 0;
 
 void menu();
+
+enum Menu tailline()
+{
+    return *arrayLine(sizeLine()-1,1);
+}
+
+int tailmatch()
+{
+    return *arrayMatch(sizeMatch()-1,1);
+}
+
+int checkfds(int nfds, fd_set *fds, struct timespec *delay, sigset_t *saved)
+{
+    int lenSel = pselect(nfds, fds, 0, 0, delay, saved);
+    if (lenSel < 0 && errno == EINTR) lenSel = 0;
+    if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+    return lenSel;
+}
+
+int readchr()
+{
+    char chr;
+    while (1) {
+        int val = read(STDIN_FILENO, &chr, 1);
+        if (val == 1) break;
+        if (val == 0) return -1;
+        if ((val < 0 && errno != EINTR) || val > 1) exitErrstr("read failed: %s\n", strerror(errno));}
+    return chr;
+}
+
+void writechr(int chr)
+{
+    while (1) {
+        int val = write(STDOUT_FILENO, &chr, 1);
+        if (val == 1) break;
+        if ((val < 0 && errno != EINTR) || val > 1 || val == 0) exitErrstr("write failed: %s\n", strerror(errno));}
+}
+
+void writestr(const char *str)
+{
+    for (int i = 0; str[i]; i++) writechr(str[i]);
+}
+
+void writeitem(enum Menu line, int match)
+{
+    struct Item *iptr = &item[line];
+    for (int i = 0; i < iptr->level; i++) writechr(' ');
+    writestr(iptr->name);
+    writechr('\r');
+    for (int i = 0; i < iptr->level; i++) writechr(' ');
+    for (int i = 0; i < match; i++) writechr(iptr->name[i]);
+}
+
+void unwriteitem(enum Menu line)
+{
+    struct Item *iptr = &item[line];
+    int count = iptr->level+strlen(iptr->name);
+    writechr('\r');
+    for (int i = 0; i < count; i++) writechr(' ');
+    writechr('\r');
+}
+
+void writemenu()
+{
+    for (enum Menu line = 0; line < Menus; line++) {
+        struct Item *iptr = &item[line];
+        enum Menu menu = Menus;
+        if (iptr->mode != Modes) menu = mark[iptr->mode];
+        for (int i = 0; i < iptr->level; i++) writechr(' ');
+        writestr(iptr->name);
+        if (menu == line) writestr(" ** "); else writestr(" -- ");
+        writestr(iptr->comment);
+        writechr('\n');
+    }
+}
+
+void writematch(char chr)
+{
+    enum Menu line = tailline();
+    int match = tailmatch();
+    struct Item *iptr = &item[line];
+    enum Mode mode = iptr->mode;
+    if (iptr->name[match] == chr) {
+        *enlocLine(1) = line; *enlocMatch(1) = match+1; return;}
+    for (int i = line+1; i < Menus; i++) {
+        struct Item *jptr = &item[i];
+        if (jptr->collect == iptr->collect && strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
+            *enlocLine(1) = i; *enlocMatch(1) = match+1; return;}}
+    for (int i = 0; i < line; i++) {
+        struct Item *jptr = &item[i];
+        if (jptr->collect == iptr->collect && strncmp(iptr->name,jptr->name,match) == 0 && jptr->name[match] == chr) {
+            *enlocLine(1) = i; *enlocMatch(1) = match+1; return;}}
+    writemenu();
+}
 
 void frontend(char key)
 {
@@ -64,15 +162,31 @@ void frontend(char key)
     else {esc = 0; *enlocOutput(1) = ofmotion(Space);}
 }
 
-int readchr()
+void backend(char chr)
 {
-    char chr;
-    while (1) {
-        int val = read(STDIN_FILENO, &chr, 1);
-        if (val == 1) break;
-        if (val == 0) return -1;
-        if ((val < 0 && errno != EINTR) || val > 1) exitErrstr("read failed: %s\n", strerror(errno));}
-    return chr;
+    unwriteitem(tailline());
+    if (motionof(chr) == Enter) {
+        enum Menu line = tailline();
+        int match = tailmatch();
+        enum Menu collect = item[line].collect;
+        enum Mode mode = item[line].mode;
+        writeitem(line,match); writechr('\n');        
+        // roll back to first character of selected line
+        while (sizeLine() > 0 && item[tailline()].collect == collect) {
+            unlocLine(1); unlocMatch(1);}
+        *enlocLine(1) = line; *enlocMatch(1) = 0;
+        if (collect != Menus && mode == item[collect].mode) {
+            // change mode to selected leaf
+            mark[mode] = line; *enlocConCmdChar(1) = ofindex(line); *enlocConCommand(1) = &menu;}
+        else {
+            // go to line in selected menu indicated by mode
+            *enlocLine(1) = mark[mode]; *enlocMatch(1) = 0;}}
+    else if (motionof(chr) == Back && sizeLine() > 1) {unlocLine(1); unlocMatch(1);}
+    else if (motionof(chr) == Back && sizeLine() == 1) writemenu();
+    else if (alphaof(chr) > 0) writematch(alphaof(chr));
+    else if (motionof(chr) == Space) writemenu();
+    else if (motionof(chr) == Escape) done = 1;
+    writeitem(tailline(),tailmatch());
 }
 
 void *console(void *arg)
@@ -80,17 +194,16 @@ void *console(void *arg)
     struct sigaction sigact = {0};
     sigemptyset(&sigact.sa_mask);
     sigact.sa_handler = &handler;
-    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
     sigset_t saved = {0};
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
     pthread_sigmask(SIG_SETMASK,0,&saved);
     sigdelset(&saved, SIGUSR1);
 
-    fd_set fds;
+    fd_set fds = {0};
     FD_ZERO(&fds);
     FD_SET(STDIN_FILENO, &fds);
     struct timespec nodelay = {0};
     struct timespec delay = {0};
-    int lenSel = 0;
     delay.tv_sec = 0;
     delay.tv_nsec = POLL_DELAY*NANO_SECONDS;
 
@@ -103,7 +216,8 @@ void *console(void *arg)
     terminal.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
 
-    while (1) {
+    writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
+    while (!done) {
         lockCommands();
         cpyques(selfCmnCommand(),selfConCommand(),3);
         if (sizeCmnCommand() > 0) signalCommands();
@@ -113,17 +227,11 @@ void *console(void *arg)
         cpyques(selfOutput(),selfCmnOutput(),6);
         unlockOutputs();
 
-        while (1) {
-            int lenSel = pselect(1, &fds, 0, 0, &nodelay, 0);
-            if (lenSel < 0 && errno == EINTR) lenSel = 0;
-            if (lenSel == 0 && sizeOutput() > 0) break;
-            if (lenSel == 0) lenSel = pselect(1, &fds, 0, 0, 0, &saved);
-            if (lenSel < 0 && errno == EINTR) lenSel = 0;
-            if (lenSel != 1) exitErrstr("pselect failed: %s\n", strerror(errno));
-            if (lenSel == 0) break;
-            frontend(readchr());}
+        if (sizeOutput() == 0 && checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;
+        if (sizeOutput() == 0) do frontend(readchr()); while (checkfds(STDIN_FILENO+1,&fds,&nodelay,0));
 
-        /*TODO backend Output til empty*/}
+        while (sizeOutput()) backend(*delocOutput(1));}
+    unwriteitem(tailline());
 
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
     return 0;
