@@ -1267,21 +1267,19 @@ int main(int argc, char **argv)
         if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
         sequenceNumber++;
         int done = 0;
-        for (int i = 0; i < cluster; i++) {
-        while (1) {
-        SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = sequenceNumber + sizeCluster();
-        FALL(Reque) {
-        Machine *reloc = enlocMachine(cluster-i);
-        for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
-        *enlocState(1) = state;
-        *enlocCluster(1) = cluster-i;
-        done = 2;}
-        CASE(Advance) {state = 0; done = 1;}
-        CASE(Continue) state++;
-        CASE(Terminate) done = 3;
-        DEFAULT(exitErrstr("invalid machine action\n");)
-        if (done) {done--; break;}}
-        if (done) {done--; break;}}
+        for (int i = 0; i < cluster; i++) {while (1) {
+            SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = sequenceNumber + sizeCluster();
+            FALL(Reque) {
+                Machine *reloc = enlocMachine(cluster-i);
+                for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
+                *enlocState(1) = state;
+                *enlocCluster(1) = cluster-i;
+                done = 2;}
+            CASE(Advance) {state = 0; done = 1;}
+            CASE(Continue) state++;
+            CASE(Terminate) done = 3;
+            DEFAULT(exitErrstr("invalid machine action\n");)
+            if (done) {done--; break;}} if (done) {done--; break;}}
         if (done) {done--; break;}}
 
     lockEvents(); *enlocCmnEvent(1) = Done; unlockEvents();

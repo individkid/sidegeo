@@ -146,7 +146,7 @@ void frontend(char key)
 {
     if (esc == 0 && key >= 'a' && key <= 'z' && inj == 0) *enlocOutput(1) = ofalpha(key);
     else if (esc == 0 && key >= 'A' && key <= 'Z' && inj == 0) *enlocOutput(1) = ofalpha(key-'A'+'a');
-    else if (esc == 0 && key == '\r') {inj++; *enlocOutput(1) = key;}
+    else if (esc == 0 && key == '-') {inj++; *enlocOutput(1) = '\r'; *enlocOutput(1) = key;}
     else if (esc == 0 && key == '\n' && inj == 0) *enlocOutput(1) = ofmotion(Enter);
     else if (esc == 0 && key == '\n' && inj > 0) {inj--; *enlocOutput(1) = key;}
     else if (esc == 0 && key == 127) *enlocOutput(1) = ofmotion(Back);
@@ -168,7 +168,8 @@ void frontend(char key)
 
 void backend(char chr)
 {
-    unwriteitem(tailline());
+    if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
+    else unwriteitem(tailline());
     if (motionof(chr) == Enter) {
         enum Menu line = tailline();
         int match = tailmatch();
@@ -247,8 +248,9 @@ void *console(void *arg)
         cpyques(selfOutput(),selfCmnOutput(),1);
         unlockOutputs();
 
-        if (sizeOutput() == 0 && checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;
-        if (sizeOutput() == 0) do frontend(readchr()); while (checkfds(STDIN_FILENO+1,&fds,&nodelay,0));
+        if (sizeOutput() == 0) {
+            if (checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;
+            frontend(readchr()); while (checkfds(STDIN_FILENO+1,&fds,&nodelay,0)) frontend(readchr());}
 
         while (sizeOutput()) backend(*delocOutput(1));}
     unwriteitem(tailline());
