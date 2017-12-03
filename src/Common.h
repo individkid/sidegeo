@@ -96,6 +96,7 @@ extern int validTermios;
 extern pthread_t consoleThread;
 extern pthread_t haskellThread;
 extern pthread_t timewheelThread;
+extern pthread_t processThread;
 extern float invalid[2];
 extern struct Item item[Menus];
 
@@ -106,6 +107,8 @@ DECLARE_LOCAL(CmnCmdChar,char)
 DECLARE_LOCAL(CmnCmdInt,int)
 DECLARE_MUTEX(Outputs)
 DECLARE_LOCAL(CmnOutput,char)
+DECLARE_MUTEX(Processes)
+DECLARE_LOCAL(CmnProcess,char)
 DECLARE_COND(Events)
 DECLARE_LOCAL(CmnEvent,enum Event)
 DECLARE_LOCAL(CmnKind,enum Kind)
@@ -123,6 +126,7 @@ int isFindChar(char*,int,int(*)(char));
 void handler(int sig);
 void signalCommands();
 void signalOutputs();
+void signalProcesses();
 
 void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
 void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);

@@ -172,6 +172,7 @@ DEFINE_POINTER(IntPtr,int,CharPtr)
 DEFINE_STUB(Local,IntPtr)
 
 DECLARE_STUB(Haskell)
+DECLARE_STUB(Console)
 DEFINE_MSGSTR(CmdOutput)
 
 void enqueMachine(Machine machine)
@@ -1114,6 +1115,9 @@ extern const GLchar *repointVertex;
 extern const GLchar *repointGeometry;
 extern const GLchar *repointFragment;
 
+void *haskell(void *arg);
+void *console(void *arg);
+
 int main(int argc, char **argv)
 {
     glfwSetErrorCallback(displayError);
@@ -1221,6 +1225,7 @@ int main(int argc, char **argv)
     for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->init) (*i->init)();
     for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->init) (*i->init)();
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->init) (*i->init)();
+    for (struct QueuePtr *i = BEGIN_STUB(Console); i != END_STUB(Console); i = (*i->next)()) if (i->init) (*i->init)();
 
 #ifdef BRINGUP
     enqueCommand(&bringup);
@@ -1232,7 +1237,8 @@ int main(int argc, char **argv)
     sigaddset(&sigs, SIGUSR1);
     sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
-    // TODO start threads
+    if (pthread_create(&haskellThread, 0, &haskell, 0) != 0) exitErrstr("cannot create thread\n");
+    if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
 
     while (1) {
         lockOutputs();
@@ -1278,11 +1284,15 @@ int main(int argc, char **argv)
         if (done) {done--; break;}}
         if (done) {done--; break;}}
 
-    // TODO signal threads to finish and join threads
+    lockEvents(); *enlocCmnEvent(1) = Done; unlockEvents();
+    lockOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockOutputs();
+    if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
+    if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
 
     for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->done) (*i->done)();
     for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->done) (*i->done)();
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->done) (*i->done)();
+    for (struct QueuePtr *i = BEGIN_STUB(Console); i != END_STUB(Console); i = (*i->next)()) if (i->done) (*i->done)();
 
     glfwTerminate();
 }

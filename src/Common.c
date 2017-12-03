@@ -35,6 +35,7 @@ int validTermios = 0; // for whether to restore before exit
 pthread_t consoleThread = 0; // for io in the console
 pthread_t haskellThread = 0; // for haskell runtime system
 pthread_t timewheelThread = 0; // for stock flow delay
+pthread_t processThread = 0; // for arguments and configure creation
 float invalid[2] = {1.0e38,1.0e37};
 
 struct Item item[Menus] = {
@@ -80,7 +81,9 @@ DEFINE_LOCAL(CmnCmdChar,char,CmnCommand)
 DEFINE_LOCAL(CmnCmdInt,int,CmnCmdChar)
 DEFINE_MUTEX(Outputs,CmnCmdInt)
 DEFINE_LOCAL(CmnOutput,char,Outputs)
-DEFINE_COND(Events,CmnOutput)
+DEFINE_MUTEX(Processes,CmnOutput)
+DEFINE_LOCAL(CmnProcess,char,Processes)
+DEFINE_COND(Events,CmnProcess)
 DEFINE_LOCAL(CmnEvent,enum Event,Events)
 DEFINE_LOCAL(CmnKind,enum Kind,CmnEvent)
 DEFINE_LOCAL(CmnData,enum Data,CmnKind)
@@ -109,6 +112,11 @@ void signalCommands()
 void signalOutputs()
 {
     if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+}
+
+void signalProcesses()
+{
+    if (pthread_kill(processThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
 }
 
 void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num)

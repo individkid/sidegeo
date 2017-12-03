@@ -31,16 +31,20 @@
 DECLARE_STUB(Console)
 DEFINE_LOCAL(ConCommand,Command,Console)
 DEFINE_LOCAL(ConCmdChar,char,ConCommand)
-DEFINE_LOCAL(Output,char,ConCmdChar)
+DEFINE_LOCAL(ConProcess,char,ConCmdChar)
+DEFINE_LOCAL(Output,char,ConProcess)
 DEFINE_LOCAL(Line,enum Menu,Output)
 DEFINE_LOCAL(Match,int,Line)
-DEFINE_STUB(Console,Match)
+DEFINE_META(Echo,char,Match)
+DEFINE_POINTER(ConPtr,char,Echo)
+DEFINE_STUB(Console,ConPtr)
 
 int esc = 0;
 int inj = 0;
 int last[4] = {0};
 enum Menu mark[Modes] = INIT;
 int done = 0;
+int depth = 0;
 
 void menu();
 
@@ -181,12 +185,23 @@ void backend(char chr)
         else {
             // go to line in selected menu indicated by mode
             *enlocLine(1) = mark[mode]; *enlocMatch(1) = 0;}}
+    else if (motionof(chr) == Back && depth > 0 && sizeConPtr() > 0) unlocConPtr(1);
+    else if (motionof(chr) == Back && depth > 0 && sizeConPtr() == 0) referConPtr(useEcho(--depth));
     else if (motionof(chr) == Back && sizeLine() > 1) {unlocLine(1); unlocMatch(1);}
     else if (motionof(chr) == Back && sizeLine() == 1) writemenu();
+    else if (alphaof(chr) == '\r') referConPtr(useEcho(depth++));
+    else if (alphaof(chr) == '\n' && depth > 0) {
+        *enlocConPtr(1) = alphaof(chr);
+        int len = sizeConPtr();
+        writestr(arrayConPtr(0,len));
+        if (*arrayConPtr(1,1) == '-') memcpy(enlocConProcess(len),delocConPtr(len),len);
+        referConPtr(useEcho(--depth));}
+    else if (alphaof(chr) > 0 && depth > 0) *enlocConPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
     else if (motionof(chr) == Space) writemenu();
     else if (motionof(chr) == Escape) done = 1;
-    writeitem(tailline(),tailmatch());
+    if (depth > 0) writestr(arrayConPtr(0,sizeConPtr()));
+    else writeitem(tailline(),tailmatch());
 }
 
 void *console(void *arg)
@@ -219,12 +234,17 @@ void *console(void *arg)
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
     while (!done) {
         lockCommands();
-        cpyques(selfCmnCommand(),selfConCommand(),3);
+        cpyques(selfCmnCommand(),selfConCommand(),2);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();
 
+        lockProcesses();
+        cpyques(selfCmnProcess(),selfConProcess(),1);
+        if (sizeCmnProcess() > 0) signalProcesses();
+        unlockProcesses();
+
         lockOutputs();
-        cpyques(selfOutput(),selfCmnOutput(),6);
+        cpyques(selfOutput(),selfCmnOutput(),1);
         unlockOutputs();
 
         if (sizeOutput() == 0 && checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;
