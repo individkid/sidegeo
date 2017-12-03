@@ -713,7 +713,7 @@ void displayError(int error, const char *description)
 
 void displayClose(GLFWwindow* window)
 {
-    enqueMachine(0);
+    enqueCommand(0);
 }
 
 void displayClick(GLFWwindow *window, int button, int action, int mods)
@@ -846,7 +846,7 @@ void menu()
 void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
-    if (escape && key == GLFW_KEY_ENTER) {escape = 0; enqueMachine(0);}
+    if (escape && key == GLFW_KEY_ENTER) {escape = 0; enqueCommand(0);}
     else if (escape) *enlocCmdOutput(1) = ofmotion(Space);
     else if (key == GLFW_KEY_ESCAPE) escape = 1;
     else if (dash && key == GLFW_KEY_ENTER) {dash = 0; *enlocCmdOutput(1) = '\n';}

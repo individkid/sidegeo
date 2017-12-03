@@ -120,6 +120,7 @@ extern int intType;
 
 int isFindChar(char*,int,int(*)(char));
 
+void handler(int sig);
 void signalCommands();
 void signalOutputs();
 

@@ -66,6 +66,7 @@ executable sculpt
                        hint
   hs-source-dirs:      src
   c-sources:           src/Haskell.c,
+                       src/Console.c,
                        src/Common.c,
                        src/Microcode.c,
                        libpqueue/src/pqueue.c

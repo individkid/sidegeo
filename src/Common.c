@@ -96,6 +96,10 @@ int intType = 0;
 
 ISFIND(Char,char)
 
+void handler(int sig)
+{
+}
+
 void glfwPostEmptyEvent();
 void signalCommands()
 {
