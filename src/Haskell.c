@@ -44,17 +44,20 @@ DEFINE_LOCAL(KindMap,int,EventMap)
 DEFINE_LOCAL(DataMap,enum Data,KindMap)
 DEFINE_LOCAL(Event,enum Event,DataMap)
 DEFINE_LOCAL(Kind,enum Kind,Event)
-DEFINE_LOCAL(Data,enum Data,Kind)
-DEFINE_LOCAL(HsCmd,Command,Data)
+DEFINE_LOCAL(HsCmd,Command,Kind)
 DEFINE_LOCAL(HsChar,char,HsCmd)
 DEFINE_LOCAL(HsInt,int,HsChar)
-DEFINE_LOCAL(HsCommand,Command,HsInt)
+DEFINE_LOCAL(HsData,enum Data,HsInt)
+DEFINE_LOCAL(HsCommand,Command,HsData)
 DEFINE_LOCAL(HsCmdChar,char,HsCommand)
 DEFINE_LOCAL(HsCmdInt,int,HsCmdChar)
-DEFINE_POINTER(Meta,int,HsCmdInt)
+DEFINE_LOCAL(HsCmdData,enum Data,HsCmdInt)
+DEFINE_POINTER(Meta,int,HsCmdData)
 DEFINE_POINTER(Sudo,char,Meta)
 DEFINE_POINTER(Name,char *,Sudo)
 DEFINE_STUB(Haskell,Name)
+
+void download();
 
 void setupEventMap()
 {
@@ -95,7 +98,7 @@ void *haskell(void *arg)
 
     while (1) {
         lockCommands();
-        cpyques(selfCmnCommand(),selfHsCommand(),3);
+        cpyques(selfCmnCommand(),selfHsCommand(),4);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();
 
@@ -107,10 +110,27 @@ void *haskell(void *arg)
         if (*arrayEvent(0,1) == Done) break;
         while (1) {
             if (*arrayEvent(0,1) == Acknowledge) {
-                ackques(selfHsCommand(),selfHsCmd(),selfHsInt(),3);
+                ackques(selfHsCommand(),selfHsCmd(),selfHsInt(),4);
                 delocEvent(1);
                 continue;}
-            // TODO handle Upload Download and continue
+            if (*arrayEvent(0,1) == Upload) {
+                delocEvent(1);
+                enum Data data = *delocHsData(1);
+                int len = *delocHsInt(1);
+                referMeta(useClient(data));
+                delocMeta(sizeMeta());
+                memcpy(enlocMeta(len),delocHsInt(len),len);
+                continue;}
+            if (*arrayEvent(0,1) == Download) {
+                delocEvent(1);
+                enum Data data = *delocHsData(1);
+                referMeta(useClient(data));
+                int len = sizeMeta();
+                *enlocHsCommand(1) = &download;
+                *enlocHsInt(1) = len;
+                memcpy(enlocHsInt(len),arrayMeta(0,len),len);
+                *enlocHsCmdData(1) = data;
+                continue;}
             if (*arrayEvent(0,1) == Enumerate) {
                 if (handleEvent() != 0) exitErrstr("haskell return true\n");
                 setupEventMap();

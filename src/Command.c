@@ -156,17 +156,18 @@ DEFINE_LOCAL(Machine,Machine,Cluster)
 DEFINE_LOCAL(Command,Command,Machine)
 DEFINE_LOCAL(CmdChar,char,Command)
 DEFINE_LOCAL(CmdInt,int,CmdChar)
-DEFINE_LOCAL(Buffer,struct Buffer *,CmdInt)
+DEFINE_LOCAL(CmdData,enum Data,CmdInt)
+DEFINE_LOCAL(Buffer,struct Buffer *,CmdData)
 DEFINE_LOCAL(Render,struct Render,Buffer)
 DEFINE_LOCAL(Option,char *,Render)
 DEFINE_LOCAL(CmdOutput,char,Option)
 DEFINE_LOCAL(CmdEvent,enum Event,CmdOutput)
 DEFINE_LOCAL(CmdKind,enum Kind,CmdEvent)
-DEFINE_LOCAL(CmdData,enum Data,CmdKind)
-DEFINE_LOCAL(CmdHsCmd,Command,CmdData)
+DEFINE_LOCAL(CmdHsCmd,Command,CmdKind)
 DEFINE_LOCAL(CmdHsChar,char,CmdHsCmd)
 DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
-DEFINE_POINTER(MachPtr,Machine,CmdHsInt)
+DEFINE_LOCAL(CmdHsData,enum Data,CmdHsInt)
+DEFINE_POINTER(MachPtr,Machine,CmdHsData)
 DEFINE_POINTER(CharPtr,char,MachPtr)
 DEFINE_POINTER(IntPtr,int,CharPtr)
 DEFINE_STUB(Local,IntPtr)
@@ -870,6 +871,39 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
     else *enlocCmdOutput(1) = ofmotion(Space);
 }
 
+enum Action downloadLock(int state)
+{
+    enum Data data = *arrayCmdData(0,1);
+    int len = *arrayCmdInt(0,1);
+    struct Buffer *buffer = &server[data];
+    if (buffer->read > 0 || buffer->write > 0) {relocCmdData(1); relocCmdInt(1); relocCmdInt(len); return Defer;}
+    buffer->write = 1;
+    if (buffer->room*buffer->dimn < len) enqueWrap(buffer, len/buffer->dimn + (len%buffer->dimn != 0));
+    return Advance;
+}
+
+enum Action downloadWrap(int state)
+{
+    enum Data data = *arrayCmdData(0,1);
+    int len = *arrayCmdInt(0,1);
+    struct Buffer *buffer = &server[data];
+    if (buffer->room*buffer->dimn < len) {relocCmdData(1); relocCmdInt(1); relocCmdInt(len); return Defer;}
+    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+    glBufferSubData(GL_ARRAY_BUFFER,0,len*sizeof*arrayCmdInt(0,0),(void*)arrayCmdInt(1,len));
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    buffer->write = 0;
+    delocCmdData(1); delocCmdInt(1); delocCmdInt(len); return Advance;
+}
+
+void download()
+{
+    enum Data data = *arrayCmdData(0,1);
+    int len = *arrayCmdInt(0,1);
+    struct Buffer *buffer = &server[data];
+    if (bufferType(buffer->type) != sizeof*arrayCmdInt(0,0)) exitErrstr("download too type\n");
+    relocCmdData(1); relocCmdInt(1); relocCmdInt(len); enqueMachine(&downloadLock); followMachine(&downloadWrap);
+}
+
 #ifdef BRINGUP
 #define NUM_PLANES 4
 #define NUM_POINTS 4
@@ -1253,7 +1287,7 @@ int main(int argc, char **argv)
 
         lockCommands();
         for (int i = 0; i < sizeCmnCommand(); i++) enqueMachine(command);
-        cpyques(selfCommand(),selfCmnCommand(),3);
+        cpyques(selfCommand(),selfCmnCommand(),4);
         unlockCommands();
 
         if (sizeCluster() == 0) glfwWaitEvents();
