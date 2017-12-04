@@ -96,7 +96,7 @@ void *haskell(void *arg)
 {
     hs_init(0,0);
 
-    while (1) {
+    while (sizeEvent() == 0) {
         lockCommands();
         cpyques(selfCmnCommand(),selfHsCommand(),4);
         if (sizeCmnCommand() > 0) signalCommands();
@@ -107,38 +107,32 @@ void *haskell(void *arg)
         cpyques(selfEvent(),selfCmnEvent(),6);
         unlockEvents();
 
-        if (*arrayEvent(0,1) == Done) break;
-        while (1) {
-            if (*arrayEvent(0,1) == Acknowledge) {
-                ackques(selfHsCommand(),selfHsCmd(),selfHsInt(),4);
-                delocEvent(1);
-                continue;}
-            if (*arrayEvent(0,1) == Upload) {
-                delocEvent(1);
-                enum Data data = *delocHsData(1);
-                int len = *delocHsInt(1);
-                referMeta(useClient(data));
-                delocMeta(sizeMeta());
-                memcpy(enlocMeta(len),delocHsInt(len),len);
-                continue;}
-            if (*arrayEvent(0,1) == Download) {
-                delocEvent(1);
-                enum Data data = *delocHsData(1);
-                referMeta(useClient(data));
-                int len = sizeMeta();
-                *enlocHsCommand(1) = &download;
-                *enlocHsInt(1) = len;
-                memcpy(enlocHsInt(len),arrayMeta(0,len),len);
-                *enlocHsCmdData(1) = data;
-                continue;}
-            if (*arrayEvent(0,1) == Enumerate) {
-                if (handleEvent() != 0) exitErrstr("haskell return true\n");
-                setupEventMap();
-                setupKindMap();
-                setupDataMap();
-                continue;}
-            if (handleEvent() != 0) exitErrstr("haskell return true\n");}
-            if (sizeEvent() == 0) break;}
+        while (sizeEvent() > 0 && *arrayEvent(0,1) != Done)
+        if (*arrayEvent(0,1) == Acknowledge) {
+            ackques(selfHsCommand(),selfHsCmd(),selfHsInt(),4);
+            delocEvent(1);}
+        else if (*arrayEvent(0,1) == Upload) {
+            delocEvent(1);
+            enum Data data = *delocHsData(1);
+            int len = *delocHsInt(1);
+            referMeta(useClient(data));
+            delocMeta(sizeMeta());
+            memcpy(enlocMeta(len),delocHsInt(len),len);}
+        else if (*arrayEvent(0,1) == Download) {
+            delocEvent(1);
+            enum Data data = *delocHsData(1);
+            referMeta(useClient(data));
+            int len = sizeMeta();
+            *enlocHsCommand(1) = &download;
+            *enlocHsInt(1) = len;
+            memcpy(enlocHsInt(len),arrayMeta(0,len),len);
+            *enlocHsCmdData(1) = data;}
+        else if (*arrayEvent(0,1) == Enumerate) {
+            if (handleEvent() != 0) exitErrstr("haskell return true\n");
+            setupEventMap();
+            setupKindMap();
+            setupDataMap();}
+        else if (handleEvent() != 0) exitErrstr("haskell return true\n");}
 
     hs_exit();
     return 0;

@@ -253,7 +253,8 @@ void *console(void *arg)
             frontend(readchr()); while (checkfds(STDIN_FILENO+1,&fds,&nodelay,0)) frontend(readchr());}
 
         while (sizeOutput()) backend(*delocOutput(1));}
-    unwriteitem(tailline());
+    if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
+    else unwriteitem(tailline());
 
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
     return 0;
