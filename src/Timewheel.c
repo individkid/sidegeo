@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <unistd.h>
+#include <portaudio.h>
 
 DECLARE_STUB(Timewheel)
 DEFINE_LOCAL(Control,enum Control,Timewheel)
@@ -118,6 +119,10 @@ void *timewheel(void *arg)
     sigdelset(&saved, SIGUSR1);
     struct timespec delay = {0};
 
+	PaError err = Pa_Initialize();
+	if( err != paNoError )
+	printf(  "PortAudio error: %s\n", Pa_GetErrorText( err ) );
+
     while (1) {
         lockCommands();
         cpyques(selfCmnCommand(),selfTwCommand(),3);
@@ -175,6 +180,10 @@ void *timewheel(void *arg)
 
     finishListen();
     finishSource();
+
+	err = Pa_Terminate();
+	if( err != paNoError )
+	printf(  "PortAudio error: %s\n", Pa_GetErrorText( err ) );
 
 	return 0;
 }

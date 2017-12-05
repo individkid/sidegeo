@@ -61,7 +61,8 @@ executable sculpt
                        portaudio
   if os(osx)
     extra-lib-dirs:    /usr/lib
-    extra-libraries:   glfw3
+    extra-libraries:   glfw3,
+                       portaudio
     frameworks:        Cocoa,
                        OpenGL,
                        IOKit,
