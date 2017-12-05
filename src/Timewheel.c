@@ -95,11 +95,11 @@ void setTime(struct timespec *delay, long long time)
 	// TODO
 }
 
-void saturate(struct State *state, long long val)
+int saturate(long long val, int min, int max)
 {
-	if (val > state->max) state->amt = state->max;
-	else if (val < state->min) state->amt = state->min;
-	else state->amt = val;
+	if (val > max) return max;
+	else if (val < min) return min;
+	return val;
 }
 
 long long evaluate(struct Ratio *ratio)
@@ -139,7 +139,7 @@ void *timewheel(void *arg)
         while (sizeChange() > 0) {
         	struct Change change = *unlocChange(1);
         	struct State *state = arrayState(change.sub,1);
-        	saturate(state,change.val);
+        	state->amt = change.val;
         	if (state->vld != 2 && state->vld != 3) exitErrstr("response too vld\n");
         	if (state->vld == 3) pipeWave(state->wav,state->amt);}
 
@@ -151,16 +151,17 @@ void *timewheel(void *arg)
         	long long update = evaluate(&state->upd);
         	long long delay = evaluate(&state->dly);
         	long long schedule = evaluate(&state->sch);
-        	struct Change change = {.val = update, .sub = sub};
+        	int val = saturate(update,state->min,state->max);
+        	struct Change change = {.val = val, .sub = sub};
         	*scheduleTime(ofTime(current+schedule)) = sub;
         	*scheduleWheel(ofTime(current+delay)) = change;}
 
         while (readyWheel(current)) {
         	struct Change change = *advanceWheel();
         	struct State *state = arrayState(change.sub,1);
-        	if (state->vld == 1 || state->vld == 3) pipeWave(state->wav,change.val);
-        	if (state->vld == 2 || state->vld == 3) requestMetric(state->met,change.sub);
-        	saturate(state,change.val);}
+        	state->amt = change.val;
+        	if (state->vld == 1 || state->vld == 3) pipeWave(state->wav,state->amt);
+        	if (state->vld == 2 || state->vld == 3) requestMetric(state->met,change.sub);}
 
         current = getTime();
         long long time = timeOf(whenTime());

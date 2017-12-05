@@ -112,7 +112,7 @@ struct State {
 };
 
 struct Change {
-    long long val; // new value for stock
+    int val; // new value for stock
     int sub; // index of stock for value
 };
 
