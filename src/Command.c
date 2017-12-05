@@ -150,8 +150,8 @@ float aspect = 0;
 
 DECLARE_STUB(Local)
 DEFINE_LOCAL(Defer,int,Local)
-DEFINE_LOCAL(State,int,Defer)
-DEFINE_LOCAL(Cluster,int,State)
+DEFINE_LOCAL(CmdState,int,Defer)
+DEFINE_LOCAL(Cluster,int,CmdState)
 DEFINE_LOCAL(Machine,Machine,Cluster)
 DEFINE_LOCAL(Command,Command,Machine)
 DEFINE_LOCAL(CmdChar,char,Command)
@@ -178,7 +178,7 @@ DEFINE_MSGSTR(CmdOutput)
 
 void enqueMachine(Machine machine)
 {
-    *enlocState(1) = 0;
+    *enlocCmdState(1) = 0;
     *enlocCluster(1) = 1;
     *enlocMachine(1) = machine;
 }
@@ -1295,7 +1295,7 @@ int main(int argc, char **argv)
         else glfwPollEvents();
 
         if (sizeCluster() == 0) continue;
-        int state = *delocState(1);
+        int state = *delocCmdState(1);
         int cluster = *delocCluster(1);
         Machine *machine = delocMachine(cluster);
         if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
@@ -1306,7 +1306,7 @@ int main(int argc, char **argv)
             FALL(Reque) {
                 Machine *reloc = enlocMachine(cluster-i);
                 for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
-                *enlocState(1) = state;
+                *enlocCmdState(1) = state;
                 *enlocCluster(1) = cluster-i;
                 done = 2;}
             CASE(Advance) {state = 0; done = 1;}

@@ -91,6 +91,33 @@ enum Data {
 
 typedef void (*Command)();
 
+struct Nomial {
+    int con0;
+    int num1,con1,var1; // var refers to val in stock
+    int num2,con2,var2a,var2b; // vars refer to vals in stocks
+    int num3,con3,var3a,var3b; // thresholds inputs outputs 
+};
+
+struct Ratio {struct Nomial n,d;};
+
+struct State {
+    int vld; // enable for wav, met
+    int wav; // index of waveform pipeline
+    int met; // metric request argument
+    int amt; // amout of stock
+    int min,max; // saturation limits
+    struct Ratio upd; // formula for new value
+    struct Ratio dly; // formula for when to apply value
+    struct Ratio sch; // formula for reschedule time
+};
+
+struct Change {
+    long long val; // new value for stock
+    int sub; // index of stock for value
+};
+
+enum Control {Listen,Source,Finish};
+
 extern struct termios savedTermios;
 extern int validTermios;
 extern pthread_t consoleThread;
@@ -118,6 +145,11 @@ DECLARE_LOCAL(CmnHsChar,char)
 DECLARE_LOCAL(CmnHsInt,int)
 DECLARE_LOCAL(CmnData,enum Data)
 DECLARE_LOCAL(Type,const char *)
+DECLARE_MUTEX(Timewheels)
+DECLARE_LOCAL(CmnCoefficient,int)
+DECLARE_LOCAL(CmnVariable,int)
+DECLARE_LOCAL(CmnState,struct State)
+DECLARE_LOCAL(CmnChange,struct Change)
 
 extern int voidType;
 extern int intType;

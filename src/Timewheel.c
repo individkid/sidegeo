@@ -28,35 +28,84 @@
 #include <errno.h>
 #include <unistd.h>
 
-struct Nomial {
-    int con0;
-    int num1,con1,var1; // var refers to val in stock
-    int num2,con2,var2a,var2b; // vars refer to vals in stocks
-};
+DECLARE_STUB(Timewheel)
+DEFINE_LOCAL(Control,enum Control,Timewheel)
+DEFINE_LOCAL(TwChar,char,Control)
+DEFINE_LOCAL(TwInt,int,TwChar)
+DEFINE_LOCAL(Coefficient,int,TwInt)
+DEFINE_LOCAL(Variable,int,Coefficient)
+DEFINE_LOCAL(State,struct State,Variable)
+DEFINE_LOCAL(Change,struct Change,State)
+DEFINE_PRIORITY(Time,int,Change)
+DEFINE_PRIORITY(Wheel,struct Change,Time)
+DEFINE_META(Wave,int,Wheel)
+DEFINE_POINTER(Pipe,int,Wave)
+DEFINE_LOCAL(TwCommand,Command,Pipe)
+DEFINE_LOCAL(TwCmdChar,int,TwCommand)
+DEFINE_LOCAL(TwCmdInt,int,TwCmdChar)
+DEFINE_STUB(Timewheel,TwCmdInt)
 
-struct Ratio {struct Nomial n,d;};
+void startListen()
+{
+	// TODO
+}
 
-struct Flow {
-	struct Ratio val; // formula for new value
-	struct Ratio sch; // formula for reschedule time
-	struct Ratio dly; // formula for when to apply value
-};
+void startSource()
+{
+	// TODO
+}
 
-struct Stock {
-	int val; // amout of stock
-	int min,max; // saturation limits
-	int sub; // index of waveform pipeline
-};
+void finishListen()
+{
+	// TODO
+}
 
-struct Update {
-	int val; // new value for stock
-	int sub; // index of stock for value
-};
+void finishSource ()
+{
+	// TODO
+}
 
-struct Time {
-	int sub; // index of flow or update
-	int how; // whether sub is for flow or update
-};
+void pipeWave(int wave, int value)
+{
+	// TODO
+}
+
+void requestMetric(int metric, int response)
+{
+	// TODO
+}
+
+pqueue_pri_t ofTime(long long time)
+{
+	return 0; // TODO
+}
+
+long long timeOf(pqueue_pri_t time)
+{
+	return 0; // TODO
+}
+
+long long getTime()
+{
+	return 0; // TODO
+}
+
+void setTime(struct timespec *delay, long long time)
+{
+	// TODO
+}
+
+void saturate(struct State *state, long long val)
+{
+	if (val > state->max) state->amt = state->max;
+	else if (val < state->min) state->amt = state->min;
+	else state->amt = val;
+}
+
+long long evaluate(struct Ratio *ratio)
+{
+	return 0; // TODO
+}
 
 void *timewheel(void *arg)
 {
@@ -67,7 +116,64 @@ void *timewheel(void *arg)
     sigset_t saved = {0};
     pthread_sigmask(SIG_SETMASK,0,&saved);
     sigdelset(&saved, SIGUSR1);
+    struct timespec delay = {0};
 
+    while (1) {
+        lockCommands();
+        cpyques(selfCmnCommand(),selfTwCommand(),3);
+        if (sizeCmnCommand() > 0) signalCommands();
+        unlockCommands();	
 
+        lockTimewheels();
+        cpyques(selfCoefficient(),selfCmnCoefficient(),7);
+        unlockTimewheels();
 
+        int done = 0;
+        while (sizeControl() > 0) {
+        	SWITCH(*delocControl(1),Listen) startListen();
+        	CASE(Source) startSource();
+        	CASE(Finish) done = 1;
+        	DEFAULT(exitErrstr("time too control\n");)}
+        if (done) break;
+
+        while (sizeChange() > 0) {
+        	struct Change change = *unlocChange(1);
+        	struct State *state = arrayState(change.sub,1);
+        	saturate(state,change.val);
+        	if (state->vld != 2 && state->vld != 3) exitErrstr("response too vld\n");
+        	if (state->vld == 3) pipeWave(state->wav,state->amt);}
+
+        while (1) {
+        long long current = getTime();
+        while (readyTime(ofTime(current))) {
+        	int sub = *advanceTime();
+        	struct State *state = arrayState(sub,1);
+        	long long update = evaluate(&state->upd);
+        	long long delay = evaluate(&state->dly);
+        	long long schedule = evaluate(&state->sch);
+        	struct Change change = {.val = update, .sub = sub};
+        	*scheduleTime(ofTime(current+schedule)) = sub;
+        	*scheduleWheel(ofTime(current+delay)) = change;}
+
+        while (readyWheel(current)) {
+        	struct Change change = *advanceWheel();
+        	struct State *state = arrayState(change.sub,1);
+        	if (state->vld == 1 || state->vld == 3) pipeWave(state->wav,change.val);
+        	if (state->vld == 2 || state->vld == 3) requestMetric(state->met,change.sub);
+        	saturate(state,change.val);}
+
+        current = getTime();
+        long long time = timeOf(whenTime());
+        long long wheel = timeOf(whenWheel());
+        if (time < current || wheel < current) continue;
+        if (sizeTwCommand() > 0) break;
+        if (time < wheel) setTime(&delay,time-current); else setTime(&delay,wheel-current);
+        int retval = pselect(0, 0, 0, 0, &delay, &saved);
+        if (retval < 0 && errno == EINTR) break;
+        if (retval != 0) exitErrstr("pselect returned error\n");}}
+
+    finishListen();
+    finishSource();
+
+	return 0;
 }

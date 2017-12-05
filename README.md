@@ -106,8 +106,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
-  * --stock name, initial value, minimum maximum saturation values
-  * --flow formulae for value, reschedule delay, assignment delay  
+  * --time formulae for value, reschedule delay, assignment delay  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
   * --color takes plane subscript and decoration  

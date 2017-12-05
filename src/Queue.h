@@ -405,55 +405,55 @@ void move##NAME(int link, int pool) \
     if (pool < 0) pool = sizeHead##NAME(); \
     while (link >= sizeLink##NAME()) { \
         struct Link empty = {0}; \
-        *enlocLink##NAME(1) = empty} \
+        *enlocLink##NAME(1) = empty;} \
     while (pool >= sizeHead##NAME()) { \
         int init = -1-sizeHead##NAME(); \
-        *enlocHead##NAME(1) = -1-sizeTail##NAME() \
-        *enlocTail##NAME(1) = init} \
-    int next = arrayLink##NAME()[link].next; \
-    int last = arrayLink##NAME()[link].last; \
+        *enlocHead##NAME(1) = -1-sizeTail##NAME(); \
+        *enlocTail##NAME(1) = init;} \
+    int next = arrayLink##NAME(link,1)->next; \
+    int last = arrayLink##NAME(link,1)->last; \
     if ((next == 0) != (last == 0)) exitErrstr("link too different\n"); \
-    if (next > 0) arrayLink##NAME()[next-1].last = last; \
-    if (next < 0) arrayTail##NAME()[next+1] = last; \
-    if (last > 0) arrayLink##NAME()[last-1].next = next; \
-    if (last < 0) arrayHead##NAME()[last+1] = next; \
-    int head = arrayHead##NAME()[pool]; \
-    int tail = arrayTail##NAME()[pool]; \
+    if (next > 0) arrayLink##NAME(next-1,1)->last = last; \
+    if (next < 0) *arrayTail##NAME(next+1,1) = last; \
+    if (last > 0) arrayLink##NAME(last-1,1)->next = next; \
+    if (last < 0) *arrayHead##NAME(last+1,1) = next; \
+    int head = *arrayHead##NAME(pool,1); \
+    int tail = *arrayTail##NAME(pool,1); \
     if (head == 0 || tail == 0) exitErrstr("link too zero\n"); \
-    arrayLink##NAME()[link].next = head; \
-    arrayLink##NAME()[link].last = -1-pool; \
-    arrayHead##NAME()[pool] = 1+link; \
-    if (tail < 0) arrayTail##NAME()[pool] = 1+link; \
+    arrayLink##NAME(link,1)->next = head; \
+    arrayLink##NAME(link,1)->last = -1-pool; \
+    *arrayHead##NAME(pool,1) = 1+link; \
+    if (tail < 0) *arrayTail##NAME(pool,1) = 1+link; \
 } \
 \
 int get##NAME(int link) \
 { \
-    return array##NAME()[link].val; \
+    return arrayLink##NAME(link,1)->val; \
 } \
 \
 void set##NAME(int link, int val) \
 { \
-    array##NAME()[link].val = val; \
+    arrayLink##NAME(link,1)->val = val; \
 } \
 \
 int begin##NAME(int pool) \
 { \
-    return arrayHead##NAME()[pool]; \
+    return *arrayHead##NAME(pool,1); \
 } \
 \
 int rbegin##NAME(int pool) \
 { \
-    return arrayTail##NAME()[pool]; \
+    return *arrayTail##NAME(pool,1); \
 } \
 \
 int next##NAME(int link) \
 { \
-    return array##NAME()[link].next; \
+    return arrayLink##NAME(link,1)->next; \
 } \
 \
 int last##NAME(int link) \
 { \
-    return array##NAME()[link].last; \
+    return arrayLink##NAME(link,1)->last; \
 }
 
 #define DEFINE_POOL(NAME,TYPE,NEXT) \
@@ -471,7 +471,7 @@ int alloc##NAME() \
         moveLink##NAME(-1,0); \
         head = beginLink##NAME(0); \
         setLink##NAME(head,sizePool##NAME()); \
-        enlocvPool##NAME(1);} \
+        enlocPool##NAME(1);} \
     moveLink##NAME(head,1); \
     return getLink##NAME(head); \
 } \
@@ -483,7 +483,7 @@ void free##NAME(int sub) \
 \
 TYPE *cast##NAME(int sub) \
 { \
-    return arrayPool##NAME()+sub; \
+    return arrayPool##NAME(sub,1); \
 }
 
 struct Pqueue {
@@ -589,6 +589,12 @@ int ready##NAME(pqueue_pri_t pri) \
 { \
     int sub = NAME##_void2int(pqueue_peek(pqueue_##NAME)); \
     return NAME##_cmp_pri(castPqueue##NAME(sub)->pri,pri); \
+} \
+\
+pqueue_pri_t when##NAME() \
+{ \
+    int sub = NAME##_void2int(pqueue_peek(pqueue_##NAME)); \
+    return castPqueue##NAME(sub)->pri; \
 }
 
 #endif
