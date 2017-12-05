@@ -97,9 +97,7 @@ struct Nomial {
     int num2,con2,var2a,var2b; // vars refer to vals in stocks
     int num3,con3,var3a,var3b; // thresholds inputs outputs 
 };
-
 struct Ratio {struct Nomial n,d;};
-
 struct State {
     int vld; // enable for wav, met
     int wav; // index of waveform pipeline
@@ -110,12 +108,10 @@ struct State {
     struct Ratio dly; // formula for when to apply value
     struct Ratio sch; // formula for reschedule time
 };
-
 struct Change {
     int val; // new value for stock
     int sub; // index of stock for value
 };
-
 enum Control {Listen,Source,Finish};
 
 extern struct termios savedTermios;
@@ -146,6 +142,9 @@ DECLARE_LOCAL(CmnHsInt,int)
 DECLARE_LOCAL(CmnData,enum Data)
 DECLARE_LOCAL(Type,const char *)
 DECLARE_MUTEX(Timewheels)
+DECLARE_LOCAL(CmnControl,enum Control)
+DECLARE_LOCAL(CmnTwChar,char)
+DECLARE_LOCAL(CmnTwInt,int)
 DECLARE_LOCAL(CmnCoefficient,int)
 DECLARE_LOCAL(CmnVariable,int)
 DECLARE_LOCAL(CmnState,struct State)
@@ -160,6 +159,7 @@ void handler(int sig);
 void signalCommands();
 void signalOutputs();
 void signalProcesses();
+void signalTimewheels();
 
 void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
 void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);

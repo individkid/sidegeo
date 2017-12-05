@@ -53,8 +53,8 @@ DEFINE_LOCAL(HsCmdChar,char,HsCommand)
 DEFINE_LOCAL(HsCmdInt,int,HsCmdChar)
 DEFINE_LOCAL(HsCmdData,enum Data,HsCmdInt)
 DEFINE_POINTER(Meta,int,HsCmdData)
-DEFINE_POINTER(Sudo,char,Meta)
-DEFINE_POINTER(Name,char *,Sudo)
+DEFINE_POINTER(Pseudo,char,Meta)
+DEFINE_POINTER(Name,char *,Pseudo)
 DEFINE_STUB(Haskell,Name)
 
 void download();
@@ -150,10 +150,10 @@ int *accessInt(int size)
 char *accessChar(int size)
 {
     // if size is not zero, resize data
-    if (size == 0) size = sizeSudo();
-    if (size > sizeSudo()) enlocSudo(size-sizeSudo());
-    if (size < sizeSudo()) unlocSudo(sizeSudo()-size);
-    return arraySudo(0,size);
+    if (size == 0) size = sizePseudo();
+    if (size > sizePseudo()) enlocPseudo(size-sizePseudo());
+    if (size < sizePseudo()) unlocPseudo(sizePseudo()-size);
+    return arrayPseudo(0,size);
 }
 
 int *place(int index, int size)
@@ -230,19 +230,19 @@ int clients(int index)
 
 char *eventName(int index, int size)
 {
-    referSudo(useEventName(index));
+    referPseudo(useEventName(index));
     return accessChar(size);
 }
 
 char *kindName(int index, int size)
 {
-    referSudo(useKindName(index));
+    referPseudo(useKindName(index));
     return accessChar(size);
 }
 
 char *clientName(int index, int size)
 {
-    referSudo(useDataName(index));
+    referPseudo(useDataName(index));
     return accessChar(size);
 }
 

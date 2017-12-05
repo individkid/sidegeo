@@ -99,8 +99,8 @@ DEFINE_LOCAL(CmnTwInt,int,CmnTwChar)
 DEFINE_LOCAL(CmnCoefficient,int,CmnTwInt)
 DEFINE_LOCAL(CmnVariable,int,CmnCoefficient)
 DEFINE_LOCAL(CmnState,struct State,CmnVariable)
-DEFINE_LOCAL(CmnUpdate,int,CmnState)
-DEFINE_POINTER(CmnInt,int,CmnUpdate)
+DEFINE_LOCAL(CmnChange,struct Change,CmnState)
+DEFINE_POINTER(CmnInt,int,CmnChange)
 DEFINE_STUB(Common,CmnInt)
 
 int voidType = 0;
@@ -126,6 +126,11 @@ void signalOutputs()
 void signalProcesses()
 {
     if (pthread_kill(processThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+}
+
+void signalTimewheels()
+{
+    if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
 }
 
 void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num)

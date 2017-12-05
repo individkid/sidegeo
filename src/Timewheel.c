@@ -71,9 +71,12 @@ void pipeWave(int wave, int value)
 	// TODO
 }
 
-void requestMetric(int metric, int response)
+void metric();
+void requestMetric(int index, int response)
 {
-	// TODO
+	*enlocTwCommand(1) = &metric;
+	*enlocTwCmdInt(1) = index;
+	*enlocTwCmdInt(1) = response;
 }
 
 pqueue_pri_t ofTime(long long time)

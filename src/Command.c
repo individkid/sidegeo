@@ -167,13 +167,16 @@ DEFINE_LOCAL(CmdHsCmd,Command,CmdKind)
 DEFINE_LOCAL(CmdHsChar,char,CmdHsCmd)
 DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
 DEFINE_LOCAL(CmdHsData,enum Data,CmdHsInt)
-DEFINE_POINTER(MachPtr,Machine,CmdHsData)
+DEFINE_LOCAL(CmdControl,enum Control,CmdHsData)
+DEFINE_LOCAL(CmdChange,struct Change,CmdControl)
+DEFINE_POINTER(MachPtr,Machine,CmdChange)
 DEFINE_POINTER(CharPtr,char,MachPtr)
 DEFINE_POINTER(IntPtr,int,CharPtr)
 DEFINE_STUB(Local,IntPtr)
 
 DECLARE_STUB(Haskell)
 DECLARE_STUB(Console)
+DECLARE_STUB(Timewheel)
 DEFINE_MSGSTR(CmdOutput)
 
 void enqueMachine(Machine machine)
@@ -904,6 +907,15 @@ void download()
     relocCmdData(1); relocCmdInt(1); relocCmdInt(len); enqueMachine(&downloadLock); followMachine(&downloadWrap);
 }
 
+void metric()
+{
+    int index = *delocCmdInt(1);
+    int stock = *delocCmdInt(1);
+    // TODO enque machines to calculate change val
+    struct Change change = {.sub = stock, .val = 0};
+    *enlocCmdChange(1) = change;
+}
+
 #ifdef BRINGUP
 #define NUM_PLANES 4
 #define NUM_POINTS 4
@@ -1151,6 +1163,7 @@ extern const GLchar *repointFragment;
 
 void *haskell(void *arg);
 void *console(void *arg);
+void *timewheel(void *arg);
 
 int main(int argc, char **argv)
 {
@@ -1260,6 +1273,7 @@ int main(int argc, char **argv)
     for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->init) (*i->init)();
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->init) (*i->init)();
     for (struct QueuePtr *i = BEGIN_STUB(Console); i != END_STUB(Console); i = (*i->next)()) if (i->init) (*i->init)();
+    for (struct QueuePtr *i = BEGIN_STUB(Timewheel); i != END_STUB(Timewheel); i = (*i->next)()) if (i->init) (*i->init)();
 
 #ifdef BRINGUP
     enqueCommand(&bringup);
@@ -1273,6 +1287,7 @@ int main(int argc, char **argv)
     sigprocmask(SIG_BLOCK,&sigs,0);
     if (pthread_create(&haskellThread, 0, &haskell, 0) != 0) exitErrstr("cannot create thread\n");
     if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
+    if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
 
     while (1) {
         lockOutputs();
@@ -1284,6 +1299,11 @@ int main(int argc, char **argv)
         cpyques(selfCmnEvent(),selfCmdEvent(),6);
         if (sizeCmnEvent() > 0) signalEvents();
         unlockEvents();
+
+        lockTimewheels();
+        cpyques(selfCmnChange(),selfCmdChange(),1);
+        if (sizeCmnChange() > 0) signalTimewheels();
+        unlockTimewheels();
 
         lockCommands();
         for (int i = 0; i < sizeCmnCommand(); i++) enqueMachine(command);
@@ -1318,13 +1338,16 @@ int main(int argc, char **argv)
 
     lockEvents(); *enlocCmnEvent(1) = Done; unlockEvents();
     lockOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockOutputs();
+    lockTimewheels(); *enlocCmnControl(1) = Finish; unlockTimewheels();
     if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
+    if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
 
     for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->done) (*i->done)();
     for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->done) (*i->done)();
     for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->done) (*i->done)();
     for (struct QueuePtr *i = BEGIN_STUB(Console); i != END_STUB(Console); i = (*i->next)()) if (i->done) (*i->done)();
+    for (struct QueuePtr *i = BEGIN_STUB(Timewheel); i != END_STUB(Timewheel); i = (*i->next)()) if (i->done) (*i->done)();
 
     glfwTerminate();
 }
