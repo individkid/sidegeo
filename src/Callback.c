@@ -16,11 +16,14 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
+
 #include "Main.h"
 
-#ifdef __APPLE__
-extern GLFWwindow *windowHandle;
+#ifdef __linux__
+extern Display *displayHandle;
 #endif
+extern GLFWwindow *windowHandle;
 extern struct Code code[Shaders];
 #ifdef BRINGUP
 enum Shader dishader = Diplane;
@@ -140,11 +143,11 @@ void matrixRotate(float *u)
     float v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
     float w[9]; w[0] = xPos-xPoint; w[1] = yPos-yPoint;
     float s = w[0]*w[0]+w[1]*w[1];
-    float t = sqrt(s);
+    float t = sqrtf(s);
     if (t > MAX_ROTATE) {
         w[0] *= MAX_ROTATE/t; w[1] *= MAX_ROTATE/t;
         s = w[0]*w[0]+w[1]*w[1];}
-    w[2] = -sqrt(1.0-s);
+    w[2] = -sqrtf(1.0-s);
     s = dotvec(v,w,3); crossvec(v,w);
     copymat(w,crossmat(v),3);
     scalevec(timesmat(v,w,3),1.0/(1.0+s),9);

@@ -19,6 +19,11 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "Queue.h"
+#include <stdarg.h>
+#include <termios.h>
+#include <unistd.h>
+
 #define BRINGUP
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
@@ -153,8 +158,6 @@ DECLARE_LOCAL(CmnChange,struct Change)
 extern int voidType;
 extern int intType;
 
-int isFindChar(char*,int,int(*)(char));
-
 void handler(int sig);
 void signalCommands();
 void signalOutputs();
@@ -181,9 +184,6 @@ void exitErrstr(const char *fmt, ...);
 #define FALL(VAL) case (VAL):
 #define BRANCH(VAL) continue; case(VAL):
 #define DEFAULT(SMT) break; default: SMT break;} break;}
-
-int isEndLine(char *chr);
-int isEndLineFunc(char ptr);
 
 enum Motion motionof(char code);
 char alphaof(char code);

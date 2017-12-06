@@ -16,19 +16,7 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Fold.h"
-#include <stdio.h>
-#include "pqueue.h"
-#include "Queue.h"
-#include <pthread.h>
 #include "Common.h"
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <signal.h>
-#include <termios.h>
-#include <unistd.h>
-#include <errno.h>
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
@@ -106,8 +94,6 @@ DEFINE_STUB(Common,CmnInt)
 int voidType = 0;
 int intType = 0;
 
-ISFIND(Char,char)
-
 void handler(int sig)
 {
 }
@@ -159,16 +145,6 @@ void exitErrstr(const char *fmt, ...)
     printf("fatal: ");
     va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
-}
-
-int isEndLine(char *chr)
-{
-    return (*chr == '\n');
-}
-
-int isEndLineFunc(char chr)
-{
-    return (chr == '\n');
 }
 
 enum Motion motionof(char code)

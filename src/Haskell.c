@@ -21,13 +21,7 @@
 #include "AffTopo/Sculpt_stub.h"
 #endif
 
-#include <stdio.h>
-#include "pqueue.h"
-#include "Queue.h"
-#include <pthread.h>
 #include "Common.h"
-#include <stdlib.h>
-#include <string.h>
 
 DECLARE_STUB(Haskell)
 DEFINE_META(Place,int,Haskell)

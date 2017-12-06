@@ -34,10 +34,6 @@
 #include <CoreGraphics/CoreGraphics.h>
 #endif
 
-#include <stdio.h>
-#include "pqueue.h"
-#include "Queue.h"
-#include <pthread.h>
 #include "Common.h"
 
 enum Action {
@@ -108,7 +104,6 @@ enum Click { // mode changed by mouse buttons
     Right, // pierce point calculated; position saved
     Clicks};
 
-DECLARE_STUB(Local)
 DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(CmdState,int)
 DECLARE_LOCAL(Cluster,int)

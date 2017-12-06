@@ -16,17 +16,7 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
-#include "pqueue.h"
-#include "Queue.h"
-#include <pthread.h>
 #include "Common.h"
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <errno.h>
-#include <termios.h>
-#include <unistd.h>
 
 DECLARE_STUB(Console)
 DEFINE_LOCAL(ConCommand,Command,Console)

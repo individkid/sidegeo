@@ -25,10 +25,10 @@ extern float xPos;
 extern float yPos;
 extern float zPos;
 
-DECLARE_MSGSTR(CmdOutput)
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
 void enqueCommand(Command cmd);
+DECLARE_MSGSTR(CmdOutput)
 
 size_t bufferType(int size)
 {
@@ -307,6 +307,7 @@ extern enum Shader dishader;
 extern enum Shader dishader;
 #endif
 extern int sequenceNumber;
+double sqrt(double x);
 void transformRight();
 void bringup()
 {
