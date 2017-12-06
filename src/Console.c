@@ -22,6 +22,42 @@
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
+struct Item item[Menus] = {
+    {Menus,Sculpt,0,"Sculpt","display and manipulate polytope"},
+    {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
+    {Sculpts,Sculpt,1,"Subtractive","click hollows out region under pierce point"},
+    {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
+    {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
+    {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
+    {Sculpts,Sculpt,1,"Perform","click switches to decoration file or opens equalizer panel"},
+    {Sculpts,Sculpt,1,"Alternate","click moves pierced target to alternate display"},
+    {Sculpts,Sculpt,1,"Transform","modify transform matrix for pierced target"},
+    {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform mode"},
+    {Mouses,Mouse,2,"Rotate","tilt polytope(s)/plane around pierce point"},
+    {Mouses,Mouse,2,"Translate","slide polytope(s)/plane from pierce point"},
+    {Mouses,Mouse,2,"Look","tilt camera around focal point"},
+    {Sculpts,Roller,1,"Roller","action of roller button in Transform mode"},
+    {Rollers,Roller,2,"Cylinder","rotate around tilt line"},
+    {Rollers,Roller,2,"Clock","rotate around perpendicular to pierce point"},
+    {Rollers,Roller,2,"Scale","grow or shrink with pierce point fixed"},
+    {Rollers,Roller,2,"Drive","move picture plane forward or back"},
+    {Sculpts,Level,1,"Level","target of Alternate/Transform click mode"},
+    {Levels,Level,2,"Plane","target is the pierced plane"},
+    {Levels,Level,2,"Polytope","target is the pierced polytope"},
+    {Levels,Level,2,"File","target is polytopes in the file of pierced"},
+    {Levels,Level,2,"Session","target is all displayed polytopes"},
+    {Sculpts,Classify,1,"Classify","type of thing displayed in Display mode"},
+    {Classifies,Classify,2,"Vector","display pierce point and coplane"},
+    {Classifies,Classify,2,"Graph","display relation of facets"},
+    {Classifies,Classify,2,"Polyant","display polyant representation"},
+    {Classifies,Classify,2,"Place","display map from boundary to halfspaces"},
+    {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
+    {Samples,Sample,2,"Symbolic","classification of space does not change"},
+    {Samples,Sample,2,"Numeric","configuration controls amount of change"},
+    {Sculpts,Action,1,"Action","what Perform click does"},
+    {Performs,Action,2,"Configure","open dialog to decorate plane's facets"},
+    {Performs,Action,2,"Hyperlink","jump through facet to another space"},
+    {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
 
 DECLARE_STUB(Console)
 DEFINE_LOCAL(ConCommand,Command,Console)

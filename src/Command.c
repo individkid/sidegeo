@@ -24,6 +24,7 @@ extern Display *displayHandle;
 extern GLFWwindow *windowHandle;
 extern struct Buffer server[Datas];
 extern enum Menu mode[Modes];
+extern struct Item item[Menus];
 extern enum Click click;
 extern float xPos;
 extern float yPos;

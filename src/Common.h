@@ -146,9 +146,6 @@ DECLARE_LOCAL(CmnVariable,int)
 DECLARE_LOCAL(CmnState,struct State)
 DECLARE_LOCAL(CmnChange,struct Change)
 
-extern int voidType;
-extern int intType;
-
 void handler(int sig);
 void signalCommands();
 void signalOutputs();

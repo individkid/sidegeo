@@ -22,9 +22,14 @@
 Display *displayHandle = 0; // for XWarpPointer
 #endif
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
+pthread_t consoleThread = 0; // for io in the console
+pthread_t haskellThread = 0; // for haskell runtime system
+pthread_t timewheelThread = 0; // for stock flow delay
+pthread_t processThread = 0; // for arguments and configure creation
 int sequenceNumber = 0;
 struct Buffer server[Datas] = {0};
 struct Code code[Shaders] = {0};
+float invalid[2] = {1.0e38,1.0e37};
 float basisMat[27] = {0}; // per versor base points
 extern float affineMata[16];
 extern float affineMatb[16];
@@ -37,10 +42,6 @@ extern float slope;
 extern float aspect;
 extern struct termios savedTermios;
 extern int validTermios;
-extern pthread_t consoleThread;
-extern pthread_t haskellThread;
-extern pthread_t timewheelThread;
-extern pthread_t processThread;
 
 DECLARE_STUB(Local)
 DEFINE_LOCAL(Defer,int,Local)
