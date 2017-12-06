@@ -164,6 +164,8 @@ void signalTimewheels();
 void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
 void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);
 
+#define DECLARE_MSGSTR(NAME) \
+void msgstr##NAME(const char *fmt, ...);
 #define DEFINE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...) \
 { \
