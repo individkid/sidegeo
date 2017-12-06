@@ -19,6 +19,7 @@
 #include <portaudio.h>
 
 #include "Common.h"
+#include <unistd.h>
 
 DECLARE_STUB(Timewheel)
 DEFINE_LOCAL(Control,enum Control,Timewheel)

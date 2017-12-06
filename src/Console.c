@@ -17,6 +17,11 @@
 */
 
 #include "Common.h"
+#include <termios.h>
+#include <unistd.h>
+
+struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
+int validTermios = 0; // for whether to restore before exit
 
 DECLARE_STUB(Console)
 DEFINE_LOCAL(ConCommand,Command,Console)

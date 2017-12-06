@@ -35,6 +35,12 @@ extern int yLoc;
 extern float cutoff;
 extern float slope;
 extern float aspect;
+extern struct termios savedTermios;
+extern int validTermios;
+extern pthread_t consoleThread;
+extern pthread_t haskellThread;
+extern pthread_t timewheelThread;
+extern pthread_t processThread;
 
 DECLARE_STUB(Local)
 DEFINE_LOCAL(Defer,int,Local)
@@ -317,9 +323,6 @@ int main(int argc, char **argv)
     glUseProgram(0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
-
-    voidType = sizeType(); *enlocType(1) = "void";
-    intType = sizeType(); *enlocType(1) = "int";
 
     for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->init) (*i->init)();
     for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->init) (*i->init)();

@@ -43,6 +43,12 @@ struct QueuePtr {
 struct QueuePtr *other##NAME(); \
 struct QueuePtr *self##NAME();
 
+#define DECLARE_STUB0(NAME) \
+extern int voidQueueType; \
+extern int charQueueType; \
+extern int intQueueType; \
+DECLARE_STUB(NAME)
+
 #define DECLARE_MUTEX(NAME) \
 struct QueuePtr *self##NAME(); \
 void lock##NAME(); \
@@ -279,6 +285,52 @@ TYPE *array##NAME(int sub, int siz) \
     return INST.head+sub; \
 }
 
+#define DEFINE_STUB0(NAME,NEXT) \
+struct QueuePtr *selfType##NAME(); \
+void initType##NAME(); \
+void doneType##NAME(); \
+void copyType##NAME(); \
+QUEUE_STRUCT(NAME##Type,const char *) NAME##TypeInst = {.self = { \
+    .self = &selfType##NAME, \
+    .next = &self##NEXT, \
+    .init = &initType##NAME, \
+    .done = &doneType##NAME}}; \
+\
+struct QueuePtr *selfType##NAME() \
+{ \
+    return &NAME##TypeInst.self; \
+} \
+\
+int voidQueueType = 0; \
+int charQueueType = 0; \
+int intQueueType = 0; \
+\
+int checkQueueType(const char *type); \
+void initType##NAME() \
+{ \
+    voidQueueType = checkQueueType("void"); \
+    charQueueType = checkQueueType("char"); \
+    intQueueType = checkQueueType("int"); \
+    NAME##TypeInst.self.type = checkQueueType("const char *"); \
+} \
+\
+void doneType##NAME() \
+{ \
+    if (NAME##TypeInst.base) free(NAME##TypeInst.base); \
+} \
+\
+DEFINE_QUEUE(NAME,const char *,NAME##TypeInst) \
+\
+int checkQueueType(const char *type) \
+{ \
+    int i = 0; for (; i < size##NAME(); i++) \
+    if (strcmp(type,*array##NAME(i,1)) == 0) break; \
+    if (i == size##NAME()) *enloc##NAME(1) = type; \
+    return i; \
+} \
+\
+DEFINE_STUB(NAME,Type##NAME)
+
 #define DEFINE_LOCAL(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
@@ -296,12 +348,10 @@ struct QueuePtr *self##NAME() \
     return &NAME##Inst.self; \
 } \
 \
+int checkQueueType(const char *type); \
 void init##NAME() \
 { \
-    int i = 0; for (; i < sizeType(); i++) \
-    if (strcmp(#TYPE,*arrayType(i,1)) == 0) break; \
-    if (i == sizeType()) *enlocType(1) = #TYPE; \
-    NAME##Inst.self.type = i; \
+    NAME##Inst.self.type = checkQueueType(#TYPE); \
 } \
 \
 void done##NAME() \
@@ -339,12 +389,10 @@ struct QueuePtr *self##NAME() \
 \
 DEFINE_QUEUE(NAME,struct NAME##MetaStruct,NAME##Inst) \
 \
+int checkQueueType(const char *type); \
 void init##NAME() \
 { \
-    int i = 0; for (; i < sizeType(); i++) \
-    if (strcmp(#TYPE,*arrayType(i,1)) == 0) break; \
-    if (i == sizeType()) *enlocType(1) = #TYPE; \
-    NAME##Type = i; \
+    NAME##Type = checkQueueType(#TYPE); \
 } \
 \
 void done##NAME() \
@@ -377,12 +425,10 @@ struct QueuePtr *self##NAME() \
     return &NAME##Inst; \
 } \
 \
+int checkQueueType(const char *type); \
 void init##NAME() \
 { \
-    int i = 0; for (; i < sizeType(); i++) \
-    if (strcmp(#TYPE,*arrayType(i,1)) == 0) break; \
-    if (i == sizeType()) *enlocType(1) = #TYPE; \
-    NAME##Type = i; \
+    NAME##Type = checkQueueType(#TYPE); \
 } \
 \
 void refer##NAME(struct QueuePtr *ptr) \

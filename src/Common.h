@@ -21,8 +21,6 @@
 
 #include "Queue.h"
 #include <stdarg.h>
-#include <termios.h>
-#include <unistd.h>
 
 #define BRINGUP
 #define PLANE_DIMENSIONS 3
@@ -119,16 +117,10 @@ struct Change {
 };
 enum Control {Listen,Source,Finish};
 
-extern struct termios savedTermios;
-extern int validTermios;
-extern pthread_t consoleThread;
-extern pthread_t haskellThread;
-extern pthread_t timewheelThread;
-extern pthread_t processThread;
 extern float invalid[2];
 extern struct Item item[Menus];
 
-DECLARE_STUB(Common)
+DECLARE_STUB0(Common)
 DECLARE_MUTEX(Commands)
 DECLARE_LOCAL(CmnCommand,Command)
 DECLARE_LOCAL(CmnCmdChar,char)
@@ -145,7 +137,6 @@ DECLARE_LOCAL(CmnHsCmd,Command)
 DECLARE_LOCAL(CmnHsChar,char)
 DECLARE_LOCAL(CmnHsInt,int)
 DECLARE_LOCAL(CmnData,enum Data)
-DECLARE_LOCAL(Type,const char *)
 DECLARE_MUTEX(Timewheels)
 DECLARE_LOCAL(CmnControl,enum Control)
 DECLARE_LOCAL(CmnTwChar,char)

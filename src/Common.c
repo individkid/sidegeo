@@ -17,9 +17,11 @@
 */
 
 #include "Common.h"
+#include <termios.h>
+#include <unistd.h>
 
-struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
-int validTermios = 0; // for whether to restore before exit
+extern struct termios savedTermios;
+extern int validTermios;
 pthread_t consoleThread = 0; // for io in the console
 pthread_t haskellThread = 0; // for haskell runtime system
 pthread_t timewheelThread = 0; // for stock flow delay
@@ -89,7 +91,7 @@ DEFINE_LOCAL(CmnVariable,int,CmnCoefficient)
 DEFINE_LOCAL(CmnState,struct State,CmnVariable)
 DEFINE_LOCAL(CmnChange,struct Change,CmnState)
 DEFINE_POINTER(CmnInt,int,CmnChange)
-DEFINE_STUB(Common,CmnInt)
+DEFINE_STUB0(Common,CmnInt)
 
 int voidType = 0;
 int intType = 0;
@@ -121,7 +123,7 @@ void signalTimewheels()
 
 void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num)
 {
-    if (siz->type != intType) exitErrstr("stageque too int\n");
+    if (siz->type != intQueueType) exitErrstr("stageque too int\n");
     referCmnInt(siz);
     int *size = delocCmnInt(num);
     for (int i = 0; i < num; i++) {
