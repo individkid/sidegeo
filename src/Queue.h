@@ -19,6 +19,17 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
+#ifdef __cplusplus
+#define EXTERNC extern "C"
+#define EXTERNCBEGIN extern "C" {
+#define EXTERNCEND }
+#else
+#define EXTERNC
+#define EXTERNCBEGIN
+#define EXTERNCEND
+#endif
+
+EXTERNCBEGIN
 #include <stdio.h>
 #include "pqueue.h"
 #include <stdlib.h>
@@ -26,6 +37,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
+EXTERNCEND
 
 struct QueuePtr {
     struct QueuePtr *(*self)();
@@ -40,8 +52,8 @@ struct QueuePtr {
 #define END_STUB(NAME) self##NAME()
 
 #define DECLARE_STUB(NAME) \
-struct QueuePtr *other##NAME(); \
-struct QueuePtr *self##NAME();
+EXTERNC struct QueuePtr *other##NAME(); \
+EXTERNC struct QueuePtr *self##NAME();
 
 #define DECLARE_STUB0(NAME) \
 extern int voidQueueType; \
@@ -50,62 +62,62 @@ extern int intQueueType; \
 DECLARE_STUB(NAME)
 
 #define DECLARE_MUTEX(NAME) \
-struct QueuePtr *self##NAME(); \
-void lock##NAME(); \
-void unlock##NAME();
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void lock##NAME(); \
+EXTERNC void unlock##NAME();
 
 #define DECLARE_COND(NAME) \
-struct QueuePtr *self##NAME(); \
-void lock##NAME(); \
-void unlock##NAME(); \
-void wait##NAME(); \
-void signal##NAME();
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void lock##NAME(); \
+EXTERNC void unlock##NAME(); \
+EXTERNC void wait##NAME(); \
+EXTERNC void signal##NAME();
 
 #define DECLARE_LOCAL(NAME,TYPE) \
-struct QueuePtr *self##NAME(); \
-int type##NAME(); \
-TYPE *enloc##NAME(int siz); \
-TYPE *deloc##NAME(int siz); \
-TYPE *unloc##NAME(int siz); \
-void reloc##NAME(int siz); \
-int size##NAME(); \
-TYPE *array##NAME(int sub, int siz);
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC int type##NAME(); \
+EXTERNC TYPE *enloc##NAME(int siz); \
+EXTERNC TYPE *deloc##NAME(int siz); \
+EXTERNC TYPE *unloc##NAME(int siz); \
+EXTERNC void reloc##NAME(int siz); \
+EXTERNC int size##NAME(); \
+EXTERNC TYPE *array##NAME(int sub, int siz);
 
 #define DECLARE_META(NAME,TYPE) \
-struct QueuePtr *self##NAME(); \
-struct QueuePtr *use##NAME(int sub); \
-int size##NAME();
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC struct QueuePtr *use##NAME(int sub); \
+EXTERNC int size##NAME();
 
 #define DECLARE_POINTER(NAME,TYPE) \
-struct NAME##Struct **pointer##NAME(); \
-void refer##NAME(struct QueuePtr *ptr); \
+EXTERNC struct NAME##Struct **pointer##NAME(); \
+EXTERNC void refer##NAME(struct QueuePtr *ptr); \
 DECLARE_LOCAL(NAME,TYPE)
 
 #define DECLARE_LINK(NAME) \
-struct QueuePtr *self##NAME(); \
-void move##NAME(int link, int pool); \
-int get##NAME(int link); \
-void set##NAME(int link, int val); \
-int head##NAME(int pool); \
-int tail##NAME(int pool); \
-int next##NAME(int link); \
-int last##NAME(int link);
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void move##NAME(int link, int pool); \
+EXTERNC int get##NAME(int link); \
+EXTERNC void set##NAME(int link, int val); \
+EXTERNC int head##NAME(int pool); \
+EXTERNC int tail##NAME(int pool); \
+EXTERNC int next##NAME(int link); \
+EXTERNC int last##NAME(int link);
 
 #define DECLARE_POOL(NAME,TYPE) \
-struct QueuePtr *self##NAME(); \
-int alloc##NAME(); \
-void free##NAME(int sub); \
-TYPE *cast##NAME(int sub);
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC int alloc##NAME(); \
+EXTERNC void free##NAME(int sub); \
+EXTERNC TYPE *cast##NAME(int sub);
 
 #define DECLARE_PRIORITY(NAME,TYPE) \
-struct QueuePtr *self##NAME(); \
-TYPE *schedule##NAME(pqueue_pri_t pri); \
-TYPE *advance##NAME(); \
-int ready##NAME(pqueue_pri_t pri); \
-pqueue_pri_t when##NAME();
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri); \
+EXTERNC TYPE *advance##NAME(); \
+EXTERNC int ready##NAME(pqueue_pri_t pri); \
+EXTERNC pqueue_pri_t when##NAME();
 
 #define QUEUE_STRUCT(NAME,TYPE) \
-struct NAME##Struct { \
+struct NAME##Struct {  \
     struct QueuePtr self; \
     TYPE *base; \
     TYPE *limit; \
@@ -114,112 +126,112 @@ struct NAME##Struct { \
 }
 
 #define MUTEX_STRUCT(NAME) \
-struct NAME##Struct { \
+struct NAME##Struct {  \
     struct QueuePtr self; \
     pthread_mutex_t mutex; \
 }
 
 #define COND_STRUCT(NAME) \
-struct NAME##Struct { \
+struct NAME##Struct {  \
     struct QueuePtr self; \
     pthread_mutex_t mutex; \
     pthread_cond_t cond; \
 }
 
 #define DEFINE_STUB(NAME,NEXT) \
-struct QueuePtr *self##NAME(); \
-struct QueuePtr NAME##Inst = { \
+EXTERNC struct QueuePtr *self##NAME(); \
+struct QueuePtr NAME##Inst = {  \
     .self = &self##NAME, \
     .next = &self##NEXT}; \
 \
-struct QueuePtr *self##NAME() \
+EXTERNC struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst; \
 } \
 \
-struct QueuePtr *other##NAME() \
+EXTERNC struct QueuePtr *other##NAME() \
 { \
     return (*NAME##Inst.self)(); \
 }
 
 #define DEFINE_MUTEX(NAME,NEXT) \
-struct QueuePtr *self##NAME(); \
-void init##NAME(); \
-void done##NAME(); \
-MUTEX_STRUCT(NAME) NAME##Inst = {.self = { \
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void init##NAME(); \
+EXTERNC void done##NAME(); \
+MUTEX_STRUCT(NAME) NAME##Inst = {.self = {  \
     .self = &self##NAME, \
     .next = &self##NEXT, \
     .init = &init##NAME, \
     .done = &done##NAME}}; \
 \
-struct QueuePtr *self##NAME() \
+EXTERNC struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst.self; \
 } \
 \
-void init##NAME() \
+EXTERNC void init##NAME() \
 { \
     if (pthread_mutex_init(&NAME##Inst.mutex,0) != 0) exitErrstr("mutex init failed: %s\n",strerror(errno)); \
 } \
 \
-void done##NAME() \
+EXTERNC void done##NAME() \
 { \
     if (pthread_mutex_destroy(&NAME##Inst.mutex) != 0) exitErrstr("mutex destroy failed: %s\n",strerror(errno)); \
 } \
 \
-void lock##NAME() \
+EXTERNC void lock##NAME() \
 { \
     if (pthread_mutex_lock(&NAME##Inst.mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
 } \
 \
-void unlock##NAME() \
+EXTERNC void unlock##NAME() \
 { \
     if (pthread_mutex_unlock(&NAME##Inst.mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno)); \
 }
 
 #define DEFINE_COND(NAME,NEXT) \
-struct QueuePtr *self##NAME(); \
-void init##NAME(); \
-void done##NAME(); \
-COND_STRUCT(NAME) NAME##Inst = {.self = { \
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void init##NAME(); \
+EXTERNC void done##NAME(); \
+COND_STRUCT(NAME) NAME##Inst = {.self = {  \
     .self = &self##NAME, \
     .next = &self##NEXT, \
     .init = &init##NAME, \
     .done = &done##NAME}}; \
 \
-struct QueuePtr *self##NAME() \
+EXTERNC struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst.self; \
 } \
 \
-void init##NAME() \
+EXTERNC void init##NAME() \
 { \
     if (pthread_mutex_init(&NAME##Inst.mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno)); \
     if (pthread_cond_init(&NAME##Inst.cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno)); \
 } \
 \
-void done##NAME() \
+EXTERNC void done##NAME() \
 { \
     if (pthread_mutex_destroy(&NAME##Inst.mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno)); \
     if (pthread_cond_destroy(&NAME##Inst.cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno)); \
 } \
 \
-void lock##NAME() \
+EXTERNC void lock##NAME() \
 { \
     if (pthread_mutex_lock(&NAME##Inst.mutex) != 0) exitErrstr("cond lock failed: %s\n",strerror(errno)); \
 } \
 \
-void unlock##NAME() \
+EXTERNC void unlock##NAME() \
 { \
     if (pthread_mutex_unlock(&NAME##Inst.mutex) != 0) exitErrstr("cond unlock failed: %s\n",strerror(errno)); \
 } \
 \
-void wait##NAME() \
+EXTERNC void wait##NAME() \
 { \
     if (pthread_cond_wait(&NAME##Inst.cond,&NAME##Inst.mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno)); \
 } \
 \
-void signal##NAME() \
+EXTERNC void signal##NAME() \
 { \
     if (pthread_cond_signal(&NAME##Inst.cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno)); \
 }
@@ -228,21 +240,21 @@ void signal##NAME() \
 
 #define DEFINE_QUEUE(NAME,TYPE,INST) \
 /*return pointer valid only until next call to en*##NAME */ \
-TYPE *enloc##NAME(int siz) \
+EXTERNC TYPE *enloc##NAME(int siz) \
 { \
-    if (INST.base == 0) { \
+    if (INST.base == 0) {  \
         INST.base = (TYPE *)malloc(QUEUE_STEP*sizeof*INST.base); \
         INST.limit = INST.base + QUEUE_STEP; \
         INST.head = INST.base; \
         INST.tail = INST.base;} \
     if (siz < 0) exitErrstr("enlocv too siz\n"); \
-    while (INST.head - INST.base >= QUEUE_STEP) { \
+    while (INST.head - INST.base >= QUEUE_STEP) {  \
         int tail = INST.tail - INST.base; \
-        for (int i = QUEUE_STEP; i < tail; i++) { \
+        for (int i = QUEUE_STEP; i < tail; i++) {  \
             INST.base[i-QUEUE_STEP] = INST.base[i];} \
         INST.head = INST.head - QUEUE_STEP; \
         INST.tail = INST.tail - QUEUE_STEP;} \
-    while (INST.tail + siz >= INST.limit) { \
+    while (INST.tail + siz >= INST.limit) {  \
         int limit = INST.limit - INST.base; \
         int size = INST.tail - INST.head; \
         TYPE *temp = (TYPE *)malloc((limit+QUEUE_STEP)*sizeof*INST.base); \
@@ -255,7 +267,7 @@ TYPE *enloc##NAME(int siz) \
     return INST.tail - siz; \
 } \
 \
-TYPE *deloc##NAME(int siz) \
+EXTERNC TYPE *deloc##NAME(int siz) \
 { \
     if (siz < 0) exitErrstr("deloc too siz\n"); \
     INST.head = INST.head + siz; \
@@ -263,7 +275,7 @@ TYPE *deloc##NAME(int siz) \
     return INST.head-siz; \
 } \
 \
-TYPE *unloc##NAME(int siz) \
+EXTERNC TYPE *unloc##NAME(int siz) \
 { \
     if (siz < 0) exitErrstr("unloc too siz\n"); \
     INST.tail = INST.tail - siz; \
@@ -271,54 +283,54 @@ TYPE *unloc##NAME(int siz) \
     return INST.tail; \
 } \
 \
-void reloc##NAME(int siz) \
+EXTERNC void reloc##NAME(int siz) \
 { \
     TYPE *buf = enloc##NAME(siz); \
     for (int i = 0; i < siz; i++) buf[i] = INST.head[i]; \
     deloc##NAME(siz); \
 } \
 \
-int size##NAME() \
+EXTERNC int size##NAME() \
 { \
     return INST.tail - INST.head; \
 } \
 \
-TYPE *array##NAME(int sub, int siz) \
+EXTERNC TYPE *array##NAME(int sub, int siz) \
 { \
     return INST.head+sub; \
 }
 
 #define DEFINE_LOCAL(NAME,TYPE,NEXT) \
-struct QueuePtr *self##NAME(); \
-void init##NAME(); \
-void done##NAME(); \
-void copy##NAME(struct QueuePtr *src, int siz); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.self = { \
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void init##NAME(); \
+EXTERNC void done##NAME(); \
+EXTERNC void copy##NAME(struct QueuePtr *src, int siz); \
+QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.self = {  \
     .self = &self##NAME, \
     .next = &self##NEXT, \
     .init = &init##NAME, \
     .done = &done##NAME, \
     .copy = &copy##NAME}}; \
 \
-struct QueuePtr *self##NAME() \
+EXTERNC struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst.self; \
 } \
 \
-int checkQueueType(const char *type); \
-void init##NAME() \
+EXTERNC int checkQueueType(const char *type); \
+EXTERNC void init##NAME() \
 { \
     NAME##Inst.self.type = checkQueueType(#TYPE); \
 } \
 \
-void done##NAME() \
+EXTERNC void done##NAME() \
 { \
     if (NAME##Inst.base) free(NAME##Inst.base); \
 } \
 \
 DEFINE_QUEUE(NAME,TYPE,NAME##Inst) \
 \
-void copy##NAME(struct QueuePtr *src, int siz) \
+EXTERNC void copy##NAME(struct QueuePtr *src, int siz) \
 { \
     if (NAME##Inst.self.type != src->type) exitErrstr("copy too type\n"); \
     struct NAME##Struct *source = (struct NAME##Struct *)src; \
@@ -335,9 +347,9 @@ int voidQueueType = 0; \
 int charQueueType = 0; \
 int intQueueType = 0; \
 \
-int checkQueueType(const char *type) \
+EXTERNC int checkQueueType(const char *type) \
 { \
-    int i = 0; for (; i < sizeType##NAME(); i++) { \
+    int i = 0; for (; i < sizeType##NAME(); i++) {  \
     if (strcmp("void",*arrayType##NAME(i,1)) == 0) voidQueueType = i; \
     if (strcmp("char",*arrayType##NAME(i,1)) == 0) charQueueType = i; \
     if (strcmp("int",*arrayType##NAME(i,1)) == 0) intQueueType = i; \
@@ -347,38 +359,38 @@ int checkQueueType(const char *type) \
 } 
 
 #define DEFINE_META(NAME,TYPE,NEXT) \
-struct QueuePtr *self##NAME(); \
-void init##NAME(); \
-void done##NAME(); \
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void init##NAME(); \
+EXTERNC void done##NAME(); \
 QUEUE_STRUCT(NAME##Meta,TYPE); \
-QUEUE_STRUCT(NAME,struct NAME##MetaStruct) NAME##Inst = {.self = { \
+QUEUE_STRUCT(NAME,struct NAME##MetaStruct) NAME##Inst = {.self = {  \
     .self = &self##NAME, \
     .next = &self##NEXT, \
     .init = &init##NAME, \
     .done = &done##NAME}}; \
 int NAME##Type = 0; \
 \
-struct QueuePtr *self##NAME() \
+EXTERNC struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst.self; \
 } \
 \
 DEFINE_QUEUE(NAME,struct NAME##MetaStruct,NAME##Inst) \
 \
-int checkQueueType(const char *type); \
-void init##NAME() \
+EXTERNC int checkQueueType(const char *type); \
+EXTERNC void init##NAME() \
 { \
     NAME##Type = checkQueueType(#TYPE); \
 } \
 \
-void done##NAME() \
+EXTERNC void done##NAME() \
 { \
     for (int i = 0; i < size##NAME(); i++) \
     if (array##NAME(i,1)->base) free(array##NAME(i,1)->base); \
     if (NAME##Inst.base) free(NAME##Inst.base); \
 } \
 \
-struct QueuePtr *use##NAME(int sub) \
+EXTERNC struct QueuePtr *use##NAME(int sub) \
 { \
     struct NAME##MetaStruct inst = {0}; \
     inst.self.type = NAME##Type; \
@@ -387,27 +399,27 @@ struct QueuePtr *use##NAME(int sub) \
 }
 
 #define DEFINE_POINTER(NAME,TYPE,NEXT) \
-struct QueuePtr *self##NAME(); \
-void init##NAME(); \
-struct QueuePtr NAME##Inst = { \
+EXTERNC struct QueuePtr *self##NAME(); \
+EXTERNC void init##NAME(); \
+struct QueuePtr NAME##Inst = {  \
     .self = &self##NAME, \
     .next = &self##NEXT, \
     .init = &init##NAME}; \
 QUEUE_STRUCT(NAME,TYPE) *NAME##Ptr = 0; \
 int NAME##Type = 0; \
 \
-struct QueuePtr *self##NAME() \
+EXTERNC struct QueuePtr *self##NAME() \
 { \
     return &NAME##Inst; \
 } \
 \
-int checkQueueType(const char *type); \
-void init##NAME() \
+EXTERNC int checkQueueType(const char *type); \
+EXTERNC void init##NAME() \
 { \
     NAME##Type = checkQueueType(#TYPE); \
 } \
 \
-void refer##NAME(struct QueuePtr *ptr) \
+EXTERNC void refer##NAME(struct QueuePtr *ptr) \
 { \
     if (NAME##Type != ptr->type) exitErrstr("pointer too type\n"); \
     NAME##Ptr = (struct NAME##Struct *)ptr; \
@@ -425,18 +437,18 @@ DEFINE_LOCAL(Head##NAME,int,NEXT) \
 DEFINE_LOCAL(Tail##NAME,int,Head##NAME) \
 DEFINE_LOCAL(Link##NAME,struct Link,Tail##NAME) \
 \
-struct QueuePtr *self##NAME() { \
+struct QueuePtr *self##NAME() {  \
     return selfLink##NAME(); \
 } \
 \
-void move##NAME(int link, int pool) \
+EXTERNC void move##NAME(int link, int pool) \
 { \
     if (link < 0) link = sizeLink##NAME(); \
     if (pool < 0) pool = sizeHead##NAME(); \
-    while (link >= sizeLink##NAME()) { \
+    while (link >= sizeLink##NAME()) {  \
         struct Link empty = {0}; \
         *enlocLink##NAME(1) = empty;} \
-    while (pool >= sizeHead##NAME()) { \
+    while (pool >= sizeHead##NAME()) {  \
         int init = -1-sizeHead##NAME(); \
         *enlocHead##NAME(1) = -1-sizeTail##NAME(); \
         *enlocTail##NAME(1) = init;} \
@@ -456,32 +468,32 @@ void move##NAME(int link, int pool) \
     if (tail < 0) *arrayTail##NAME(pool,1) = 1+link; \
 } \
 \
-int get##NAME(int link) \
+EXTERNC int get##NAME(int link) \
 { \
     return arrayLink##NAME(link,1)->val; \
 } \
 \
-void set##NAME(int link, int val) \
+EXTERNC void set##NAME(int link, int val) \
 { \
     arrayLink##NAME(link,1)->val = val; \
 } \
 \
-int begin##NAME(int pool) \
+EXTERNC int begin##NAME(int pool) \
 { \
     return *arrayHead##NAME(pool,1); \
 } \
 \
-int rbegin##NAME(int pool) \
+EXTERNC int rbegin##NAME(int pool) \
 { \
     return *arrayTail##NAME(pool,1); \
 } \
 \
-int next##NAME(int link) \
+EXTERNC int next##NAME(int link) \
 { \
     return arrayLink##NAME(link,1)->next; \
 } \
 \
-int last##NAME(int link) \
+EXTERNC int last##NAME(int link) \
 { \
     return arrayLink##NAME(link,1)->last; \
 }
@@ -490,14 +502,14 @@ int last##NAME(int link) \
 DEFINE_LOCAL(Pool##NAME,TYPE,NEXT) \
 DEFINE_LINK(Link##NAME,Pool##NAME) \
 \
-struct QueuePtr *self##NAME() { \
+struct QueuePtr *self##NAME() {  \
     return selfLink##NAME(); \
 } \
 \
-int alloc##NAME() \
+EXTERNC int alloc##NAME() \
 { \
     int head = beginLink##NAME(0); \
-    if (head < 0) { \
+    if (head < 0) {  \
         moveLink##NAME(-1,0); \
         head = beginLink##NAME(0); \
         setLink##NAME(head,sizePool##NAME()); \
@@ -506,12 +518,12 @@ int alloc##NAME() \
     return getLink##NAME(head); \
 } \
 \
-void free##NAME(int sub) \
+EXTERNC void free##NAME(int sub) \
 { \
     moveLink##NAME(0,sub); \
 } \
 \
-TYPE *cast##NAME(int sub) \
+EXTERNC TYPE *cast##NAME(int sub) \
 { \
     return arrayPool##NAME(sub,1); \
 }
@@ -529,73 +541,73 @@ DEFINE_POOL(Pqueue##NAME,struct Pqueue,Pool##NAME) \
 \
 pqueue_t *pqueue_##NAME = 0; \
 \
-void *NAME##_int2void(int val) \
+EXTERNC void *NAME##_int2void(int val) \
 { \
     char *ptr = 0; \
     return (void *)(ptr+val); \
 } \
 \
-int NAME##_void2int(void *val) \
+EXTERNC int NAME##_void2int(void *val) \
 { \
     char *ptr = 0; \
     return ((char *)val-ptr); \
 } \
 \
-pqueue_pri_t NAME##_get_pri(void *sub) \
+EXTERNC pqueue_pri_t NAME##_get_pri(void *sub) \
 { \
     struct Pqueue *pq = castPqueue##NAME(NAME##_void2int(sub)); \
     return pq->pri; \
 } \
 \
-void NAME##_set_pri(void *sub, pqueue_pri_t pri) \
+EXTERNC void NAME##_set_pri(void *sub, pqueue_pri_t pri) \
 { \
     struct Pqueue *pq = castPqueue##NAME(NAME##_void2int(sub)); \
     pq->pri = pri; \
 } \
 \
-int NAME##_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr) \
+EXTERNC int NAME##_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr) \
 { \
     return (next < curr); \
 } \
 \
-size_t NAME##_get_pos(void *sub) \
+EXTERNC size_t NAME##_get_pos(void *sub) \
 { \
     struct Pqueue *pq = castPqueue##NAME(NAME##_void2int(sub)); \
     return pq->pos; \
 } \
 \
-void NAME##_set_pos(void *sub, size_t pos) \
+EXTERNC void NAME##_set_pos(void *sub, size_t pos) \
 { \
     struct Pqueue *pq = castPqueue##NAME(NAME##_void2int(sub)); \
     pq->pos = pos; \
 } \
 \
-void NAME##_print_entry(FILE *out, void *sub) \
+EXTERNC void NAME##_print_entry(FILE *out, void *sub) \
 { \
     struct Pqueue *pq = castPqueue##NAME(NAME##_void2int(sub)); \
     fprintf(out,"pri %llu pos %lu val %d\n",pq->pri,pq->pos,pq->val); \
 } \
 \
-void init##NAME() { \
+void init##NAME() {  \
     pqueue_##NAME = pqueue_init(PQUEUE_STEP,&NAME##_cmp_pri,&NAME##_get_pri,&NAME##_set_pri,&NAME##_get_pos,&NAME##_set_pos); \
 } \
 \
-void done##NAME() { \
+void done##NAME() {  \
     pqueue_free(pqueue_##NAME); \
 } \
 \
-struct QueuePtr *self##NAME(); \
-QUEUE_STRUCT(NAME,void) NAME##Inst = {.self = { \
+EXTERNC struct QueuePtr *self##NAME(); \
+QUEUE_STRUCT(NAME,void) NAME##Inst = {.self = {  \
     .self = &self##NAME, \
     .next = &selfPqueue##NAME, \
     .init = &init##NAME, \
     .done = &done##NAME}}; \
 \
-struct QueuePtr *self##NAME() { \
+struct QueuePtr *self##NAME() {  \
     return &NAME##Inst.self; \
 } \
 \
-TYPE *schedule##NAME(pqueue_pri_t pri) \
+EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri) \
 { \
     int sub = allocPqueue##NAME(); \
     int val = allocPool##NAME(); \
@@ -606,7 +618,7 @@ TYPE *schedule##NAME(pqueue_pri_t pri) \
     return castPool##NAME(val); \
 } \
 \
-TYPE *advance##NAME() \
+EXTERNC TYPE *advance##NAME() \
 { \
     int sub = NAME##_void2int(pqueue_pop(pqueue_##NAME)); \
     int val = castPqueue##NAME(sub)->val; \
@@ -615,13 +627,13 @@ TYPE *advance##NAME() \
     return castPool##NAME(val); \
 } \
 \
-int ready##NAME(pqueue_pri_t pri) \
+EXTERNC int ready##NAME(pqueue_pri_t pri) \
 { \
     int sub = NAME##_void2int(pqueue_peek(pqueue_##NAME)); \
     return NAME##_cmp_pri(castPqueue##NAME(sub)->pri,pri); \
 } \
 \
-pqueue_pri_t when##NAME() \
+EXTERNC pqueue_pri_t when##NAME() \
 { \
     int sub = NAME##_void2int(pqueue_peek(pqueue_##NAME)); \
     return castPqueue##NAME(sub)->pri; \

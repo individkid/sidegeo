@@ -20,6 +20,9 @@
 #define COMMON_H
 
 #include "Queue.h"
+
+EXTERNCBEGIN
+
 #include <stdarg.h>
 
 #define BRINGUP
@@ -154,6 +157,60 @@ enum Control {
     Source,
     Finish};
 
+void handler(int sig);
+void signalCommands();
+void signalOutputs();
+void signalProcesses();
+void signalTimewheels();
+
+void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
+void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);
+
+#define DECLARE_MSGSTR(NAME) \
+void msgstr##NAME(const char *fmt, ...);
+#define DEFINE_MSGSTR(NAME) \
+void msgstr##NAME(const char *fmt, ...) \
+{ \
+    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
+    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
+    memcpy(enloc##NAME(len),buf,len); \
+}
+
+void exitErrstr(const char *fmt, ...);
+
+#define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
+#define CASE(VAL) break; case (VAL):
+#define FALL(VAL) case (VAL):
+#define BRANCH(VAL) continue; case(VAL):
+#define DEFAULT(SMT) break; default: SMT break;} break;}
+
+enum Motion motionof(char code);
+char alphaof(char code);
+int indexof(char code);
+char ofglfw(int key);
+char ofshift(int key);
+char ofmotion(enum Motion code);
+char ofalpha(char code);
+char ofindex(int code);
+
+float dotvec(float *u, float *v, int n);
+float *plusvec(float *u, float *v, int n);
+float *scalevec(float *u, float s, int n);
+float *jumpvec(float *u, float *v, int n);
+float *timesmat(float *u, float *v, int n);
+float *jumpmat(float *u, float *v, int n);
+float *identmat(float *u, int n);
+float *copyary(float *u, float *v, int duty, int stride, int size);
+float *copyvec(float *u, float *v, int n);
+float *copymat(float *u, float *v, int n);
+float *crossmat(float *u);
+float *crossvec(float *u, float *v);
+float detmat(float *u, int n);
+float *adjmat(float *u, int n);
+float *invmat(float *u, int n);
+
+EXTERNCEND
+
 DECLARE_STUB0(Common)
 DECLARE_MUTEX(Commands)
 DECLARE_LOCAL(CmnCommand,Command)
@@ -179,6 +236,7 @@ DECLARE_LOCAL(CmnCoefficient,int)
 DECLARE_LOCAL(CmnVariable,int)
 DECLARE_LOCAL(CmnState,struct State)
 DECLARE_LOCAL(CmnChange,struct Change)
+DECLARE_POINTER(CmnInt,int)
 
 DECLARE_STUB(Local)
 DECLARE_LOCAL(Defer,int)
@@ -257,57 +315,5 @@ DECLARE_POINTER(Pipe,int)
 DECLARE_LOCAL(TwCommand,Command)
 DECLARE_LOCAL(TwCmdChar,int)
 DECLARE_LOCAL(TwCmdInt,int)
-
-void handler(int sig);
-void signalCommands();
-void signalOutputs();
-void signalProcesses();
-void signalTimewheels();
-
-void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
-void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);
-
-#define DECLARE_MSGSTR(NAME) \
-void msgstr##NAME(const char *fmt, ...);
-#define DEFINE_MSGSTR(NAME) \
-void msgstr##NAME(const char *fmt, ...) \
-{ \
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
-    memcpy(enloc##NAME(len),buf,len); \
-}
-
-void exitErrstr(const char *fmt, ...);
-
-#define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
-#define CASE(VAL) break; case (VAL):
-#define FALL(VAL) case (VAL):
-#define BRANCH(VAL) continue; case(VAL):
-#define DEFAULT(SMT) break; default: SMT break;} break;}
-
-enum Motion motionof(char code);
-char alphaof(char code);
-int indexof(char code);
-char ofglfw(int key);
-char ofshift(int key);
-char ofmotion(enum Motion code);
-char ofalpha(char code);
-char ofindex(int code);
-
-float dotvec(float *u, float *v, int n);
-float *plusvec(float *u, float *v, int n);
-float *scalevec(float *u, float s, int n);
-float *jumpvec(float *u, float *v, int n);
-float *timesmat(float *u, float *v, int n);
-float *jumpmat(float *u, float *v, int n);
-float *identmat(float *u, int n);
-float *copyary(float *u, float *v, int duty, int stride, int size);
-float *copyvec(float *u, float *v, int n);
-float *copymat(float *u, float *v, int n);
-float *crossmat(float *u);
-float *crossvec(float *u, float *v);
-float detmat(float *u, int n);
-float *adjmat(float *u, int n);
-float *invmat(float *u, int n);
 
 #endif
