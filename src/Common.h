@@ -176,8 +176,6 @@ void msgstr##NAME(const char *fmt, ...) \
     memcpy(enloc##NAME(len),buf,len); \
 }
 
-void exitErrstr(const char *fmt, ...);
-
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
 #define FALL(VAL) case (VAL):

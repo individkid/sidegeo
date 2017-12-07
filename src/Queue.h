@@ -39,6 +39,8 @@ EXTERNCBEGIN
 #include <errno.h>
 EXTERNCEND
 
+EXTERNC void exitErrstr(const char *fmt, ...);
+
 struct QueuePtr {
     struct QueuePtr *(*self)();
     struct QueuePtr *(*next)();
@@ -89,7 +91,6 @@ EXTERNC struct QueuePtr *use##NAME(int sub); \
 EXTERNC int size##NAME();
 
 #define DECLARE_POINTER(NAME,TYPE) \
-EXTERNC struct NAME##Struct **pointer##NAME(); \
 EXTERNC void refer##NAME(struct QueuePtr *ptr); \
 DECLARE_LOCAL(NAME,TYPE)
 
@@ -116,15 +117,6 @@ EXTERNC TYPE *advance##NAME(); \
 EXTERNC int ready##NAME(pqueue_pri_t pri); \
 EXTERNC pqueue_pri_t when##NAME();
 
-#define QUEUE_STRUCT(NAME,TYPE) \
-struct NAME##Struct {  \
-    struct QueuePtr self; \
-    TYPE *base; \
-    TYPE *limit; \
-    TYPE *head; \
-    TYPE *tail; \
-}
-
 #define MUTEX_STRUCT(NAME) \
 struct NAME##Struct {  \
     struct QueuePtr self; \
@@ -137,6 +129,8 @@ struct NAME##Struct {  \
     pthread_mutex_t mutex; \
     pthread_cond_t cond; \
 }
+
+#ifdef __cplusplus
 
 #define DEFINE_STUB(NAME,NEXT) \
 EXTERNC struct QueuePtr *self##NAME(); \
@@ -238,79 +232,100 @@ EXTERNC void signal##NAME() \
 
 #define QUEUE_STEP 10
 
+template<class TYPE> struct QueueStruct {  
+    struct QueuePtr self;
+    TYPE *base;
+    TYPE *limit;
+    TYPE *head;
+    TYPE *tail;
+    QueueStruct(
+        struct QueuePtr *(*func)(),
+        struct QueuePtr *(*next)(),
+        void (*init)(),
+        void (*done)(),
+        void (*copy)(struct QueuePtr *src, int siz)) {
+        self.self = func;
+        self.next = next;
+        self.init = init;
+        self.done = done;
+        self.copy = copy;
+        base = 0;
+        limit = 0;
+        head = 0;
+        tail = 0;
+    }
+    TYPE *enloc(int siz)
+    {
+        if (base == 0) {
+            base = (TYPE *)malloc(QUEUE_STEP*sizeof*base);
+            limit = base + QUEUE_STEP;
+            head = base;
+            tail = base;}
+        if (siz < 0) exitErrstr("enlocv too siz\n");
+        while (head - base >= QUEUE_STEP) {
+            int diff = tail - base;
+            for (int i = QUEUE_STEP; i < diff; i++) {
+                base[i-QUEUE_STEP] = base[i];}
+            head = head - QUEUE_STEP;
+            tail = tail - QUEUE_STEP;}
+        while (tail + siz >= limit) {
+            int diff = limit - base;
+            int size = tail - head;
+            TYPE *temp = (TYPE *)malloc((diff+QUEUE_STEP)*sizeof*base);
+            memcpy(temp,head,size*sizeof*base);
+            free(base); base = temp;
+            head = base;
+            tail = base + size;
+            limit = base + diff + QUEUE_STEP;}
+        tail = tail + siz;
+        return tail - siz;
+    }
+    TYPE *deloc(int siz)
+    {
+        if (siz < 0) exitErrstr("deloc too siz\n");
+        head = head + siz;
+        if (head > tail) exitErrstr("deloc too siz\n");
+        return head-siz;
+    }
+    TYPE *unloc(int siz)
+    {
+        if (siz < 0) exitErrstr("unloc too siz\n");
+        tail = tail - siz;
+        if (head > tail) exitErrstr("unloc too siz\n");
+        return tail;
+    }
+    void reloc(int siz)
+    {
+        TYPE *buf = enloc(siz);
+        for (int i = 0; i < siz; i++) buf[i] = head[i];
+        deloc(siz);
+    }
+    int size()
+    {
+        return tail - head;
+    }
+    TYPE *array(int sub, int siz)
+    {
+        return head + sub;
+    }
+};
+
 #define DEFINE_QUEUE(NAME,TYPE,INST) \
-/*return pointer valid only until next call to en*##NAME */ \
-EXTERNC TYPE *enloc##NAME(int siz) \
-{ \
-    if (INST.base == 0) {  \
-        INST.base = (TYPE *)malloc(QUEUE_STEP*sizeof*INST.base); \
-        INST.limit = INST.base + QUEUE_STEP; \
-        INST.head = INST.base; \
-        INST.tail = INST.base;} \
-    if (siz < 0) exitErrstr("enlocv too siz\n"); \
-    while (INST.head - INST.base >= QUEUE_STEP) {  \
-        int tail = INST.tail - INST.base; \
-        for (int i = QUEUE_STEP; i < tail; i++) {  \
-            INST.base[i-QUEUE_STEP] = INST.base[i];} \
-        INST.head = INST.head - QUEUE_STEP; \
-        INST.tail = INST.tail - QUEUE_STEP;} \
-    while (INST.tail + siz >= INST.limit) {  \
-        int limit = INST.limit - INST.base; \
-        int size = INST.tail - INST.head; \
-        TYPE *temp = (TYPE *)malloc((limit+QUEUE_STEP)*sizeof*INST.base); \
-        memcpy(temp,INST.head,size*sizeof*INST.base); \
-        free(INST.base); INST.base = temp; \
-        INST.head = INST.base; \
-        INST.tail = INST.base + size; \
-        INST.limit = INST.base + limit + QUEUE_STEP;} \
-    INST.tail = INST.tail + siz; \
-    return INST.tail - siz; \
-} \
-\
-EXTERNC TYPE *deloc##NAME(int siz) \
-{ \
-    if (siz < 0) exitErrstr("deloc too siz\n"); \
-    INST.head = INST.head + siz; \
-    if (INST.head > INST.tail) exitErrstr("deloc too siz\n"); \
-    return INST.head-siz; \
-} \
-\
-EXTERNC TYPE *unloc##NAME(int siz) \
-{ \
-    if (siz < 0) exitErrstr("unloc too siz\n"); \
-    INST.tail = INST.tail - siz; \
-    if (INST.head > INST.tail) exitErrstr("unloc too siz\n"); \
-    return INST.tail; \
-} \
-\
-EXTERNC void reloc##NAME(int siz) \
-{ \
-    TYPE *buf = enloc##NAME(siz); \
-    for (int i = 0; i < siz; i++) buf[i] = INST.head[i]; \
-    deloc##NAME(siz); \
-} \
-\
-EXTERNC int size##NAME() \
-{ \
-    return INST.tail - INST.head; \
-} \
-\
-EXTERNC TYPE *array##NAME(int sub, int siz) \
-{ \
-    return INST.head+sub; \
-}
+/*return pointer valid only until next call to enloc##NAME or array##NAME */ \
+EXTERNC TYPE *enloc##NAME(int siz) {return INST.enloc(siz);} \
+EXTERNC TYPE *deloc##NAME(int siz) {return INST.deloc(siz);} \
+EXTERNC TYPE *unloc##NAME(int siz) {return INST.unloc(siz);} \
+EXTERNC void reloc##NAME(int siz) {INST.reloc(siz);} \
+EXTERNC int size##NAME() {return INST.size();} \
+EXTERNC TYPE *array##NAME(int sub, int siz) {return INST.array(sub,siz);}
 
 #define DEFINE_LOCAL(NAME,TYPE,NEXT) \
 EXTERNC struct QueuePtr *self##NAME(); \
 EXTERNC void init##NAME(); \
 EXTERNC void done##NAME(); \
 EXTERNC void copy##NAME(struct QueuePtr *src, int siz); \
-QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.self = {  \
-    .self = &self##NAME, \
-    .next = &self##NEXT, \
-    .init = &init##NAME, \
-    .done = &done##NAME, \
-    .copy = &copy##NAME}}; \
+typedef QueueStruct<TYPE> NAME##Struct; \
+NAME##Struct NAME##Inst = NAME##Struct(&self##NAME,&self##NEXT,&init##NAME,&done##NAME,&copy##NAME); \
 \
 EXTERNC struct QueuePtr *self##NAME() \
 { \
@@ -333,7 +348,7 @@ DEFINE_QUEUE(NAME,TYPE,NAME##Inst) \
 EXTERNC void copy##NAME(struct QueuePtr *src, int siz) \
 { \
     if (NAME##Inst.self.type != src->type) exitErrstr("copy too type\n"); \
-    struct NAME##Struct *source = (struct NAME##Struct *)src; \
+    NAME##Struct *source = (NAME##Struct *)src; \
     source->head = source->head + siz; \
     if (source->head > source->tail) exitErrstr("copy too siz\n"); \
     memcpy(enloc##NAME(siz),source->head-siz,siz); \
@@ -362,12 +377,9 @@ EXTERNC int checkQueueType(const char *type) \
 EXTERNC struct QueuePtr *self##NAME(); \
 EXTERNC void init##NAME(); \
 EXTERNC void done##NAME(); \
-QUEUE_STRUCT(NAME##Meta,TYPE); \
-QUEUE_STRUCT(NAME,struct NAME##MetaStruct) NAME##Inst = {.self = {  \
-    .self = &self##NAME, \
-    .next = &self##NEXT, \
-    .init = &init##NAME, \
-    .done = &done##NAME}}; \
+typedef QueueStruct<TYPE> NAME##MetaStruct; \
+typedef QueueStruct<NAME##MetaStruct> NAME##Struct; \
+NAME##Struct NAME##Inst = NAME##Struct(&self##NAME,&self##NEXT,&init##NAME,&done##NAME,0); \
 int NAME##Type = 0; \
 \
 EXTERNC struct QueuePtr *self##NAME() \
@@ -375,7 +387,7 @@ EXTERNC struct QueuePtr *self##NAME() \
     return &NAME##Inst.self; \
 } \
 \
-DEFINE_QUEUE(NAME,struct NAME##MetaStruct,NAME##Inst) \
+DEFINE_QUEUE(NAME,NAME##MetaStruct,NAME##Inst) \
 \
 EXTERNC int checkQueueType(const char *type); \
 EXTERNC void init##NAME() \
@@ -392,7 +404,7 @@ EXTERNC void done##NAME() \
 \
 EXTERNC struct QueuePtr *use##NAME(int sub) \
 { \
-    struct NAME##MetaStruct inst = {0}; \
+    NAME##MetaStruct inst = NAME##MetaStruct(0,0,0,0,0); \
     inst.self.type = NAME##Type; \
     while (sub >= size##NAME()) *enloc##NAME(1) = inst; \
     return &array##NAME(sub,1)->self; \
@@ -405,7 +417,8 @@ struct QueuePtr NAME##Inst = {  \
     .self = &self##NAME, \
     .next = &self##NEXT, \
     .init = &init##NAME}; \
-QUEUE_STRUCT(NAME,TYPE) *NAME##Ptr = 0; \
+typedef QueueStruct<TYPE> NAME##Struct; \
+NAME##Struct *NAME##Ptr = 0; \
 int NAME##Type = 0; \
 \
 EXTERNC struct QueuePtr *self##NAME() \
@@ -422,7 +435,7 @@ EXTERNC void init##NAME() \
 EXTERNC void refer##NAME(struct QueuePtr *ptr) \
 { \
     if (NAME##Type != ptr->type) exitErrstr("pointer too type\n"); \
-    NAME##Ptr = (struct NAME##Struct *)ptr; \
+    NAME##Ptr = (NAME##Struct *)ptr; \
 } \
 \
 DEFINE_QUEUE(NAME,TYPE,(*NAME##Ptr))
@@ -597,11 +610,8 @@ void done##NAME() {  \
 } \
 \
 EXTERNC struct QueuePtr *self##NAME(); \
-QUEUE_STRUCT(NAME,void) NAME##Inst = {.self = {  \
-    .self = &self##NAME, \
-    .next = &selfPqueue##NAME, \
-    .init = &init##NAME, \
-    .done = &done##NAME}}; \
+typedef QueueStruct<TYPE> NAME##Struct; \
+NAME##Struct NAME##Inst = NAME##Struct(&self##NAME,&selfPqueue##NAME,&init##NAME,&done##NAME,0); \
 \
 struct QueuePtr *self##NAME() {  \
     return &NAME##Inst.self; \
@@ -638,6 +648,8 @@ EXTERNC pqueue_pri_t when##NAME() \
     int sub = NAME##_void2int(pqueue_peek(pqueue_##NAME)); \
     return castPqueue##NAME(sub)->pri; \
 }
+
+#endif // __cplusplus
 
 #endif
 
