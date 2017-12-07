@@ -32,11 +32,10 @@
 EXTERNCBEGIN
 #include <stdio.h>
 #include "pqueue.h"
-#include <stdlib.h>
-#include <string.h>
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
+#include <string.h>
 EXTERNCEND
 
 EXTERNC void exitErrstr(const char *fmt, ...);
@@ -236,12 +235,12 @@ template<class TYPE> struct QueueStruct : QueueBase {
         tail = 0;
     }
     virtual ~QueueStruct() {
-        if (base) free(base);
+        if (base) delete[] base;
     }
     TYPE *enloc(int siz)
     {
         if (base == 0) {
-            base = (TYPE *)malloc(QUEUE_STEP*sizeof*base);
+            base = new TYPE[QUEUE_STEP];
             limit = base + QUEUE_STEP;
             head = base;
             tail = base;}
@@ -255,9 +254,9 @@ template<class TYPE> struct QueueStruct : QueueBase {
         while (tail + siz >= limit) {
             int diff = limit - base;
             int size = tail - head;
-            void *temp = malloc((diff+QUEUE_STEP)*sizeof*base);
-            memcpy(temp,(void *)head,size*sizeof*base);
-            free(base); base = (TYPE *)temp;
+            TYPE *temp = new TYPE[diff+QUEUE_STEP];
+            for (int i = 0; i < size; i++) temp[i] = head[i];
+            delete[] base; base = (TYPE *)temp;
             head = base;
             tail = base + size;
             limit = base + diff + QUEUE_STEP;}
@@ -299,7 +298,9 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     virtual void copy(int siz)
     {
-        memcpy((void *)enloc(siz),(void *)src->deloc(siz),siz);
+        TYPE *dest = enloc(siz);
+        TYPE *source = src->deloc(siz);
+        for (int i = 0; i < siz; i++) dest[i] = source[i];
         src = 0;
     }
 };
@@ -325,7 +326,7 @@ template<class TYPE> struct QueueMeta {
     QueueMeta() {}
     ~QueueMeta() {
         for (int i = 0; i < meta.size(); i++)
-        if (meta.array(i,1)->base) free(meta.array(i,1)->base);
+        if (meta.array(i,1)->base) delete[] meta.array(i,1)->base;
     }
     void use(int sub)
     {
