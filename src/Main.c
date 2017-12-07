@@ -46,8 +46,6 @@ void enqueCommand(Command cmd);
 void bringup();
 #endif
 
-DEFINE_MSGSTR(CmdOutput)
-
 const char *inputCode(enum Shader shader)
 {
     SWITCH(code[shader].input,GL_POINTS) return "#define INPUT points\n";

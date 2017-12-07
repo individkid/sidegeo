@@ -22,6 +22,7 @@
 #include "Queue.h"
 
 EXTERNCBEGIN
+#include <stdarg.h>
 
 #define BRINGUP
 #define PLANE_DIMENSIONS 3

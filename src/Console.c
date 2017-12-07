@@ -19,6 +19,9 @@
 #include "Common.h"
 #include <termios.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/types.h>
+#endif
 
 extern struct termios savedTermios;
 extern int validTermios;
