@@ -16,6 +16,8 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+extern "C" {
+
 #include "Common.h"
 #include <termios.h>
 #include <unistd.h>
@@ -115,7 +117,7 @@ enum Motion motionof(char code)
 {
     int uchar = code; if (uchar < 0) uchar += 256;
     if (uchar < 128 || uchar - 128 >= Motions) return Motions;
-    return uchar - 128;
+    return (Motion)(uchar - 128);
 }
 
 char alphaof(char code)
@@ -305,4 +307,4 @@ float *invmat(float *u, int n)
     return u;
 }
 
-
+}

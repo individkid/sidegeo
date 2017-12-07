@@ -228,7 +228,7 @@ void signal##NAME() \
 TYPE *enloc##NAME(int siz) \
 { \
     if (INST.base == 0) { \
-        INST.base = malloc(QUEUE_STEP*sizeof*INST.base); \
+        INST.base = (TYPE *)malloc(QUEUE_STEP*sizeof*INST.base); \
         INST.limit = INST.base + QUEUE_STEP; \
         INST.head = INST.base; \
         INST.tail = INST.base;} \
@@ -242,7 +242,7 @@ TYPE *enloc##NAME(int siz) \
     while (INST.tail + siz >= INST.limit) { \
         int limit = INST.limit - INST.base; \
         int size = INST.tail - INST.head; \
-        TYPE *temp = malloc((limit+QUEUE_STEP)*sizeof*INST.base); \
+        TYPE *temp = (TYPE *)malloc((limit+QUEUE_STEP)*sizeof*INST.base); \
         memcpy(temp,INST.head,size*sizeof*INST.base); \
         free(INST.base); INST.base = temp; \
         INST.head = INST.base; \
@@ -285,57 +285,11 @@ TYPE *array##NAME(int sub, int siz) \
     return INST.head+sub; \
 }
 
-#define DEFINE_STUB0(NAME,NEXT) \
-struct QueuePtr *selfType##NAME(); \
-void initType##NAME(); \
-void doneType##NAME(); \
-void copyType##NAME(); \
-QUEUE_STRUCT(NAME##Type,const char *) NAME##TypeInst = {.self = { \
-    .self = &selfType##NAME, \
-    .next = &self##NEXT, \
-    .init = &initType##NAME, \
-    .done = &doneType##NAME}}; \
-\
-struct QueuePtr *selfType##NAME() \
-{ \
-    return &NAME##TypeInst.self; \
-} \
-\
-int voidQueueType = 0; \
-int charQueueType = 0; \
-int intQueueType = 0; \
-\
-int checkQueueType(const char *type); \
-void initType##NAME() \
-{ \
-    voidQueueType = checkQueueType("void"); \
-    charQueueType = checkQueueType("char"); \
-    intQueueType = checkQueueType("int"); \
-    NAME##TypeInst.self.type = checkQueueType("const char *"); \
-} \
-\
-void doneType##NAME() \
-{ \
-    if (NAME##TypeInst.base) free(NAME##TypeInst.base); \
-} \
-\
-DEFINE_QUEUE(NAME,const char *,NAME##TypeInst) \
-\
-int checkQueueType(const char *type) \
-{ \
-    int i = 0; for (; i < size##NAME(); i++) \
-    if (strcmp(type,*array##NAME(i,1)) == 0) break; \
-    if (i == size##NAME()) *enloc##NAME(1) = type; \
-    return i; \
-} \
-\
-DEFINE_STUB(NAME,Type##NAME)
-
 #define DEFINE_LOCAL(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
 void init##NAME(); \
 void done##NAME(); \
-void copy##NAME(); \
+void copy##NAME(struct QueuePtr *src, int siz); \
 QUEUE_STRUCT(NAME,TYPE) NAME##Inst = {.self = { \
     .self = &self##NAME, \
     .next = &self##NEXT, \
@@ -369,6 +323,25 @@ void copy##NAME(struct QueuePtr *src, int siz) \
     if (source->head > source->tail) exitErrstr("copy too siz\n"); \
     memcpy(enloc##NAME(siz),source->head-siz,siz); \
 }
+
+#define DEFINE_STUB0(NAME,NEXT) \
+DEFINE_LOCAL(Type##NAME,const char *,NEXT) \
+DEFINE_STUB(NAME,Type##NAME)  \
+\
+int voidQueueType = 0; \
+int charQueueType = 0; \
+int intQueueType = 0; \
+\
+int checkQueueType(const char *type) \
+{ \
+    int i = 0; for (; i < sizeType##NAME(); i++) { \
+    if (strcmp("void",*arrayType##NAME(i,1)) == 0) voidQueueType = i; \
+    if (strcmp("char",*arrayType##NAME(i,1)) == 0) charQueueType = i; \
+    if (strcmp("int",*arrayType##NAME(i,1)) == 0) intQueueType = i; \
+    if (strcmp(type,*arrayType##NAME(i,1)) == 0) break;} \
+    if (i == sizeType##NAME()) *enlocType##NAME(1) = type; \
+    return i; \
+} 
 
 #define DEFINE_META(NAME,TYPE,NEXT) \
 struct QueuePtr *self##NAME(); \
