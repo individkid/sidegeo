@@ -40,8 +40,6 @@ extern int yLoc;
 extern float cutoff;
 extern float slope;
 extern float aspect;
-extern struct termios savedTermios;
-extern int validTermios;
 
 void enqueCommand(Command cmd);
 #ifdef BRINGUP
