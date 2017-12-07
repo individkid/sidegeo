@@ -91,19 +91,6 @@ EXTERNC TYPE *advance##NAME(); \
 EXTERNC int ready##NAME(pqueue_pri_t pri); \
 EXTERNC pqueue_pri_t when##NAME();
 
-#define MUTEX_STRUCT(NAME) \
-struct NAME##Struct {  \
-    struct QueuePtr self; \
-    pthread_mutex_t mutex; \
-}
-
-#define COND_STRUCT(NAME) \
-struct NAME##Struct {  \
-    struct QueuePtr self; \
-    pthread_mutex_t mutex; \
-    pthread_cond_t cond; \
-}
-
 #ifdef __cplusplus
 
 struct QueueMutex {
@@ -163,8 +150,6 @@ extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 extern "C" void wait##NAME() {NAME##Inst.wait();} \
 extern "C" void signal##NAME() {NAME##Inst.signal();}
 
-#define QUEUE_STEP 10
-
 struct QueueBase {
     static QueueBase *cpy;
     QueueBase *next;
@@ -174,7 +159,7 @@ struct QueueBase {
     }
     QueueBase(QueueBase *ptr)
     {
-        if (ptr) ptr->next = this;
+        ptr->next = this;
         next = 0;
     }
     virtual ~QueueBase() {}
@@ -214,13 +199,15 @@ struct QueueStub : QueueBase {
 
 #define DEFINE_STUB(NAME) QueueStub NAME##Inst = QueueStub();
 
+#define QUEUE_STEP 10
+
 template<class TYPE> struct QueueStruct : QueueBase {
     static QueueStruct *src;
     TYPE *base;
     TYPE *limit;
     TYPE *head;
     TYPE *tail;
-    QueueStruct() : QueueBase(0)
+    QueueStruct() : QueueBase()
     {
         base = 0;
         limit = 0;
