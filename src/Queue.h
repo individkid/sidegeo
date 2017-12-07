@@ -272,6 +272,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     TYPE *array(int sub, int siz)
     {
+        if (sub+siz > size()) exitErrstr("array too siz\n");
         return head + sub;
     }
     virtual int size()

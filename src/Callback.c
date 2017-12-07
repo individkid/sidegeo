@@ -16,9 +16,8 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <math.h>
-
 #include "Main.h"
+#include <math.h>
 
 #ifdef __linux__
 extern Display *displayHandle;
