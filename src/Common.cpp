@@ -23,8 +23,6 @@ EXTERNCBEGIN
 #include <termios.h>
 #include <unistd.h>
 
-extern struct termios savedTermios;
-extern int validTermios;
 extern pthread_t consoleThread;
 extern pthread_t haskellThread;
 extern pthread_t timewheelThread;
@@ -54,34 +52,6 @@ void signalProcesses()
 void signalTimewheels()
 {
     if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-}
-
-void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num)
-{
-    if (siz->type != intQueueType) exitErrstr("stageque too int\n");
-    referCmnInt(siz);
-    int *size = delocCmnInt(num);
-    for (int i = 0; i < num; i++) {
-        (*dst->copy)(src,size[i]);
-        dst = (*dst->next)();
-        src = (*src->next)();}
-}
-
-void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num)
-{
-    for (int i = 0; i < num; i++) {
-        referCmnInt(src);
-        (*dst->copy)(src,sizeCmnInt());
-        dst = (*dst->next)();
-        src = (*src->next)();}
-}
-
-void exitErrstr(const char *fmt, ...)
-{
-    if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
-    printf("fatal: ");
-    va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
-    exit(-1);
 }
 
 enum Motion motionof(char code)
@@ -280,71 +250,71 @@ float *invmat(float *u, int n)
 
 EXTERNCEND
 
-DEFINE_MUTEX(Commands,Common)
-DEFINE_LOCAL(CmnCommand,Command,Commands)
+DEFINE_STUB(Zero)
+
+DEFINE_MUTEX(Commands)
+DEFINE_LOCAL(CmnCommand,Command,Zero)
 DEFINE_LOCAL(CmnCmdChar,char,CmnCommand)
 DEFINE_LOCAL(CmnCmdInt,int,CmnCmdChar)
 DEFINE_LOCAL(CmnCmdData,enum Data,CmnCmdInt)
-DEFINE_MUTEX(Outputs,CmnCmdData)
-DEFINE_LOCAL(CmnOutput,char,Outputs)
-DEFINE_MUTEX(Processes,CmnOutput)
-DEFINE_LOCAL(CmnProcess,char,Processes)
-DEFINE_COND(Events,CmnProcess)
-DEFINE_LOCAL(CmnEvent,enum Event,Events)
+DEFINE_MUTEX(Outputs)
+DEFINE_LOCAL(CmnOutput,char,Zero)
+DEFINE_MUTEX(Processes)
+DEFINE_LOCAL(CmnProcess,char,Zero)
+DEFINE_COND(Events)
+DEFINE_LOCAL(CmnEvent,enum Event,Zero)
 DEFINE_LOCAL(CmnKind,enum Kind,CmnEvent)
 DEFINE_LOCAL(CmnHsCmd,Command,CmnKind)
 DEFINE_LOCAL(CmnHsChar,char,CmnHsCmd)
 DEFINE_LOCAL(CmnHsInt,int,CmnHsChar)
 DEFINE_LOCAL(CmnHsData,enum Data,CmnHsInt)
-DEFINE_MUTEX(Timewheels,CmnHsData)
-DEFINE_LOCAL(CmnControl,enum Control,Timewheels)
+DEFINE_MUTEX(Timewheels)
+DEFINE_LOCAL(CmnControl,enum Control,Zero)
 DEFINE_LOCAL(CmnTwChar,char,CmnControl)
 DEFINE_LOCAL(CmnTwInt,int,CmnTwChar)
 DEFINE_LOCAL(CmnCoefficient,int,CmnTwInt)
 DEFINE_LOCAL(CmnVariable,int,CmnCoefficient)
 DEFINE_LOCAL(CmnState,struct State,CmnVariable)
 DEFINE_LOCAL(CmnChange,struct Change,CmnState)
-DEFINE_POINTER(CmnInt,int,CmnChange)
-DEFINE_STUB0(Common,CmnInt)
+DEFINE_POINTER(CmnInt,int)
 
-DEFINE_LOCAL(Defer,int,Local)
-DEFINE_LOCAL(CmdState,int,Defer)
-DEFINE_LOCAL(Cluster,int,CmdState)
-DEFINE_LOCAL(Machine,Machine,Cluster)
+DEFINE_LOCAL(Defer,int,Zero)
+DEFINE_LOCAL(CmdState,int,Zero)
+DEFINE_LOCAL(Cluster,int,Zero)
+DEFINE_LOCAL(Machine,Machine,Zero)
 DEFINE_LOCAL(Command,Command,Machine)
 DEFINE_LOCAL(CmdChar,char,Command)
 DEFINE_LOCAL(CmdInt,int,CmdChar)
 DEFINE_LOCAL(CmdData,enum Data,CmdInt)
 DEFINE_LOCAL(Buffer,struct Buffer *,CmdData)
 DEFINE_LOCAL(Render,struct Render,Buffer)
-DEFINE_LOCAL(Option,char *,Render)
-DEFINE_LOCAL(CmdOutput,char,Option)
-DEFINE_LOCAL(CmdEvent,enum Event,CmdOutput)
+DEFINE_LOCAL(Option,char *,Zero)
+DEFINE_LOCAL(CmdOutput,char,Zero)
+DEFINE_LOCAL(CmdEvent,enum Event,Zero)
 DEFINE_LOCAL(CmdKind,enum Kind,CmdEvent)
 DEFINE_LOCAL(CmdHsCmd,Command,CmdKind)
 DEFINE_LOCAL(CmdHsChar,char,CmdHsCmd)
 DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
 DEFINE_LOCAL(CmdHsData,enum Data,CmdHsInt)
-DEFINE_LOCAL(CmdControl,enum Control,CmdHsData)
+DEFINE_LOCAL(CmdControl,enum Control,Zero)
 DEFINE_LOCAL(CmdChange,struct Change,CmdControl)
-DEFINE_POINTER(MachPtr,Machine,CmdChange)
-DEFINE_POINTER(CharPtr,char,MachPtr)
-DEFINE_POINTER(IntPtr,int,CharPtr)
-DEFINE_STUB(Local,IntPtr)
+DEFINE_POINTER(MachPtr,Machine)
+DEFINE_POINTER(CharPtr,char)
+DEFINE_POINTER(IntPtr,int)
 
-DEFINE_META(Place,int,Haskell)
-DEFINE_META(Embed,int,Place)
-DEFINE_LOCAL(Sideband,int,Embed)
-DEFINE_LOCAL(Correlate,int,Sideband)
-DEFINE_META(Boundary,int,Correlate)
-DEFINE_META(Client,int,Boundary)
-DEFINE_META(EventName,char,Client)
-DEFINE_META(KindName,char,EventName)
-DEFINE_META(DataName,char,KindName)
-DEFINE_LOCAL(EventMap,int,DataName)
-DEFINE_LOCAL(KindMap,int,EventMap)
-DEFINE_LOCAL(DataMap,enum Data,KindMap)
-DEFINE_LOCAL(Event,enum Event,DataMap)
+DEFINE_META(Place,int)
+DEFINE_META(Embed,int)
+DEFINE_LOCAL(Sideband,int,Zero)
+DEFINE_LOCAL(Correlate,int,Zero)
+DEFINE_META(Boundary,int)
+DEFINE_META(Client,int)
+DEFINE_META(EventName,char)
+DEFINE_META(KindName,char)
+DEFINE_META(DataName,char)
+DEFINE_LOCAL(EventMap,int,Zero)
+DEFINE_LOCAL(KindMap,int,Zero)
+DEFINE_LOCAL(DataMap,enum Data,Zero)
+DEFINE_LOCAL(Event,enum Event,Zero)
 DEFINE_LOCAL(Kind,enum Kind,Event)
 DEFINE_LOCAL(HsCmd,Command,Kind)
 DEFINE_LOCAL(HsChar,char,HsCmd)
@@ -354,33 +324,30 @@ DEFINE_LOCAL(HsCommand,Command,HsData)
 DEFINE_LOCAL(HsCmdChar,char,HsCommand)
 DEFINE_LOCAL(HsCmdInt,int,HsCmdChar)
 DEFINE_LOCAL(HsCmdData,enum Data,HsCmdInt)
-DEFINE_POINTER(Meta,int,HsCmdData)
-DEFINE_POINTER(Pseudo,char,Meta)
-DEFINE_POINTER(Name,char *,Pseudo)
-DEFINE_STUB(Haskell,Name)
+DEFINE_POINTER(Meta,int)
+DEFINE_POINTER(Pseudo,char)
+DEFINE_POINTER(Name,char *)
 
-DEFINE_LOCAL(ConCommand,Command,Console)
+DEFINE_LOCAL(ConCommand,Command,Zero)
 DEFINE_LOCAL(ConCmdChar,char,ConCommand)
 DEFINE_LOCAL(ConProcess,char,ConCmdChar)
-DEFINE_LOCAL(Output,char,ConProcess)
-DEFINE_LOCAL(Line,enum Menu,Output)
-DEFINE_LOCAL(Match,int,Line)
-DEFINE_META(Echo,char,Match)
-DEFINE_POINTER(ConPtr,char,Echo)
-DEFINE_STUB(Console,ConPtr)
+DEFINE_LOCAL(Output,char,Zero)
+DEFINE_LOCAL(Line,enum Menu,Zero)
+DEFINE_LOCAL(Match,int,Zero)
+DEFINE_META(Echo,char)
+DEFINE_POINTER(ConPtr,char)
 
-DEFINE_LOCAL(Control,enum Control,Timewheel)
+DEFINE_LOCAL(Control,enum Control,Zero)
 DEFINE_LOCAL(TwChar,char,Control)
 DEFINE_LOCAL(TwInt,int,TwChar)
 DEFINE_LOCAL(Coefficient,int,TwInt)
 DEFINE_LOCAL(Variable,int,Coefficient)
 DEFINE_LOCAL(State,struct State,Variable)
 DEFINE_LOCAL(Change,struct Change,State)
-DEFINE_PRIORITY(Time,int,Change)
-DEFINE_PRIORITY(Wheel,struct Change,Time)
-DEFINE_META(Wave,int,Wheel)
-DEFINE_POINTER(Pipe,int,Wave)
-DEFINE_LOCAL(TwCommand,Command,Pipe)
+DEFINE_PRIORITY(Time,int)
+DEFINE_PRIORITY(Wheel,struct Change)
+DEFINE_META(Wave,int)
+DEFINE_POINTER(Pipe,int)
+DEFINE_LOCAL(TwCommand,Command,Zero)
 DEFINE_LOCAL(TwCmdChar,int,TwCommand)
 DEFINE_LOCAL(TwCmdInt,int,TwCmdChar)
-DEFINE_STUB(Timewheel,TwCmdInt)

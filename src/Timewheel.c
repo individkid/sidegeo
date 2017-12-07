@@ -31,6 +31,11 @@ void startSource()
 	// TODO
 }
 
+void startState()
+{
+    // TODO
+}
+
 void finishListen()
 {
 	// TODO
@@ -103,18 +108,19 @@ void *timewheel(void *arg)
 
     while (1) {
         lockCommands();
-        cpyques(selfCmnCommand(),selfTwCommand(),3);
+        cpyuseCmnCommand(); cpyallTwCommand(3);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();	
 
         lockTimewheels();
-        cpyques(selfCoefficient(),selfCmnCoefficient(),7);
+        cpyuseCoefficient(); cpyallCmnCoefficient(7);
         unlockTimewheels();
 
         int done = 0;
         while (sizeControl() > 0) {
         	SWITCH(*delocControl(1),Listen) startListen();
         	CASE(Source) startSource();
+            CASE(Start) startState();
         	CASE(Finish) done = 1;
         	DEFAULT(exitErrstr("time too control\n");)}
         if (done) break;

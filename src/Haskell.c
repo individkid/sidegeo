@@ -32,7 +32,7 @@ void setupEventMap()
     int len = sizeof(eventName)/sizeof(eventName[0]);
     enlocEventMap(Acknowledge);
     for (int i = 0; i < sizeEventName(); i++)
-    for (int j = 0; j < len; j++) {referName(useEventName(i));
+    for (int j = 0; j < len; j++) {useEventName(i); referName();
     if (strcmp(*arrayName(0,sizeName()),eventName[j]) == 0) *arrayEventMap(eventEnum[j],1) = i;}
 }
 
@@ -43,7 +43,7 @@ void setupKindMap()
     int len = sizeof(kindName)/sizeof(kindName[0]);
     enlocKindMap(Kinds);
     for (int i = 0; i < sizeKindName(); i++)
-    for (int j = 0; j < len; j++) {referName(useKindName(i));
+    for (int j = 0; j < len; j++) {useKindName(i); referName();
     if (strcmp(*arrayName(0,sizeName()),kindName[j]) == 0) *arrayDataMap(kindEnum[j],1) = i;}
 }
 
@@ -54,7 +54,7 @@ void setupDataMap()
     int len = sizeof(dataName)/sizeof(dataName[0]);
     enlocDataMap(Datas);
     for (int i = 0; i < sizeDataName(); i++)
-    for (int j = 0; j < len; j++) {referName(useDataName(i));
+    for (int j = 0; j < len; j++) {useDataName(i); referName();
     if (strcmp(*arrayName(0,sizeName()),dataName[j]) == 0) *arrayDataMap(i,1) = dataEnum[j];}
 }
 
@@ -64,30 +64,30 @@ void *haskell(void *arg)
 
     while (sizeEvent() == 0) {
         lockCommands();
-        cpyques(selfCmnCommand(),selfHsCommand(),4);
+        cpyuseCmnCommand(); cpyallHsCommand(4);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();
 
         lockEvents();
         while (sizeCmnEvent() == 0) waitEvents();
-        cpyques(selfEvent(),selfCmnEvent(),6);
+        cpyuseEvent(); cpyallCmnEvent(6);
         unlockEvents();
 
         while (sizeEvent() > 0 && *arrayEvent(0,1) != Done)
         if (*arrayEvent(0,1) == Acknowledge) {
-            ackques(selfHsCommand(),selfHsCmd(),selfHsInt(),4);
+            cpyuseHsCommand(); cpyackHsCmd(arrayHsInt(0,4),4);
             delocEvent(1);}
         else if (*arrayEvent(0,1) == Upload) {
             delocEvent(1);
             enum Data data = *delocHsData(1);
             int len = *delocHsInt(1);
-            referMeta(useClient(data));
+            useClient(data); referMeta();
             delocMeta(sizeMeta());
             memcpy(enlocMeta(len),delocHsInt(len),len);}
         else if (*arrayEvent(0,1) == Download) {
             delocEvent(1);
             enum Data data = *delocHsData(1);
-            referMeta(useClient(data));
+            useClient(data); referMeta();
             int len = sizeMeta();
             *enlocHsCommand(1) = &download;
             *enlocHsInt(1) = len;
@@ -124,31 +124,31 @@ char *accessChar(int size)
 
 int *place(int index, int size)
 {
-    referMeta(usePlace(index));
+    usePlace(index); referMeta();
     return accessInt(size);
 }
 
 int places(int index)
 {
-    referMeta(usePlace(index));
+    usePlace(index); referMeta();
     return sizeMeta();
 }
 
 int *embed(int index, int size)
 {
-    referMeta(useEmbed(index));
+    useEmbed(index); referMeta();
     return accessInt(size);
 }
 
 int embeds(int index)
 {
-    referMeta(useEmbed(index));
+    useEmbed(index); referMeta();
     return sizeMeta();
 }
 
 int *sideband(int size)
 {
-    referMeta(selfSideband());
+    useSideband(); referMeta();
     return accessInt(size);
 }
 
@@ -159,7 +159,7 @@ int sidebands()
 
 int *correlate(int size)
 {
-    referMeta(selfCorrelate());
+    useCorrelate(); referMeta();
     return accessInt(size);
 }
 
@@ -170,45 +170,45 @@ int correlates()
 
 int *boundary(int index, int size)
 {
-    referMeta(useBoundary(index));
+    useBoundary(index); referMeta();
     return accessInt(size);
 }
 
 int boundaries(int index)
 {
-    referMeta(useBoundary(index));
+    useBoundary(index); referMeta();
     return sizeMeta();
 }
 
 int *client(int index, int size)
 {
     if (index < 0 || index >= sizeDataMap()) exitErrstr("client too data\n");
-    referMeta(useClient(*arrayDataMap(index,1)));
+    useClient(*arrayDataMap(index,1)); referMeta();
     return accessInt(size);
 }
 
 int clients(int index)
 {
     if (index < 0 || index >= sizeDataMap()) exitErrstr("client too data\n");
-    referMeta(useClient(*arrayDataMap(index,1)));
+    useClient(*arrayDataMap(index,1)); referMeta();
     return sizeMeta();
 }
 
 char *eventName(int index, int size)
 {
-    referPseudo(useEventName(index));
+    useEventName(index); referPseudo();
     return accessChar(size);
 }
 
 char *kindName(int index, int size)
 {
-    referPseudo(useKindName(index));
+    useKindName(index); referPseudo();
     return accessChar(size);
 }
 
 char *clientName(int index, int size)
 {
-    referPseudo(useDataName(index));
+    useDataName(index); referPseudo();
     return accessChar(size);
 }
 

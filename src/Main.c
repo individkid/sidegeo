@@ -295,12 +295,6 @@ int main(int argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
 
-    for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->init) (*i->init)();
-    for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->init) (*i->init)();
-    for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->init) (*i->init)();
-    for (struct QueuePtr *i = BEGIN_STUB(Console); i != END_STUB(Console); i = (*i->next)()) if (i->init) (*i->init)();
-    for (struct QueuePtr *i = BEGIN_STUB(Timewheel); i != END_STUB(Timewheel); i = (*i->next)()) if (i->init) (*i->init)();
-
 #ifdef BRINGUP
     enqueCommand(&bringup);
 #endif
@@ -317,17 +311,17 @@ int main(int argc, char **argv)
 
     while (1) {
         lockOutputs();
-        cpyques(selfCmnOutput(),selfCmdOutput(),1);
+        cpyuseCmnOutput(); cpyallCmdOutput(1);
         if (sizeCmnOutput() > 0) signalOutputs();
         unlockOutputs();
 
         lockEvents();
-        cpyques(selfCmnEvent(),selfCmdEvent(),6);
+        cpyuseCmnEvent(); cpyallCmdEvent(6);
         if (sizeCmnEvent() > 0) signalEvents();
         unlockEvents();
 
         lockTimewheels();
-        cpyques(selfCmnChange(),selfCmdChange(),1);
+        cpyuseCmnChange(); cpyallCmdChange(1);
         if (sizeCmnChange() > 0) signalTimewheels();
         unlockTimewheels();
 
@@ -368,11 +362,6 @@ int main(int argc, char **argv)
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
 
-    for (struct QueuePtr *i = BEGIN_STUB(Local); i != END_STUB(Local); i = (*i->next)()) if (i->done) (*i->done)();
-    for (struct QueuePtr *i = BEGIN_STUB(Common); i != END_STUB(Common); i = (*i->next)()) if (i->done) (*i->done)();
-    for (struct QueuePtr *i = BEGIN_STUB(Haskell); i != END_STUB(Haskell); i = (*i->next)()) if (i->done) (*i->done)();
-    for (struct QueuePtr *i = BEGIN_STUB(Console); i != END_STUB(Console); i = (*i->next)()) if (i->done) (*i->done)();
-    for (struct QueuePtr *i = BEGIN_STUB(Timewheel); i != END_STUB(Timewheel); i = (*i->next)()) if (i->done) (*i->done)();
-
     glfwTerminate();
+    return 0;
 }

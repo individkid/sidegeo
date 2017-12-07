@@ -20,8 +20,8 @@
 #include <termios.h>
 #include <unistd.h>
 
-struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
-int validTermios = 0; // for whether to restore before exit
+extern struct termios savedTermios;
+extern int validTermios;
 struct Item item[Menus] = {
     {Menus,Sculpt,0,"Sculpt","display and manipulate polytope"},
     {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
@@ -207,16 +207,16 @@ void backend(char chr)
             // go to line in selected menu indicated by mode
             *enlocLine(1) = mark[mode]; *enlocMatch(1) = 0;}}
     else if (motionof(chr) == Back && depth > 0 && sizeConPtr() > 0) unlocConPtr(1);
-    else if (motionof(chr) == Back && depth > 0 && sizeConPtr() == 0) referConPtr(useEcho(--depth));
+    else if (motionof(chr) == Back && depth > 0 && sizeConPtr() == 0) {useEcho(--depth); referConPtr();}
     else if (motionof(chr) == Back && sizeLine() > 1) {unlocLine(1); unlocMatch(1);}
     else if (motionof(chr) == Back && sizeLine() == 1) writemenu();
-    else if (alphaof(chr) == '\r') referConPtr(useEcho(depth++));
+    else if (alphaof(chr) == '\r') {useEcho(depth++); referConPtr();}
     else if (alphaof(chr) == '\n' && depth > 0) {
         *enlocConPtr(1) = alphaof(chr);
         int len = sizeConPtr();
         writestr(arrayConPtr(0,len));
         if (*arrayConPtr(1,1) == '-') memcpy(enlocConProcess(len),delocConPtr(len),len);
-        referConPtr(useEcho(--depth));}
+        useEcho(--depth); referConPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocConPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
     else if (motionof(chr) == Space) writemenu();
@@ -255,17 +255,17 @@ void *console(void *arg)
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
     while (!done) {
         lockCommands();
-        cpyques(selfCmnCommand(),selfConCommand(),2);
+        cpyuseCmnCommand(); cpyallConCommand(2);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();
 
         lockProcesses();
-        cpyques(selfCmnProcess(),selfConProcess(),1);
+        cpyuseCmnProcess(); cpyallConProcess(1);
         if (sizeCmnProcess() > 0) signalProcesses();
         unlockProcesses();
 
         lockOutputs();
-        cpyques(selfOutput(),selfCmnOutput(),1);
+        cpyuseOutput(); cpyallCmnOutput(1);
         unlockOutputs();
 
         if (sizeOutput() == 0) {

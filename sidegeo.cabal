@@ -45,13 +45,14 @@ executable sculpt
                        random,
                        hint
   hs-source-dirs:      src
-  c-sources:           src/Command.c,
+  c-sources:           src/Queue.cpp,
+                       src/Common.cpp,
+                       src/Command.c,
                        src/Render.c,
                        src/Callback.c,
                        src/Haskell.c,
                        src/Console.c,
                        src/Timewheel.c,
-                       src/Common.cpp,
                        src/Microcode.c,
                        libpqueue/src/pqueue.c
   include-dirs:        libpqueue/src
@@ -61,11 +62,13 @@ executable sculpt
                        glfw,
                        X11,
                        pthread,
-                       portaudio
+                       portaudio,
+                       stdc++
   if os(osx)
     extra-lib-dirs:    /usr/lib
     extra-libraries:   glfw3,
-                       portaudio
+                       portaudio,
+                       stdc++
     frameworks:        Cocoa,
                        OpenGL,
                        IOKit,

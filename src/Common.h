@@ -23,8 +23,6 @@
 
 EXTERNCBEGIN
 
-#include <stdarg.h>
-
 #define BRINGUP
 #define PLANE_DIMENSIONS 3
 #define POINT_DIMENSIONS 3
@@ -155,6 +153,7 @@ struct Change {
 enum Control {
     Listen,
     Source,
+    Start,
     Finish};
 
 void handler(int sig);
@@ -162,9 +161,6 @@ void signalCommands();
 void signalOutputs();
 void signalProcesses();
 void signalTimewheels();
-
-void ackques(struct QueuePtr *dst, struct QueuePtr *src, struct QueuePtr *siz, int num);
-void cpyques(struct QueuePtr *dst, struct QueuePtr *src, int num);
 
 #define DECLARE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...);
@@ -209,7 +205,6 @@ float *invmat(float *u, int n);
 
 EXTERNCEND
 
-DECLARE_STUB0(Common)
 DECLARE_MUTEX(Commands)
 DECLARE_LOCAL(CmnCommand,Command)
 DECLARE_LOCAL(CmnCmdChar,char)
@@ -236,7 +231,6 @@ DECLARE_LOCAL(CmnState,struct State)
 DECLARE_LOCAL(CmnChange,struct Change)
 DECLARE_POINTER(CmnInt,int)
 
-DECLARE_STUB(Local)
 DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(CmdState,int)
 DECLARE_LOCAL(Cluster,int)
@@ -261,7 +255,6 @@ DECLARE_POINTER(MachPtr,Machine)
 DECLARE_POINTER(CharPtr,char)
 DECLARE_POINTER(IntPtr,int)
 
-DECLARE_STUB(Haskell)
 DECLARE_META(Place,int)
 DECLARE_META(Embed,int)
 DECLARE_LOCAL(Sideband,int)
@@ -288,7 +281,6 @@ DECLARE_POINTER(Meta,int)
 DECLARE_POINTER(Pseudo,char)
 DECLARE_POINTER(Name,char *)
 
-DECLARE_STUB(Console)
 DECLARE_LOCAL(ConCommand,Command)
 DECLARE_LOCAL(ConCmdChar,char)
 DECLARE_LOCAL(ConProcess,char)
@@ -298,7 +290,6 @@ DECLARE_LOCAL(Match,int)
 DECLARE_META(Echo,char)
 DECLARE_POINTER(ConPtr,char)
 
-DECLARE_STUB(Timewheel)
 DECLARE_LOCAL(Control,enum Control)
 DECLARE_LOCAL(TwChar,char)
 DECLARE_LOCAL(TwInt,int)
