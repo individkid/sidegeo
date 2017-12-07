@@ -23,34 +23,6 @@
 
 #include "Common.h"
 
-DECLARE_STUB(Haskell)
-DEFINE_META(Place,int,Haskell)
-DEFINE_META(Embed,int,Place)
-DEFINE_LOCAL(Sideband,int,Embed)
-DEFINE_LOCAL(Correlate,int,Sideband)
-DEFINE_META(Boundary,int,Correlate)
-DEFINE_META(Client,int,Boundary)
-DEFINE_META(EventName,char,Client)
-DEFINE_META(KindName,char,EventName)
-DEFINE_META(DataName,char,KindName)
-DEFINE_LOCAL(EventMap,int,DataName)
-DEFINE_LOCAL(KindMap,int,EventMap)
-DEFINE_LOCAL(DataMap,enum Data,KindMap)
-DEFINE_LOCAL(Event,enum Event,DataMap)
-DEFINE_LOCAL(Kind,enum Kind,Event)
-DEFINE_LOCAL(HsCmd,Command,Kind)
-DEFINE_LOCAL(HsChar,char,HsCmd)
-DEFINE_LOCAL(HsInt,int,HsChar)
-DEFINE_LOCAL(HsData,enum Data,HsInt)
-DEFINE_LOCAL(HsCommand,Command,HsData)
-DEFINE_LOCAL(HsCmdChar,char,HsCommand)
-DEFINE_LOCAL(HsCmdInt,int,HsCmdChar)
-DEFINE_LOCAL(HsCmdData,enum Data,HsCmdInt)
-DEFINE_POINTER(Meta,int,HsCmdData)
-DEFINE_POINTER(Pseudo,char,Meta)
-DEFINE_POINTER(Name,char *,Pseudo)
-DEFINE_STUB(Haskell,Name)
-
 void download();
 
 void setupEventMap()

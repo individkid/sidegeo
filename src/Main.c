@@ -43,36 +43,6 @@ extern float aspect;
 extern struct termios savedTermios;
 extern int validTermios;
 
-DECLARE_STUB(Local)
-DEFINE_LOCAL(Defer,int,Local)
-DEFINE_LOCAL(CmdState,int,Defer)
-DEFINE_LOCAL(Cluster,int,CmdState)
-DEFINE_LOCAL(Machine,Machine,Cluster)
-DEFINE_LOCAL(Command,Command,Machine)
-DEFINE_LOCAL(CmdChar,char,Command)
-DEFINE_LOCAL(CmdInt,int,CmdChar)
-DEFINE_LOCAL(CmdData,enum Data,CmdInt)
-DEFINE_LOCAL(Buffer,struct Buffer *,CmdData)
-DEFINE_LOCAL(Render,struct Render,Buffer)
-DEFINE_LOCAL(Option,char *,Render)
-DEFINE_LOCAL(CmdOutput,char,Option)
-DEFINE_LOCAL(CmdEvent,enum Event,CmdOutput)
-DEFINE_LOCAL(CmdKind,enum Kind,CmdEvent)
-DEFINE_LOCAL(CmdHsCmd,Command,CmdKind)
-DEFINE_LOCAL(CmdHsChar,char,CmdHsCmd)
-DEFINE_LOCAL(CmdHsInt,int,CmdHsChar)
-DEFINE_LOCAL(CmdHsData,enum Data,CmdHsInt)
-DEFINE_LOCAL(CmdControl,enum Control,CmdHsData)
-DEFINE_LOCAL(CmdChange,struct Change,CmdControl)
-DEFINE_POINTER(MachPtr,Machine,CmdChange)
-DEFINE_POINTER(CharPtr,char,MachPtr)
-DEFINE_POINTER(IntPtr,int,CharPtr)
-DEFINE_STUB(Local,IntPtr)
-
-DECLARE_STUB(Haskell)
-DECLARE_STUB(Console)
-DECLARE_STUB(Timewheel)
-
 void enqueCommand(Command cmd);
 #ifdef BRINGUP
 void bringup();

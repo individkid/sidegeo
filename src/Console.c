@@ -59,17 +59,6 @@ struct Item item[Menus] = {
     {Performs,Action,2,"Hyperlink","jump through facet to another space"},
     {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
 
-DECLARE_STUB(Console)
-DEFINE_LOCAL(ConCommand,Command,Console)
-DEFINE_LOCAL(ConCmdChar,char,ConCommand)
-DEFINE_LOCAL(ConProcess,char,ConCmdChar)
-DEFINE_LOCAL(Output,char,ConProcess)
-DEFINE_LOCAL(Line,enum Menu,Output)
-DEFINE_LOCAL(Match,int,Line)
-DEFINE_META(Echo,char,Match)
-DEFINE_POINTER(ConPtr,char,Echo)
-DEFINE_STUB(Console,ConPtr)
-
 int esc = 0;
 int inj = 0;
 int last[4] = {0};

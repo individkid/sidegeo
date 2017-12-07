@@ -77,7 +77,12 @@ enum Event {
     Download, // copy from client copy of buffer
     Enumerate, // initialize maps between enum and int
     Done}; // terminate
-enum Kind {Poly,Boundary,Face,Other,Kinds};
+enum Kind {
+    Poly,
+    Boundary,
+    Face,
+    Other,
+    Kinds};
 enum Data {
     PlaneBuf, // per boundary distances above base plane
     VersorBuf, // per boundary base selector
@@ -93,6 +98,35 @@ enum Data {
     Datas};
 
 typedef void (*Command)();
+enum Action {
+    Reque, // be polite to other commands
+    Defer, // wait for other commands engines threads
+    Advance, // go to next command in chain if any
+    Continue, // increment state and call again
+    Terminate // end program
+}; // multi command return value
+typedef enum Action (*Machine) (int state);
+enum Shader { // one value per shader; state for bringup
+    Diplane, // display planes
+    Dipoint, // display points
+    Coplane, // calculate intersections
+    Copoint, // construct planes
+    Adplane, // classify point by planes
+    Adpoint, //  classify plane by points
+    Perplane, // find points that minimize area
+    Perpoint, // points are base of tetrahedron
+    Replane, // reconstruct to versor 0
+    Repoint, // reconstruct from versor 0
+    Shaders};
+struct Render {
+    int draw; // waiting for shader
+    int vertex; // number of input buffers que
+    int element; // primitives per output buffer
+    int feedback; // number of output buffers on que
+    enum Shader shader;
+    int restart;
+    const char *name;
+}; // argument to render functions
 
 struct Nomial {
     int con0;
@@ -115,10 +149,10 @@ struct Change {
     int val; // new value for stock
     int sub; // index of stock for value
 };
-enum Control {Listen,Source,Finish};
-
-extern float invalid[2];
-extern struct Item item[Menus];
+enum Control {
+    Listen,
+    Source,
+    Finish};
 
 DECLARE_STUB0(Common)
 DECLARE_MUTEX(Commands)
@@ -145,6 +179,84 @@ DECLARE_LOCAL(CmnCoefficient,int)
 DECLARE_LOCAL(CmnVariable,int)
 DECLARE_LOCAL(CmnState,struct State)
 DECLARE_LOCAL(CmnChange,struct Change)
+
+DECLARE_STUB(Local)
+DECLARE_LOCAL(Defer,int)
+DECLARE_LOCAL(CmdState,int)
+DECLARE_LOCAL(Cluster,int)
+DECLARE_LOCAL(Machine,Machine)
+DECLARE_LOCAL(Command,Command)
+DECLARE_LOCAL(CmdChar,char)
+DECLARE_LOCAL(CmdInt,int)
+DECLARE_LOCAL(CmdData,enum Data)
+DECLARE_LOCAL(Buffer,struct Buffer *)
+DECLARE_LOCAL(Render,struct Render)
+DECLARE_LOCAL(Option,char *)
+DECLARE_LOCAL(CmdOutput,char)
+DECLARE_LOCAL(CmdEvent,enum Event)
+DECLARE_LOCAL(CmdKind,enum Kind)
+DECLARE_LOCAL(CmdHsCmd,Command)
+DECLARE_LOCAL(CmdHsChar,char)
+DECLARE_LOCAL(CmdHsInt,int)
+DECLARE_LOCAL(CmdHsData,enum Data)
+DECLARE_LOCAL(CmdControl,enum Control)
+DECLARE_LOCAL(CmdChange,struct Change)
+DECLARE_POINTER(MachPtr,Machine)
+DECLARE_POINTER(CharPtr,char)
+DECLARE_POINTER(IntPtr,int)
+
+DECLARE_STUB(Haskell)
+DECLARE_META(Place,int)
+DECLARE_META(Embed,int)
+DECLARE_LOCAL(Sideband,int)
+DECLARE_LOCAL(Correlate,int)
+DECLARE_META(Boundary,int)
+DECLARE_META(Client,int)
+DECLARE_META(EventName,char)
+DECLARE_META(KindName,char)
+DECLARE_META(DataName,char)
+DECLARE_LOCAL(EventMap,int)
+DECLARE_LOCAL(KindMap,int)
+DECLARE_LOCAL(DataMap,enum Data)
+DECLARE_LOCAL(Event,enum Event)
+DECLARE_LOCAL(Kind,enum Kind)
+DECLARE_LOCAL(HsCmd,Command)
+DECLARE_LOCAL(HsChar,char)
+DECLARE_LOCAL(HsInt,int)
+DECLARE_LOCAL(HsData,enum Data)
+DECLARE_LOCAL(HsCommand,Command)
+DECLARE_LOCAL(HsCmdChar,char)
+DECLARE_LOCAL(HsCmdInt,int)
+DECLARE_LOCAL(HsCmdData,enum Data)
+DECLARE_POINTER(Meta,int)
+DECLARE_POINTER(Pseudo,char)
+DECLARE_POINTER(Name,char *)
+
+DECLARE_STUB(Console)
+DECLARE_LOCAL(ConCommand,Command)
+DECLARE_LOCAL(ConCmdChar,char)
+DECLARE_LOCAL(ConProcess,char)
+DECLARE_LOCAL(Output,char)
+DECLARE_LOCAL(Line,enum Menu)
+DECLARE_LOCAL(Match,int)
+DECLARE_META(Echo,char)
+DECLARE_POINTER(ConPtr,char)
+
+DECLARE_STUB(Timewheel)
+DECLARE_LOCAL(Control,enum Control)
+DECLARE_LOCAL(TwChar,char)
+DECLARE_LOCAL(TwInt,int)
+DECLARE_LOCAL(Coefficient,int)
+DECLARE_LOCAL(Variable,int)
+DECLARE_LOCAL(State,struct State)
+DECLARE_LOCAL(Change,struct Change)
+DECLARE_PRIORITY(Time,int)
+DECLARE_PRIORITY(Wheel,struct Change)
+DECLARE_META(Wave,int)
+DECLARE_POINTER(Pipe,int)
+DECLARE_LOCAL(TwCommand,Command)
+DECLARE_LOCAL(TwCmdChar,int)
+DECLARE_LOCAL(TwCmdInt,int)
 
 void handler(int sig);
 void signalCommands();

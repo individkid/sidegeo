@@ -21,23 +21,6 @@
 #include "Common.h"
 #include <unistd.h>
 
-DECLARE_STUB(Timewheel)
-DEFINE_LOCAL(Control,enum Control,Timewheel)
-DEFINE_LOCAL(TwChar,char,Control)
-DEFINE_LOCAL(TwInt,int,TwChar)
-DEFINE_LOCAL(Coefficient,int,TwInt)
-DEFINE_LOCAL(Variable,int,Coefficient)
-DEFINE_LOCAL(State,struct State,Variable)
-DEFINE_LOCAL(Change,struct Change,State)
-DEFINE_PRIORITY(Time,int,Change)
-DEFINE_PRIORITY(Wheel,struct Change,Time)
-DEFINE_META(Wave,int,Wheel)
-DEFINE_POINTER(Pipe,int,Wave)
-DEFINE_LOCAL(TwCommand,Command,Pipe)
-DEFINE_LOCAL(TwCmdChar,int,TwCommand)
-DEFINE_LOCAL(TwCmdInt,int,TwCmdChar)
-DEFINE_STUB(Timewheel,TwCmdInt)
-
 void startListen()
 {
 	// TODO

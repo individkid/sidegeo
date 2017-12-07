@@ -71,13 +71,15 @@ void reloc##NAME(int siz); \
 int size##NAME(); \
 TYPE *array##NAME(int sub, int siz);
 
-#define DECLARE_META(NAME,TYPE,NEXT) \
+#define DECLARE_META(NAME,TYPE) \
 struct QueuePtr *self##NAME(); \
-struct QueuePtr *use##NAME(int sub);
+struct QueuePtr *use##NAME(int sub); \
+int size##NAME();
 
 #define DECLARE_POINTER(NAME,TYPE) \
 struct NAME##Struct **pointer##NAME(); \
-void refer##NAME(struct QueuePtr *ptr);
+void refer##NAME(struct QueuePtr *ptr); \
+DECLARE_LOCAL(NAME,TYPE)
 
 #define DECLARE_LINK(NAME) \
 struct QueuePtr *self##NAME(); \
@@ -99,7 +101,8 @@ TYPE *cast##NAME(int sub);
 struct QueuePtr *self##NAME(); \
 TYPE *schedule##NAME(pqueue_pri_t pri); \
 TYPE *advance##NAME(); \
-int ready##NAME(pqueue_pri_t pri);
+int ready##NAME(pqueue_pri_t pri); \
+pqueue_pri_t when##NAME();
 
 #define QUEUE_STRUCT(NAME,TYPE) \
 struct NAME##Struct { \
@@ -377,8 +380,8 @@ void done##NAME() \
 \
 struct QueuePtr *use##NAME(int sub) \
 { \
-    struct NAME##MetaStruct inst = {.self = { \
-        .type = NAME##Type}}; \
+    struct NAME##MetaStruct inst = {0}; \
+    inst.self.type = NAME##Type; \
     while (sub >= size##NAME()) *enloc##NAME(1) = inst; \
     return &array##NAME(sub,1)->self; \
 }

@@ -21,6 +21,7 @@
 extern GLFWwindow *windowHandle;
 extern struct Buffer server[Datas];
 extern struct Code code[Shaders];
+extern float invalid[2];
 extern float xPos;
 extern float yPos;
 extern float zPos;
