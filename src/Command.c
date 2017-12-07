@@ -18,9 +18,6 @@
 
 #include "Main.h"
 
-#ifdef __linux__
-extern Display *displayHandle;
-#endif
 extern GLFWwindow *windowHandle;
 extern struct Buffer server[Datas];
 extern enum Menu mode[Modes];

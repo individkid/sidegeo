@@ -95,16 +95,20 @@ EXTERNC pqueue_pri_t when##NAME();
 
 struct QueueMutex {
     pthread_mutex_t mutex;
-    QueueMutex() {
+    QueueMutex()
+    {
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
-    ~QueueMutex() {
+    ~QueueMutex()
+    {
         if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
     }
-    void lock() {
+    void lock()
+    {
         if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     }
-    void unlock() {
+    void unlock()
+    {
         if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
     }
 };
@@ -117,11 +121,13 @@ extern "C" void unlock##NAME() {NAME##Inst.unlock();}
 struct QueueCond {
     pthread_mutex_t mutex;
     pthread_cond_t cond;
-    QueueCond() {
+    QueueCond()
+    {
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
-    ~QueueCond() {
+    ~QueueCond()
+    {
         if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
         if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
     }
@@ -221,7 +227,8 @@ template<class TYPE> struct QueueStruct : QueueBase {
         head = 0;
         tail = 0;
     }
-    virtual ~QueueStruct() {
+    virtual ~QueueStruct()
+    {
         if (base) delete[] base;
     }
     TYPE *enloc(int siz)
@@ -312,7 +319,8 @@ extern "C" void cpyack##NAME(int *siz, int num) {NAME##Inst.cpyack(siz,num);}
 template<class TYPE> struct QueueMeta {
     QueueStruct<QueueStruct<TYPE> > meta;
     QueueMeta() {}
-    ~QueueMeta() {
+    ~QueueMeta()
+    {
         for (int i = 0; i < meta.size(); i++)
         if (meta.array(i,1)->base) delete[] meta.array(i,1)->base;
     }
@@ -323,7 +331,8 @@ template<class TYPE> struct QueueMeta {
             *meta.enloc(1) = inst;}
         QueueStruct<TYPE>::src = meta.array(sub,1);
     }
-    int size() {
+    int size()
+    {
         return meta.size();
     }
 };
@@ -335,11 +344,13 @@ extern "C" int size##NAME() {return NAME##Inst.size();}
 
 template<class TYPE> struct QueuePointer {
     QueueStruct<TYPE> *ptr;
-    QueuePointer() {
+    QueuePointer()
+    {
         ptr = 0;
     }
     ~QueuePointer() {}
-    void refer() {
+    void refer()
+    {
         ptr = QueueStruct<TYPE>::src;
         if (ptr == 0) exitErrstr("refer too ptr\n");
         QueueStruct<TYPE>::src = 0;
@@ -459,17 +470,17 @@ extern "C" int alloc##NAME() {return NAME##Inst.alloc();} \
 extern "C" void free##NAME(int sub) {NAME##Inst.free(sub);} \
 extern "C" TYPE *cast##NAME(int sub) {return NAME##Inst.cast(sub);}
 
-struct Pqueue {
-    int val; // subscript into a buffer
+template<class TYPE> struct Pqueue {
+    TYPE val; // subscript into a buffer
     pqueue_pri_t pri; // when action scheduled
-    size_t pos;}; // used by pqueue
+    size_t pos; // used by pqueue
+};
 
 #define PQUEUE_STEP 100
 
 template<class TYPE> struct QueuePriority {
-    QueuePool<TYPE> pool;
-    QueuePool<Pqueue> pqueue;
-    pqueue_t *priority; \
+    QueuePool<Pqueue<TYPE> > pool;
+    pqueue_t *pqueue;
     QueuePriority(
         pqueue_cmp_pri_f cmppri,
         pqueue_get_pri_f getpri,
@@ -477,11 +488,11 @@ template<class TYPE> struct QueuePriority {
         pqueue_get_pos_f getpos,
         pqueue_set_pos_f setpos)
     {
-        priority = pqueue_init(PQUEUE_STEP,cmppri,getpri,setpri,getpos,setpos);
+        pqueue = pqueue_init(PQUEUE_STEP,cmppri,getpri,setpri,getpos,setpos);
     }
     ~QueuePriority()
     {
-        pqueue_free(priority);
+        pqueue_free(pqueue);
     }
     void *int2void(int val)
     {
@@ -495,13 +506,11 @@ template<class TYPE> struct QueuePriority {
     }
     pqueue_pri_t get_pri(void *sub)
     {
-        struct Pqueue *pq = pqueue.cast(void2int(sub));
-        return pq->pri;
+        return pool.cast(void2int(sub))->pri;
     }
     void set_pri(void *sub, pqueue_pri_t pri)
     {
-        struct Pqueue *pq = pqueue.cast(void2int(sub));
-        pq->pri = pri;
+        pool.cast(void2int(sub))->pri = pri;
     }
     int cmp_pri(pqueue_pri_t next, pqueue_pri_t curr)
     {
@@ -509,63 +518,56 @@ template<class TYPE> struct QueuePriority {
     }
     size_t get_pos(void *sub)
     {
-        struct Pqueue *pq = pqueue.cast(void2int(sub));
-        return pq->pos;
+        return pool.cast(void2int(sub))->pos;
     }
     void set_pos(void *sub, size_t pos)
     {
-        struct Pqueue *pq = pqueue.cast(void2int(sub));
-        pq->pos = pos;
+        pool.cast(void2int(sub))->pos = pos;
     }
     void print_entry(FILE *out, void *sub)
     {
-        struct Pqueue *pq = pqueue.cast(void2int(sub));
-        fprintf(out,"pri %llu pos %lu val %d\n",pq->pri,pq->pos,pq->val);
+        Pqueue<TYPE> *pq = pool.cast(void2int(sub));
+        fprintf(out,"pri %llu pos %lu\n",pq->pri,pq->pos);
     }
     TYPE *schedule(pqueue_pri_t pri)
     {
-        int sub = pqueue.alloc();
-        int val = pool.alloc();
-        struct Pqueue *pq = pqueue.cast(sub);
-        pq->pri = pri;
-        pq->val = val;
-        pqueue_insert(priority,int2void(sub));
-        return pool.cast(val);
+        int sub = pool.alloc();
+        pool.cast(sub)->pri = pri;
+        pqueue_insert(pqueue,int2void(sub));
+        return &pool.cast(sub)->val;
     }
     TYPE *advance()
     {
-        int sub = void2int(pqueue_pop(priority));
-        int val = pqueue.cast(sub)->val;
-        pqueue.free(sub);
-        pool.free(val);
-        return pool.cast(val);
+        int sub = void2int(pqueue_pop(pqueue));
+        pool.free(sub);
+        return &pool.cast(sub)->val;
     }
     int ready(pqueue_pri_t pri)
     {
-        int sub = void2int(pqueue_peek(priority));
-        return cmp_pri(pqueue.cast(sub)->pri,pri);
+        int sub = void2int(pqueue_peek(pqueue));
+        return cmp_pri(pool.cast(sub)->pri,pri);
     }
     pqueue_pri_t when()
     {
-        int sub = void2int(pqueue_peek(priority));
-        return pqueue.cast(sub)->pri;
+        int sub = void2int(pqueue_peek(pqueue));
+        return pool.cast(sub)->pri;
     }
 };
 
 #define DEFINE_PRIORITY(NAME,TYPE) \
-extern "C" pqueue_pri_t NAME##_get_pri(void *sub); \
-extern "C" void NAME##_set_pri(void *sub, pqueue_pri_t pri); \
-extern "C" int NAME##_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr); \
-extern "C" size_t NAME##_get_pos(void *sub); \
-extern "C" void NAME##_set_pos(void *sub, size_t pos); \
-extern "C" void NAME##_print_entry(FILE *out, void *sub); \
-QueuePriority<TYPE> NAME##Inst = QueuePriority<TYPE>(&NAME##_cmp_pri,&NAME##_get_pri,&NAME##_set_pri,&NAME##_get_pos,&NAME##_set_pos); \
-extern "C" pqueue_pri_t NAME##_get_pri(void *sub) {return NAME##Inst.get_pri(sub);} \
-extern "C" void NAME##_set_pri(void *sub, pqueue_pri_t pri) {NAME##Inst.set_pri(sub,pri);} \
-extern "C" int NAME##_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr) {return NAME##Inst.cmp_pri(next,curr);} \
-extern "C" size_t NAME##_get_pos(void *sub) {return NAME##Inst.get_pos(sub);} \
-extern "C" void NAME##_set_pos(void *sub, size_t pos) {return NAME##Inst.set_pos(sub,pos);} \
-extern "C" void NAME##_print_entry(FILE *out, void *sub) {NAME##Inst.print_entry(out,sub);} \
+extern "C" pqueue_pri_t get_pri_##NAME(void *sub); \
+extern "C" void set_pri_##NAME(void *sub, pqueue_pri_t pri); \
+extern "C" int cmp_pri_##NAME(pqueue_pri_t next, pqueue_pri_t curr); \
+extern "C" size_t get_pos_##NAME(void *sub); \
+extern "C" void set_pos_##NAME(void *sub, size_t pos); \
+extern "C" void print_entry_##NAME(FILE *out, void *sub); \
+QueuePriority<TYPE> NAME##Inst = QueuePriority<TYPE>(&cmp_pri_##NAME,&get_pri_##NAME,&set_pri_##NAME,&get_pos_##NAME,&set_pos_##NAME); \
+extern "C" pqueue_pri_t get_pri_##NAME(void *sub) {return NAME##Inst.get_pri(sub);} \
+extern "C" void set_pri_##NAME(void *sub, pqueue_pri_t pri) {NAME##Inst.set_pri(sub,pri);} \
+extern "C" int cmp_pri_##NAME(pqueue_pri_t next, pqueue_pri_t curr) {return NAME##Inst.cmp_pri(next,curr);} \
+extern "C" size_t get_pos_##NAME(void *sub) {return NAME##Inst.get_pos(sub);} \
+extern "C" void set_pos_##NAME(void *sub, size_t pos) {return NAME##Inst.set_pos(sub,pos);} \
+extern "C" void print_entry_##NAME(FILE *out, void *sub) {NAME##Inst.print_entry(out,sub);} \
 extern "C" TYPE *schedule##NAME(pqueue_pri_t pri) {return NAME##Inst.schedule(pri);} \
 extern "C" TYPE *advance##NAME() {return NAME##Inst.advance();} \
 extern "C" int ready##NAME(pqueue_pri_t pri) {return NAME##Inst.ready(pri);} \
