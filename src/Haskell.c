@@ -64,13 +64,13 @@ void *haskell(void *arg)
 
     while (sizeEvent() == 0) {
         lockCommands();
-        cpyuseCmnCommand(); cpyallHsCommand(4);
+        cpyuseHsCommand(); cpyallCmnCommand(4);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();
 
         lockEvents();
         while (sizeCmnEvent() == 0) waitEvents();
-        cpyuseEvent(); cpyallCmnEvent(6);
+        cpyuseCmnEvent(); cpyallEvent(6);
         unlockEvents();
 
         while (sizeEvent() > 0 && *arrayEvent(0,1) != Done)
@@ -98,7 +98,8 @@ void *haskell(void *arg)
             setupEventMap();
             setupKindMap();
             setupDataMap();}
-        else if (handleEvent() != 0) exitErrstr("haskell return true\n");}
+        else if (handleEvent() != 0) exitErrstr("haskell return true\n");
+    }
 
     hs_exit();
     return 0;

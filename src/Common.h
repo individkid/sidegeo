@@ -157,6 +157,20 @@ enum Control {
     Start,
     Finish};
 
+enum Role { // state that process is in for each file
+    Attempt, // still reading before end of file
+    Allow, // wait for other files to yield or end
+    Maintain, // owner waits for others to offer appends
+    Direct, // owner attempts to append and accept
+    Monitor, // non-owner waits for owner to accept appends
+    Offer, // non-owner attempts to append
+    Accept}; // owner allows read of append
+struct File {
+    enum Role role; // state process is in for this file
+    int desc; // descriptor for open file
+    char *name; // for subsequently identifying file
+};
+
 void handler(int sig);
 void signalCommands();
 void signalOutputs();
@@ -215,6 +229,7 @@ DECLARE_MUTEX(Outputs)
 DECLARE_LOCAL(CmnOutput,char)
 DECLARE_MUTEX(Processes)
 DECLARE_LOCAL(CmnProcess,char)
+DECLARE_LOCAL(Option,char *)
 DECLARE_COND(Events)
 DECLARE_LOCAL(CmnEvent,enum Event)
 DECLARE_LOCAL(CmnKind,enum Kind)
@@ -242,7 +257,6 @@ DECLARE_LOCAL(CmdInt,int)
 DECLARE_LOCAL(CmdData,enum Data)
 DECLARE_LOCAL(Buffer,struct Buffer *)
 DECLARE_LOCAL(Render,struct Render)
-DECLARE_LOCAL(Option,char *)
 DECLARE_LOCAL(CmdOutput,char)
 DECLARE_LOCAL(CmdEvent,enum Event)
 DECLARE_LOCAL(CmdKind,enum Kind)
@@ -250,7 +264,6 @@ DECLARE_LOCAL(CmdHsCmd,Command)
 DECLARE_LOCAL(CmdHsChar,char)
 DECLARE_LOCAL(CmdHsInt,int)
 DECLARE_LOCAL(CmdHsData,enum Data)
-DECLARE_LOCAL(CmdControl,enum Control)
 DECLARE_LOCAL(CmdChange,struct Change)
 DECLARE_POINTER(MachPtr,Machine)
 DECLARE_POINTER(CharPtr,char)
@@ -305,5 +318,20 @@ DECLARE_POINTER(Pipe,int)
 DECLARE_LOCAL(TwCommand,Command)
 DECLARE_LOCAL(TwCmdChar,int)
 DECLARE_LOCAL(TwCmdInt,int)
+
+DECLARE_LOCAL(File,struct File)
+DECLARE_LOCAL(ProChar,char)
+DECLARE_LOCAL(Process,char)
+DECLARE_LOCAL(Inject,char)
+DECLARE_LOCAL(ProCommand,Command)
+DECLARE_LOCAL(ProCmdChar,char)
+DECLARE_LOCAL(ProCmdInt,int)
+DECLARE_LOCAL(ProCmdData,enum Data)
+DECLARE_LOCAL(ProControl,enum Control)
+DECLARE_LOCAL(ProTwChar,char)
+DECLARE_LOCAL(ProTwInt,int)
+DECLARE_LOCAL(ProCoefficient,int)
+DECLARE_LOCAL(ProVariable,int)
+DECLARE_LOCAL(ProState,struct State)
 
 #endif

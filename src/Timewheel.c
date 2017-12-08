@@ -111,12 +111,12 @@ void *timewheel(void *arg)
 
     while (1) {
         lockCommands();
-        cpyuseCmnCommand(); cpyallTwCommand(3);
+        cpyuseTwCommand(); cpyallCmnCommand(3);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();	
 
         lockTimewheels();
-        cpyuseCoefficient(); cpyallCmnCoefficient(7);
+        cpyuseCmnCoefficient(); cpyallCoefficient(3);
         unlockTimewheels();
 
         int done = 0;
@@ -163,7 +163,8 @@ void *timewheel(void *arg)
         if (time < wheel) setTime(&delay,time-current); else setTime(&delay,wheel-current);
         int retval = pselect(0, 0, 0, 0, &delay, &saved);
         if (retval < 0 && errno == EINTR) break;
-        if (retval != 0) exitErrstr("pselect returned error\n");}}
+        if (retval != 0) exitErrstr("pselect returned error\n");
+    }}
 
     finishListen();
     finishSource();

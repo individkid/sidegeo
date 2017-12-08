@@ -258,24 +258,25 @@ void *console(void *arg)
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
     while (!done) {
         lockCommands();
-        cpyuseCmnCommand(); cpyallConCommand(2);
+        cpyuseConCommand(); cpyallCmnCommand(2);
         if (sizeCmnCommand() > 0) signalCommands();
         unlockCommands();
 
         lockProcesses();
-        cpyuseCmnProcess(); cpyallConProcess(1);
+        cpyuseConProcess(); cpyallCmnProcess(1);
         if (sizeCmnProcess() > 0) signalProcesses();
         unlockProcesses();
 
         lockOutputs();
-        cpyuseOutput(); cpyallCmnOutput(1);
+        cpyuseCmnOutput(); cpyallOutput(1);
         unlockOutputs();
 
         if (sizeOutput() == 0) {
             if (checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;
             frontend(readchr()); while (checkfds(STDIN_FILENO+1,&fds,&nodelay,0)) frontend(readchr());}
 
-        while (sizeOutput()) backend(*delocOutput(1));}
+        while (sizeOutput()) backend(*delocOutput(1));
+    }
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
 

@@ -307,17 +307,17 @@ int main(int argc, char **argv)
 
     while (1) {
         lockOutputs();
-        cpyuseCmnOutput(); cpyallCmdOutput(1);
+        cpyuseCmdOutput(); cpyallCmnOutput(1);
         if (sizeCmnOutput() > 0) signalOutputs();
         unlockOutputs();
 
         lockEvents();
-        cpyuseCmnEvent(); cpyallCmdEvent(6);
+        cpyuseCmdEvent(); cpyallCmnEvent(6);
         if (sizeCmnEvent() > 0) signalEvents();
         unlockEvents();
 
         lockTimewheels();
-        cpyuseCmnChange(); cpyallCmdChange(1);
+        cpyuseCmdChange(); cpyallCmnChange(1);
         if (sizeCmnChange() > 0) signalTimewheels();
         unlockTimewheels();
 
@@ -349,7 +349,8 @@ int main(int argc, char **argv)
             CASE(Terminate) done = 3;
             DEFAULT(exitErrstr("invalid machine action\n");)
             if (done) {done--; break;}} if (done) {done--; break;}}
-        if (done) {done--; break;}}
+        if (done) {done--; break;}
+    }
 
     lockEvents(); *enlocCmnEvent(1) = Done; unlockEvents();
     lockOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockOutputs();
