@@ -18,8 +18,6 @@
 
 #include "Queue.h"
 
-QueueBase *QueueBase::cpy = 0;
-
 EXTERNCBEGIN
 
 #include <termios.h>

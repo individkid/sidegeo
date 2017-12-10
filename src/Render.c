@@ -29,7 +29,6 @@ extern float zPos;
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
 void enqueCommand(Command cmd);
-
 DEFINE_MSGSTR(CmdOutput)
 
 size_t bufferType(int size)

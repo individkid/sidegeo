@@ -50,6 +50,17 @@ EXTERNC void unlock##NAME(); \
 EXTERNC void wait##NAME(); \
 EXTERNC void signal##NAME();
 
+#define DECLARE_SOURCE(NAME) \
+EXTERNC void copy##NAME(); \
+EXTERNC void ack##NAME(int *siz);
+
+#define DECLARE_DEST(NAME) \
+EXTERNC void copy##NAME(); \
+EXTERNC void ack##NAME(int *siz);
+
+#define DECLARE_WAIT(NAME) \
+EXTERNC void copy##NAME();
+
 #define DECLARE_LOCAL(NAME,TYPE) \
 EXTERNC TYPE *enloc##NAME(int siz); \
 EXTERNC TYPE *deloc##NAME(int siz); \
@@ -58,10 +69,30 @@ EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int size##NAME(); \
 EXTERNC void use##NAME(); \
-EXTERNC void copy##NAME(int siz); \
-EXTERNC void cpyuse##NAME(); \
-EXTERNC void cpyall##NAME(int num); \
-EXTERNC void cpyack##NAME(int *siz, int num);
+EXTERNC void copy##NAME(int siz);
+
+#define DECLARE_STAGE(NAME,TYPE) \
+EXTERNC TYPE *enloc##NAME(int siz); \
+EXTERNC TYPE *deloc##NAME(int siz); \
+EXTERNC TYPE *unloc##NAME(int siz); \
+EXTERNC void reloc##NAME(int siz); \
+EXTERNC TYPE *array##NAME(int sub, int siz); \
+EXTERNC int size##NAME(); \
+EXTERNC void use##NAME(); \
+EXTERNC void copy##NAME(int siz);
+
+#define DECLARE_HUB(NAME) \
+EXTERNC void extend##NAME(void *(*func)(void *)); \
+EXTERNC void lock##NAME(); \
+EXTERNC void unlock##NAME();
+
+#define DECLARE_THREAD(NAME,TYPE) \
+EXTERNC TYPE *enloc##NAME(int idx, int siz); \
+EXTERNC TYPE *deloc##NAME(int idx, int siz); \
+EXTERNC TYPE *unloc##NAME(int idx, int siz); \
+EXTERNC void reloc##NAME(int idx, int siz); \
+EXTERNC TYPE *array##NAME(int idx, int sub, int siz); \
+EXTERNC int size##NAME(int idx);
 
 #define DECLARE_META(NAME,TYPE) \
 EXTERNC void use##NAME(int sub); \
@@ -93,10 +124,44 @@ EXTERNC pqueue_pri_t when##NAME();
 
 #ifdef __cplusplus
 
+struct QueueBase {
+    QueueBase *next;
+    QueueBase()
+    {
+        next = 0;
+    }
+    QueueBase(QueueBase *ptr)
+    {
+        ptr->next = this;
+        next = 0;
+    }
+    virtual ~QueueBase() {}
+    virtual int size() = 0;
+    virtual void copy(int siz) = 0;
+    virtual void use() = 0;
+};
+
 struct QueueMutex {
+    QueueBase *next;
     pthread_mutex_t mutex;
+    void (*func0)();
+    void (*func1)();
     QueueMutex()
     {
+        func0 = 0;
+        func1 = 0;
+        if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    }
+    QueueMutex(void (*fnc)())
+    {
+        func0 = fnc;
+        func1 = 0;
+        if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    }
+    QueueMutex(void (*fnc0)(), void (*fnc1)())
+    {
+        func0 = fnc0;
+        func1 = fnc1;
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
     ~QueueMutex()
@@ -111,33 +176,38 @@ struct QueueMutex {
     {
         if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
     }
+    void source()
+    {
+        if (func0) (*func0)();
+    }
+    void dest()
+    {
+        if (func1) (*func1)();
+    }
 };
 
-#define DEFINE_MUTEX(NAME) \
-QueueMutex NAME##Inst = QueueMutex(); \
+#define DEFINE_MUTEX(NAME,FUNC) \
+QueueMutex NAME##Inst = QueueMutex(FUNC); \
 extern "C" void lock##NAME() {NAME##Inst.lock();} \
-extern "C" void unlock##NAME() {NAME##Inst.unlock();}
+extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 
-struct QueueCond {
-    pthread_mutex_t mutex;
+struct QueueCond : QueueMutex {
     pthread_cond_t cond;
-    QueueCond()
+    QueueCond() : QueueMutex()
     {
-        if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+        if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    }
+    QueueCond(void (*fnc)()) : QueueMutex(fnc)
+    {
+        if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    }
+    QueueCond(void (*fnc0)(), void (*fnc1)()) : QueueMutex(fnc0,fnc1)
+    {
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
     ~QueueCond()
     {
-        if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
         if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
-    }
-    void lock()
-    {
-        if (pthread_mutex_lock(&mutex) != 0) exitErrstr("cond lock failed: %s\n",strerror(errno));
-    }
-    void unlock()
-    {
-        if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("cond unlock failed: %s\n",strerror(errno));
     }
     void wait()
     {
@@ -149,61 +219,118 @@ struct QueueCond {
     }
 };
 
-#define DEFINE_COND(NAME) \
-QueueCond NAME##Inst = QueueCond(); \
+#define DEFINE_COND(NAME,FUNC) \
+QueueCond NAME##Inst = QueueCond(FUNC); \
 extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 extern "C" void wait##NAME() {NAME##Inst.wait();} \
-extern "C" void signal##NAME() {NAME##Inst.signal();}
+extern "C" void signal##NAME() {NAME##Inst.signal();} \
 
-struct QueueBase {
-    static QueueBase *cpy;
+struct QueueSource {
     QueueBase *next;
-    QueueBase()
+    QueueMutex *mutex;
+    QueueSource(QueueMutex *ptr)
     {
+        mutex = ptr;
         next = 0;
     }
-    QueueBase(QueueBase *ptr)
+    void copy()
     {
-        ptr->next = this;
-        next = 0;
+        mutex->lock();
+        QueueBase *source = next;
+        QueueBase *dest = mutex->next;
+        while (source) {
+        if (dest == 0) exitErrstr("copy too ptr\n");
+        source->use(); dest->copy(dest->size()); mutex->source();
+        source = source->next; dest = dest->next;}
+        mutex->unlock();
     }
-    virtual ~QueueBase() {}
-    virtual int size() = 0;
-    virtual void use() = 0;
-    virtual void copy(int siz) = 0;
-    void cpyuse()
+    void ack(int *siz)
     {
-        if (cpy != 0) exitErrstr("use too ptr\n");
-        cpy = this;
-    }
-    void cpyall(int num)
-    {
-        if (cpy == 0) exitErrstr("cpyall too ptr\n");
-        cpy->use(); copy(size());
-        if (num > 0 && next == 0) exitErrstr("base too next\n");
-        if (num > 0) {cpy = cpy->next; next->cpyall(num-1);}
-        else cpy = 0;
-    }
-    void cpyack(int *siz, int num)
-    {
-        if (cpy == 0) exitErrstr("cpyack too ptr\n");
-        cpy->use(); copy(*siz);
-        if (num > 0 && next == 0) exitErrstr("base too next\n");
-        if (num > 0) {cpy = cpy->next; next->cpyack(siz+1,num-1);}
-        else cpy = 0;
+        mutex->lock();
+        QueueBase *source = next;
+        QueueBase *dest = mutex->next;
+        while (source) {
+        if (dest == 0) exitErrstr("copy too ptr\n");
+        source->use(); dest->copy(*siz); mutex->source();
+        source = source->next; dest = dest->next;}
+        mutex->unlock();
     }
 };
 
-struct QueueStub : QueueBase {
-    QueueStub() : QueueBase() {}
-    virtual ~QueueStub() {}
-    virtual int size() {return 0;}
-    virtual void use() {}
-    virtual void copy(int siz) {}
+#define DEFINE_SOURCE(NAME,NEXT) \
+QueueSource NAME##Inst = QueueSource(&NEXT##Inst); \
+extern "C" void copy##NAME() {NAME##Inst.copy();} \
+extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
+
+struct QueueDest {
+    QueueBase *next;
+    QueueMutex *mutex;
+    QueueDest(QueueMutex *ptr)
+    {
+        mutex = ptr;
+        next = 0;
+    }
+    void copy()
+    {
+        if (mutex == 0) exitErrstr("source too mutex\n");
+        mutex->lock();
+        QueueBase *source = mutex->next;
+        QueueBase *dest = next;
+        while (dest) {
+        if (source == 0) exitErrstr("copy too ptr\n");
+        source->use(); dest->copy(dest->size()); mutex->dest();
+        source = source->next; dest = dest->next;}
+        mutex->unlock();
+    }
+    void ack(int *siz)
+    {
+        if (mutex == 0) exitErrstr("source too mutex\n");
+        mutex->lock();
+        QueueBase *source = mutex->next;
+        QueueBase *dest = next;
+        while (dest) {
+        if (source == 0) exitErrstr("copy too ptr\n");
+        if (source == 0 || dest == 0) exitErrstr("copy too ptr\n");
+        source->use(); dest->copy(*siz); mutex->dest();
+        source = source->next; dest = dest->next;}
+        mutex->unlock();
+    }
 };
 
-#define DEFINE_STUB(NAME) QueueStub NAME##Inst = QueueStub();
+#define DEFINE_DEST(NAME,NEXT) \
+QueueDest NAME##Inst = QueueDest(&NEXT##Inst); \
+extern "C" void copy##NAME() {NAME##Inst.copy();} \
+extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
+
+struct QueueWait {
+    QueueBase *next;
+    QueueCond *cond;
+    QueueWait(QueueCond *ptr)
+    {
+        cond = ptr;
+        next = 0;
+    }
+    void copy()
+    {
+        if (cond == 0) exitErrstr("source too cond\n");
+        cond->lock();
+        QueueBase *source = cond->next;
+        QueueBase *dest = next;
+        int any = 0;
+        while (!any) {while (dest) {
+        if (source == 0) exitErrstr("copy too ptr\n");
+        if (dest->size() > 0) any = 1;
+        source->use(); dest->copy(dest->size()); cond->dest();
+        source = source->next; dest = dest->next;}
+        if (!any) cond->wait();}
+        cond->unlock();
+    }
+};
+
+#define DEFINE_WAIT(NAME,NEXT) \
+QueueWait NAME##Inst = QueueWait(&NEXT##Inst); \
+extern "C" void copy##NAME() {NAME##Inst.copy();}
 
 #define QUEUE_STEP 10
 
@@ -226,6 +353,38 @@ template<class TYPE> struct QueueStruct : QueueBase {
         limit = 0;
         head = 0;
         tail = 0;
+    }
+    QueueStruct(QueueMutex *ptr) : QueueBase()
+    {
+        base = 0;
+        limit = 0;
+        head = 0;
+        tail = 0;
+        ptr->next = this;
+    }
+    QueueStruct(QueueSource *ptr) :QueueBase()
+    {
+        base = 0;
+        limit = 0;
+        head = 0;
+        tail = 0;
+        ptr->next = this;
+    }
+    QueueStruct(QueueDest *ptr) :QueueBase()
+    {
+        base = 0;
+        limit = 0;
+        head = 0;
+        tail = 0;
+        ptr->next = this;
+    }
+    QueueStruct(QueueWait *ptr) :QueueBase()
+    {
+        base = 0;
+        limit = 0;
+        head = 0;
+        tail = 0;
+        ptr->next = this;
     }
     virtual ~QueueStruct()
     {
@@ -286,23 +445,35 @@ template<class TYPE> struct QueueStruct : QueueBase {
     {
         return tail - head;
     }
-    virtual void use()
-    {
-        if (src != 0) exitErrstr("use too ptr\n");
-        src = this;
-    }
     virtual void copy(int siz)
     {
+        if (!src) exitErrstr("copy too src\n");
         TYPE *dest = enloc(siz);
         TYPE *source = src->deloc(siz);
         for (int i = 0; i < siz; i++) dest[i] = source[i];
         src = 0;
     }
+    virtual void use()
+    {
+        if (src) exitErrstr("src too use\n");
+        src = this;
+    }
 };
 
 template<class TYPE> QueueStruct<TYPE> *QueueStruct<TYPE>::src = 0;
 
-#define DEFINE_LOCAL(NAME,TYPE,NEXT) \
+#define DEFINE_LOCAL(NAME,TYPE) \
+QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(); \
+extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
+extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
+extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.unloc(siz);} \
+extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
+extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
+extern "C" int size##NAME() {return NAME##Inst.size();} \
+extern "C" void use##NAME() {NAME##Inst.use();} \
+extern "C" void copy##NAME(int siz) {NAME##Inst.copy(siz);}
+
+#define DEFINE_STAGE(NAME,TYPE,NEXT) \
 QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(&NEXT##Inst); \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
@@ -311,18 +482,77 @@ extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
 extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" void use##NAME() {NAME##Inst.use();} \
-extern "C" void copy##NAME(int siz) {NAME##Inst.copy(siz);} \
-extern "C" void cpyuse##NAME() {NAME##Inst.cpyuse();} \
-extern "C" void cpyall##NAME(int num) {NAME##Inst.cpyall(num);} \
-extern "C" void cpyack##NAME(int *siz, int num) {NAME##Inst.cpyack(siz,num);}
+extern "C" void copy##NAME(int siz) {NAME##Inst.copy(siz);}
 
-template<class TYPE> struct QueueMeta {
+struct QueueThread {
+    QueueThread *next;
+    QueueThread() {next = 0;}
+    QueueThread(QueueThread *ptr) {next = 0; ptr->next = this;}
+    QueueThread *self() {return this;}
+    virtual void extend() = 0;
+};
+
+struct QueueHub : QueueCond {
+    QueueThread *next;
+    pthread_cond_t cond;
+    QueueStruct<pthread_t> thread;
+    int signal;
+    QueueHub() : QueueCond()
+    {
+        next = 0; signal = 0;
+        if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    }
+    ~QueueHub()
+    {
+        if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
+    }
+    void *int2void(int val)
+    {
+        char *ptr = 0;
+        return (void *)(ptr+val);
+    }
+    void extend(void *(*func)(void *))
+    {
+        if (pthread_mutex_lock(&mutex) != 0) exitErrstr("cond lock failed: %s\n",strerror(errno));
+        for (int i = 0; i < thread.size(); i++)
+        if (pthread_kill(*thread.array(i,1), SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+        signal = thread.size(); while (signal > 0)
+        if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+        if (next) next->extend();
+        int index = thread.size(); if (pthread_create(thread.enloc(1), 0, func, int2void(index)) != 0) exitErrstr("cannot create thread\n");
+        if (pthread_cond_broadcast(&(QueueCond::cond)) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
+        if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("cond unlock failed: %s\n",strerror(errno));
+    }
+    void lock()
+    {
+        if (pthread_mutex_lock(&mutex) != 0) exitErrstr("cond lock failed: %s\n",strerror(errno));
+        if (signal > 0) {signal--;
+        if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
+        if (pthread_cond_wait(&(QueueCond::cond),&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));}
+    }
+};
+
+#define DEFINE_HUB(NAME) \
+QueueHub NAME##Inst = QueueHub(); \
+extern "C" void extend##NAME(void *(*func)(void *)) {NAME##Inst.extend(func);} \
+extern "C" void lock##NAME() {NAME##Inst.lock();} \
+extern "C" void unlock##NAME() {NAME##Inst.unlock();}
+
+template<class TYPE> struct QueueMeta : QueueThread {
     QueueStruct<QueueStruct<TYPE> > meta;
-    QueueMeta() {}
+    QueueMeta() : QueueThread() {}
+    QueueMeta(QueueThread *ptr) : QueueThread(ptr) {}
+    QueueMeta(QueueHub *ptr) : QueueThread() {ptr->next = self();}
     ~QueueMeta()
     {
         for (int i = 0; i < meta.size(); i++)
         if (meta.array(i,1)->base) delete[] meta.array(i,1)->base;
+    }
+    virtual void extend()
+    {
+        QueueStruct<TYPE> inst = QueueStruct<TYPE>();
+        *meta.enloc(1) = inst;
+        if (next) next->extend();
     }
     void use(int sub)
     {
@@ -335,7 +565,40 @@ template<class TYPE> struct QueueMeta {
     {
         return meta.size();
     }
+    TYPE *enloc(int idx, int siz)
+    {
+        return meta.array(idx,1)->enloc(siz);
+    }
+    TYPE *deloc(int idx, int siz)
+    {
+        return meta.array(idx,1)->deloc(siz);
+    }
+    TYPE *unloc(int idx, int siz)
+    {
+        return meta.array(idx,1)->unloc(siz);
+    }
+    void reloc(int idx, int siz)
+    {
+        return meta.array(idx,1)->reloc(siz);
+    }
+    TYPE *array(int idx, int sub, int siz)
+    {
+        return meta.array(idx,1)->array(sub,siz);
+    }
+    int size(int idx)
+    {
+        return meta.array(idx,1)->size();
+    }
 };
+
+#define DEFINE_THREAD(NAME,TYPE,NEXT) \
+QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(&NEXT##Inst); \
+extern "C" TYPE *enloc##NAME(int idx, int siz) {return NAME##Inst.enloc(idx,siz);} \
+extern "C" TYPE *deloc##NAME(int idx, int siz) {return NAME##Inst.deloc(idx,siz);} \
+extern "C" TYPE *unloc##NAME(int idx, int siz) {return NAME##Inst.unloc(idx,siz);} \
+extern "C" void reloc##NAME(int idx, int siz) {NAME##Inst.reloc(idx,siz);} \
+extern "C" TYPE *array##NAME(int idx, int sub, int siz) {return NAME##Inst.array(idx,sub,siz);} \
+extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);}
 
 #define DEFINE_META(NAME,TYPE) \
 QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \

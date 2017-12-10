@@ -66,6 +66,14 @@ void enqueCommand(Command cmd)
     enqueMachine(command);
 }
 
+void enqueCommands()
+{
+    int size = sizeCommand();
+    copyCommands();
+    for (int i = size; i < sizeCommand(); i++)
+    enqueMachine(command); 
+}
+
 void compass(double xdelta, double ydelta)
 {
     double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;

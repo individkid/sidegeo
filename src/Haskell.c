@@ -63,20 +63,11 @@ void *haskell(void *arg)
     hs_init(0,0);
 
     while (sizeEvent() == 0) {
-        lockCommands();
-        cpyuseHsCommand(); cpyallCmnCommand(4);
-        if (sizeCmnCommand() > 0) signalCommands();
-        unlockCommands();
-
-        lockEvents();
-        while (sizeCmnEvent() == 0) waitEvents();
-        cpyuseCmnEvent(); cpyallEvent(6);
-        unlockEvents();
+        copyHsCommands();
+        copyHaskells();
 
         while (sizeEvent() > 0 && *arrayEvent(0,1) != Done)
-        if (*arrayEvent(0,1) == Acknowledge) {
-            cpyuseHsCommand(); cpyackHsCmd(arrayHsInt(0,4),4);
-            delocEvent(1);}
+        if (*arrayEvent(0,1) == Acknowledge) {ackHsCommands(); delocEvent(1);}
         else if (*arrayEvent(0,1) == Upload) {
             delocEvent(1);
             enum Data data = *delocHsData(1);

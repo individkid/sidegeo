@@ -53,6 +53,7 @@ executable sculpt
                        src/Haskell.c,
                        src/Console.c,
                        src/Timewheel.c,
+                       src/Process.c,
                        src/Microcode.c,
                        libpqueue/src/pqueue.c
   include-dirs:        libpqueue/src

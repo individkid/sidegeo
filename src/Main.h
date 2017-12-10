@@ -36,20 +36,6 @@
 
 #include "Common.h"
 
-struct Buffer {
-    const char *name;
-    GLuint handle; // source memory handle
-    GLuint copy; // target memory handle
-    GLuint query; // feedback completion test
-    GLuint loc; // vertex shader input
-    int wrap; // desired vector count
-    int room; // current vector count
-    int done; // initialized vectors
-    int type; // type of data elements
-    int dimn; // elements per vector
-    int read; // count of readers
-    int write; // count of writers
-}; // argument to render functions
 enum Uniform { // one value per uniform; no associated state
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin

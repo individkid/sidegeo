@@ -41,9 +41,10 @@ extern float cutoff;
 extern float slope;
 extern float aspect;
 
-void enqueCommand(Command cmd);
+void enqueCommands();
 #ifdef BRINGUP
 void bringup();
+void enqueCommand(Command cmd);
 #endif
 
 const char *inputCode(enum Shader shader)
@@ -192,6 +193,8 @@ void *timewheel(void *arg);
 
 int main(int argc, char **argv)
 {
+    if (sizeof(GLuint) != sizeof(MyGLuint)) exitErrstr("gluint too sizeof\n");
+
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -295,7 +298,7 @@ int main(int argc, char **argv)
     enqueCommand(&bringup);
 #endif
 
-    for (int i = 1; i < argc; i++) *enlocOption(1) = argv[i];
+    // TODO combine argv int lines to enque to enlocOption
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
@@ -306,24 +309,10 @@ int main(int argc, char **argv)
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
 
     while (1) {
-        lockOutputs();
-        cpyuseCmdOutput(); cpyallCmnOutput(1);
-        if (sizeCmnOutput() > 0) signalOutputs();
-        unlockOutputs();
-
-        lockEvents();
-        cpyuseCmdEvent(); cpyallCmnEvent(6);
-        if (sizeCmnEvent() > 0) signalEvents();
-        unlockEvents();
-
-        lockTimewheels();
-        cpyuseCmdChange(); cpyallCmnChange(1);
-        if (sizeCmnChange() > 0) signalTimewheels();
-        unlockTimewheels();
-
-        lockCommands();
-        for (int i = 0; i < sizeCmnCommand(); i++) enqueCommand(*delocCmnCommand(1));
-        unlockCommands();
+        copyCmdOutputs();
+        copyCmdHaskells();
+        copyCmdTimewheels();
+        enqueCommands();
 
         if (sizeCluster() == 0) glfwWaitEvents();
         else if (sizeDefer() == sizeCluster()) glfwWaitEventsTimeout(POLL_DELAY);
@@ -352,9 +341,9 @@ int main(int argc, char **argv)
         if (done) {done--; break;}
     }
 
-    lockEvents(); *enlocCmnEvent(1) = Done; unlockEvents();
-    lockOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockOutputs();
-    lockTimewheels(); *enlocCmnControl(1) = Finish; unlockTimewheels();
+    lockCmnHaskells(); *enlocCmnEvent(1) = Done; unlockCmnHaskells();
+    lockCmnOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockCmnOutputs();
+    lockCmnTimewheels(); *enlocCmnControl(1) = Finish; unlockCmnTimewheels();
     if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");

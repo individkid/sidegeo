@@ -218,7 +218,11 @@ void backend(char chr)
         *enlocConPtr(1) = alphaof(chr);
         int len = sizeConPtr();
         writestr(arrayConPtr(0,len));
-        if (*arrayConPtr(1,1) == '-') memcpy(enlocConProcess(len),delocConPtr(len),len);
+        delocConPtr(1); len--;
+        if (*arrayConPtr(0,1) == '-') {
+            if (len > 1 && *arrayConPtr(1,1) == '-')
+            memcpy(enlocConOption(2),"-e",2);
+            memcpy(enlocConOption(len),delocConPtr(len),len);}
         useEcho(--depth); referConPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocConPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
@@ -257,26 +261,15 @@ void *console(void *arg)
 
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
     while (!done) {
-        lockCommands();
-        cpyuseConCommand(); cpyallCmnCommand(2);
-        if (sizeCmnCommand() > 0) signalCommands();
-        unlockCommands();
-
-        lockProcesses();
-        cpyuseConProcess(); cpyallCmnProcess(1);
-        if (sizeCmnProcess() > 0) signalProcesses();
-        unlockProcesses();
-
-        lockOutputs();
-        cpyuseCmnOutput(); cpyallOutput(1);
-        unlockOutputs();
+        copyConCommands();
+        copyConProcesses();
+        copyOutputs();
 
         if (sizeOutput() == 0) {
             if (checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;
             frontend(readchr()); while (checkfds(STDIN_FILENO+1,&fds,&nodelay,0)) frontend(readchr());}
 
-        while (sizeOutput()) backend(*delocOutput(1));
-    }
+        while (sizeOutput()) backend(*delocOutput(1));}
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
 

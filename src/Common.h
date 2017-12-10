@@ -129,6 +129,21 @@ struct Render {
     int restart;
     const char *name;
 }; // argument to render functions
+typedef unsigned MyGLuint;
+struct Buffer {
+    const char *name;
+    MyGLuint handle; // source memory handle
+    MyGLuint copy; // target memory handle
+    MyGLuint query; // feedback completion test
+    MyGLuint loc; // vertex shader input
+    int wrap; // desired vector count
+    int room; // current vector count
+    int done; // initialized vectors
+    int type; // type of data elements
+    int dimn; // elements per vector
+    int read; // count of readers
+    int write; // count of writers
+}; // argument to render functions
 
 struct Nomial {
     int con0;
@@ -157,25 +172,16 @@ enum Control {
     Start,
     Finish};
 
-enum Role { // state that process is in for each file
-    Attempt, // still reading before end of file
-    Allow, // wait for other files to yield or end
-    Maintain, // owner waits for others to offer appends
-    Direct, // owner attempts to append and accept
-    Monitor, // non-owner waits for owner to accept appends
-    Offer, // non-owner attempts to append
-    Accept}; // owner allows read of append
-struct File {
-    enum Role role; // state process is in for this file
-    int desc; // descriptor for open file
-    char *name; // for subsequently identifying file
-};
+enum Yield {
+    Unyield, // continue sending to Configure
+    Yields};
 
 void handler(int sig);
 void signalCommands();
 void signalOutputs();
 void signalProcesses();
 void signalTimewheels();
+void signalHaskells();
 
 #define DECLARE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...);
@@ -220,51 +226,61 @@ float *invmat(float *u, int n);
 
 EXTERNCEND
 
-DECLARE_MUTEX(Commands)
-DECLARE_LOCAL(CmnCommand,Command)
-DECLARE_LOCAL(CmnCmdChar,char)
-DECLARE_LOCAL(CmnCmdInt,int)
-DECLARE_LOCAL(CmnCmdData,enum Data)
-DECLARE_MUTEX(Outputs)
-DECLARE_LOCAL(CmnOutput,char)
-DECLARE_MUTEX(Processes)
-DECLARE_LOCAL(CmnProcess,char)
-DECLARE_LOCAL(Option,char *)
-DECLARE_COND(Events)
-DECLARE_LOCAL(CmnEvent,enum Event)
-DECLARE_LOCAL(CmnKind,enum Kind)
-DECLARE_LOCAL(CmnHsCmd,Command)
-DECLARE_LOCAL(CmnHsChar,char)
-DECLARE_LOCAL(CmnHsInt,int)
-DECLARE_LOCAL(CmnData,enum Data)
-DECLARE_MUTEX(Timewheels)
-DECLARE_LOCAL(CmnControl,enum Control)
-DECLARE_LOCAL(CmnTwChar,char)
-DECLARE_LOCAL(CmnTwInt,int)
-DECLARE_LOCAL(CmnCoefficient,int)
-DECLARE_LOCAL(CmnVariable,int)
-DECLARE_LOCAL(CmnState,struct State)
-DECLARE_LOCAL(CmnChange,struct Change)
+DECLARE_MUTEX(CmnCommands)
+DECLARE_STAGE(CmnCommand,Command)
+DECLARE_STAGE(CmnCmdChar,char)
+DECLARE_STAGE(CmnCmdInt,int)
+DECLARE_STAGE(CmnCmdData,enum Data)
+DECLARE_STAGE(CmnRender,struct Render)
+DECLARE_STAGE(CmnBuffer,struct Buffer *)
+DECLARE_MUTEX(CmnOutputs)
+DECLARE_STAGE(CmnOutput,char)
+DECLARE_MUTEX(CmnProcesses)
+DECLARE_STAGE(CmnOption,char)
+DECLARE_STAGE(CmnOptioner,int)
+DECLARE_STAGE(CmnProcess,char)
+DECLARE_STAGE(CmnProcesser,int)
+DECLARE_STAGE(CmnConfigure,char)
+DECLARE_STAGE(CmnConfigurer,int)
+DECLARE_COND(CmnHaskells)
+DECLARE_STAGE(CmnEvent,enum Event)
+DECLARE_STAGE(CmnKind,enum Kind)
+DECLARE_STAGE(CmnHsCmd,Command)
+DECLARE_STAGE(CmnHsChar,char)
+DECLARE_STAGE(CmnHsInt,int)
+DECLARE_STAGE(CmnHsData,enum Data)
+DECLARE_MUTEX(CmnTimewheels)
+DECLARE_STAGE(CmnControl,enum Control)
+DECLARE_STAGE(CmnChange,struct Change)
+DECLARE_STAGE(CmnTwChar,char)
+DECLARE_STAGE(CmnTwInt,int)
+DECLARE_STAGE(CmnCoefficient,int)
+DECLARE_STAGE(CmnVariable,int)
+DECLARE_STAGE(CmnState,struct State)
 DECLARE_POINTER(CmnInt,int)
 
 DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(CmdState,int)
 DECLARE_LOCAL(Cluster,int)
 DECLARE_LOCAL(Machine,Machine)
-DECLARE_LOCAL(Command,Command)
-DECLARE_LOCAL(CmdChar,char)
-DECLARE_LOCAL(CmdInt,int)
-DECLARE_LOCAL(CmdData,enum Data)
-DECLARE_LOCAL(Buffer,struct Buffer *)
-DECLARE_LOCAL(Render,struct Render)
-DECLARE_LOCAL(CmdOutput,char)
-DECLARE_LOCAL(CmdEvent,enum Event)
-DECLARE_LOCAL(CmdKind,enum Kind)
-DECLARE_LOCAL(CmdHsCmd,Command)
-DECLARE_LOCAL(CmdHsChar,char)
-DECLARE_LOCAL(CmdHsInt,int)
-DECLARE_LOCAL(CmdHsData,enum Data)
-DECLARE_LOCAL(CmdChange,struct Change)
+DECLARE_DEST(Commands)
+DECLARE_STAGE(Command,Command)
+DECLARE_STAGE(CmdChar,char)
+DECLARE_STAGE(CmdInt,int)
+DECLARE_STAGE(CmdData,enum Data)
+DECLARE_STAGE(Render,struct Render)
+DECLARE_STAGE(Buffer,struct Buffer *)
+DECLARE_SOURCE(CmdOutputs)
+DECLARE_STAGE(CmdOutput,char)
+DECLARE_SOURCE(CmdHaskells)
+DECLARE_STAGE(CmdEvent,enum Event)
+DECLARE_STAGE(CmdKind,enum Kind)
+DECLARE_STAGE(CmdHsCmd,Command)
+DECLARE_STAGE(CmdHsChar,char)
+DECLARE_STAGE(CmdHsInt,int)
+DECLARE_STAGE(CmdHsData,enum Data)
+DECLARE_SOURCE(CmdTimewheels)
+DECLARE_STAGE(CmdChange,struct Change)
 DECLARE_POINTER(MachPtr,Machine)
 DECLARE_POINTER(CharPtr,char)
 DECLARE_POINTER(IntPtr,int)
@@ -281,57 +297,75 @@ DECLARE_META(DataName,char)
 DECLARE_LOCAL(EventMap,int)
 DECLARE_LOCAL(KindMap,int)
 DECLARE_LOCAL(DataMap,enum Data)
-DECLARE_LOCAL(Event,enum Event)
-DECLARE_LOCAL(Kind,enum Kind)
-DECLARE_LOCAL(HsCmd,Command)
-DECLARE_LOCAL(HsChar,char)
-DECLARE_LOCAL(HsInt,int)
-DECLARE_LOCAL(HsData,enum Data)
-DECLARE_LOCAL(HsCommand,Command)
-DECLARE_LOCAL(HsCmdChar,char)
-DECLARE_LOCAL(HsCmdInt,int)
-DECLARE_LOCAL(HsCmdData,enum Data)
+DECLARE_WAIT(Haskells)
+DECLARE_STAGE(Event,enum Event)
+DECLARE_STAGE(Kind,enum Kind)
+DECLARE_STAGE(HsCmd,Command)
+DECLARE_STAGE(HsChar,char)
+DECLARE_STAGE(HsInt,int)
+DECLARE_STAGE(HsData,enum Data)
+DECLARE_SOURCE(HsCommands)
+DECLARE_STAGE(HsCommand,Command)
+DECLARE_STAGE(HsCmdChar,char)
+DECLARE_STAGE(HsCmdInt,int)
+DECLARE_STAGE(HsCmdData,enum Data)
 DECLARE_POINTER(Meta,int)
 DECLARE_POINTER(Pseudo,char)
 DECLARE_POINTER(Name,char *)
 
-DECLARE_LOCAL(ConCommand,Command)
-DECLARE_LOCAL(ConCmdChar,char)
-DECLARE_LOCAL(ConProcess,char)
-DECLARE_LOCAL(Output,char)
+DECLARE_SOURCE(ConCommands)
+DECLARE_STAGE(ConCommand,Command)
+DECLARE_STAGE(ConCmdChar,char)
+DECLARE_SOURCE(ConProcesses)
+DECLARE_STAGE(ConOption,char)
+DECLARE_STAGE(ConOptioner,int)
+DECLARE_DEST(Outputs)
+DECLARE_STAGE(Output,char)
 DECLARE_LOCAL(Line,enum Menu)
 DECLARE_LOCAL(Match,int)
 DECLARE_META(Echo,char)
 DECLARE_POINTER(ConPtr,char)
 
-DECLARE_LOCAL(Control,enum Control)
-DECLARE_LOCAL(TwChar,char)
-DECLARE_LOCAL(TwInt,int)
-DECLARE_LOCAL(Coefficient,int)
-DECLARE_LOCAL(Variable,int)
-DECLARE_LOCAL(State,struct State)
-DECLARE_LOCAL(Change,struct Change)
+DECLARE_DEST(Timewheels)
+DECLARE_STAGE(Control,enum Control)
+DECLARE_STAGE(Change,struct Change)
+DECLARE_STAGE(TwChar,char)
+DECLARE_STAGE(TwInt,int)
+DECLARE_STAGE(Coefficient,int)
+DECLARE_STAGE(Variable,int)
+DECLARE_STAGE(State,struct State)
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
 DECLARE_META(Wave,int)
 DECLARE_POINTER(Pipe,int)
-DECLARE_LOCAL(TwCommand,Command)
-DECLARE_LOCAL(TwCmdChar,int)
-DECLARE_LOCAL(TwCmdInt,int)
+DECLARE_SOURCE(TwCommands)
+DECLARE_STAGE(TwCommand,Command)
+DECLARE_STAGE(TwCmdChar,int)
+DECLARE_STAGE(TwCmdInt,int)
 
-DECLARE_LOCAL(File,struct File)
-DECLARE_LOCAL(ProChar,char)
-DECLARE_LOCAL(Process,char)
-DECLARE_LOCAL(Inject,char)
-DECLARE_LOCAL(ProCommand,Command)
-DECLARE_LOCAL(ProCmdChar,char)
-DECLARE_LOCAL(ProCmdInt,int)
-DECLARE_LOCAL(ProCmdData,enum Data)
-DECLARE_LOCAL(ProControl,enum Control)
-DECLARE_LOCAL(ProTwChar,char)
-DECLARE_LOCAL(ProTwInt,int)
-DECLARE_LOCAL(ProCoefficient,int)
-DECLARE_LOCAL(ProVariable,int)
-DECLARE_LOCAL(ProState,struct State)
+DECLARE_DEST(Processes)
+DECLARE_STAGE(Option,char)
+DECLARE_STAGE(Optioner,int)
+DECLARE_STAGE(Process,char)
+DECLARE_STAGE(Processer,int)
+DECLARE_HUB(Configures)
+DECLARE_THREAD(Inject,char)
+DECLARE_THREAD(Yield,enum Yield)
+DECLARE_THREAD(File,char)
+DECLARE_THREAD(CfgProcess,char)
+DECLARE_THREAD(CfgProcesser,int)
+DECLARE_SOURCE(ProCommands)
+DECLARE_STAGE(ProCommand,Command)
+DECLARE_STAGE(ProCmdChar,char)
+DECLARE_STAGE(ProCmdInt,int)
+DECLARE_STAGE(ProCmdData,enum Data)
+DECLARE_SOURCE(ProTimewheels)
+DECLARE_STAGE(ProControl,enum Control)
+DECLARE_STAGE(ProChange,struct Change)
+DECLARE_STAGE(ProTwChar,char)
+DECLARE_STAGE(ProTwInt,int)
+DECLARE_STAGE(ProCoefficient,int)
+DECLARE_STAGE(ProVariable,int)
+DECLARE_STAGE(ProState,struct State)
 
 #endif
