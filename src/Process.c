@@ -17,6 +17,9 @@
 */
 
 #include "Common.h"
+#ifdef __linux__
+#include <sys/types.h>
+#endif
 
 int void2int(void *val)
 {
@@ -37,9 +40,9 @@ void *process(void *arg)
     sigdelset(&saved, SIGUSR2);
 
     while (1) {
-        copyProCommands();
-        copyProTimewheels();
-        copyProcesses();
+        xferProCommands();
+        xferProTimewheels();
+        xferProcesses();
 
         // TODO process Options
 

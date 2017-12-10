@@ -63,17 +63,18 @@ void *haskell(void *arg)
     hs_init(0,0);
 
     while (sizeEvent() == 0) {
-        copyHsCommands();
-        copyHaskells();
+        xferHsCommands();
+        xferHaskells();
 
         while (sizeEvent() > 0 && *arrayEvent(0,1) != Done)
-        if (*arrayEvent(0,1) == Acknowledge) {ackHsCommands(); delocEvent(1);}
+        if (*arrayEvent(0,1) == Acknowledge) {ackHsCommands(delocHsInt(4)); delocEvent(1);}
         else if (*arrayEvent(0,1) == Upload) {
             delocEvent(1);
             enum Data data = *delocHsData(1);
             int len = *delocHsInt(1);
             useClient(data); referMeta();
             delocMeta(sizeMeta());
+            useHsInt(); xferMeta(len);
             memcpy(enlocMeta(len),delocHsInt(len),len);}
         else if (*arrayEvent(0,1) == Download) {
             delocEvent(1);

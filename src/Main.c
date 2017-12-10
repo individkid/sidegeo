@@ -309,9 +309,9 @@ int main(int argc, char **argv)
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
 
     while (1) {
-        copyCmdOutputs();
-        copyCmdHaskells();
-        copyCmdTimewheels();
+        xferCmdOutputs();
+        xferCmdHaskells();
+        xferCmdTimewheels();
         enqueCommands();
 
         if (sizeCluster() == 0) glfwWaitEvents();

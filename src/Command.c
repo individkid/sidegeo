@@ -69,7 +69,7 @@ void enqueCommand(Command cmd)
 void enqueCommands()
 {
     int size = sizeCommand();
-    copyCommands();
+    xferCommands();
     for (int i = size; i < sizeCommand(); i++)
     enqueMachine(command); 
 }

@@ -51,15 +51,15 @@ EXTERNC void wait##NAME(); \
 EXTERNC void signal##NAME();
 
 #define DECLARE_SOURCE(NAME) \
-EXTERNC void copy##NAME(); \
+EXTERNC void xfer##NAME(); \
 EXTERNC void ack##NAME(int *siz);
 
 #define DECLARE_DEST(NAME) \
-EXTERNC void copy##NAME(); \
+EXTERNC void xfer##NAME(); \
 EXTERNC void ack##NAME(int *siz);
 
 #define DECLARE_WAIT(NAME) \
-EXTERNC void copy##NAME();
+EXTERNC void xfer##NAME();
 
 #define DECLARE_LOCAL(NAME,TYPE) \
 EXTERNC TYPE *enloc##NAME(int siz); \
@@ -69,7 +69,7 @@ EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int size##NAME(); \
 EXTERNC void use##NAME(); \
-EXTERNC void copy##NAME(int siz);
+EXTERNC void xfer##NAME(int siz);
 
 #define DECLARE_STAGE(NAME,TYPE) \
 EXTERNC TYPE *enloc##NAME(int siz); \
@@ -79,7 +79,7 @@ EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int size##NAME(); \
 EXTERNC void use##NAME(); \
-EXTERNC void copy##NAME(int siz);
+EXTERNC void xfer##NAME(int siz);
 
 #define DECLARE_HUB(NAME) \
 EXTERNC void extend##NAME(void *(*func)(void *)); \
@@ -137,7 +137,7 @@ struct QueueBase {
     }
     virtual ~QueueBase() {}
     virtual int size() = 0;
-    virtual void copy(int siz) = 0;
+    virtual void xfer(int siz) = 0;
     virtual void use() = 0;
 };
 
@@ -234,14 +234,14 @@ struct QueueSource {
         mutex = ptr;
         next = 0;
     }
-    void copy()
+    void xfer()
     {
         mutex->lock();
         QueueBase *source = next;
         QueueBase *dest = mutex->next;
         while (source) {
-        if (dest == 0) exitErrstr("copy too ptr\n");
-        source->use(); dest->copy(dest->size()); mutex->source();
+        if (dest == 0) exitErrstr("xfer too ptr\n");
+        source->use(); dest->xfer(dest->size()); mutex->source();
         source = source->next; dest = dest->next;}
         mutex->unlock();
     }
@@ -251,8 +251,8 @@ struct QueueSource {
         QueueBase *source = next;
         QueueBase *dest = mutex->next;
         while (source) {
-        if (dest == 0) exitErrstr("copy too ptr\n");
-        source->use(); dest->copy(*siz); mutex->source();
+        if (dest == 0) exitErrstr("xfer too ptr\n");
+        source->use(); dest->xfer(*siz); mutex->source();
         source = source->next; dest = dest->next;}
         mutex->unlock();
     }
@@ -260,7 +260,7 @@ struct QueueSource {
 
 #define DEFINE_SOURCE(NAME,NEXT) \
 QueueSource NAME##Inst = QueueSource(&NEXT##Inst); \
-extern "C" void copy##NAME() {NAME##Inst.copy();} \
+extern "C" void xfer##NAME() {NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
 struct QueueDest {
@@ -271,15 +271,15 @@ struct QueueDest {
         mutex = ptr;
         next = 0;
     }
-    void copy()
+    void xfer()
     {
         if (mutex == 0) exitErrstr("source too mutex\n");
         mutex->lock();
         QueueBase *source = mutex->next;
         QueueBase *dest = next;
         while (dest) {
-        if (source == 0) exitErrstr("copy too ptr\n");
-        source->use(); dest->copy(dest->size()); mutex->dest();
+        if (source == 0) exitErrstr("xfer too ptr\n");
+        source->use(); dest->xfer(dest->size()); mutex->dest();
         source = source->next; dest = dest->next;}
         mutex->unlock();
     }
@@ -290,9 +290,9 @@ struct QueueDest {
         QueueBase *source = mutex->next;
         QueueBase *dest = next;
         while (dest) {
-        if (source == 0) exitErrstr("copy too ptr\n");
-        if (source == 0 || dest == 0) exitErrstr("copy too ptr\n");
-        source->use(); dest->copy(*siz); mutex->dest();
+        if (source == 0) exitErrstr("xfer too ptr\n");
+        if (source == 0 || dest == 0) exitErrstr("xfer too ptr\n");
+        source->use(); dest->xfer(*siz); mutex->dest();
         source = source->next; dest = dest->next;}
         mutex->unlock();
     }
@@ -300,7 +300,7 @@ struct QueueDest {
 
 #define DEFINE_DEST(NAME,NEXT) \
 QueueDest NAME##Inst = QueueDest(&NEXT##Inst); \
-extern "C" void copy##NAME() {NAME##Inst.copy();} \
+extern "C" void xfer##NAME() {NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
 struct QueueWait {
@@ -311,7 +311,7 @@ struct QueueWait {
         cond = ptr;
         next = 0;
     }
-    void copy()
+    void xfer()
     {
         if (cond == 0) exitErrstr("source too cond\n");
         cond->lock();
@@ -319,9 +319,9 @@ struct QueueWait {
         QueueBase *dest = next;
         int any = 0;
         while (!any) {while (dest) {
-        if (source == 0) exitErrstr("copy too ptr\n");
+        if (source == 0) exitErrstr("xfer too ptr\n");
         if (dest->size() > 0) any = 1;
-        source->use(); dest->copy(dest->size()); cond->dest();
+        source->use(); dest->xfer(dest->size()); cond->dest();
         source = source->next; dest = dest->next;}
         if (!any) cond->wait();}
         cond->unlock();
@@ -330,7 +330,7 @@ struct QueueWait {
 
 #define DEFINE_WAIT(NAME,NEXT) \
 QueueWait NAME##Inst = QueueWait(&NEXT##Inst); \
-extern "C" void copy##NAME() {NAME##Inst.copy();}
+extern "C" void xfer##NAME() {NAME##Inst.xfer();}
 
 #define QUEUE_STEP 10
 
@@ -445,9 +445,9 @@ template<class TYPE> struct QueueStruct : QueueBase {
     {
         return tail - head;
     }
-    virtual void copy(int siz)
+    virtual void xfer(int siz)
     {
-        if (!src) exitErrstr("copy too src\n");
+        if (!src) exitErrstr("xfer too src\n");
         TYPE *dest = enloc(siz);
         TYPE *source = src->deloc(siz);
         for (int i = 0; i < siz; i++) dest[i] = source[i];
@@ -471,7 +471,7 @@ extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
 extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" void use##NAME() {NAME##Inst.use();} \
-extern "C" void copy##NAME(int siz) {NAME##Inst.copy(siz);}
+extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) \
 QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(&NEXT##Inst); \
@@ -482,7 +482,7 @@ extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
 extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" void use##NAME() {NAME##Inst.use();} \
-extern "C" void copy##NAME(int siz) {NAME##Inst.copy(siz);}
+extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);}
 
 struct QueueThread {
     QueueThread *next;
@@ -630,7 +630,7 @@ extern "C" void reloc##NAME(int siz) {NAME##Inst.ptr->reloc(siz);} \
 extern "C" int size##NAME() {return NAME##Inst.ptr->size();} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.ptr->array(sub,siz);} \
 extern "C" void use##NAME() {NAME##Inst.ptr->use();} \
-extern "C" void copy##NAME(int siz) {NAME##Inst.ptr->copy(siz);}
+extern "C" void xfer##NAME(int siz) {NAME##Inst.ptr->xfer(siz);}
 
 struct Link {
     int next,last; // links if positive, index into head or tail if negative

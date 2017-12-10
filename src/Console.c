@@ -261,9 +261,9 @@ void *console(void *arg)
 
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
     while (!done) {
-        copyConCommands();
-        copyConProcesses();
-        copyOutputs();
+        xferConCommands();
+        xferConProcesses();
+        xferOutputs();
 
         if (sizeOutput() == 0) {
             if (checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;

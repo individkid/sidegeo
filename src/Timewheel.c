@@ -110,8 +110,8 @@ void *timewheel(void *arg)
 	printf(  "PortAudio error: %s\n", Pa_GetErrorText( err ) );
 
     while (1) {
-        copyTwCommands();
-        copyTimewheels();
+        xferTwCommands();
+        xferTimewheels();
 
         int done = 0;
         while (sizeControl() > 0) {
