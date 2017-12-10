@@ -21,10 +21,37 @@
 #include <sys/types.h>
 #endif
 
+int toggle = 0;
+
 int void2int(void *val)
 {
     char *ptr = 0;
     return ((char *)val-ptr);
+}
+
+void handleAppend(char *line, int index)
+{
+	// TODO send to indicated Configure thread
+}
+
+void handleOption(char *line)
+{
+	// TODO extend to Configure on -f, change -e target on -E, etc
+}
+
+void handleConfigure(char *line, int index)
+{
+	// TODO send command to update indicated polytope
+}
+
+void handleIgnore(char *line)
+{
+	// TODO print error message
+}
+
+void handleDisable(char *line, int index)
+{
+	// TODO print error message and disable rest of file
 }
 
 void *process(void *arg)
@@ -44,7 +71,14 @@ void *process(void *arg)
         xferProTimewheels();
         xferProcesses();
 
-        // TODO process Options
+        if (sizeOption() > 0 && sizeConfigure() > 0 && !toggle && sizeOption() < 2) handleIgnore(delocOption(1));
+        if (sizeOption() > 0 && sizeConfigure() > 0 && !toggle && *arrayOption(1,1) == '-') handleAppend(destrOption('\n'),*delocOptioner(1));
+        if (sizeOption() > 0 && sizeConfigure() > 0 && !toggle && *arrayOption(1,1) != '-') handleOption(destrOption('\n'));
+        if (sizeOption() > 0 && sizeConfigure() > 0 && toggle) handleConfigure(destrConfigure('\n'),*delocConfigurer(1));
+        if (sizeOption() > 0 && sizeConfigure() == 0 && sizeOption() < 2) handleIgnore(delocOption(1));
+        if (sizeOption() > 0 && sizeConfigure() == 0 && *arrayOption(1,1) == '-') handleAppend(destrOption('\n'),*delocOptioner(1));
+        if (sizeOption() > 0 && sizeConfigure() == 0 && *arrayOption(1,1) != '-') handleOption(destrOption('\n'));
+        if (sizeOption() == 0 && sizeConfigure() > 0) handleConfigure(destrConfigure('\n'),*delocConfigurer(1));
 
         int lenSel = pselect(0, 0, 0, 0, 0, &saved);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;

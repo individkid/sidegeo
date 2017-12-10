@@ -64,6 +64,7 @@ EXTERNC void xfer##NAME();
 #define DECLARE_LOCAL(NAME,TYPE) \
 EXTERNC TYPE *enloc##NAME(int siz); \
 EXTERNC TYPE *deloc##NAME(int siz); \
+EXTERNC TYPE *destr##NAME(TYPE val); \
 EXTERNC TYPE *unloc##NAME(int siz); \
 EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
@@ -74,6 +75,7 @@ EXTERNC void xfer##NAME(int siz);
 #define DECLARE_STAGE(NAME,TYPE) \
 EXTERNC TYPE *enloc##NAME(int siz); \
 EXTERNC TYPE *deloc##NAME(int siz); \
+EXTERNC TYPE *destr##NAME(TYPE val); \
 EXTERNC TYPE *unloc##NAME(int siz); \
 EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
@@ -89,6 +91,7 @@ EXTERNC void unlock##NAME();
 #define DECLARE_THREAD(NAME,TYPE) \
 EXTERNC TYPE *enloc##NAME(int idx, int siz); \
 EXTERNC TYPE *deloc##NAME(int idx, int siz); \
+EXTERNC TYPE *destr##NAME(int idx, TYPE val); \
 EXTERNC TYPE *unloc##NAME(int idx, int siz); \
 EXTERNC void reloc##NAME(int idx, int siz); \
 EXTERNC TYPE *array##NAME(int idx, int sub, int siz); \
@@ -423,6 +426,12 @@ template<class TYPE> struct QueueStruct : QueueBase {
         if (head > tail) exitErrstr("deloc too siz\n");
         return head-siz;
     }
+    TYPE *destr(TYPE val)
+    {
+        int siz = 0; while (siz < size() && *array(siz,1) != val) siz++;
+        if (siz < size()) siz++;
+        return deloc(siz);
+    }
     TYPE *unloc(int siz)
     {
         if (siz < 0) exitErrstr("unloc too siz\n");
@@ -466,6 +475,7 @@ template<class TYPE> QueueStruct<TYPE> *QueueStruct<TYPE>::src = 0;
 QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(); \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
+extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.destr(val);} \
 extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.unloc(siz);} \
 extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
@@ -477,6 +487,7 @@ extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);}
 QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(&NEXT##Inst); \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
+extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.destr(val);} \
 extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.unloc(siz);} \
 extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
@@ -573,6 +584,10 @@ template<class TYPE> struct QueueMeta : QueueThread {
     {
         return meta.array(idx,1)->deloc(siz);
     }
+    TYPE *destr(int idx, TYPE val)
+    {
+        return meta.array(idx,1)->destr(val);
+    }
     TYPE *unloc(int idx, int siz)
     {
         return meta.array(idx,1)->unloc(siz);
@@ -595,6 +610,7 @@ template<class TYPE> struct QueueMeta : QueueThread {
 QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(&NEXT##Inst); \
 extern "C" TYPE *enloc##NAME(int idx, int siz) {return NAME##Inst.enloc(idx,siz);} \
 extern "C" TYPE *deloc##NAME(int idx, int siz) {return NAME##Inst.deloc(idx,siz);} \
+extern "C" TYPE *destr##NAME(int idx, TYPE val) {return NAME##Inst.destr(idx,val);} \
 extern "C" TYPE *unloc##NAME(int idx, int siz) {return NAME##Inst.unloc(idx,siz);} \
 extern "C" void reloc##NAME(int idx, int siz) {NAME##Inst.reloc(idx,siz);} \
 extern "C" TYPE *array##NAME(int idx, int sub, int siz) {return NAME##Inst.array(idx,sub,siz);} \
@@ -625,6 +641,7 @@ QueuePointer<TYPE> NAME##Inst = QueuePointer<TYPE>(); \
 extern "C" void refer##NAME() {NAME##Inst.refer();} \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.ptr->enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.ptr->deloc(siz);} \
+extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.ptr->destr(val);} \
 extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.ptr->unloc(siz);} \
 extern "C" void reloc##NAME(int siz) {NAME##Inst.ptr->reloc(siz);} \
 extern "C" int size##NAME() {return NAME##Inst.ptr->size();} \

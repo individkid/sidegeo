@@ -220,9 +220,9 @@ void backend(char chr)
         writestr(arrayConPtr(0,len));
         delocConPtr(1); len--;
         if (*arrayConPtr(0,1) == '-') {
-            if (len > 1 && *arrayConPtr(1,1) == '-')
-            memcpy(enlocConOption(2),"-e",2);
-            memcpy(enlocConOption(len),delocConPtr(len),len);}
+        if (len > 1 && *arrayConPtr(1,1) == '-') {
+        memcpy(enlocConOption(2),"-e",2); delocConOption(2);}
+        memcpy(enlocConOption(len),delocConPtr(len),len);}
         useEcho(--depth); referConPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocConPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
