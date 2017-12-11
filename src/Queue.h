@@ -328,7 +328,7 @@ struct QueueStdin : QueueMutex {
     }
 };
 
-#define DEFINE_MUTEX_(NAME,TYPE,FUNC...) \
+#define DEFINE_MUTEX(NAME,TYPE,FUNC...) \
 TYPE NAME##Inst = TYPE(FUNC); \
 extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
 extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
@@ -336,8 +336,6 @@ extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 extern "C" void join##NAME() {NAME##Inst.join();} \
 extern "C" void exit##NAME() {NAME##Inst.done = 1;}
-
-#define DEFINE_MUTEX(NAME) DEFINE_MUTEX_(NAME,QueueCompat)
 
 struct QueueCond : QueueCompat {
     pthread_cond_t cond;
@@ -412,13 +410,8 @@ struct QueueSource : QueueXfer {
     }
 };
 
-#define DEFINE_SOURCE_(NAME,NEXT,XPTR) \
+#define DEFINE_SOURCE(NAME,NEXT,XPTR) \
 QueueSource NAME##Inst = QueueSource(&NEXT##Inst,&XPTR##Inst); \
-extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
-extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
-
-#define DEFINE_SOURCE(NAME,NEXT) \
-QueueSource NAME##Inst = QueueSource(&NEXT##Inst,&NEXT##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
@@ -461,12 +454,8 @@ struct QueueDest : QueueXfer {
     }
 };
 
-#define DEFINE_DEST_(NAME,NEXT,XPTR) \
+#define DEFINE_DEST(NAME,NEXT,XPTR) \
 QueueDest NAME##Inst = QueueDest(&NEXT##Inst,&XPTR##Inst); \
-extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
-
-#define DEFINE_DEST(NAME,NEXT) \
-QueueDest NAME##Inst = QueueDest(&NEXT##Inst,&NEXT##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 struct QueueWait : QueueXfer {
@@ -504,12 +493,8 @@ struct QueueWait : QueueXfer {
     }
 };
 
-#define DEFINE_WAIT_(NAME,NEXT,XPTR) \
+#define DEFINE_WAIT(NAME,NEXT,XPTR) \
 QueueWait NAME##Inst = QueueWait(&NEXT##Inst,&XPTR##Inst); \
-extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
-
-#define DEFINE_WAIT(NAME,NEXT) \
-QueueWait NAME##Inst = QueueWait(&NEXT##Inst,&NEXT##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define QUEUE_STEP 10

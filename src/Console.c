@@ -73,14 +73,6 @@ int tailmatch()
     return *arrayMatch(sizeMatch()-1,1);
 }
 
-int checkfds(int nfds, fd_set *fds, struct timespec *delay, sigset_t *saved)
-{
-    int lenSel = pselect(nfds, fds, 0, 0, delay, saved);
-    if (lenSel < 0 && errno == EINTR) lenSel = 0;
-    if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
-    return lenSel;
-}
-
 int readchr()
 {
     char chr;
