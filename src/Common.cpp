@@ -355,7 +355,7 @@ DEFINE_POINTER(Pseudo,char)
 DEFINE_POINTER(Name,char *)
 
 
-DEFINE_SOURCE(ConCommands,CmnCommands,CmnCommands)
+DEFINE_SOURCE(ConCommands,CmnCommands,CmnOutputs)
 DEFINE_STAGE(ConCommand,Command,ConCommands)
 DEFINE_STAGE(ConCmdChar,char,ConCommand)
 
