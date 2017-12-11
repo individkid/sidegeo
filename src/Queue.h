@@ -213,6 +213,7 @@ struct QueueMutex {
         if (xfer()) {consume(index); while (noxfer()) consume(index);}
         else if (delay()) {produce(index); while (nodelay()) produce(index);}}
         if (after) after();
+        return 0;
     }
 };
 
@@ -391,12 +392,12 @@ struct QueueSource : QueueXfer {
 
 #define DEFINE_SOURCE_(NAME,NEXT,XPTR) \
 QueueSource NAME##Inst = QueueSource(&NEXT##Inst,&XPTR##Inst); \
-extern "C" int xfer##NAME() {NAME##Inst.xfer();} \
+extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
 #define DEFINE_SOURCE(NAME,NEXT) \
 QueueSource NAME##Inst = QueueSource(&NEXT##Inst); \
-extern "C" int xfer##NAME() {NAME##Inst.xfer();} \
+extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
 struct QueueDest : QueueXfer {
@@ -442,11 +443,11 @@ struct QueueDest : QueueXfer {
 
 #define DEFINE_DEST_(NAME,NEXT,XPTR) \
 QueueDest NAME##Inst = QueueDest(&NEXT##Inst,&XPTR##Inst); \
-extern "C" int xfer##NAME() {NAME##Inst.xfer();}
+extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define DEFINE_DEST(NAME,NEXT) \
 QueueDest NAME##Inst = QueueDest(&NEXT##Inst); \
-extern "C" int xfer##NAME() {NAME##Inst.xfer();}
+extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 struct QueueWait : QueueXfer {
     QueueBase *next;
@@ -486,11 +487,11 @@ struct QueueWait : QueueXfer {
 
 #define DEFINE_WAIT_(NAME,NEXT,XPTR) \
 QueueWait NAME##Inst = QueueWait(&NEXT##Inst,&XPTR##Inst); \
-extern "C" int xfer##NAME() {NAME##Inst.xfer();}
+extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define DEFINE_WAIT(NAME,NEXT) \
 QueueWait NAME##Inst = QueueWait(&NEXT##Inst); \
-extern "C" int xfer##NAME() {NAME##Inst.xfer();}
+extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define QUEUE_STEP 10
 
