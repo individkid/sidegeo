@@ -21,17 +21,12 @@
 EXTERNCBEGIN
 
 #include <termios.h>
-#include <unistd.h>
 
 extern pthread_t consoleThread;
 extern pthread_t haskellThread;
 extern pthread_t timewheelThread;
 extern pthread_t processThread;
 extern float invalid[2];
-
-void handler(int sig)
-{
-}
 
 void glfwPostEmptyEvent();
 void signalCommands()
@@ -266,6 +261,7 @@ DEFINE_STAGE(CmnCmdInt,int,CmnCmdChar)
 DEFINE_STAGE(CmnCmdData,enum Data,CmnCmdInt)
 DEFINE_STAGE(CmnRender,struct Render,CmnCmdData)
 DEFINE_STAGE(CmnBuffer,struct Buffer *,CmnRender)
+
 DEFINE_MUTEX(CmnOutputs,signalOutputs)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 DEFINE_MUTEX(CmnProcesses,signalProcesses)
@@ -273,6 +269,7 @@ DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnOptioner,int,CmnOption)
 DEFINE_STAGE(CmnConfigure,char,CmnOptioner)
 DEFINE_STAGE(CmnConfigureer,int,CmnConfigure)
+
 DEFINE_COND(CmnHaskells,signalHaskells)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnKind,enum Kind,CmnEvent)
@@ -280,6 +277,7 @@ DEFINE_STAGE(CmnHsCmd,Command,CmnKind)
 DEFINE_STAGE(CmnHsChar,char,CmnHsCmd)
 DEFINE_STAGE(CmnHsInt,int,CmnHsChar)
 DEFINE_STAGE(CmnHsData,enum Data,CmnHsInt)
+
 DEFINE_MUTEX(CmnTimewheels,signalTimewheels)
 DEFINE_STAGE(CmnControl,enum Control,CmnTimewheels)
 DEFINE_STAGE(CmnChange,struct Change,CmnControl)
@@ -288,7 +286,6 @@ DEFINE_STAGE(CmnTwInt,int,CmnTwChar)
 DEFINE_STAGE(CmnCoefficient,int,CmnTwInt)
 DEFINE_STAGE(CmnVariable,int,CmnCoefficient)
 DEFINE_STAGE(CmnState,struct State,CmnVariable)
-DEFINE_POINTER(CmnInt,int)
 
 DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(CmdState,int)

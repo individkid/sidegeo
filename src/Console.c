@@ -18,7 +18,6 @@
 
 #include "Common.h"
 #include <termios.h>
-#include <unistd.h>
 #ifdef __linux__
 #include <sys/types.h>
 #endif
@@ -232,25 +231,10 @@ void backend(char chr)
     else writeitem(tailline(),tailmatch());
 }
 
-void *console(void *arg)
+// cfunctionptrs
+void before()
 {
-    struct sigaction sigact = {0};
-    sigemptyset(&sigact.sa_mask);
-    sigact.sa_handler = &handler;
-    sigset_t saved = {0};
-    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
-    pthread_sigmask(SIG_SETMASK,0,&saved);
-    sigdelset(&saved, SIGUSR1);
-
-    fd_set fds = {0};
-    FD_ZERO(&fds);
-    FD_SET(STDIN_FILENO, &fds);
-    struct timespec nodelay = {0};
-    struct timespec delay = {0};
-    delay.tv_sec = 0;
-    delay.tv_nsec = POLL_DELAY*NANO_SECONDS;
-
-    if (!isatty (STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
+    if (!isatty(STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
     if (!validTermios) tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
     struct termios terminal;
     if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed: %s\n", strerror(errno));
@@ -258,21 +242,74 @@ void *console(void *arg)
     terminal.c_cc[VMIN] = 1;
     terminal.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
-
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
-    while (!done) {
-        xferConCommands();
-        xferConProcesses();
-        xferOutputs();
-
-        if (sizeOutput() == 0) {
-            if (checkfds(STDIN_FILENO+1,&fds,&delay,&saved) == 0) continue;
-            frontend(readchr()); while (checkfds(STDIN_FILENO+1,&fds,&nodelay,0)) frontend(readchr());}
-
-        while (sizeOutput()) backend(*delocOutput(1));}
+}
+void consume(int index)
+{
+    backend(*delocOutput(1));
+}
+void produce(int index)
+{
+    frontend(readchr());
+}
+void after()
+{
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
-
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
-    return 0;
+}
+
+// virtual
+sigset_t saved;
+fd_set fds;
+struct timespec notime;
+void init()
+{
+    struct sigaction sigact = {0};
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_handler = &handler;
+    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+    pthread_sigmask(SIG_SETMASK,0,&saved);
+    sigdelset(&saved, SIGUSR1);
+    FD_ZERO(&fds);
+    FD_SET(STDIN_FILENO, &fds);
+    struct timespec temp = {0};
+    notime = temp;
+}
+int delay()
+{
+    return checkfds(STDIN_FILENO+1,&fds,0,&saved);
+}
+int nodelay()
+{
+    return checkfds(STDIN_FILENO+1,&fds,&notime,0);
+}
+
+int xfer()
+{
+    xferConCommands();
+    xferConProcesses();
+    xferOutputs();
+    return (sizeOutput() > 0);
+}
+int noxfer()
+{
+    return (sizeOutput() > 0);
+}
+
+// incommon
+void *loop(void *arg)
+{
+    int index = void2int(arg);
+    before();
+    init();
+    while (1) {
+    if (xfer()) {consume(index); while (noxfer()) consume(index);}
+    else if (delay()) {produce(index); while (nodelay()) produce(index);}}
+    after();
+}
+
+void *console(void *arg)
+{
+    return loop(arg);
 }

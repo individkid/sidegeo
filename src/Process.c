@@ -23,12 +23,6 @@
 
 int toggle = 0;
 
-int void2int(void *val)
-{
-    char *ptr = 0;
-    return ((char *)val-ptr);
-}
-
 void handleAppend(char *line, int index)
 {
 	// TODO send to indicated Configure thread

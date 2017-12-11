@@ -176,7 +176,6 @@ enum Yield {
     Unyield, // continue sending to Configure
     Yields};
 
-void handler(int sig);
 void signalCommands();
 void signalOutputs();
 void signalProcesses();
@@ -257,7 +256,6 @@ DECLARE_STAGE(CmnTwInt,int)
 DECLARE_STAGE(CmnCoefficient,int)
 DECLARE_STAGE(CmnVariable,int)
 DECLARE_STAGE(CmnState,struct State)
-DECLARE_POINTER(CmnInt,int)
 
 DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(CmdState,int)
@@ -352,8 +350,8 @@ DECLARE_HUB(Configures)
 DECLARE_THREAD(Inject,char)
 DECLARE_THREAD(Yield,enum Yield)
 DECLARE_THREAD(File,char)
-DECLARE_THREAD(CfgConfigure,char)
-DECLARE_THREAD(CfgConfigurer,int)
+DECLARE_THREAD(CfgProcess,char)
+DECLARE_THREAD(CfgProcesser,int)
 DECLARE_SOURCE(ProCommands)
 DECLARE_STAGE(ProCommand,Command)
 DECLARE_STAGE(ProCmdChar,char)

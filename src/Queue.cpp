@@ -21,12 +21,23 @@
 EXTERNCBEGIN
 
 #include <termios.h>
-#include <unistd.h>
 #include <stdarg.h>
 #include <stdlib.h>
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
+
+void *int2void(int val)
+{
+    char *ptr = 0;
+    return (void *)(ptr+val);
+}
+
+int void2int(void *val)
+{
+    char *ptr = 0;
+    return ((char *)val-ptr);
+}
 
 void exitErrstr(const char *fmt, ...)
 {
@@ -34,6 +45,10 @@ void exitErrstr(const char *fmt, ...)
     printf("fatal: ");
     va_list args; va_start(args, fmt); vprintf(fmt, args); va_end(args);
     exit(-1);
+}
+
+void handler(int sig)
+{
 }
 
 EXTERNCEND
