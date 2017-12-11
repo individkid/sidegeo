@@ -222,12 +222,6 @@ extern pthread_t haskellThread;
 extern pthread_t timewheelThread;
 extern pthread_t processThread;
 
-void glfwPostEmptyEvent();
-void signalCommands()
-{
-    glfwPostEmptyEvent();
-}
-
 void signalProcesses()
 {
     if (pthread_kill(processThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
@@ -243,6 +237,13 @@ void signalHaskells()
     signalCmnHaskells();
 }
 
+void commandSignal();
+int commandXfer() ;
+void commandConsume(int index);
+int commandDelay();
+int commandNodelay() ;
+void commandProduce(int index);
+
 void beforeConsole();
 void consumeConsole(int index);
 void produceConsole(int index);
@@ -254,7 +255,7 @@ inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
 
-DEFINE_MUTEX(CmnCommands,signalCommands)
+DEFINE_MUTEX_(CmnCommands,QueueFunc,0,commandConsume,commandProduce,0,commandSignal,0,commandXfer,0,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdChar,char,CmnCommand)
 DEFINE_STAGE(CmnCmdInt,int,CmnCmdChar)
@@ -262,7 +263,7 @@ DEFINE_STAGE(CmnCmdData,enum Data,CmnCmdInt)
 DEFINE_STAGE(CmnRender,struct Render,CmnCmdData)
 DEFINE_STAGE(CmnBuffer,struct Buffer *,CmnRender)
 
-DEFINE_MUTEX(CmnOutputs,beforeConsole,consumeConsole,produceConsole,afterConsole)
+DEFINE_MUTEX_(CmnOutputs,QueueStdin,beforeConsole,consumeConsole,produceConsole,afterConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
 DEFINE_MUTEX(CmnProcesses,signalProcesses)
@@ -288,10 +289,12 @@ DEFINE_STAGE(CmnCoefficient,int,CmnTwInt)
 DEFINE_STAGE(CmnVariable,int,CmnCoefficient)
 DEFINE_STAGE(CmnState,struct State,CmnVariable)
 
+
 DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(CmdState,int)
 DEFINE_LOCAL(Cluster,int)
 DEFINE_LOCAL(Machine,Machine)
+
 DEFINE_DEST(Commands,CmnCommands)
 DEFINE_STAGE(Command,Command,Commands)
 DEFINE_STAGE(CmdChar,char,Command)
@@ -299,21 +302,26 @@ DEFINE_STAGE(CmdInt,int,CmdChar)
 DEFINE_STAGE(CmdData,enum Data,CmdInt)
 DEFINE_STAGE(Render,struct Render,CmdData)
 DEFINE_STAGE(Buffer,struct Buffer *,Render)
-DEFINE_SOURCE(CmdOutputs,CmnOutputs)
+
+DEFINE_SOURCE_(CmdOutputs,CmnOutputs,Commands)
 DEFINE_STAGE(CmdOutput,char,CmdOutputs)
-DEFINE_SOURCE(CmdHaskells,CmnHaskells)
+
+DEFINE_SOURCE_(CmdHaskells,CmnHaskells,CmdOutputs)
 DEFINE_STAGE(CmdEvent,enum Event,CmdHaskells)
 DEFINE_STAGE(CmdKind,enum Kind,CmdEvent)
 DEFINE_STAGE(CmdHsCmd,Command,CmdKind)
 DEFINE_STAGE(CmdHsChar,char,CmdHsCmd)
 DEFINE_STAGE(CmdHsInt,int,CmdHsChar)
 DEFINE_STAGE(CmdHsData,enum Data,CmdHsInt)
-DEFINE_SOURCE(CmdTimewheels,CmnTimewheels)
+
+DEFINE_SOURCE_(CmdTimewheels,CmnTimewheels,CmdHaskells)
 DEFINE_STAGE(CmdControl,enum Control,CmdTimewheels)
 DEFINE_STAGE(CmdChange,struct Change,CmdControl)
+
 DEFINE_POINTER(MachPtr,Machine)
 DEFINE_POINTER(CharPtr,char)
 DEFINE_POINTER(IntPtr,int)
+
 
 DEFINE_META(Place,int)
 DEFINE_META(Embed,int)
@@ -327,6 +335,7 @@ DEFINE_META(DataName,char)
 DEFINE_LOCAL(EventMap,int)
 DEFINE_LOCAL(KindMap,int)
 DEFINE_LOCAL(DataMap,enum Data)
+
 DEFINE_WAIT(Haskells,CmnHaskells)
 DEFINE_STAGE(Event,enum Event,Haskells)
 DEFINE_STAGE(Kind,enum Kind,Event)
@@ -334,27 +343,34 @@ DEFINE_STAGE(HsCmd,Command,Kind)
 DEFINE_STAGE(HsChar,char,HsCmd)
 DEFINE_STAGE(HsInt,int,HsChar)
 DEFINE_STAGE(HsData,enum Data,HsInt)
-DEFINE_SOURCE(HsCommands,CmnCommands)
+
+DEFINE_SOURCE_(HsCommands,CmnCommands,Haskells)
 DEFINE_STAGE(HsCommand,Command,HsCommands)
 DEFINE_STAGE(HsCmdChar,char,HsCommand)
 DEFINE_STAGE(HsCmdInt,int,HsCmdChar)
 DEFINE_STAGE(HsCmdData,enum Data,HsCmdInt)
+
 DEFINE_POINTER(Meta,int)
 DEFINE_POINTER(Pseudo,char)
 DEFINE_POINTER(Name,char *)
 
+
 DEFINE_SOURCE(ConCommands,CmnCommands)
 DEFINE_STAGE(ConCommand,Command,ConCommands)
 DEFINE_STAGE(ConCmdChar,char,ConCommand)
-DEFINE_SOURCE(ConProcesses,CmnProcesses)
+
+DEFINE_SOURCE_(ConProcesses,CmnProcesses,ConCommands)
 DEFINE_STAGE(ConOption,char,ConProcesses)
 DEFINE_STAGE(ConOptioner,int,ConOption)
-DEFINE_DEST(Outputs,CmnOutputs)
+
+DEFINE_DEST_(Outputs,CmnOutputs,ConProcesses)
 DEFINE_STAGE(Output,char,Outputs)
+
 DEFINE_LOCAL(Line,enum Menu)
 DEFINE_LOCAL(Match,int)
 DEFINE_META(Echo,char)
 DEFINE_POINTER(ConPtr,char)
+
 
 DEFINE_DEST(Timewheels,CmnTimewheels)
 DEFINE_STAGE(Control,enum Control,Timewheels)
@@ -364,32 +380,38 @@ DEFINE_STAGE(TwInt,int,TwChar)
 DEFINE_STAGE(Coefficient,int,TwInt)
 DEFINE_STAGE(Variable,int,Coefficient)
 DEFINE_STAGE(State,struct State,Variable)
+
 DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)
 DEFINE_META(Wave,int)
 DEFINE_POINTER(Pipe,int)
-DEFINE_SOURCE(TwCommands,CmnCommands)
+
+DEFINE_SOURCE_(TwCommands,CmnCommands,Timewheels)
 DEFINE_STAGE(TwCommand,Command,TwCommands)
 DEFINE_STAGE(TwCmdChar,int,TwCommand)
 DEFINE_STAGE(TwCmdInt,int,TwCmdChar)
+
 
 DEFINE_DEST(Processes,CmnProcesses)
 DEFINE_STAGE(Option,char,Processes)
 DEFINE_STAGE(Optioner,int,Option)
 DEFINE_STAGE(Configure,char,Optioner)
 DEFINE_STAGE(Configurer,int,Configure)
+
 DEFINE_HUB(Configures)
 DEFINE_THREAD(Inject,char,Configures)
 DEFINE_THREAD(Yield,enum Yield,Inject)
 DEFINE_THREAD(File,char,Yield)
 DEFINE_THREAD(CfgConfigure,char,File)
 DEFINE_THREAD(CfgConfigurer,int,CfgConfigure)
-DEFINE_SOURCE(ProCommands,CmnCommands)
+
+DEFINE_SOURCE_(ProCommands,CmnCommands,Processes)
 DEFINE_STAGE(ProCommand,Command,ProCommands)
 DEFINE_STAGE(ProCmdChar,char,ProCommand)
 DEFINE_STAGE(ProCmdInt,int,ProCmdChar)
 DEFINE_STAGE(ProCmdData,enum Data,ProCmdInt)
-DEFINE_SOURCE(ProTimewheels,CmnTimewheels)
+
+DEFINE_SOURCE_(ProTimewheels,CmnTimewheels,ProCommands)
 DEFINE_STAGE(ProControl,enum Control,ProTimewheels)
 DEFINE_STAGE(ProChange,struct Change,ProControl)
 DEFINE_STAGE(ProTwChar,char,ProChange)

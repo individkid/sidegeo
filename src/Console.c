@@ -65,7 +65,6 @@ int esc = 0;
 int inj = 0;
 int last[4] = {0};
 enum Menu mark[Modes] = INIT;
-int done = 0;
 int depth = 0;
 
 void menu();
@@ -226,7 +225,7 @@ void backend(char chr)
     else if (alphaof(chr) > 0 && depth > 0) *enlocConPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
     else if (motionof(chr) == Space) writemenu();
-    else if (motionof(chr) == Escape) done = 1;
+    else if (motionof(chr) == Escape) exitCmnOutputs();
     if (depth > 0) writestr(arrayConPtr(0,sizeConPtr()));
     else writeitem(tailline(),tailmatch());
 }
