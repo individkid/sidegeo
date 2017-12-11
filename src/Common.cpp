@@ -255,7 +255,7 @@ inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
 
-DEFINE_MUTEX_(CmnCommands,QueueFunc,0,commandConsume,commandProduce,0,commandSignal,0,commandXfer,0,commandDelay,commandNodelay)
+DEFINE_MUTEX_(CmnCommands,QueueFunc,commandConsume,commandProduce,commandSignal,0,0,commandXfer,0,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdChar,char,CmnCommand)
 DEFINE_STAGE(CmnCmdInt,int,CmnCmdChar)
@@ -263,16 +263,16 @@ DEFINE_STAGE(CmnCmdData,enum Data,CmnCmdInt)
 DEFINE_STAGE(CmnRender,struct Render,CmnCmdData)
 DEFINE_STAGE(CmnBuffer,struct Buffer *,CmnRender)
 
-DEFINE_MUTEX_(CmnOutputs,QueueStdin,beforeConsole,consumeConsole,produceConsole,afterConsole)
+DEFINE_MUTEX_(CmnOutputs,QueueStdin,beforeConsole,afterConsole,consumeConsole,produceConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
-DEFINE_MUTEX(CmnProcesses,signalProcesses)
+DEFINE_MUTEX(CmnProcesses)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnOptioner,int,CmnOption)
 DEFINE_STAGE(CmnConfigure,char,CmnOptioner)
 DEFINE_STAGE(CmnConfigureer,int,CmnConfigure)
 
-DEFINE_COND(CmnHaskells,signalHaskells)
+DEFINE_COND(CmnHaskells)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnKind,enum Kind,CmnEvent)
 DEFINE_STAGE(CmnHsCmd,Command,CmnKind)
@@ -280,7 +280,7 @@ DEFINE_STAGE(CmnHsChar,char,CmnHsCmd)
 DEFINE_STAGE(CmnHsInt,int,CmnHsChar)
 DEFINE_STAGE(CmnHsData,enum Data,CmnHsInt)
 
-DEFINE_MUTEX(CmnTimewheels,signalTimewheels)
+DEFINE_MUTEX(CmnTimewheels)
 DEFINE_STAGE(CmnControl,enum Control,CmnTimewheels)
 DEFINE_STAGE(CmnChange,struct Change,CmnControl)
 DEFINE_STAGE(CmnTwChar,char,CmnChange)

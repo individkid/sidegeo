@@ -309,7 +309,7 @@ int main(int argc, char **argv)
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
     createCmnOutputs(0);
 
-    funcCmnCommands(0);
+    loopCmnCommands(0);
 
     lockCmnHaskells(); *enlocCmnEvent(1) = Done; unlockCmnHaskells(); if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
     lockCmnTimewheels(); *enlocCmnControl(1) = Finish; unlockCmnTimewheels(); if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
@@ -319,8 +319,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-int xferCount = 0;
-int consumeCount = 0;
+int commandCount = 0;
 
 void commandSignal()
 {
@@ -328,11 +327,11 @@ void commandSignal()
 }
 int commandXfer()
 {
-    return (xferCount > consumeCount);
+    return (sizeCommand() > commandCount);
 }
 void commandConsume(int index)
 {
-    countCommands(xferCount-consumeCount); consumeCount = xferCount;
+    countCommands(sizeCommand()-commandCount); commandCount = sizeCommand();
 }
 int commandDelay()
 {
@@ -368,4 +367,5 @@ void commandProduce(int index)
         DEFAULT(exitErrstr("invalid machine action\n");)
         if (done) {done--; break;}} if (done) {done--; break;}}
     if (done) {done--; exitCmnCommands();}
+    commandCount = sizeCommand();
 }

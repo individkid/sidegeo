@@ -20,10 +20,12 @@
 #define QUEUE_H
 
 #ifdef __cplusplus
+#define EXTERNV extern "C"
 #define EXTERNC extern "C"
 #define EXTERNCBEGIN extern "C" {
 #define EXTERNCEND }
 #else
+#define EXTERNV extern
 #define EXTERNC
 #define EXTERNCBEGIN
 #define EXTERNCEND
@@ -37,10 +39,14 @@ EXTERNCBEGIN
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <termios.h>
 #ifdef __linux__
 #include <sys/types.h>
 #endif
 EXTERNCEND
+
+EXTERNV struct termios savedTermios;
+EXTERNV int validTermios;
 
 EXTERNC void *int2void(int val);
 EXTERNC int void2int(void *val);
@@ -48,7 +54,7 @@ EXTERNC void exitErrstr(const char *fmt, ...);
 EXTERNC void handler(int sig);
 
 #define DECLARE_MUTEX(NAME) \
-EXTERNC void *func##NAME(void *arg); \
+EXTERNC void *loop##NAME(void *arg); \
 EXTERNC void create##NAME(int arg); \
 EXTERNC void lock##NAME(); \
 EXTERNC void unlock##NAME(); \
@@ -146,36 +152,33 @@ struct QueueBase {
     virtual void use() = 0;
 };
 
+struct QueueMutex;
 struct QueueXfer {
+    QueueBase *next;
     QueueXfer *xptr;
+    QueueMutex *mutex;
     virtual int xfer() = 0;
     virtual int noxfer() = 0;
 };
 
 struct QueueMutex {
     QueueBase *next;
-    pthread_mutex_t mutex;
     QueueXfer *xptr;
-    void (*before)();
+    pthread_t thread;
+    pthread_mutex_t mutex;
     void (*consume)(int);
     void (*produce)(int);
-    void (*after)();
-    pthread_t thread;
     int done;
     QueueMutex()
     {
-        before = 0;
         consume = 0;
         produce = 0;
-        after = 0;
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
-    QueueMutex(void (*fnc2)(), void (*fnc3)(int), void (*fnc4)(int), void (*fnc5)())
+    QueueMutex(void (*fnc3)(int), void (*fnc4)(int))
     {
-        before = fnc2;
         consume = fnc3;
         produce = fnc4;
-        after = fnc5;
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
     virtual ~QueueMutex()
@@ -199,7 +202,8 @@ struct QueueMutex {
         if (pthread_join(thread,0) != 0) exitErrstr("cannot join thread\n");
     }
     virtual void signal() = 0;
-    virtual void init() = 0;
+    virtual void before() = 0;
+    virtual void after() = 0;
     virtual int xfer() = 0;
     virtual int noxfer() = 0;
     virtual int delay() = 0;
@@ -207,22 +211,21 @@ struct QueueMutex {
     void *loop(void *arg)
     {
         int index = void2int(arg);
-        init();
-        if (before) before();
+        before();
         while (!done) {
         if (xfer()) {consume(index); while (noxfer()) consume(index);}
         else if (delay()) {produce(index); while (nodelay()) produce(index);}}
-        if (after) after();
+        after();
         return 0;
     }
 };
 
 struct QueueCompat : QueueMutex {
-    void (*func)();
-    QueueCompat(void (*fnc)()) : QueueMutex() {func = fnc;}
+    QueueCompat() : QueueMutex() {}
     virtual ~QueueCompat() {}
-    virtual void signal() {(*func)();}
-    virtual void init() {exitErrstr("mutex too compat\n");}
+    virtual void signal() {exitErrstr("mutex too compat\n");}
+    virtual void before() {exitErrstr("mutex too compat\n");}
+    virtual void after() {exitErrstr("mutex too compat\n");}
     virtual int xfer() {exitErrstr("mutex too compat\n"); return 0;}
     virtual int noxfer() {exitErrstr("mutex too compat\n"); return 0;}
     virtual int delay() {exitErrstr("mutex too compat\n"); return 0;}
@@ -231,19 +234,21 @@ struct QueueCompat : QueueMutex {
 
 struct QueueFunc : QueueMutex {
     void (*signalPtr)();
-    void (*initPtr)();
+    void (*beforePtr)();
+    void (*afterPtr)();
     int (*delayPtr)();
     int (*nodelayPtr)();
     int (*xferPtr)();
     int (*noxferPtr)();
-    QueueFunc(void (*fnc2)(), void (*fnc3)(int), void (*fnc4)(int), void (*fnc5)(),
-        void (*fnc0)(), void (*fnc1)(),
-        int (*fnc6)(), int (*fnc7)(), int (*fnc8)(), int (*fnc9)()) : QueueMutex(fnc2,fnc3,fnc4,fnc5) {
-        signalPtr = fnc0; initPtr = fnc1;
+    QueueFunc(void (*fnc3)(int), void (*fnc4)(int),
+        void (*fnc)(), void (*fnc0)(), void (*fnc1)(),
+        int (*fnc6)(), int (*fnc7)(), int (*fnc8)(), int (*fnc9)()) : QueueMutex(fnc3,fnc4) {
+        signalPtr = fnc; beforePtr = fnc0; afterPtr = fnc1;
         xferPtr = fnc6; noxferPtr = fnc7; delayPtr = fnc8; nodelayPtr = fnc9;}
     virtual ~QueueFunc() {}
     virtual void signal() {if (signalPtr) (*signalPtr)();}
-    virtual void init() {if (initPtr) (*initPtr)();}
+    virtual void before() {if (beforePtr) (*beforePtr)();}
+    virtual void after() {if (afterPtr) (*afterPtr)();}
     virtual int xfer() {return (xferPtr ? (*xferPtr)() : 0);}
     virtual int noxfer() {return (noxferPtr() ? (*noxferPtr)() : 0);}
     virtual int delay() {return (delayPtr ? (*delayPtr)() : 0);}
@@ -254,14 +259,27 @@ struct QueueStdin : QueueMutex {
     sigset_t saved;
     fd_set fds;
     struct timespec notime;
-    QueueStdin(void (*fnc2)(), void (*fnc3)(int), void (*fnc4)(int), void (*fnc5)()) : QueueMutex(fnc2,fnc3,fnc4,fnc5) {}
+    void (*func0)();
+    void (*func1)();
+    QueueStdin(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(int), void (*fnc4)(int)) : QueueMutex(fnc3,fnc4) {
+        func0 = fnc2;
+        func1 = fnc5;
+    }
     virtual ~QueueStdin() {}
     virtual void signal()
     {
         if (pthread_kill(thread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
     }
-    virtual void init()
+    virtual void before()
     {
+        if (!isatty(STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
+        if (!validTermios) tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
+        struct termios terminal;
+        if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed: %s\n", strerror(errno));
+        terminal.c_lflag &= ~(ECHO|ICANON);
+        terminal.c_cc[VMIN] = 1;
+        terminal.c_cc[VTIME] = 0;
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
         struct sigaction sigact = {0};
         sigemptyset(&sigact.sa_mask);
         sigact.sa_handler = &handler;
@@ -273,6 +291,12 @@ struct QueueStdin : QueueMutex {
         struct timespec temp = {0};
         notime = temp;
         done = 0;
+        (*func0)();
+    }
+    virtual void after()
+    {
+        (*func1)();
+        if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
     }
     virtual int xfer()
     {
@@ -306,18 +330,18 @@ struct QueueStdin : QueueMutex {
 
 #define DEFINE_MUTEX_(NAME,TYPE,FUNC...) \
 TYPE NAME##Inst = TYPE(FUNC); \
-extern "C" void *func##NAME(void *arg) {return NAME##Inst.loop(arg);} \
-extern "C" void create##NAME(int arg) {NAME##Inst.create(func##NAME,arg);} \
+extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
+extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
 extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 extern "C" void join##NAME() {NAME##Inst.join();} \
 extern "C" void exit##NAME() {NAME##Inst.done = 1;}
 
-#define DEFINE_MUTEX(NAME,FUNC...) DEFINE_MUTEX_(NAME,QueueCompat,FUNC)
+#define DEFINE_MUTEX(NAME) DEFINE_MUTEX_(NAME,QueueCompat)
 
 struct QueueCond : QueueCompat {
     pthread_cond_t cond;
-    QueueCond(void (*fnc)()) : QueueCompat(fnc)
+    QueueCond() : QueueCompat()
     {
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
@@ -335,8 +359,8 @@ struct QueueCond : QueueCompat {
     }
 };
 
-#define DEFINE_COND(NAME,FUNC) \
-QueueCond NAME##Inst = QueueCond(FUNC); \
+#define DEFINE_COND(NAME) \
+QueueCond NAME##Inst = QueueCond(); \
 extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 extern "C" void wait##NAME() {NAME##Inst.wait();} \
@@ -344,12 +368,10 @@ extern "C" void signal##NAME() {NAME##Inst.signal();} \
 extern "C" void exit##NAME() {NAME##Inst.done = 1;}
 
 struct QueueSource : QueueXfer {
-    QueueBase *next;
-    QueueMutex *mutex;
-    QueueSource(QueueMutex *ptr)
+    QueueSource(QueueMutex *ptr0, QueueMutex *ptr1)
     {
-        mutex = ptr;
-        ptr->xptr = this;
+        mutex = ptr0;
+        ptr1->xptr = this;
         next = 0;
     }
     QueueSource(QueueMutex *ptr0, QueueXfer *ptr1)
@@ -396,17 +418,15 @@ extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
 #define DEFINE_SOURCE(NAME,NEXT) \
-QueueSource NAME##Inst = QueueSource(&NEXT##Inst); \
+QueueSource NAME##Inst = QueueSource(&NEXT##Inst,&NEXT##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
 struct QueueDest : QueueXfer {
-    QueueBase *next;
-    QueueMutex *mutex;
-    QueueDest(QueueMutex *ptr)
+    QueueDest(QueueMutex *ptr0, QueueMutex *ptr1)
     {
-        mutex = ptr;
-        ptr->xptr = this;
+        mutex = ptr0;
+        ptr1->xptr = this;
         next = 0;
     }
     QueueDest(QueueMutex *ptr0, QueueXfer *ptr1)
@@ -415,7 +435,7 @@ struct QueueDest : QueueXfer {
         ptr1->xptr = this;
         next = 0;
     }
-    int xfer()
+    virtual int xfer()
     {
         if (mutex == 0) exitErrstr("source too mutex\n");
         mutex->lock();
@@ -428,7 +448,7 @@ struct QueueDest : QueueXfer {
         mutex->unlock();
         return retval;
     }
-    int noxfer()
+    virtual int noxfer()
     {
         if (mutex == 0) exitErrstr("source too mutex\n");
         mutex->lock();
@@ -446,25 +466,24 @@ QueueDest NAME##Inst = QueueDest(&NEXT##Inst,&XPTR##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define DEFINE_DEST(NAME,NEXT) \
-QueueDest NAME##Inst = QueueDest(&NEXT##Inst); \
+QueueDest NAME##Inst = QueueDest(&NEXT##Inst,&NEXT##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 struct QueueWait : QueueXfer {
-    QueueBase *next;
     QueueCond *cond;
-    QueueWait(QueueCond *ptr)
+    QueueWait(QueueCond *ptr0, QueueMutex *ptr1)
     {
-        cond = ptr;
-        ptr->xptr = this;
+        mutex = cond = ptr0;
+        ptr1->xptr = this;
         next = 0;
     }
     QueueWait(QueueCond *ptr0, QueueXfer *ptr1)
     {
-        cond = ptr0;
+        mutex = cond = ptr0;
         ptr1->xptr = this;
         next = 0;
     }
-    int xfer()
+    virtual int xfer()
     {
         if (cond == 0) exitErrstr("source too cond\n");
         cond->lock();
@@ -490,7 +509,7 @@ QueueWait NAME##Inst = QueueWait(&NEXT##Inst,&XPTR##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define DEFINE_WAIT(NAME,NEXT) \
-QueueWait NAME##Inst = QueueWait(&NEXT##Inst); \
+QueueWait NAME##Inst = QueueWait(&NEXT##Inst,&NEXT##Inst); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define QUEUE_STEP 10
@@ -527,7 +546,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
         ptr->next = this;
         next = 0;
     }
-    QueueStruct(QueueSource *ptr)
+    QueueStruct(QueueXfer *ptr)
     {
         base = 0;
         limit = 0;
@@ -535,24 +554,6 @@ template<class TYPE> struct QueueStruct : QueueBase {
         tail = 0;
         ptr->next = this;
         next = 0;
-    }
-    QueueStruct(QueueDest *ptr)
-    {
-        base = 0;
-        limit = 0;
-        head = 0;
-        tail = 0;
-        ptr->next = this;
-        next = 0;
-    }
-    QueueStruct(QueueWait *ptr)
-    {
-        base = 0;
-        limit = 0;
-        head = 0;
-        tail = 0;
-        next = 0;
-        ptr->next = this;
     }
     virtual ~QueueStruct()
     {
@@ -636,8 +637,8 @@ template<class TYPE> struct QueueStruct : QueueBase {
 
 template<class TYPE> QueueStruct<TYPE> *QueueStruct<TYPE>::src = 0;
 
-#define DEFINE_LOCAL(NAME,TYPE) \
-QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(); \
+#define DEFINE_LOCAL(NAME,TYPE,FUNC...) \
+QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(FUNC); \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
 extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.destr(val);} \
@@ -648,17 +649,7 @@ extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" void use##NAME() {NAME##Inst.use();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);}
 
-#define DEFINE_STAGE(NAME,TYPE,NEXT) \
-QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(&NEXT##Inst); \
-extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
-extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
-extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.destr(val);} \
-extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.unloc(siz);} \
-extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
-extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
-extern "C" int size##NAME() {return NAME##Inst.size();} \
-extern "C" void use##NAME() {NAME##Inst.use();} \
-extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);}
+#define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE)
 
 struct QueueThread {
     QueueThread *next;
@@ -673,7 +664,7 @@ struct QueueHub : QueueCond {
     pthread_cond_t cond;
     QueueStruct<pthread_t> thread;
     int signal;
-    QueueHub() : QueueCond(0)
+    QueueHub() : QueueCond()
     {
         next = 0; signal = 0;
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));

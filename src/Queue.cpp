@@ -20,7 +20,6 @@
 
 EXTERNCBEGIN
 
-#include <termios.h>
 #include <stdarg.h>
 #include <stdlib.h>
 

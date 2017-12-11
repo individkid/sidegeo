@@ -176,8 +176,6 @@ enum Yield {
     Unyield, // continue sending to Configure
     Yields};
 
-void signalCommands();
-void signalOutputs();
 void signalProcesses();
 void signalTimewheels();
 void signalHaskells();
@@ -261,10 +259,12 @@ DECLARE_STAGE(CmnCoefficient,int)
 DECLARE_STAGE(CmnVariable,int)
 DECLARE_STAGE(CmnState,struct State)
 
+
 DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(CmdState,int)
 DECLARE_LOCAL(Cluster,int)
 DECLARE_LOCAL(Machine,Machine)
+
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
 DECLARE_STAGE(CmdChar,char)
@@ -272,8 +272,10 @@ DECLARE_STAGE(CmdInt,int)
 DECLARE_STAGE(CmdData,enum Data)
 DECLARE_STAGE(Render,struct Render)
 DECLARE_STAGE(Buffer,struct Buffer *)
+
 DECLARE_SOURCE(CmdOutputs)
 DECLARE_STAGE(CmdOutput,char)
+
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,enum Event)
 DECLARE_STAGE(CmdKind,enum Kind)
@@ -281,11 +283,14 @@ DECLARE_STAGE(CmdHsCmd,Command)
 DECLARE_STAGE(CmdHsChar,char)
 DECLARE_STAGE(CmdHsInt,int)
 DECLARE_STAGE(CmdHsData,enum Data)
+
 DECLARE_SOURCE(CmdTimewheels)
 DECLARE_STAGE(CmdChange,struct Change)
+
 DECLARE_POINTER(MachPtr,Machine)
 DECLARE_POINTER(CharPtr,char)
 DECLARE_POINTER(IntPtr,int)
+
 
 DECLARE_META(Place,int)
 DECLARE_META(Embed,int)
@@ -299,6 +304,7 @@ DECLARE_META(DataName,char)
 DECLARE_LOCAL(EventMap,int)
 DECLARE_LOCAL(KindMap,int)
 DECLARE_LOCAL(DataMap,enum Data)
+
 DECLARE_WAIT(Haskells)
 DECLARE_STAGE(Event,enum Event)
 DECLARE_STAGE(Kind,enum Kind)
@@ -306,27 +312,34 @@ DECLARE_STAGE(HsCmd,Command)
 DECLARE_STAGE(HsChar,char)
 DECLARE_STAGE(HsInt,int)
 DECLARE_STAGE(HsData,enum Data)
+
 DECLARE_SOURCE(HsCommands)
 DECLARE_STAGE(HsCommand,Command)
 DECLARE_STAGE(HsCmdChar,char)
 DECLARE_STAGE(HsCmdInt,int)
 DECLARE_STAGE(HsCmdData,enum Data)
+
 DECLARE_POINTER(Meta,int)
 DECLARE_POINTER(Pseudo,char)
 DECLARE_POINTER(Name,char *)
 
+
 DECLARE_SOURCE(ConCommands)
 DECLARE_STAGE(ConCommand,Command)
 DECLARE_STAGE(ConCmdChar,char)
+
 DECLARE_SOURCE(ConProcesses)
 DECLARE_STAGE(ConOption,char)
 DECLARE_STAGE(ConOptioner,int)
+
 DECLARE_DEST(Outputs)
 DECLARE_STAGE(Output,char)
+
 DECLARE_LOCAL(Line,enum Menu)
 DECLARE_LOCAL(Match,int)
 DECLARE_META(Echo,char)
 DECLARE_POINTER(ConPtr,char)
+
 
 DECLARE_DEST(Timewheels)
 DECLARE_STAGE(Control,enum Control)
@@ -336,31 +349,37 @@ DECLARE_STAGE(TwInt,int)
 DECLARE_STAGE(Coefficient,int)
 DECLARE_STAGE(Variable,int)
 DECLARE_STAGE(State,struct State)
+
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
 DECLARE_META(Wave,int)
 DECLARE_POINTER(Pipe,int)
+
 DECLARE_SOURCE(TwCommands)
 DECLARE_STAGE(TwCommand,Command)
 DECLARE_STAGE(TwCmdChar,int)
 DECLARE_STAGE(TwCmdInt,int)
+
 
 DECLARE_DEST(Processes)
 DECLARE_STAGE(Option,char)
 DECLARE_STAGE(Optioner,int)
 DECLARE_STAGE(Configure,char)
 DECLARE_STAGE(Configurer,int)
+
 DECLARE_HUB(Configures)
 DECLARE_THREAD(Inject,char)
 DECLARE_THREAD(Yield,enum Yield)
 DECLARE_THREAD(File,char)
 DECLARE_THREAD(CfgProcess,char)
 DECLARE_THREAD(CfgProcesser,int)
+
 DECLARE_SOURCE(ProCommands)
 DECLARE_STAGE(ProCommand,Command)
 DECLARE_STAGE(ProCmdChar,char)
 DECLARE_STAGE(ProCmdInt,int)
 DECLARE_STAGE(ProCmdData,enum Data)
+
 DECLARE_SOURCE(ProTimewheels)
 DECLARE_STAGE(ProControl,enum Control)
 DECLARE_STAGE(ProChange,struct Change)

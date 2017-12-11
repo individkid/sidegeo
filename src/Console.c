@@ -17,13 +17,7 @@
 */
 
 #include "Common.h"
-#include <termios.h>
-#ifdef __linux__
-#include <sys/types.h>
-#endif
 
-extern struct termios savedTermios;
-extern int validTermios;
 struct Item item[Menus] = {
     {Menus,Sculpt,0,"Sculpt","display and manipulate polytope"},
     {Sculpts,Sculpt,1,"Additive","click fills in region over pierce point"},
@@ -232,14 +226,6 @@ void backend(char chr)
 
 void beforeConsole()
 {
-    if (!isatty(STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
-    if (!validTermios) tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
-    struct termios terminal;
-    if (tcgetattr(STDIN_FILENO, &terminal) < 0) exitErrstr("tcgetattr failed: %s\n", strerror(errno));
-    terminal.c_lflag &= ~(ECHO|ICANON);
-    terminal.c_cc[VMIN] = 1;
-    terminal.c_cc[VTIME] = 0;
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
 }
 
@@ -257,5 +243,4 @@ void afterConsole()
 {
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
-    if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
 }
