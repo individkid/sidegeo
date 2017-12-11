@@ -22,37 +22,7 @@ EXTERNCBEGIN
 
 #include <termios.h>
 
-extern pthread_t consoleThread;
-extern pthread_t haskellThread;
-extern pthread_t timewheelThread;
-extern pthread_t processThread;
 extern float invalid[2];
-
-void glfwPostEmptyEvent();
-void signalCommands()
-{
-    glfwPostEmptyEvent();
-}
-
-void signalOutputs()
-{
-    if (pthread_kill(consoleThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-}
-
-void signalProcesses()
-{
-    if (pthread_kill(processThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-}
-
-void signalTimewheels()
-{
-    if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-}
-
-void signalHaskells()
-{
-    signalCmnHaskells();
-}
 
 enum Motion motionof(char code)
 {
@@ -248,6 +218,36 @@ float *invmat(float *u, int n)
     return u;
 }
 
+extern pthread_t haskellThread;
+extern pthread_t timewheelThread;
+extern pthread_t processThread;
+
+void glfwPostEmptyEvent();
+void signalCommands()
+{
+    glfwPostEmptyEvent();
+}
+
+void signalProcesses()
+{
+    if (pthread_kill(processThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+}
+
+void signalTimewheels()
+{
+    if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+}
+
+void signalHaskells()
+{
+    signalCmnHaskells();
+}
+
+void beforeConsole();
+void consumeConsole(int index);
+void produceConsole(int index);
+void afterConsole();
+
 EXTERNCEND
 
 inline bool operator!=(const Render &left, const Render &right) {return false;}
@@ -262,8 +262,9 @@ DEFINE_STAGE(CmnCmdData,enum Data,CmnCmdInt)
 DEFINE_STAGE(CmnRender,struct Render,CmnCmdData)
 DEFINE_STAGE(CmnBuffer,struct Buffer *,CmnRender)
 
-DEFINE_MUTEX(CmnOutputs,signalOutputs)
+DEFINE_MUTEX(CmnOutputs,beforeConsole,consumeConsole,produceConsole,afterConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
+
 DEFINE_MUTEX(CmnProcesses,signalProcesses)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnOptioner,int,CmnOption)

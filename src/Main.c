@@ -22,7 +22,6 @@
 Display *displayHandle = 0; // for XWarpPointer
 #endif
 GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
-pthread_t consoleThread = 0; // for io in the console
 pthread_t haskellThread = 0; // for haskell runtime system
 pthread_t timewheelThread = 0; // for stock flow delay
 pthread_t processThread = 0; // for arguments and configure creation
@@ -305,8 +304,8 @@ int main(int argc, char **argv)
     sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
     if (pthread_create(&haskellThread, 0, &haskell, 0) != 0) exitErrstr("cannot create thread\n");
-    if (pthread_create(&consoleThread, 0, &console, 0) != 0) exitErrstr("cannot create thread\n");
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
+    createCmnOutputs(0);
 
     while (1) {
         xferCmdOutputs();
@@ -342,11 +341,10 @@ int main(int argc, char **argv)
     }
 
     lockCmnHaskells(); *enlocCmnEvent(1) = Done; unlockCmnHaskells();
-    lockCmnOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockCmnOutputs();
     lockCmnTimewheels(); *enlocCmnControl(1) = Finish; unlockCmnTimewheels();
     if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
-    if (pthread_join(consoleThread, 0) != 0) exitErrstr("cannot join thread\n");
     if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
+    lockCmnOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockCmnOutputs(); joinCmnOutputs();
 
     glfwTerminate();
     return 0;

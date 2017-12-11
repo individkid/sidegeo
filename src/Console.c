@@ -231,8 +231,7 @@ void backend(char chr)
     else writeitem(tailline(),tailmatch());
 }
 
-// cfunctionptrs
-void before()
+void beforeConsole()
 {
     if (!isatty(STDIN_FILENO)) exitErrstr("stdin isnt terminal\n");
     if (!validTermios) tcgetattr(STDIN_FILENO, &savedTermios); validTermios = 1;
@@ -244,72 +243,20 @@ void before()
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) < 0) exitErrstr("tcsetattr failed: %s\n", strerror(errno));
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
 }
-void consume(int index)
+
+void consumeConsole(int index)
 {
     backend(*delocOutput(1));
 }
-void produce(int index)
+
+void produceConsole(int index)
 {
     frontend(readchr());
 }
-void after()
+
+void afterConsole()
 {
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
     if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
-}
-
-// virtual
-sigset_t saved;
-fd_set fds;
-struct timespec notime;
-void init()
-{
-    struct sigaction sigact = {0};
-    sigemptyset(&sigact.sa_mask);
-    sigact.sa_handler = &handler;
-    if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
-    pthread_sigmask(SIG_SETMASK,0,&saved);
-    sigdelset(&saved, SIGUSR1);
-    FD_ZERO(&fds);
-    FD_SET(STDIN_FILENO, &fds);
-    struct timespec temp = {0};
-    notime = temp;
-}
-int delay()
-{
-    return checkfds(STDIN_FILENO+1,&fds,0,&saved);
-}
-int nodelay()
-{
-    return checkfds(STDIN_FILENO+1,&fds,&notime,0);
-}
-
-int xfer()
-{
-    xferConCommands();
-    xferConProcesses();
-    xferOutputs();
-    return (sizeOutput() > 0);
-}
-int noxfer()
-{
-    return (sizeOutput() > 0);
-}
-
-// incommon
-void *loop(void *arg)
-{
-    int index = void2int(arg);
-    before();
-    init();
-    while (1) {
-    if (xfer()) {consume(index); while (noxfer()) consume(index);}
-    else if (delay()) {produce(index); while (nodelay()) produce(index);}}
-    after();
-}
-
-void *console(void *arg)
-{
-    return loop(arg);
 }

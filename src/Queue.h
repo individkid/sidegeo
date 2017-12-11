@@ -48,8 +48,10 @@ EXTERNC void exitErrstr(const char *fmt, ...);
 EXTERNC void handler(int sig);
 
 #define DECLARE_MUTEX(NAME) \
+EXTERNC void create##NAME(int arg); \
 EXTERNC void lock##NAME(); \
-EXTERNC void unlock##NAME();
+EXTERNC void unlock##NAME(); \
+EXTERNC void join##NAME();
 
 #define DECLARE_COND(NAME) \
 EXTERNC void lock##NAME(); \
@@ -269,8 +271,11 @@ struct QueueMutex {
 
 #define DEFINE_MUTEX(NAME,FUNC...) \
 QueueMutex NAME##Inst = QueueMutex(FUNC); \
+extern "C" void *func##NAME(void *arg) {return NAME##Inst.loop(arg);} \
+extern "C" void create##NAME(int arg) {NAME##Inst.create(func##NAME,arg);} \
 extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
+extern "C" void join##NAME() {NAME##Inst.join();}
 
 struct QueueCond : QueueMutex {
     pthread_cond_t cond;
