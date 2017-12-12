@@ -398,13 +398,6 @@ DEFINE_STAGE(Optioner,int,Option)
 DEFINE_STAGE(Configure,char,Optioner)
 DEFINE_STAGE(Configurer,int,Configure)
 
-DEFINE_HUB(Configures,0)
-DEFINE_THREAD(Inject,char,Configures)
-DEFINE_THREAD(Yield,enum Yield,Inject)
-DEFINE_THREAD(File,char,Yield)
-DEFINE_THREAD(CfgConfigure,char,File)
-DEFINE_THREAD(CfgConfigurer,int,CfgConfigure)
-
 DEFINE_SOURCE(ProCommands,CmnCommands,Processes)
 DEFINE_STAGE(ProCommand,Command,ProCommands)
 DEFINE_STAGE(ProCmdChar,char,ProCommand)

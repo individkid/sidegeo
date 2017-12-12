@@ -31,7 +31,7 @@ void setupEventMap()
     const enum Event eventEnum[] = {Side,Update,Inflate,Fill,Hollow,Remove,Call};
     int len = sizeof(eventName)/sizeof(eventName[0]);
     enlocEventMap(Acknowledge);
-    for (int i = 0; i < sizeEventName(); i++)
+    for (int i = 0; i < usageEventName(); i++)
     for (int j = 0; j < len; j++) {useEventName(i); referName();
     if (strcmp(*arrayName(0,sizeName()),eventName[j]) == 0) *arrayEventMap(eventEnum[j],1) = i;}
 }
@@ -42,7 +42,7 @@ void setupKindMap()
     const enum Kind kindEnum[] = {Poly,Boundary,Face,Other};
     int len = sizeof(kindName)/sizeof(kindName[0]);
     enlocKindMap(Kinds);
-    for (int i = 0; i < sizeKindName(); i++)
+    for (int i = 0; i < usageKindName(); i++)
     for (int j = 0; j < len; j++) {useKindName(i); referName();
     if (strcmp(*arrayName(0,sizeName()),kindName[j]) == 0) *arrayDataMap(kindEnum[j],1) = i;}
 }
@@ -53,7 +53,7 @@ void setupDataMap()
     const enum Data dataEnum[] = {PlaneBuf,VersorBuf,PointBuf,PierceBuf,SideBuf,FaceSub,FrameSub,PointSub,PlaneSub,SideSub,HalfSub};
     int len = sizeof(dataName)/sizeof(dataName[0]);
     enlocDataMap(Datas);
-    for (int i = 0; i < sizeDataName(); i++)
+    for (int i = 0; i < usageDataName(); i++)
     for (int j = 0; j < len; j++) {useDataName(i); referName();
     if (strcmp(*arrayName(0,sizeName()),dataName[j]) == 0) *arrayDataMap(i,1) = dataEnum[j];}
 }

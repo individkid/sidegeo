@@ -367,13 +367,6 @@ DECLARE_STAGE(Optioner,int)
 DECLARE_STAGE(Configure,char)
 DECLARE_STAGE(Configurer,int)
 
-DECLARE_HUB(Configures)
-DECLARE_THREAD(Inject,char)
-DECLARE_THREAD(Yield,enum Yield)
-DECLARE_THREAD(File,char)
-DECLARE_THREAD(CfgProcess,char)
-DECLARE_THREAD(CfgProcesser,int)
-
 DECLARE_SOURCE(ProCommands)
 DECLARE_STAGE(ProCommand,Command)
 DECLARE_STAGE(ProCmdChar,char)

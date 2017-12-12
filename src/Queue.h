@@ -105,7 +105,9 @@ EXTERNC void extend##NAME(void *(*func)(void *)); \
 EXTERNC void lock##NAME(); \
 EXTERNC void unlock##NAME();
 
-#define DECLARE_THREAD(NAME,TYPE) \
+#define DECLARE_META(NAME,TYPE) \
+EXTERNC void use##NAME(int sub); \
+EXTERNC int usage##NAME(); \
 EXTERNC TYPE *enloc##NAME(int idx, int siz); \
 EXTERNC TYPE *deloc##NAME(int idx, int siz); \
 EXTERNC TYPE *destr##NAME(int idx, TYPE val); \
@@ -113,10 +115,6 @@ EXTERNC TYPE *unloc##NAME(int idx, int siz); \
 EXTERNC void reloc##NAME(int idx, int siz); \
 EXTERNC TYPE *array##NAME(int idx, int sub, int siz); \
 EXTERNC int size##NAME(int idx);
-
-#define DECLARE_META(NAME,TYPE) \
-EXTERNC void use##NAME(int sub); \
-EXTERNC int size##NAME();
 
 #define DECLARE_POINTER(NAME,TYPE) \
 EXTERNC void refer##NAME(); \
@@ -714,70 +712,13 @@ extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst)
 
-struct QueueThread {
-    QueueThread *next;
-    QueueThread() {next = 0;}
-    QueueThread(QueueThread *ptr) {next = 0; ptr->next = this;}
-    QueueThread *self() {return this;}
-    virtual void extend() = 0;
-};
-
-struct QueueHub : QueueCond {
-    QueueThread *next;
-    pthread_cond_t cond;
-    QueueStruct<pthread_t> thread;
-    int signal;
-    QueueHub(void (*fnc3)(int)) : QueueCond(fnc3)
-    {
-        next = 0; signal = 0;
-        if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
-    }
-    ~QueueHub()
-    {
-        if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
-    }
-    void extend(void *(*func)(void *))
-    {
-        if (pthread_mutex_lock(&mutex) != 0) exitErrstr("cond lock failed: %s\n",strerror(errno));
-        for (int i = 0; i < thread.size(); i++)
-        if (pthread_kill(*thread.array(i,1), SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-        signal = thread.size(); while (signal > 0)
-        if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
-        if (next) next->extend();
-        int index = thread.size(); if (pthread_create(thread.enloc(1), 0, func, int2void(index)) != 0) exitErrstr("cannot create thread\n");
-        if (pthread_cond_broadcast(&(QueueCond::cond)) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
-        if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("cond unlock failed: %s\n",strerror(errno));
-    }
-    void lock()
-    {
-        if (pthread_mutex_lock(&mutex) != 0) exitErrstr("cond lock failed: %s\n",strerror(errno));
-        if (signal > 0) {signal--;
-        if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
-        if (pthread_cond_wait(&(QueueCond::cond),&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));}
-    }
-};
-
-#define DEFINE_HUB(NAME,FUNC) \
-QueueHub NAME##Inst = QueueHub(FUNC); \
-extern "C" void extend##NAME(void *(*func)(void *)) {NAME##Inst.extend(func);} \
-extern "C" void lock##NAME() {NAME##Inst.lock();} \
-extern "C" void unlock##NAME() {NAME##Inst.unlock();}
-
-template<class TYPE> struct QueueMeta : QueueThread {
+template<class TYPE> struct QueueMeta {
     QueueStruct<QueueStruct<TYPE> > meta;
-    QueueMeta() : QueueThread() {}
-    QueueMeta(QueueThread *ptr) : QueueThread(ptr) {}
-    QueueMeta(QueueHub *ptr) : QueueThread() {ptr->next = self();}
+    QueueMeta() {}
     ~QueueMeta()
     {
         for (int i = 0; i < meta.size(); i++)
         if (meta.array(i,1)->base) delete[] meta.array(i,1)->base;
-    }
-    virtual void extend()
-    {
-        QueueStruct<TYPE> inst = QueueStruct<TYPE>();
-        *meta.enloc(1) = inst;
-        if (next) next->extend();
     }
     void use(int sub)
     {
@@ -820,8 +761,10 @@ template<class TYPE> struct QueueMeta : QueueThread {
     }
 };
 
-#define DEFINE_THREAD(NAME,TYPE,NEXT) \
-QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(&NEXT##Inst); \
+#define DEFINE_META(NAME,TYPE) \
+QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \
+extern "C" void use##NAME(int sub) {NAME##Inst.use(sub);} \
+extern "C" int usage##NAME() {return NAME##Inst.size();} \
 extern "C" TYPE *enloc##NAME(int idx, int siz) {return NAME##Inst.enloc(idx,siz);} \
 extern "C" TYPE *deloc##NAME(int idx, int siz) {return NAME##Inst.deloc(idx,siz);} \
 extern "C" TYPE *destr##NAME(int idx, TYPE val) {return NAME##Inst.destr(idx,val);} \
@@ -829,11 +772,6 @@ extern "C" TYPE *unloc##NAME(int idx, int siz) {return NAME##Inst.unloc(idx,siz)
 extern "C" void reloc##NAME(int idx, int siz) {NAME##Inst.reloc(idx,siz);} \
 extern "C" TYPE *array##NAME(int idx, int sub, int siz) {return NAME##Inst.array(idx,sub,siz);} \
 extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);}
-
-#define DEFINE_META(NAME,TYPE) \
-QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \
-extern "C" void use##NAME(int sub) {NAME##Inst.use(sub);} \
-extern "C" int size##NAME() {return NAME##Inst.size();}
 
 template<class TYPE> struct QueuePointer {
     QueueStruct<TYPE> *ptr;

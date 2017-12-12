@@ -19,9 +19,6 @@
 #include <portaudio.h>
 
 #include "Common.h"
-#ifdef __linux__
-#include <sys/types.h>
-#endif
 
 void startListen()
 {
