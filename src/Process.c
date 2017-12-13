@@ -22,19 +22,20 @@
 int toggle = 0;
 int current = 0;
 pthread_mutex_t mutex;
-pthread_cond_t cond;
-struct Pipe {
+pthread_cond_t cond0;
+pthread_cond_t cond1;
+struct Helper {
     int pipe; // helper side of pipe
     int file; // filesystem descriptor
 } helper;
 
-void helperInit(int *pipe, int *file)
+struct Helper helperInit()
 {
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    *pipe = helper.pipe;
-    *file = helper.file;
-	if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
+    struct Helper retval = helper;
+	if (pthread_cond_signal(&cond0) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+    return retval;
 }
 
 int processInit(int file, pthread_t *thread, void *(*func)(void *))
@@ -46,49 +47,51 @@ int processInit(int file, pthread_t *thread, void *(*func)(void *))
 	helper.pipe = pipefd[1];
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     if (pthread_create(thread,0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
-    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+    if (pthread_cond_wait(&cond0,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
     return pipefd[0];
+}
+
+int helperReinit(int file)
+{
+    struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
+    int retval = fcntl(file,F_SETLK,&lock);
+    if (retval < 0 && (errno == EACCES || errno == EAGAIN)) retval = 1;
+    if (retval < 0) exitErrstr("cannot fcntl file\n");
+    // if retval is 1, append ---pid- and writelock the last -
+    // if retval is 0, readlock --- to read pid and send sigusr2 to pid
+    return retval;
 }
 
 int processReinit(int file)
 {
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    if (write(file,"-",1) <= 0) return -1;
-    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+    if (write(file,"-",1) < 1) return -1;
+    if (pthread_cond_wait(&cond1,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
     return 0;
 }
 
-void helperReinit()
-{
-    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    if (pthread_cond_broadcast(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
-    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-}
-
 void *helperRead(void *arg)
 {
-	int pipe,file; helperInit(&pipe,&file);
+	struct Helper helper = helperInit();
     // block on readlock, write command to pipe with all but last \n converted to space
-    // if command is -, write - to pipe and wait for signal
+    // if command is -, write - to pipe and wait for cond1
     // if eof, write \n to pipe and return
     return 0;
 }
 
 void *helperWrite(void *arg)
 {
-    int pipe,file; helperInit(&pipe,&file);
-    struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
-    int retval = fcntl(file,F_SETLK,&lock);
-    if (retval < 0 && (errno == EACCES || errno == EAGAIN)) retval = 1;
-    if (retval < 0) exitErrstr("cannot fcntl file\n");
-    // if retval, write ---pid- to eof and writelock the last -
-    // blocking read the pipe for commands to insert or append, depending on retval
-    // if command is - and retval is 0, redo fcntl for retval and broadcast signal
+    struct Helper helper = helperInit();
+    int retval = helperReinit(helper.file);
+    // blocking read the pipe for commands
+    // if command is - and retval is 0, redo fcntl for retval and sigusr2 and send cond1
     // if command is - and retval is 1, exitErrstr
     // if command is \n and retval is 0, ignore
     // if command is \n and retval is 1, pack out ---
+    // if command is otherwise and retval is 0 append and send sigusr2
+    // if command is otherwise and retval is 1 insert command
     return 0;
 }
 
@@ -107,7 +110,7 @@ void processToggle()
         if (len < -1) {
         *arrayRead(current,1) = *arrayWrite(current,1) = -1;
         current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
-        if (len == -1 && processReinit(*arrayWrite(current,1)) < 0) {
+        if (len == -1 && write(*arrayWrite(current,1),"-",1) < 1) {
         *arrayRead(current,1) = *arrayWrite(current,1) = -1;
         current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
         if (len == 0) {
@@ -121,7 +124,8 @@ void processToggle()
 void processBefore()
 {
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
-    if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    if (pthread_cond_init(&cond0,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    if (pthread_cond_init(&cond1,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }
 
 void processConsume(int index)
@@ -156,7 +160,10 @@ void processProduce(int index)
 
 void processAfter()
 {
-    // TODO join helpers
+    for (int i = 0; i < sizeHelper(); i++) {
+        if (pthread_cancel(*arrayHelper(i,1)) < 0) exitErrstr("cannot cancel thread\n");
+        if (pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
     if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
-    if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
+    if (pthread_cond_destroy(&cond0) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
+    if (pthread_cond_destroy(&cond1) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
 }
