@@ -308,12 +308,14 @@ int main(int argc, char **argv)
     if (pthread_create(&haskellThread, 0, &haskell, 0) != 0) exitErrstr("cannot create thread\n");
     if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
     createCmnOutputs(0);
+    createCmnProcesses(0);
 
     loopCmnCommands(0);
 
-    lockCmnHaskells(); *enlocCmnEvent(1) = Done; unlockCmnHaskells(); if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
-    lockCmnTimewheels(); *enlocCmnControl(1) = Finish; unlockCmnTimewheels(); if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
-    lockCmnOutputs(); *enlocCmnOutput(1) = ofmotion(Escape); unlockCmnOutputs(); joinCmnOutputs();
+    lockCmnHaskells(); *enlocCmnEvent(1) = Done; signalCmnHaskells(); unlockCmnHaskells(); if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
+    lockCmnTimewheels(); *enlocCmnControl(1) = Finish; signalCmnTimewheels(); unlockCmnTimewheels(); if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
+    exitCmnOutputs();
+    exitCmnProcesses();
 
     glfwTerminate();
     return 0;

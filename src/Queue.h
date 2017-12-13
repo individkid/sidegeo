@@ -47,6 +47,7 @@ EXTERNCEND
 
 EXTERNV struct termios savedTermios;
 EXTERNV int validTermios;
+EXTERNV int sigusr2;
 
 EXTERNC void *int2void(int val);
 EXTERNC int void2int(void *val);
@@ -59,14 +60,16 @@ EXTERNC void create##NAME(int arg); \
 EXTERNC void lock##NAME(); \
 EXTERNC void unlock##NAME(); \
 EXTERNC void join##NAME(); \
-EXTERNC void exit##NAME();
-
-#define DECLARE_COND(NAME) \
-EXTERNC void lock##NAME(); \
-EXTERNC void unlock##NAME(); \
-EXTERNC void wait##NAME(); \
 EXTERNC void signal##NAME(); \
 EXTERNC void exit##NAME();
+
+#define DECLARE_SET(NAME,ELEM) DECLARE_MUTEX(NAME) \
+EXTERNC void insert##NAME(ELEM val); \
+EXTERNC void remove##NAME(ELEM val); \
+EXTERNC int member##NAME(ELEM val);
+
+#define DECLARE_COND(NAME) DECLARE_MUTEX(NAME) \
+EXTERNC void wait##NAME();
 
 #define DECLARE_SOURCE(NAME) \
 EXTERNC int xfer##NAME(); \
@@ -99,11 +102,6 @@ EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int size##NAME(); \
 EXTERNC void use##NAME(); \
 EXTERNC void xfer##NAME(int siz);
-
-#define DECLARE_HUB(NAME) \
-EXTERNC void extend##NAME(void *(*func)(void *)); \
-EXTERNC void lock##NAME(); \
-EXTERNC void unlock##NAME();
 
 #define DECLARE_META(NAME,TYPE) \
 EXTERNC void use##NAME(int sub); \
@@ -327,6 +325,73 @@ struct QueueStdin : QueueMutex {
     }
 };
 
+struct QueueFdset : QueueMutex {
+    sigset_t saved;
+    fd_set fds;
+    int maxfd;
+    struct timespec notime;
+    void (*func0)();
+    void (*func1)();
+    QueueFdset(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(int), void (*fnc4)(int)) : QueueMutex(fnc3,fnc4) {
+        FD_ZERO(&fds);
+        maxfd = 0;
+        func0 = fnc2;
+        func1 = fnc5;
+    }
+    virtual ~QueueFdset() {}
+    virtual void insert(int fd) {if (fd > maxfd) maxfd = fd; FD_SET(fd, &fds);}
+    virtual void remove(int fd) {FD_CLR(fd, &fds);}
+    virtual int member(int fd) {return FD_ISSET(fd, &fds);}
+    virtual void signal()
+    {
+        if (pthread_kill(thread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
+    }
+    virtual void before()
+    {
+        struct sigaction sigact = {0};
+        sigemptyset(&sigact.sa_mask);
+        sigact.sa_handler = &handler;
+        sigset_t saved = {0};
+        if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+        if (sigaction(SIGUSR2, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
+        pthread_sigmask(SIG_SETMASK,0,&saved);
+        sigdelset(&saved, SIGUSR1);
+        sigdelset(&saved, SIGUSR2);
+        (*func0)();
+    }
+    virtual void after() {
+        (*func1)();
+    }
+    virtual int xfer()
+    {
+        int retval = 0;
+        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
+        if (ptr->xfer()) retval = 1;
+        return retval;
+    }
+    virtual int noxfer()
+    {
+        int retval = 0;
+        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
+        if (ptr->noxfer()) retval = 1;
+        return retval;
+    }
+    virtual int delay()
+    {
+        int lenSel = pselect(maxfd+1, &fds, 0, 0, 0, &saved);
+        if (lenSel < 0 && errno == EINTR) lenSel = 0;
+        if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+        return lenSel;
+    }
+    virtual int nodelay()
+    {
+        int lenSel = pselect(maxfd+1, &fds, 0, 0, &notime, 0);
+        if (lenSel < 0 && errno == EINTR) lenSel = 0;
+        if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+        return lenSel;
+    }
+};
+
 struct QueueTime : QueueMutex {
     sigset_t saved;
     struct timespec notime;
@@ -428,11 +493,16 @@ extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
 extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 extern "C" void join##NAME() {NAME##Inst.join();} \
-extern "C" void exit##NAME() {NAME##Inst.done = 1;}
+extern "C" void signal##NAME() {NAME##Inst.signal();} \
+extern "C" void exit##NAME() {NAME##Inst.done = 1; NAME##Inst.signal(); NAME##Inst.join();}
 
-#define DEFINE_COND(NAME,FUNC) DEFINE_MUTEX(NAME,QueueCond,FUNC) \
-extern "C" void wait##NAME() {NAME##Inst.wait();} \
-extern "C" void signal##NAME() {NAME##Inst.signal();}
+#define DEFINE_COND(NAME,TYPE,FUNC...) DEFINE_MUTEX(NAME,TYPE,FUNC) \
+extern "C" void wait##NAME() {NAME##Inst.wait();}
+
+#define DEFINE_SET(NAME,TYPE,ELEM,FUNC...) DEFINE_MUTEX(NAME,TYPE,FUNC) \
+extern "C" void insert##NAME(ELEM val) {NAME##Inst.insert(val);} \
+extern "C" void remove##NAME(ELEM val) {NAME##Inst.remove(val);} \
+extern "C" int member##NAME(ELEM val) {return NAME##Inst.member(val);}
 
 struct QueueSource : QueueXfer {
     QueueSource(QueueMutex *ptr0, QueueMutex *ptr1)
@@ -458,6 +528,7 @@ struct QueueSource : QueueXfer {
         if (dest == 0) exitErrstr("xfer too ptr\n");
         if (source->size() > 0) {source->use(); dest->xfer(source->size()); retval = 1;}}
         if (retval) mutex->signal();
+        mutex->unlock();
         return 0;
     }
     virtual int noxfer()
@@ -513,12 +584,10 @@ struct QueueDest : QueueXfer {
     virtual int noxfer()
     {
         if (mutex == 0) exitErrstr("source too mutex\n");
-        mutex->lock();
         QueueBase *dest = next;
         int retval = 0;
         for (; dest != 0; dest = dest->next)
         if (dest->size() > 0) retval = 1;
-        mutex->unlock();
         return retval;
     }
 };
@@ -559,12 +628,10 @@ struct QueueWait : QueueXfer {
     virtual int noxfer()
     {
         if (cond == 0) exitErrstr("source too cond\n");
-        cond->lock();
         QueueBase *dest = next;
         int retval = 0;
         for (; dest != 0; dest = dest->next)
         if (dest->size() > 0) retval = 1;
-        cond->unlock();
         return retval;
     }
 };

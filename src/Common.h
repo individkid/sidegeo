@@ -234,7 +234,7 @@ DECLARE_STAGE(CmnBuffer,struct Buffer *)
 DECLARE_MUTEX(CmnOutputs)
 DECLARE_STAGE(CmnOutput,char)
 
-DECLARE_MUTEX(CmnProcesses)
+DECLARE_SET(CmnProcesses,int)
 DECLARE_STAGE(CmnOption,char)
 DECLARE_STAGE(CmnOptioner,int)
 DECLARE_STAGE(CmnConfigure,char)
@@ -363,7 +363,6 @@ DECLARE_STAGE(TwCmdInt,int)
 
 DECLARE_DEST(Processes)
 DECLARE_STAGE(Option,char)
-DECLARE_STAGE(Optioner,int)
 DECLARE_STAGE(Configure,char)
 DECLARE_STAGE(Configurer,int)
 
@@ -381,5 +380,12 @@ DECLARE_STAGE(ProTwInt,int)
 DECLARE_STAGE(ProCoefficient,int)
 DECLARE_STAGE(ProVariable,int)
 DECLARE_STAGE(ProState,struct State)
+
+DECLARE_LOCAL(ProChar,char)
+DECLARE_LOCAL(File,int)
+DECLARE_LOCAL(Lock,int)
+DECLARE_LOCAL(Read,int)
+DECLARE_LOCAL(Write,int)
+DECLARE_LOCAL(Helper,pthread_t)
 
 #endif

@@ -249,6 +249,11 @@ void consumeConsole(int index);
 void produceConsole(int index);
 void afterConsole();
 
+void processBefore();
+void processConsume(int index);
+void processProduce(int index);
+void processAfter();
+
 EXTERNCEND
 
 inline bool operator!=(const Render &left, const Render &right) {return false;}
@@ -266,13 +271,12 @@ DEFINE_STAGE(CmnBuffer,struct Buffer *,CmnRender)
 DEFINE_MUTEX(CmnOutputs,QueueStdin,beforeConsole,afterConsole,consumeConsole,produceConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
-DEFINE_MUTEX(CmnProcesses,QueueCompat)
+DEFINE_SET(CmnProcesses,QueueFdset,int,processBefore,processAfter,processConsume,processProduce)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
-DEFINE_STAGE(CmnOptioner,int,CmnOption)
-DEFINE_STAGE(CmnConfigure,char,CmnOptioner)
+DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigureer,int,CmnConfigure)
 
-DEFINE_COND(CmnHaskells,0)
+DEFINE_COND(CmnHaskells,QueueCond,0)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnKind,enum Kind,CmnEvent)
 DEFINE_STAGE(CmnHsCmd,Command,CmnKind)
@@ -394,8 +398,7 @@ DEFINE_STAGE(TwCmdInt,int,TwCmdChar)
 
 DEFINE_DEST(Processes,CmnProcesses,CmnProcesses)
 DEFINE_STAGE(Option,char,Processes)
-DEFINE_STAGE(Optioner,int,Option)
-DEFINE_STAGE(Configure,char,Optioner)
+DEFINE_STAGE(Configure,char,Option)
 DEFINE_STAGE(Configurer,int,Configure)
 
 DEFINE_SOURCE(ProCommands,CmnCommands,Processes)
@@ -412,3 +415,11 @@ DEFINE_STAGE(ProTwInt,int,ProTwChar)
 DEFINE_STAGE(ProCoefficient,int,ProTwInt)
 DEFINE_STAGE(ProVariable,int,ProCoefficient)
 DEFINE_STAGE(ProState,struct State,ProVariable)
+
+DEFINE_LOCAL(ProChar,char)
+DEFINE_LOCAL(File,int)
+DEFINE_LOCAL(Lock,int)
+DEFINE_LOCAL(Read,int)
+DEFINE_LOCAL(Write,int)
+DEFINE_LOCAL(Helper,pthread_t)
+
