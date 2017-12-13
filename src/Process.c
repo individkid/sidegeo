@@ -70,7 +70,7 @@ void helperReinit()
 void *helperRead(void *arg)
 {
 	int pipe,file; helperInit(&pipe,&file);
-    // block on readlock, write command to pipe
+    // block on readlock, write command to pipe with all but last \n converted to space
     // if command is -, write - to pipe and wait for signal
     // if eof, write \n to pipe and return
     return 0;
@@ -85,18 +85,16 @@ void *helperWrite(void *arg)
     if (retval < 0) exitErrstr("cannot fcntl file\n");
     // if retval, write ---pid- to eof and writelock the last -
     // blocking read the pipe for commands to insert or append, depending on retval
-    // if command is -, redo fcntl for retval and broadcast signal
+    // if command is - and retval is 0, redo fcntl for retval and broadcast signal
+    // if command is - and retval is 1, exitErrstr
+    // if command is \n and retval is 0, ignore
+    // if command is \n and retval is 1, pack out ---
     return 0;
 }
 
 int processRead(int pipe)
 {
     return -2; // -2 error (\n in pipe), -1 --- not locked (- in pipe), 0 waitig on --- (pipe not readable), or length of command in ProChar
-}
-
-int processWrite(int pipe, char *configure, int len)
-{
-    return -1; // 0 on success
 }
 
 int processOption(char *option, int len); // 0 or length of filename in ProChar
@@ -132,8 +130,7 @@ void processConsume(int index)
         char *buf = destrConfigure('\n');
         int len = 0; while (buf[len] != '\n') len++;
         int idx = *delocConfigurer(1);
-        int write = *arrayWrite(idx,1);
-        if (write > 0 && processWrite(write,buf,len) != 0) exitErrstr("process too write");}
+        if (*arrayWrite(idx,1) > 0 && write(*arrayWrite(idx,1),buf,len) < len) exitErrstr("process too write");}
     if (!toggle && sizeOption() > 0) {
         char *buf = destrOption('\n');
         int len = 0; while (buf[len] != '\n') len++;
@@ -152,7 +149,8 @@ void processConsume(int index)
 void processProduce(int index)
 {
     if (sigusr2) {sigusr2 = 0;
-        for (int i = 0; i < sizeWrite(); i++) processWrite(*arrayWrite(i,1),"\n",1);}
+        for (int i = 0; i < sizeWrite(); i++)
+        if (write(*arrayWrite(i,1),"\n",1) < 1) exitErrstr("process too write\n");}
     processToggle();
 }
 
