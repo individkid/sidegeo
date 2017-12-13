@@ -418,7 +418,6 @@ DEFINE_STAGE(ProState,struct State,ProVariable)
 
 DEFINE_LOCAL(ProChar,char)
 DEFINE_LOCAL(File,int)
-DEFINE_LOCAL(Lock,int)
 DEFINE_LOCAL(Read,int)
 DEFINE_LOCAL(Write,int)
 DEFINE_LOCAL(Helper,pthread_t)

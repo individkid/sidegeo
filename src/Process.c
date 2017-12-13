@@ -1,5 +1,5 @@
 /*
-*    Process.c commandline arguments configuration file commands
+*    Process.c prioritize options and synchronize configurations
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -17,61 +17,73 @@
 */
 
 #include "Common.h"
+#include <fcntl.h>
 
 int toggle = 0;
 int current = 0;
+pthread_mutex_t mutex;
+pthread_cond_t cond;
+struct Pipe {
+    int pipe; // helper side of pipe
+    int file; // filesystem descriptor
+} helper;
 
-int processOption(char *option, int len)
+void helperInit(int *pipe, int *file)
 {
-    return 0; // 0 or length of filename in ProChar
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    *pipe = helper.pipe;
+    *file = helper.file;
+	if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 }
 
-int processOpen(char *filename, int len)
+int processInit(int file, void *(*func)(void *))
 {
-    return -1; // file descriptor or -1
+	int pipefd[2];
+	if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
+	helper.file = file;
+	helper.pipe = pipefd[1];
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    if (pthread_create(enlocHelper(1),0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
+    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+    return pipefd[0];
 }
 
-int processLock(int fd)
+void *helperRead(void *arg)
 {
-    return -1; // -1 error, 0 append, 1 insert
+	int pipe,file; helperInit(&pipe,&file);
 }
 
-int processReader(int fd)
+void *helperAppend(void *arg)
 {
-    return -1; // pipe descriptor or -1
+	int pipe,file; helperInit(&pipe,&file);
 }
 
-int processAppender(int fd)
+void *helperInsert(void *arg)
 {
-    return -1; // pipe descriptor or -1
+	int pipe,file; helperInit(&pipe,&file);
 }
 
-int processInserter(int fd)
-{
-    return -1; // pipe descriptor or -1
-}
-
-int processRead(int fd)
+int processRead(int pipe)
 {
     return -1; // -1 error, 0 waitig on ---, or length of command in ProChar
 }
 
-int processWrite(int fd, char *configure, int len)
+int processWrite(int pipe, char *configure, int len)
 {
     return -1; // 0 on success
 }
 
-int processConfigure(int index, char *configure, int len)
-{
-    return 0; // 0 or 1 whether to yield
-}
+int processOption(char *option, int len); // 0 or length of filename in ProChar
+int processConfigure(int index, char *configure, int len); // 0 or 1 whether to yield
 
 void processToggle()
 {
     if (toggle && *arrayRead(current,1) >= 0) {
         int len = processRead(*arrayRead(0,1));
         if (len < 0) {
-            *arrayFile(current,1) = *arrayLock(current,1) = *arrayRead(current,1) = *arrayWrite(current,1) = -1;
+            *arrayFile(current,1) = *arrayRead(current,1) = *arrayWrite(current,1) = -1;
             current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
         if (len == 0) {
             current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
@@ -83,6 +95,8 @@ void processToggle()
 
 void processBefore()
 {
+    if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }
 
 void processConsume(int index)
@@ -98,12 +112,14 @@ void processConsume(int index)
         int len = 0; while (buf[len] != '\n') len++;
         len = processOption(buf,len);
         if (len > 0) {toggle = 1;
-        current = sizeFile(); enlocFile(1); enlocLock(1); enlocRead(1); enlocWrite(1);
-        if ((*arrayFile(0,1) = processOpen(unlocProChar(len),len)) < 0 ||
-        (*arrayLock(0,1) = processLock(*arrayFile(0,1))) < 0 ||
-        (*arrayRead(0,1) = processReader(*arrayFile(0,1))) < 0 ||
-        (*arrayWrite(0,1) = (*arrayLock(0,1) == 0 ? processAppender(*arrayFile(0,1)) : processInserter(*arrayFile(0,1)))) < 0) {
-        *arrayFile(0,1) = *arrayLock(0,1) = *arrayRead(0,1) = *arrayWrite(0,1) = -1;}}}
+        char *filename = unlocProChar(len);
+        current = sizeFile(); enlocFile(1); enlocRead(1); enlocWrite(1);
+        struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
+        int retval; if ((*arrayFile(0,1) = open(filename,O_RDWR)) < 0 ||
+        (retval = (fcntl(*arrayFile(0,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0 ||
+        (*arrayRead(0,1) = processInit(open(filename,O_RDONLY),helperRead)) < 0 ||
+        (*arrayWrite(0,1) = (retval ? processInit(*arrayFile(0,1),helperAppend) : processInit(*arrayFile(0,1),helperInsert))) < 0) {
+        *arrayFile(0,1) = *arrayRead(0,1) = *arrayWrite(0,1) = -1;}}}
     if (!toggle && sizeOption() == 0) toggle = 1;
     processToggle();
 }
@@ -118,4 +134,6 @@ void processProduce(int index)
 void processAfter()
 {
     // TODO join helpers
+    if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
+    if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
 }
