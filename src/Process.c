@@ -67,7 +67,7 @@ void *helperInsert(void *arg)
 
 int processRead(int pipe)
 {
-    return -1; // -1 error, 0 waitig on ---, or length of command in ProChar
+    return -2; // -2 error, -1 --- not locked, 0 waitig on ---, or length of command in ProChar
 }
 
 int processWrite(int pipe, char *configure, int len)
@@ -81,10 +81,16 @@ int processConfigure(int index, char *configure, int len); // 0 or 1 whether to 
 void processToggle()
 {
     if (toggle && *arrayRead(current,1) >= 0) {
-        int len = processRead(*arrayRead(0,1));
-        if (len < 0) {
-            *arrayFile(current,1) = *arrayRead(current,1) = *arrayWrite(current,1) = -1;
+        int len = processRead(*arrayRead(current,1));
+        if (len < -1) {
+            *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
             current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
+        if (len == -1) {int retval;
+        	struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
+	        if ((retval = (fcntl(*arrayFile(current,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0) {
+            *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
+            current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;} else {
+            *arrayWrite(current,1) = (retval ? *arrayAppend(current,1) : *arrayInsert(current,1));}}
         if (len == 0) {
             current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
         if (len > 0 && processConfigure(current,delocProChar(len),len)) {
@@ -113,13 +119,15 @@ void processConsume(int index)
         len = processOption(buf,len);
         if (len > 0) {toggle = 1;
         char *filename = unlocProChar(len);
-        current = sizeFile(); enlocFile(1); enlocRead(1); enlocWrite(1);
+        current = sizeFile(); enlocFile(1); enlocRead(1); enlocAppend(1); enlocInsert(1); enlocWrite(1);
         struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
-        int retval; if ((*arrayFile(0,1) = open(filename,O_RDWR)) < 0 ||
-        (retval = (fcntl(*arrayFile(0,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0 ||
-        (*arrayRead(0,1) = processInit(open(filename,O_RDONLY),helperRead)) < 0 ||
-        (*arrayWrite(0,1) = (retval ? processInit(*arrayFile(0,1),helperAppend) : processInit(*arrayFile(0,1),helperInsert))) < 0) {
-        *arrayFile(0,1) = *arrayRead(0,1) = *arrayWrite(0,1) = -1;}}}
+        int retval; if ((*arrayFile(current,1) = open(filename,O_RDWR)) < 0 ||
+        (*arrayAppend(current,1) = processInit(*arrayFile(current,1),helperAppend)) < 0 ||
+        (*arrayInsert(current,1) = processInit(*arrayFile(current,1),helperInsert)) < 0 ||
+        (retval = (fcntl(*arrayFile(current,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0 ||
+        (*arrayRead(current,1) = processInit(open(filename,O_RDONLY),helperRead)) < 0) {
+        *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;} else {
+        *arrayWrite(current,1) = (retval ? *arrayAppend(current,1) : *arrayInsert(current,1));}}}
     if (!toggle && sizeOption() == 0) toggle = 1;
     processToggle();
 }
