@@ -65,9 +65,10 @@ void *helperInsert(void *arg)
 	int pipe,file; helperInit(&pipe,&file);
 }
 
-int processRead(int pipe)
+int processRead(int pipe) // -2 error, -1 --- not locked, 0 waitig on ---, or length of command in ProChar
 {
-    return -2; // -2 error, -1 --- not locked, 0 waitig on ---, or length of command in ProChar
+
+    return -2;
 }
 
 int processWrite(int pipe, char *configure, int len)
@@ -83,18 +84,18 @@ void processToggle()
     if (toggle && *arrayRead(current,1) >= 0) {
         int len = processRead(*arrayRead(current,1));
         if (len < -1) {
-            *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
-            current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
-        if (len == -1) {int retval;
-        	struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
-	        if ((retval = (fcntl(*arrayFile(current,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0) {
-            *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
-            current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;} else {
-            *arrayWrite(current,1) = (retval ? *arrayAppend(current,1) : *arrayInsert(current,1));}}
+        *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
+        current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
+        if (len == -1) {
+        struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
+        int retval; if ((retval = (fcntl(*arrayFile(current,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0) {
+        *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
+        current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;} else {
+        *arrayWrite(current,1) = (retval ? *arrayAppend(current,1) : *arrayInsert(current,1));}}
         if (len == 0) {
-            current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
+        current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
         if (len > 0 && processConfigure(current,delocProChar(len),len)) {
-            current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}}
+        current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}}
     if (toggle && *arrayRead(current,1) < 0) {
         current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
 }
