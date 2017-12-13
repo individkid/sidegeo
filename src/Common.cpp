@@ -417,10 +417,7 @@ DEFINE_STAGE(ProVariable,int,ProCoefficient)
 DEFINE_STAGE(ProState,struct State,ProVariable)
 
 DEFINE_LOCAL(ProChar,char)
-DEFINE_LOCAL(File,int)
 DEFINE_LOCAL(Read,int)
 DEFINE_LOCAL(Write,int)
-DEFINE_LOCAL(Append,int)
-DEFINE_LOCAL(Insert,int)
 DEFINE_LOCAL(Helper,pthread_t)
 

@@ -378,11 +378,8 @@ DECLARE_STAGE(ProVariable,int)
 DECLARE_STAGE(ProState,struct State)
 
 DECLARE_LOCAL(ProChar,char)
-DECLARE_LOCAL(File,int)
 DECLARE_LOCAL(Read,int)
 DECLARE_LOCAL(Write,int)
-DECLARE_LOCAL(Append,int)
-DECLARE_LOCAL(Insert,int)
 DECLARE_LOCAL(Helper,pthread_t)
 
 #endif

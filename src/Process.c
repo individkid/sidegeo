@@ -37,38 +37,61 @@ void helperInit(int *pipe, int *file)
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 }
 
-int processInit(int file, void *(*func)(void *))
+int processInit(int file, pthread_t *thread, void *(*func)(void *))
 {
+    if (file < 0) return -1;
 	int pipefd[2];
 	if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
 	helper.file = file;
 	helper.pipe = pipefd[1];
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    if (pthread_create(enlocHelper(1),0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
+    if (pthread_create(thread,0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
     return pipefd[0];
 }
 
+int processReinit(int file)
+{
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    if (write(file,"-",1) <= 0) return -1;
+    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+    return 0;
+}
+
+void helperReinit()
+{
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    if (pthread_cond_broadcast(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+}
+
 void *helperRead(void *arg)
 {
 	int pipe,file; helperInit(&pipe,&file);
+    // block on readlock, write command to pipe
+    // if command is -, write - to pipe and wait for signal
+    // if eof, write \n to pipe and return
+    return 0;
 }
 
-void *helperAppend(void *arg)
+void *helperWrite(void *arg)
 {
-	int pipe,file; helperInit(&pipe,&file);
+    int pipe,file; helperInit(&pipe,&file);
+    struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
+    int retval = fcntl(file,F_SETLK,&lock);
+    if (retval < 0 && (errno == EACCES || errno == EAGAIN)) retval = 1;
+    if (retval < 0) exitErrstr("cannot fcntl file\n");
+    // if retval, write ---pid- to eof and writelock the last -
+    // blocking read the pipe for commands to insert or append, depending on retval
+    // if command is -, redo fcntl for retval and broadcast signal
+    return 0;
 }
 
-void *helperInsert(void *arg)
+int processRead(int pipe)
 {
-	int pipe,file; helperInit(&pipe,&file);
-}
-
-int processRead(int pipe) // -2 error, -1 --- not locked, 0 waitig on ---, or length of command in ProChar
-{
-
-    return -2;
+    return -2; // -2 error (\n in pipe), -1 --- not locked (- in pipe), 0 waitig on --- (pipe not readable), or length of command in ProChar
 }
 
 int processWrite(int pipe, char *configure, int len)
@@ -84,14 +107,11 @@ void processToggle()
     if (toggle && *arrayRead(current,1) >= 0) {
         int len = processRead(*arrayRead(current,1));
         if (len < -1) {
-        *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
+        *arrayRead(current,1) = *arrayWrite(current,1) = -1;
         current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
-        if (len == -1) {
-        struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
-        int retval; if ((retval = (fcntl(*arrayFile(current,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0) {
-        *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;
-        current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;} else {
-        *arrayWrite(current,1) = (retval ? *arrayAppend(current,1) : *arrayInsert(current,1));}}
+        if (len == -1 && processReinit(*arrayWrite(current,1)) < 0) {
+        *arrayRead(current,1) = *arrayWrite(current,1) = -1;
+        current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
         if (len == 0) {
         current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}
         if (len > 0 && processConfigure(current,delocProChar(len),len)) {
@@ -120,15 +140,11 @@ void processConsume(int index)
         len = processOption(buf,len);
         if (len > 0) {toggle = 1;
         char *filename = unlocProChar(len);
-        current = sizeFile(); enlocFile(1); enlocRead(1); enlocAppend(1); enlocInsert(1); enlocWrite(1);
-        struct flock lock; lock.l_type = F_WRLCK; lock.l_whence = SEEK_SET; lock.l_start = 0; lock.l_len = 0;
-        int retval; if ((*arrayFile(current,1) = open(filename,O_RDWR)) < 0 ||
-        (*arrayAppend(current,1) = processInit(*arrayFile(current,1),helperAppend)) < 0 ||
-        (*arrayInsert(current,1) = processInit(*arrayFile(current,1),helperInsert)) < 0 ||
-        (retval = (fcntl(*arrayFile(current,1),F_SETLK,&lock) < 0 ? (errno == EACCES || errno == EAGAIN ? 1 : -1) : 0)) < 0 ||
-        (*arrayRead(current,1) = processInit(open(filename,O_RDONLY),helperRead)) < 0) {
-        *arrayFile(current,1) = *arrayRead(current,1) = *arrayAppend(current,1) = *arrayInsert(current,1) = *arrayWrite(current,1) = -1;} else {
-        *arrayWrite(current,1) = (retval ? *arrayAppend(current,1) : *arrayInsert(current,1));}}}
+        current = sizeRead(); enlocRead(1); enlocWrite(1);
+        if ((*arrayWrite(current,1) = processInit(open(filename,O_RDWR),enlocHelper(1),helperWrite)) < 0 ||
+        (*arrayRead(current,1) = processInit(open(filename,O_RDONLY),enlocHelper(1),helperRead)) < 0) {
+        *arrayRead(current,1) = *arrayWrite(current,1) = -1;
+        current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;}}}
     if (!toggle && sizeOption() == 0) toggle = 1;
     processToggle();
 }
