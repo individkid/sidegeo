@@ -353,10 +353,8 @@ struct QueueFdset : QueueMutex {
         sigact.sa_handler = &handler;
         sigset_t saved = {0};
         if (sigaction(SIGUSR1, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
-        if (sigaction(SIGUSR2, &sigact, 0) < 0) exitErrstr("sigaction failed\n");
         pthread_sigmask(SIG_SETMASK,0,&saved);
         sigdelset(&saved, SIGUSR1);
-        sigdelset(&saved, SIGUSR2);
         (*func0)();
     }
     virtual void after() {
