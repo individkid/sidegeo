@@ -55,42 +55,45 @@ int processInit(int file, pthread_t *thread, void *(*func)(void *))
 // must be large enough for \n-- or ---pid-
 
 #define READBUF \
-    lock.l_start = 0; lock.l_len = PROCESS_STEP; lock.l_type = F_RDLCK; lock.l_whence = SEEK_CUR; \
+    retval = PROCESS_STEP-len; lock.l_start = start; lock.l_len = retval; lock.l_type = F_RDLCK; lock.l_whence = SEEK_SET; \
     if (fcntl(helper.file,F_GETLK,&lock) < 0) { \
-    if (write(helper.pipe,"-",1) < 0) exitErrstr("helper too pipe\n"); return 0;} \
-    retval = PROCESS_STEP-len; if (lock.l_type == F_WRLCK && lock.l_len > 0 && lock.l_len < retval) retval = lock.l_len; \
+    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} \
+    if (lock.l_type == F_WRLCK && lock.l_start-start+3 < retval) retval = lock.l_start-start+3; \
+    if (retval < 0) exitErrstr("helper too start\n"); \
     retval = read(helper.file,buf+len,retval); if (retval < 0) { \
-    if (write(helper.pipe,"-",1) < 0) exitErrstr("helper too pipe\n"); return 0;} len += retval;
+    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} len += retval; start += retval;
 #define WRITEBUF \
-    int len_ = 0; int line_ = 0; while (1) { \
-    if (len_+3 <= len && buf[len_] == '\n' && buf[len_+1] == '-' && buf[len_+2] == '-') {line_ = 1; len_++; break;} \
-    if (len_+2 <= len && buf[len_] == '\n' && buf[len_+1] == '-') break; \
-    if (len_+1 <= len && buf[len_] == '\n') break; len_++;} \
-    if (line) {for (int i = 0; i < len_-2; i++) buf[i] = buf[i+2]; len_ -= 2;} \
-    for (int i = 0; i < len_-1; i++) if (buf[i] == '\n') buf[i] = ' '; \
+    int len_ = 0; int line_ = 0; while (len_ < len) { \
+    if (len_ <= len-3 && buf[len_] == '-' && buf[len_+1] == '-' && buf[len_+2] == '-') {line_ = 1; break;} \
+    if (len_ <= len-3 && buf[len_] == '\n' && buf[len_+1] == '-' && buf[len_+2] == '-') {line_ = 1; len_++; break;} \
+    if (len_ <= len-2 && buf[len_] == '\n' && buf[len_+1] == '-') break; \
+    if (len_ <= len-1 && buf[len_] == '\n') break; len_++;} \
+    if (line) {for (int i = 0; i < len-2; i++) buf[i] = buf[i+2]; len -= 2; len_ -= 2;} \
+    for (int i = 0; i < len_-line_; i++) if (buf[i] == '\n') buf[i] = ' '; \
     if (write(helper.pipe,buf,len_) < 0) exitErrstr("helper too pipe\n"); \
-    for (int i = 0; i+len_ < len; i++) buf[i] = buf[i+len_]; len = len_; line = line_;
+    for (int i = 0; i < len-len_; i++) buf[i] = buf[i+len_]; len -= len_; line = line_;
 #define DASHBUF (line && len >= 3 && buf[0] == '-' && buf[1] == '-' && buf[2] == '-')
 #define RDLKWBUF \
     lock.l_start = -len; lock.l_len = 1; lock.l_type = F_RDLCK; lock.l_whence = SEEK_CUR; \
     while (1) {retval = fcntl(helper.file,F_SETLKW,&lock); if (retval >= 0 || errno != EINTR) break;} \
-    if (retval < 0) {if (write(helper.pipe,"-",1) < 0) exitErrstr("helper too pipe\n"); return 0;}
+    if (retval < 0) {if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;}
 #define REREADBUF \
     retval = lseek(helper.file,-len,SEEK_CUR); len = 0; \
-    if (retval < 0) {if (write(helper.pipe,"-",1) < 0) exitErrstr("helper too pipe\n"); return 0;} \
+    if (retval < 0) {if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} \
     retval = read(helper.file,buf,PROCESS_STEP); if (retval < 0) { \
-    if (write(helper.pipe,"-",1) < 0) exitErrstr("helper too pipe\n"); return 0;} len += retval;
+    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} len += retval;
 #define UNLKBUF \
     lock.l_start = -len; lock.l_len = 1; lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; \
     retval = fcntl(helper.file,F_SETLK,&lock); \
-    if (retval < 0) {if (write(helper.pipe,"-",1) < 0) exitErrstr("helper too pipe\n"); return 0;}
+    if (retval < 0) {if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;}
 #define WRLKBUF \
     lock.l_start = -len; lock.l_len = 1; lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; \
     retval = fcntl(helper.file,F_SETLK,&lock); if (retval < 0 && errno != EAGAIN) { \
-    if (write(helper.pipe,"-",1) < 0) exitErrstr("helper too pipe\n"); return 0;}
+    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;}
 
 void *helperRead(void *arg)
 {
+    int start = 0;
     struct Helper helper = helperInit();
     struct flock lock; int len,line,retval; char buf[PROCESS_STEP];
     len = 0; line = 1; while (1) {
