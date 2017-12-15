@@ -26,6 +26,7 @@ pthread_cond_t cond;
 struct Helper {
     int file; // filesystem descriptor
     int pipe; // helper side of pipe
+    int index; // for accessing mutex protected resources
 } helper;
 
 struct Helper helperInit()
@@ -37,7 +38,7 @@ struct Helper helperInit()
     return retval;
 }
 
-int processInit(int file, pthread_t *thread, void *(*func)(void *))
+int processInit(int index, int file, pthread_t *thread, void *(*func)(void *))
 {
     int pipefd[2];
     if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
@@ -54,6 +55,7 @@ int processInit(int file, pthread_t *thread, void *(*func)(void *))
 #define PROCESS_STEP 20
 // must be large enough for \n-- or ---pid-
 
+#if 0
 #define READBUF \
     retval = PROCESS_STEP-len; lock.l_start = start; lock.l_len = retval; lock.l_type = F_RDLCK; lock.l_whence = SEEK_SET; \
     if (fcntl(helper.file,F_GETLK,&lock) < 0) { \
@@ -90,36 +92,71 @@ int processInit(int file, pthread_t *thread, void *(*func)(void *))
     lock.l_start = -len; lock.l_len = 1; lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; \
     retval = fcntl(helper.file,F_SETLK,&lock); if (retval < 0 && errno != EAGAIN) { \
     if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;}
+#endif
 
 void *helperRead(void *arg)
 {
-    int start = 0;
     struct Helper helper = helperInit();
-    struct flock lock; int len,line,retval; char buf[PROCESS_STEP];
-    len = 0; line = 1; while (1) {
-    /*mutex*/ READBUF /*unmutex*/ WRITEBUF if (!DASHBUF) continue;
-    RDLKWBUF REREADBUF if (!DASHBUF) {UNLKBUF continue;}
-    WRLKBUF if (retval < 0) continue; REREADBUF if (!DASHBUF) {UNLKBUF continue;}
-    break;} while (1) {
-    // seek to start of buf
-    // writelock wait to eof
-    // pack out ---pid-, writing to pipe, translating \n-- to \n, translating other \n to space, writing - and returning on filesystem error
-    // write ---pid-
-    // rewritelock to first - of ---
-    // pselect on SIGUSR2
-    }
+#if 0
+    while (1) {
+        int readpos = 0;
+        int filemin,lockmin,posmin;
+        MINIMUM // filemin <= lockmin <= posmin
+        if (readpos < filemin) {
+            READMIN // advance readpos to filemin
+            if (readpos < filemin) {ERRORINJ return 0;}
+            contnue;}
+        else if (readpos == posmin) {
+            YIELDINJ
+            WAITPOS // wait for readpos < *arrayPos(helper.index,1)
+            continue;}
+        else if (readpos == lockmin) {
+            YIELDINJ
+            RDLKWMIN // wait lock on readpos
+            UNLKMIN // unlock on readpos
+            continue;}
+        else if (filemin < 0) {ERRORINJ return 0;}
+        else if (readpos == filemin) {
+            YIELDINJ
+            WRLKTPID //try lock on pos 0
+            if (NOLK) { // lock not acquired
+                RDLKWPID // wait lock on pos 0
+                UNLKPID // unlock on pos 0
+                continue;}
+            WRITEPID // write pid to pos 0
+            while (1) {
+                MINIMUM
+                if (readpos < filemin) {
+                    UNLKPID
+                    break;}
+                WAITSIG}} // pselect for sigusr2
+        else exitErrstr("helper too minimum\n");}
+#endif
+    return 0;
 }
 
 int processRead(int pipe)
 {
-    return -1; // -1 error (\n- in pipe), 0 waitig on --- or sigusr2 (pipe not readable), or length of command in ProChar
+    return -1; // -1 error (\n--- in pipe), 0 waitig on writelock or sigusr2 (pipe not readable), or length of command in ProChar
 }
 
-int processWrite(int file, char *buf, int len)
+int processWrite(int index, char *writebuf, int writelen)
 {
+#if 0
+    int file = *arrayWrite(index,1);
     if (file < 0) return -1;
-    // writelock wait at eof of length to write, check still eof, seek back to read pid, mutex, append, unlock, unmutex, send SIGUSR2 to pid
-    return 0;
+    int filelen;
+    FILELEN // get filelen
+    SETPOS // within mutex, set *arrayPos(index,1) to filelen
+    WRLKWEOF // wait for lock from eof of size writelen
+    FILELEN
+    if (filelen > *arrayPos(index,1)) {FIXPOS} // within mutex, set *arrayPos(index,1) to filelen, and signal cond
+    int retval;
+    WRITELEN // write writelen bytes to file from writebuf
+    ENDPOS // within mutex, set *arrayPos(index,1) to infinite, and signal cond
+    return retval;
+#endif
+    return -1;
 }
 
 void processYield()
@@ -153,13 +190,13 @@ void processConsume(int index)
         int len = 0; while (buf[len] != '\n') len++;
         int idx = *delocConfigurer(1);
         if (*arrayWrite(idx,1) < 0) processIgnore(idx);
-        else if (processWrite(*arrayWrite(idx,1),buf,len) < 0) processError();}
+        else if (processWrite(idx,buf,len) < 0) processError();}
     if (!toggle && sizeOption() > 0) {toggle = 1;
         char *buf = destrOption('\n'); int len = 0;
         while (buf[len] != '\n') len++; len = processOption(buf,len);
         if (len > 0) {char *filename = unlocProChar(len); current = sizeRead();
         *enlocWrite(1) = open(filename,O_RDWR);
-        *enlocRead(1) = processInit(open(filename,O_RDONLY),enlocHelper(1),helperRead);
+        *enlocRead(1) = processInit(current, open(filename,O_RDONLY),enlocHelper(1), helperRead);
         if (*arrayRead(current,1) < 0 || *arrayWrite(current,1) < 0) processError();}}
     if (!toggle && sizeOption() == 0) toggle = 1;
     processProduce(index);
