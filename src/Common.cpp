@@ -420,4 +420,4 @@ DEFINE_LOCAL(ProChar,char)
 DEFINE_LOCAL(Read,int)
 DEFINE_LOCAL(Write,int)
 DEFINE_LOCAL(Helper,pthread_t)
-
+DEFINE_LOCAL(Pos,int)

@@ -381,5 +381,6 @@ DECLARE_LOCAL(ProChar,char)
 DECLARE_LOCAL(Read,int)
 DECLARE_LOCAL(Write,int)
 DECLARE_LOCAL(Helper,pthread_t)
+DECLARE_LOCAL(Pos,int)
 
 #endif

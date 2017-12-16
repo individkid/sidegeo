@@ -18,6 +18,8 @@
 
 #include "Common.h"
 #include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
 
 int toggle = 0;
 int current = 0;
@@ -44,6 +46,7 @@ int processInit(int index, int file, pthread_t *thread, void *(*func)(void *))
     if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
     helper.file = file;
     helper.pipe = pipefd[1];
+    helper.index = index;
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     if (pthread_create(thread,0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
@@ -52,76 +55,115 @@ int processInit(int index, int file, pthread_t *thread, void *(*func)(void *))
     return pipefd[0];
 }
 
+#define PROCESS_PIDLEN 20
 #define PROCESS_STEP 20
 // must be large enough for \n-- or ---pid-
 
-#if 0
-#define READBUF \
-    retval = PROCESS_STEP-len; lock.l_start = start; lock.l_len = retval; lock.l_type = F_RDLCK; lock.l_whence = SEEK_SET; \
-    if (fcntl(helper.file,F_GETLK,&lock) < 0) { \
-    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} \
-    if (lock.l_type == F_WRLCK && lock.l_start-start+3 < retval) retval = lock.l_start-start+3; \
-    if (retval < 0) exitErrstr("helper too start\n"); \
-    retval = read(helper.file,buf+len,retval); if (retval < 0) { \
-    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} len += retval; start += retval;
-#define WRITEBUF \
-    int len_ = 0; int line_ = 0; while (len_ < len) { \
-    if (len_ <= len-3 && buf[len_] == '-' && buf[len_+1] == '-' && buf[len_+2] == '-') {line_ = 1; break;} \
-    if (len_ <= len-3 && buf[len_] == '\n' && buf[len_+1] == '-' && buf[len_+2] == '-') {line_ = 1; len_++; break;} \
-    if (len_ <= len-2 && buf[len_] == '\n' && buf[len_+1] == '-') break; \
-    if (len_ <= len-1 && buf[len_] == '\n') break; len_++;} \
-    if (line) {for (int i = 0; i < len-2; i++) buf[i] = buf[i+2]; len -= 2; len_ -= 2;} \
-    for (int i = 0; i < len_-line_; i++) if (buf[i] == '\n') buf[i] = ' '; \
-    if (write(helper.pipe,buf,len_) < 0) exitErrstr("helper too pipe\n"); \
-    for (int i = 0; i < len-len_; i++) buf[i] = buf[i+len_]; len -= len_; line = line_;
-#define DASHBUF (line && len >= 3 && buf[0] == '-' && buf[1] == '-' && buf[2] == '-')
-#define RDLKWBUF \
-    lock.l_start = -len; lock.l_len = 1; lock.l_type = F_RDLCK; lock.l_whence = SEEK_CUR; \
-    while (1) {retval = fcntl(helper.file,F_SETLKW,&lock); if (retval >= 0 || errno != EINTR) break;} \
-    if (retval < 0) {if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;}
-#define REREADBUF \
-    retval = lseek(helper.file,-len,SEEK_CUR); len = 0; \
-    if (retval < 0) {if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} \
-    retval = read(helper.file,buf,PROCESS_STEP); if (retval < 0) { \
-    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;} len += retval;
-#define UNLKBUF \
-    lock.l_start = -len; lock.l_len = 1; lock.l_type = F_UNLCK; lock.l_whence = SEEK_CUR; \
-    retval = fcntl(helper.file,F_SETLK,&lock); \
-    if (retval < 0) {if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;}
-#define WRLKBUF \
-    lock.l_start = -len; lock.l_len = 1; lock.l_type = F_WRLCK; lock.l_whence = SEEK_CUR; \
-    retval = fcntl(helper.file,F_SETLK,&lock); if (retval < 0 && errno != EAGAIN) { \
-    if (write(helper.pipe,"-",1) < 1) exitErrstr("helper too pipe\n"); return 0;}
-#endif
+#define ERRORINJ
+#define YIELDINJ
+#define SEEKPOS \
+    if (lseek(helper.file,readpos,SEEK_SET) < 0) {ERRORINJ return 0;}
+#define MINIMUM \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    posmin = *arrayPos(helper.index,1); \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno)); \
+    if (posmin < INT_MAX) lockmin = posmin; \
+    else {struct flock lockval; \
+        lockval.l_start = PROCESS_PIDLEN; lockval.l_len = INT_MAX; lockval.l_type = F_RDLCK; lockval.l_whence = SEEK_SET; \
+        if (fcntl(helper.file,F_GETLK,&lockval) < 0) {ERRORINJ return 0;} \
+        if (lockval.l_whence != SEEK_SET) exitErrstr("fcntl too gnu\n"); \
+        if (lockval.l_type == F_UNLCK) lockmin = INT_MAX; \
+        else lockmin = lockval.l_start;} \
+    if (lockmin < INT_MAX) filemin = lockmin; \
+    else {struct stat statval; \
+        if (fstat(helper.file,&statval) < 0) {ERRORINJ return 0;} \
+        filemin = statval.st_size;}
+#define READMIN \
+    while (readpos < filemin) { \
+        int len_ = PROCESS_STEP-len; \
+        if (len+len_ > filemin-readpos) len_ = filemin-readpos-len; \
+        if (read(helper.file,buf+len,len_) < 0) {ERRORINJ return 0;} len += len_; \
+        if (len == 1 || (len > 2 && buf[0] == '\n' && buf[1] == '-' && buf[2] == '-')) { \
+            if (write(helper.pipe,buf,1) != 1) exitErrstr("helper too pipe\n"); \
+            for (int i = 0; i < len-1; i++) buf[i] = buf[i+1]; len -= 1; readpos += 1;} \
+        if (len > 1 && buf[0] == '-' && buf[1] == '-') { \
+            for (int i = 0; i < len-2; i++) buf[i] = buf[i+2]; len -= 2; readpos += 2;} \
+        if (buf[0] == '\n' && len < 3) exitErrstr("helper too len\n"); \
+        if (buf[0] == '\n') buf[0] = ' '; \
+        len_ = 0; while (len_ < len && buf[len_] != '\n') len_++; \
+        if (write(helper.pipe,buf,len_) != len_) exitErrstr("helper too pipe\n"); \
+        for (int i = 0; i < len-len_; i++) buf[i] = buf[i+len_]; len -= len_; readpos += len_;}
+#define WAITPOS \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    while (readpos == *arrayPos(helper.index,1)) \
+        if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno)); \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+#define RDLKWMIN \
+    while (1) {struct flock lockval; \
+        lockval.l_start = readpos; lockval.l_len = 1; lockval.l_type = F_RDLCK; lockval.l_whence = SEEK_SET; \
+        int retval = fcntl(helper.file,F_SETLKW,&lockval); \
+        if (retval == -1 && errno == EINTR) continue; \
+        if (retval == -1) {ERRORINJ return 0;} else lockval.l_type = F_UNLCK; \
+        if (fcntl(helper.file,F_SETLK,&lockval) == -1) {ERRORINJ return 0;} else break;}
+#define WRLKTPID \
+    while (1) {struct flock lockval; \
+        lockval.l_start = 0; lockval.l_len = 1; lockval.l_type = F_WRLCK; lockval.l_whence = SEEK_SET; \
+        retval = fcntl(helper.file,F_SETLK,&lockval); \
+        if (retval == -1 && errno == EAGAIN) break; \
+        if (retval == -1) {ERRORINJ return 0;} else break;}
+#define RDLKWPID \
+    while (1) {struct flock lockval; \
+        lockval.l_start = 0; lockval.l_len = 1; lockval.l_type = F_RDLCK; lockval.l_whence = SEEK_SET; \
+        int retval = fcntl(helper.file,F_SETLKW,&lockval); \
+        if (retval == -1 && errno == EINTR) continue; \
+        if (retval == -1) {ERRORINJ return 0;} else lockval.l_type = F_UNLCK; \
+        if (fcntl(helper.file,F_SETLK,&lockval) == -1) {ERRORINJ return 0;} else break;}
+#define WRITEPID \
+    while (1) {char pidstr[PROCESS_PIDLEN]; \
+        int retval = sprintf(pidstr,"%llu",(unsigned long long)getpid()); \
+        if (retval < 0) exitErrstr("sprintf too pid\n"); \
+        while (retval < PROCESS_PIDLEN) {pidstr[retval] = ' '; retval++;} \
+        if (lseek(helper.file,0,SEEK_SET) < 0) {ERRORINJ return 0;} \
+        if (write(helper.file,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) {ERRORINJ return 0;} \
+        if (lseek(helper.file,readpos,SEEK_SET) < 0) {ERRORINJ return 0;} else break;}
+#define UNLKPID \
+    while (1) {struct flock lockval; \
+        lockval.l_start = 0; lockval.l_len = 1; lockval.l_type = F_UNLCK; lockval.l_whence = SEEK_SET; \
+        if (fcntl(helper.file,F_SETLK,&lockval) == -1) {ERRORINJ return 0;} else break;}
+#define WAITSIG \
+    while (1) {struct sigaction sigact = {0}; sigemptyset(&sigact.sa_mask); sigact.sa_handler = &handler; \
+        if (sigaction(SIGUSR2, &sigact, 0) < 0) exitErrstr("sigaction failed\n"); \
+        sigset_t saved; pthread_sigmask(SIG_SETMASK,0,&saved); sigdelset(&saved, SIGUSR2); \
+        if (pselect(0,0,0,0,0,&saved) < 0 && errno != EINTR) exitErrstr("pselect failed\n"); else break;}
 
 void *helperRead(void *arg)
 {
     struct Helper helper = helperInit();
-#if 0
+    int readpos = PROCESS_PIDLEN;
+    char buf[PROCESS_STEP]; int len = 0;
+    SEEKPOS // start reading at readpos
     while (1) {
-        int readpos = 0;
         int filemin,lockmin,posmin;
         MINIMUM // filemin <= lockmin <= posmin
         if (readpos < filemin) {
             READMIN // advance readpos to filemin
             if (readpos < filemin) {ERRORINJ return 0;}
-            contnue;}
+            continue;}
         else if (readpos == posmin) {
             YIELDINJ
             WAITPOS // wait for readpos < *arrayPos(helper.index,1)
             continue;}
         else if (readpos == lockmin) {
             YIELDINJ
-            RDLKWMIN // wait lock on readpos
-            UNLKMIN // unlock on readpos
+            RDLKWMIN // wait lockable on readpos
             continue;}
         else if (filemin < 0) {ERRORINJ return 0;}
         else if (readpos == filemin) {
             YIELDINJ
+            int retval;
             WRLKTPID //try lock on pos 0
-            if (NOLK) { // lock not acquired
+            if (retval < 0) { // lock not acquired
                 RDLKWPID // wait lock on pos 0
-                UNLKPID // unlock on pos 0
                 continue;}
             WRITEPID // write pid to pos 0
             while (1) {
@@ -131,7 +173,6 @@ void *helperRead(void *arg)
                     break;}
                 WAITSIG}} // pselect for sigusr2
         else exitErrstr("helper too minimum\n");}
-#endif
     return 0;
 }
 
@@ -152,8 +193,11 @@ int processWrite(int index, char *writebuf, int writelen)
     FILELEN
     if (filelen > *arrayPos(index,1)) {FIXPOS} // within mutex, set *arrayPos(index,1) to filelen, and signal cond
     int retval;
-    WRITELEN // write writelen bytes to file from writebuf
+    WRITELEN // write writelen bytes to file at filelen from writebuf
     ENDPOS // within mutex, set *arrayPos(index,1) to infinite, and signal cond
+    int pid;
+    READPID // seek to start of file, read PROCESS_PIDLEN bytes, sscanf into pid
+    SIGPID // send SIGUSR2 to process identified by pid
     return retval;
 #endif
     return -1;
@@ -196,7 +240,7 @@ void processConsume(int index)
         while (buf[len] != '\n') len++; len = processOption(buf,len);
         if (len > 0) {char *filename = unlocProChar(len); current = sizeRead();
         *enlocWrite(1) = open(filename,O_RDWR);
-        *enlocRead(1) = processInit(current, open(filename,O_RDONLY),enlocHelper(1), helperRead);
+        *enlocRead(1) = processInit(current, open(filename,O_RDWR),enlocHelper(1), helperRead);
         if (*arrayRead(current,1) < 0 || *arrayWrite(current,1) < 0) processError();}}
     if (!toggle && sizeOption() == 0) toggle = 1;
     processProduce(index);
