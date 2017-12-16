@@ -91,18 +91,10 @@ EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int size##NAME(); \
 EXTERNC void use##NAME(); \
-EXTERNC void xfer##NAME(int siz);
+EXTERNC void xfer##NAME(int siz); \
+EXTERNC int enstr##NAME(TYPE val);
 
-#define DECLARE_STAGE(NAME,TYPE) \
-EXTERNC TYPE *enloc##NAME(int siz); \
-EXTERNC TYPE *deloc##NAME(int siz); \
-EXTERNC TYPE *destr##NAME(TYPE val); \
-EXTERNC TYPE *unloc##NAME(int siz); \
-EXTERNC void reloc##NAME(int siz); \
-EXTERNC TYPE *array##NAME(int sub, int siz); \
-EXTERNC int size##NAME(); \
-EXTERNC void use##NAME(); \
-EXTERNC void xfer##NAME(int siz);
+#define DECLARE_STAGE(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
 
 #define DECLARE_META(NAME,TYPE) \
 EXTERNC void use##NAME(int sub); \
@@ -751,6 +743,11 @@ template<class TYPE> struct QueueStruct : QueueBase {
     {
         return tail - head;
     }
+    virtual void use()
+    {
+        if (src) exitErrstr("src too use\n");
+        src = this;
+    }
     virtual void xfer(int siz)
     {
         if (!src) exitErrstr("xfer too src\n");
@@ -759,10 +756,13 @@ template<class TYPE> struct QueueStruct : QueueBase {
         for (int i = 0; i < siz; i++) dest[i] = source[i];
         src = 0;
     }
-    virtual void use()
+    int enstr(TYPE val)
     {
-        if (src) exitErrstr("src too use\n");
-        src = this;
+        if (!src) exitErrstr("enstr too src\n");
+        int len = src->size(); TYPE *buf = src->destr(val);
+        len -= src->size(); len--; memcpy(enloc(len),buf,len);
+        src = 0;
+        return len;
     }
 };
 
@@ -778,7 +778,8 @@ extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
 extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" void use##NAME() {NAME##Inst.use();} \
-extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);}
+extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
+extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst)
 

@@ -197,8 +197,9 @@ void *helperRead(void *arg)
 #define SIGPID \
     if (kill(pid, SIGUSR2) < 0 && errno != ESRCH) return -1;
 
-int processWrite(int index, char *writebuf, int writelen)
+int processWrite(int index, int writelen)
 {
+    char *writebuf = unlocProChar(writelen);
     int file = *arrayWrite(index,1);
     if (file < 0) return -1;
     int filelen;
@@ -230,11 +231,11 @@ void processYield()
     current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;
 }
 
-void processError()
+void processError(int index)
 {
-    if (pthread_cancel(*arrayHelper(current,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
-    if (*arrayRead(current,1) >= 0) removeCmnProcesses(*arrayRead(current,1));
-    *arrayRead(current,1) = *arraySize(current,1) = *arrayWrite(current,1) = -1;
+    if (pthread_cancel(*arrayHelper(index,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
+    if (*arrayRead(index,1) >= 0) removeCmnProcesses(*arrayRead(index,1));
+    *arrayRead(index,1) = *arraySize(index,1) = *arrayWrite(index,1) = -1;
     processYield();
 }
 
@@ -255,7 +256,7 @@ void processInit(int len)
     if (pthread_create(enlocHelper(1),0,helperRead,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-    if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) processError();
+    if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) processError(current);
 }
 
 void processIgnore(int index)
@@ -271,12 +272,10 @@ void processBefore()
 
 void processConsume(int index)
 {
-    if (sizeConfigure() > 0) {
-        char *buf = destrConfigure('\n');
-        int len = 0; while (buf[len] != '\n') len++;
-        int idx = *delocConfigurer(1);
-        if (*arrayWrite(idx,1) < 0) processIgnore(idx);
-        else if (processWrite(idx,buf,len) < 0) processError();}
+    if (sizeConfigurer() > 0) {
+        int idx = *delocConfigurer(1); useConfigure();
+        if (processWrite(idx,enstrProChar('\n')) < 0) processError(idx);
+        if (*arrayWrite(idx,1) < 0) processIgnore(idx);}
     useOption(); xferStage(sizeOption());
 }
 
@@ -290,12 +289,10 @@ void processProduce(int index)
     else if (toggle) {
         int len = processRead(*arrayRead(current,1),*arraySize(current,1));
         if (len > 0) len = processConfigure(current,len);
-        if (len < 0) processError();
+        if (len < 0) processError(current);
         if (len == 0) *arrayYield(current,1) = 1;}
     else if (sizeStage() > 0) {
-    	int len = sizeStage(); char *buf = destrStage('\n');
-    	len -= sizeStage(); len--; memcpy(enlocProChar(len),buf,len);
-        processInit(processOption(len));}
+        useOption(); processInit(processOption(enstrProChar('\n')));}
     else toggle = 1;
 }
 
