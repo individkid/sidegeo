@@ -34,6 +34,7 @@ struct Helper {
 
 #define PROCESS_PIDLEN 20
 #define PROCESS_STEP 20
+#define PROCESS_IGNORE 3
 
 #define ERRORINJ \
 	while (1) {int help = -1; if (write(helper.size,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
@@ -199,7 +200,7 @@ void *helperRead(void *arg)
 
 int processWrite(int index, int writelen)
 {
-    char *writebuf = unlocProChar(writelen);
+    char *writebuf = unlocPcsChar(writelen);
     int file = *arrayWrite(index,1);
     if (file < 0) return -1;
     int filelen;
@@ -221,8 +222,8 @@ int processRead(int pipe, int size)
 	int len; char *buf;
 	if (read(size,&len,sizeof(len)) != sizeof(len)) return -1;
 	if (len < 0) return -1; if (len == 0) return 0;
-	buf = enlocProChar(len);
-	if (read(pipe,buf,len) != len) {unlocProChar(len); return -1;}
+	buf = enlocPcsChar(len);
+	if (read(pipe,buf,len) != len) {unlocPcsChar(len); return -1;}
 	return len;
 }
 
@@ -243,8 +244,8 @@ void processInit(int len)
 {
 	if (len == 0) return; toggle = 1;
 	if (len < 0) exitErrstr("init too len\n");
-    *enlocProChar(1) = 0; char *filename = unlocProChar(len+1);
-    helper.index = current = sizeRead(); *enlocYield(1) = 0;
+    *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
+    helper.index = current = sizeRead(); *enlocYield(1) = 0; *enlocIgnore(1) = 0;
     *enlocWrite(1) = open(filename,O_RDWR);
     helper.file = open(filename,O_RDWR);;
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
@@ -259,9 +260,13 @@ void processInit(int len)
     if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) processError(current);
 }
 
+DEFINE_MSGSTR(PcsOutput)
+
 void processIgnore(int index)
 {
-    // print error message first few times
+    if (*arrayIgnore(index,1) >= PROCESS_IGNORE) return;
+    *arrayIgnore(index,1) += 1;
+    msgstrPcsOutput("syntax error in file number %d\n",index);
 }
 
 void processBefore()
@@ -274,13 +279,13 @@ void processConsume(int index)
 {
     if (sizeConfigurer() > 0) {
         int idx = *delocConfigurer(1); useConfigure();
-        if (processWrite(idx,enstrProChar('\n')) < 0) processError(idx);
+        if (processWrite(idx,enstrPcsChar('\n')) < 0) processError(idx);
         if (*arrayWrite(idx,1) < 0) processIgnore(idx);}
     useOption(); xferStage(sizeOption());
 }
 
-int processConfigure(int index, int len); // given unlocProChar(len), return -1 error, 0 yield, >0 continue
-int processOption(int len); // given unlocProChar(len), return 0 or length of filename in enlocProChar
+int processConfigure(int index, int len); // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
+int processOption(int len); // given unlocPcsChar(len), return 0 or length of filename in enlocPcsChar
 void processProduce(int index)
 {
     if (toggle && *arrayRead(current,1) < 0) processYield();
@@ -292,7 +297,7 @@ void processProduce(int index)
         if (len < 0) processError(current);
         if (len == 0) *arrayYield(current,1) = 1;}
     else if (sizeStage() > 0) {
-        useOption(); processInit(processOption(enstrProChar('\n')));}
+        useOption(); processInit(processOption(enstrPcsChar('\n')));}
     else toggle = 1;
 }
 
