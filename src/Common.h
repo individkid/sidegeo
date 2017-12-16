@@ -379,6 +379,7 @@ DECLARE_STAGE(ProState,struct State)
 
 DECLARE_LOCAL(ProChar,char)
 DECLARE_LOCAL(Read,int)
+DECLARE_LOCAL(Size,int)
 DECLARE_LOCAL(Write,int)
 DECLARE_LOCAL(Helper,pthread_t)
 DECLARE_LOCAL(Pos,int)

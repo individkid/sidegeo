@@ -28,39 +28,17 @@ pthread_cond_t cond;
 struct Helper {
     int file; // filesystem descriptor
     int pipe; // helper side of pipe
+    int size; // pipe for command sizes
     int index; // for accessing mutex protected resources
 } helper;
 
-struct Helper helperInit()
-{
-    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    struct Helper retval = helper;
-    if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
-    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-    return retval;
-}
-
-int processInit(int index, int file, pthread_t *thread, void *(*func)(void *))
-{
-    int pipefd[2];
-    if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
-    helper.file = file;
-    helper.pipe = pipefd[1];
-    helper.index = index;
-    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    if (pthread_create(thread,0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
-    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
-    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-    if (pipefd[0] >= 0) insertCmnProcesses(pipefd[0]);
-    return pipefd[0];
-}
-
 #define PROCESS_PIDLEN 20
 #define PROCESS_STEP 20
-// must be large enough for \n-- or ---pid-
 
-#define ERRORINJ
-#define YIELDINJ
+#define ERRORINJ \
+	if (write(helper.pipe,"-\n",2) != 2) exitErrstr("helper too pipe\n");
+#define YIELDINJ \
+	if (write(helper.pipe,"yield\n",6) != 6) exitErrstr("helper too pipe\n");
 #define SEEKPOS \
     if (lseek(helper.file,readpos,SEEK_SET) < 0) {ERRORINJ return 0;}
 #define MINIMUM \
@@ -84,14 +62,14 @@ int processInit(int index, int file, pthread_t *thread, void *(*func)(void *))
         if (len+len_ > filemin-readpos) len_ = filemin-readpos-len; \
         if (read(helper.file,buf+len,len_) < 0) {ERRORINJ return 0;} len += len_; \
         if (len == 1 || (len > 2 && buf[0] == '\n' && buf[1] == '-' && buf[2] == '-')) { \
-            if (write(helper.pipe,buf,1) != 1) exitErrstr("helper too pipe\n"); \
+            if (write(helper.size,&length,sizeof(length)) != sizeof(length)) exitErrstr("helper too size\n"); length = 0; \
             for (int i = 0; i < len-1; i++) buf[i] = buf[i+1]; len -= 1; readpos += 1;} \
         if (len > 1 && buf[0] == '-' && buf[1] == '-') { \
             for (int i = 0; i < len-2; i++) buf[i] = buf[i+2]; len -= 2; readpos += 2;} \
         if (buf[0] == '\n' && len < 3) exitErrstr("helper too len\n"); \
         if (buf[0] == '\n') buf[0] = ' '; \
         len_ = 0; while (len_ < len && buf[len_] != '\n') len_++; \
-        if (write(helper.pipe,buf,len_) != len_) exitErrstr("helper too pipe\n"); \
+        if (write(helper.pipe,buf,len_) != len_) exitErrstr("helper too pipe\n"); length += len_; \
         for (int i = 0; i < len-len_; i++) buf[i] = buf[i+len_]; len -= len_; readpos += len_;}
 #define WAITPOS \
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
@@ -136,11 +114,20 @@ int processInit(int index, int file, pthread_t *thread, void *(*func)(void *))
         sigset_t saved; pthread_sigmask(SIG_SETMASK,0,&saved); sigdelset(&saved, SIGUSR2); \
         if (pselect(0,0,0,0,0,&saved) < 0 && errno != EINTR) exitErrstr("pselect failed\n"); else break;}
 
+struct Helper helperInit()
+{
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    struct Helper retval = helper;
+    if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+    return retval;
+}
+
 void *helperRead(void *arg)
 {
     struct Helper helper = helperInit();
     int readpos = PROCESS_PIDLEN;
-    char buf[PROCESS_STEP]; int len = 0;
+    char buf[PROCESS_STEP]; int len = 0; int length = 0;
     SEEKPOS // start reading at readpos
     while (1) {
         int filemin,lockmin,posmin;
@@ -174,11 +161,6 @@ void *helperRead(void *arg)
                 WAITSIG}} // pselect for sigusr2
         else exitErrstr("helper too minimum\n");}
     return 0;
-}
-
-int processRead(int pipe)
-{
-    return -1; // -1 error (\n--- in pipe), 0 waitig on writelock or sigusr2 (pipe not readable), or length of command in ProChar
 }
 
 #define FILELEN \
@@ -233,6 +215,33 @@ int processWrite(int index, char *writebuf, int writelen)
     return 0;
 }
 
+int processRead(int pipe, int size) // -1 error (- in pipe), 0 waitig on writelock or sigusr2 (yield in pipe), or length of command in ProChar
+{
+	int len; char *buf;
+	if (read(size,&len,sizeof(len)) != sizeof(len)) return -1;
+	buf = enlocProChar(len);
+	if (read(pipe,buf,len) != len) {unlocProChar(len); return -1;}
+	if (len == 1 && strncmp(buf,"-",1) == 0) {unlocProChar(len); return -1;}
+	if (len == 5 && strncmp(buf,"yield",5) == 0) {unlocProChar(len); return 0;}
+	return len;
+}
+
+void processInit(int index, int file, void *(*func)(void *))
+{
+    helper.index = index;
+    helper.file = file;
+    int pipefd[2];
+    if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
+    *enlocRead(1) = pipefd[0]; helper.pipe = pipefd[1];
+    if (pipefd[0] >= 0) insertCmnProcesses(pipefd[0]);
+    if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
+    *enlocSize(1) = pipefd[0]; helper.size = pipefd[1];
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    if (pthread_create(enlocHelper(1),0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
+    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+}
+
 void processYield()
 {
     current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;
@@ -241,7 +250,7 @@ void processYield()
 void processError()
 {
     if (*arrayRead(current,1) >= 0) removeCmnProcesses(*arrayRead(current,1));
-    *arrayRead(current,1) = *arrayWrite(current,1) = -1;
+    *arrayRead(current,1) = *arraySize(current,1) = *arrayWrite(current,1) = -1;
     processYield();
 }
 
@@ -252,7 +261,8 @@ void processIgnore(int index)
 
 void processBefore()
 {
-    // initialize mutex and cond
+    if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }
 
 int processOption(char *option, int len); // 0 or length of filename in ProChar
@@ -270,8 +280,8 @@ void processConsume(int index)
         while (buf[len] != '\n') len++; len = processOption(buf,len);
         if (len > 0) {char *filename = unlocProChar(len); current = sizeRead();
         *enlocWrite(1) = open(filename,O_RDWR);
-        *enlocRead(1) = processInit(current, open(filename,O_RDWR),enlocHelper(1), helperRead);
-        if (*arrayRead(current,1) < 0 || *arrayWrite(current,1) < 0) processError();}}
+        processInit(current,open(filename,O_RDWR),helperRead);
+        if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) processError();}}
     if (!toggle && sizeOption() == 0) toggle = 1;
     processProduce(index);
 }
@@ -280,7 +290,7 @@ int processConfigure(int index, char *configure, int len); // 0 or 1 whether to 
 void processProduce(int index)
 {
     if (toggle && *arrayRead(current,1) >= 0) {
-        int len = processRead(*arrayRead(current,1));
+        int len = processRead(*arrayRead(current,1),*arraySize(current,1));
         if (len < 0) processError();
         if (len == 0) processYield();
         if (len > 0 && processConfigure(current,delocProChar(len),len)) processYield();}
@@ -289,7 +299,8 @@ void processProduce(int index)
 
 void processAfter()
 {
-    // finalize mutex and cond
+    if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
     for (int i = 0; i < sizeHelper(); i++) {
         if (pthread_cancel(*arrayHelper(i,1)) < 0) exitErrstr("cannot cancel thread\n");
         if (pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
