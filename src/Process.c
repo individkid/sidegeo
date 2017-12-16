@@ -36,9 +36,9 @@ struct Helper {
 #define PROCESS_STEP 20
 
 #define ERRORINJ \
-	if (write(helper.pipe,"-\n",2) != 2) exitErrstr("helper too pipe\n");
+	while (1) {int help = -1; if (write(helper.size,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
 #define YIELDINJ \
-	if (write(helper.pipe,"yield\n",6) != 6) exitErrstr("helper too pipe\n");
+	while (1) {int help = 0; if (write(helper.size,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
 #define SEEKPOS \
     if (lseek(helper.file,readpos,SEEK_SET) < 0) {ERRORINJ return 0;}
 #define MINIMUM \
@@ -215,31 +215,14 @@ int processWrite(int index, char *writebuf, int writelen)
     return 0;
 }
 
-int processRead(int pipe, int size) // -1 error (- in pipe), 0 waitig on writelock or sigusr2 (yield in pipe), or length of command in ProChar
+int processRead(int pipe, int size)
 {
 	int len; char *buf;
 	if (read(size,&len,sizeof(len)) != sizeof(len)) return -1;
+	if (len < 0) return -1; if (len == 0) return 0;
 	buf = enlocProChar(len);
 	if (read(pipe,buf,len) != len) {unlocProChar(len); return -1;}
-	if (len == 1 && strncmp(buf,"-",1) == 0) {unlocProChar(len); return -1;}
-	if (len == 5 && strncmp(buf,"yield",5) == 0) {unlocProChar(len); return 0;}
 	return len;
-}
-
-void processInit(int index, int file, void *(*func)(void *))
-{
-    helper.index = index;
-    helper.file = file;
-    int pipefd[2];
-    if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
-    *enlocRead(1) = pipefd[0]; helper.pipe = pipefd[1];
-    if (pipefd[0] >= 0) insertCmnProcesses(pipefd[0]);
-    if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
-    *enlocSize(1) = pipefd[0]; helper.size = pipefd[1];
-    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    if (pthread_create(enlocHelper(1),0,func,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
-    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
-    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 }
 
 void processYield()
@@ -254,6 +237,26 @@ void processError()
     processYield();
 }
 
+void processInit(int len)
+{
+	if (len == 0) return; toggle = 1;
+	if (len < 0) exitErrstr("init too len\n");
+    *enlocProChar(1) = 0; char *filename = unlocProChar(len+1);
+    helper.index = current = sizeRead(); *enlocYield(1) = 0;
+    *enlocWrite(1) = open(filename,O_RDWR);
+    helper.file = open(filename,O_RDWR);;
+    int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
+    *enlocRead(1) = pipefd[0]; helper.pipe = pipefd[1];
+    if (pipefd[0] >= 0) insertCmnProcesses(pipefd[0]);
+    if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
+    *enlocSize(1) = pipefd[0]; helper.size = pipefd[1];
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    if (pthread_create(enlocHelper(1),0,helperRead,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
+    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+    if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) processError();
+}
+
 void processIgnore(int index)
 {
     // print error message first few times
@@ -265,8 +268,6 @@ void processBefore()
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }
 
-int processOption(char *option, int len); // 0 or length of filename in ProChar
-void processProduce(int index);
 void processConsume(int index)
 {
     if (sizeConfigure() > 0) {
@@ -275,26 +276,26 @@ void processConsume(int index)
         int idx = *delocConfigurer(1);
         if (*arrayWrite(idx,1) < 0) processIgnore(idx);
         else if (processWrite(idx,buf,len) < 0) processError();}
-    if (!toggle && sizeOption() > 0) {toggle = 1;
-        char *buf = destrOption('\n'); int len = 0;
-        while (buf[len] != '\n') len++; len = processOption(buf,len);
-        if (len > 0) {char *filename = unlocProChar(len); current = sizeRead();
-        *enlocWrite(1) = open(filename,O_RDWR);
-        processInit(current,open(filename,O_RDWR),helperRead);
-        if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) processError();}}
-    if (!toggle && sizeOption() == 0) toggle = 1;
-    processProduce(index);
+    useOption(); xferStage(sizeOption());
 }
 
-int processConfigure(int index, char *configure, int len); // 0 or 1 whether to yield
+int processConfigure(int index, int len); // given unlocProChar(len), return -1 error, 0 yield, >0 continue
+int processOption(int len); // given unlocProChar(len), return 0 or length of filename in enlocProChar
 void processProduce(int index)
 {
-    if (toggle && *arrayRead(current,1) >= 0) {
-        int len = processRead(*arrayRead(current,1),*arraySize(current,1));
-        if (len < 0) processError();
-        if (len == 0) processYield();
-        if (len > 0 && processConfigure(current,delocProChar(len),len)) processYield();}
     if (toggle && *arrayRead(current,1) < 0) processYield();
+    else if (toggle && *arrayRead(current,1) >= 0 &&
+    	*arrayYield(current,1) && !readableCmnProcesses(*arrayRead(current,1))) processYield();
+    else if (toggle) {
+        int len = processRead(*arrayRead(current,1),*arraySize(current,1));
+        if (len > 0) len = processConfigure(current,len);
+        if (len < 0) processError();
+        if (len == 0) *arrayYield(current,1) = 1;}
+    else if (sizeStage() > 0) {
+    	int len = sizeStage(); char *buf = destrStage('\n');
+    	len -= sizeStage(); len--; memcpy(enlocProChar(len),buf,len);
+        processInit(processOption(len));}
+    else toggle = 1;
 }
 
 void processAfter()

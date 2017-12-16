@@ -63,10 +63,11 @@ EXTERNC void join##NAME(); \
 EXTERNC void signal##NAME(); \
 EXTERNC void exit##NAME();
 
-#define DECLARE_SET(NAME,ELEM) DECLARE_MUTEX(NAME) \
+#define DECLARE_FDSET(NAME,ELEM) DECLARE_MUTEX(NAME) \
 EXTERNC void insert##NAME(ELEM val); \
 EXTERNC void remove##NAME(ELEM val); \
-EXTERNC int member##NAME(ELEM val);
+EXTERNC int member##NAME(ELEM val); \
+EXTERNC int readable##NAME(ELEM val);
 
 #define DECLARE_COND(NAME) DECLARE_MUTEX(NAME) \
 EXTERNC void wait##NAME();
@@ -327,7 +328,7 @@ struct QueueStdin : QueueMutex {
 
 struct QueueFdset : QueueMutex {
     sigset_t saved;
-    fd_set fds;
+    fd_set fds,rfds;
     int maxfd;
     struct timespec notime;
     void (*func0)();
@@ -342,6 +343,7 @@ struct QueueFdset : QueueMutex {
     virtual void insert(int fd) {if (fd > maxfd) maxfd = fd; FD_SET(fd, &fds);}
     virtual void remove(int fd) {FD_CLR(fd, &fds);}
     virtual int member(int fd) {return FD_ISSET(fd, &fds);}
+    virtual int readable(int fd) {return FD_ISSET(fd, &rfds);}
     virtual void signal()
     {
         if (pthread_kill(thread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
@@ -376,14 +378,16 @@ struct QueueFdset : QueueMutex {
     }
     virtual int delay()
     {
-        int lenSel = pselect(maxfd+1, &fds, 0, 0, 0, &saved);
+        rfds = fds;
+        int lenSel = pselect(maxfd+1, &rfds, 0, 0, 0, &saved);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
         if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
         return lenSel;
     }
     virtual int nodelay()
     {
-        int lenSel = pselect(maxfd+1, &fds, 0, 0, &notime, 0);
+        rfds = fds;
+        int lenSel = pselect(maxfd+1, &rfds, 0, 0, &notime, 0);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
         if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
         return lenSel;
@@ -497,10 +501,11 @@ extern "C" void exit##NAME() {NAME##Inst.done = 1; NAME##Inst.signal(); NAME##In
 #define DEFINE_COND(NAME,TYPE,FUNC...) DEFINE_MUTEX(NAME,TYPE,FUNC) \
 extern "C" void wait##NAME() {NAME##Inst.wait();}
 
-#define DEFINE_SET(NAME,TYPE,ELEM,FUNC...) DEFINE_MUTEX(NAME,TYPE,FUNC) \
+#define DEFINE_FDSET(NAME,TYPE,ELEM,FUNC...) DEFINE_MUTEX(NAME,TYPE,FUNC) \
 extern "C" void insert##NAME(ELEM val) {NAME##Inst.insert(val);} \
 extern "C" void remove##NAME(ELEM val) {NAME##Inst.remove(val);} \
-extern "C" int member##NAME(ELEM val) {return NAME##Inst.member(val);}
+extern "C" int member##NAME(ELEM val) {return NAME##Inst.member(val);} \
+extern "C" int readable##NAME(ELEM val) {return NAME##Inst.readable(val);}
 
 struct QueueSource : QueueXfer {
     QueueSource(QueueMutex *ptr0, QueueMutex *ptr1)

@@ -18,8 +18,8 @@
 
 #include "Common.h"
 
-int processOption(char *option, int len)
+int processOption(int len)
 {
-    return 0; // 0 or length of filename in ProChar
+    return 0; // given unlocProChar(len), return 0 or length of filename in enlocProChar
 }
 

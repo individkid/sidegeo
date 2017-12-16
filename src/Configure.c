@@ -18,8 +18,8 @@
 
 #include "Common.h"
 
-int processConfigure(int index, char *configure, int len)
+int processConfigure(int index, int len)
 {
-    return 0; // 0 or 1 whether to yield
+    return -1; // given unlocProChar(len), return -1 error, 0 yield, >0 continue
 }
 
