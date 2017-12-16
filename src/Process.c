@@ -195,7 +195,7 @@ void *helperRead(void *arg)
     	if (read(file,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) return -1; \
     	unsigned long long temp; if (sscanf(pidstr,"%llu",&temp) != 1) return -1; pid = temp; break;}
 #define SIGPID \
-    if (kill(pid, SIGUSR2) < 0) return -1;
+    if (kill(pid, SIGUSR2) < 0 && errno != ESRCH) return -1;
 
 int processWrite(int index, char *writebuf, int writelen)
 {
@@ -232,6 +232,7 @@ void processYield()
 
 void processError()
 {
+    if (pthread_cancel(*arrayHelper(current,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
     if (*arrayRead(current,1) >= 0) removeCmnProcesses(*arrayRead(current,1));
     *arrayRead(current,1) = *arraySize(current,1) = *arrayWrite(current,1) = -1;
     processYield();
@@ -303,6 +304,7 @@ void processAfter()
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
     for (int i = 0; i < sizeHelper(); i++) {
-        if (pthread_cancel(*arrayHelper(i,1)) < 0) exitErrstr("cannot cancel thread\n");
-        if (pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
+        int retval = pthread_cancel(*arrayHelper(i,1));
+        if (retval < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
+        if (retval == 0 && pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
 }
