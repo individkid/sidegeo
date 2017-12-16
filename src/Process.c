@@ -181,9 +181,42 @@ int processRead(int pipe)
     return -1; // -1 error (\n--- in pipe), 0 waitig on writelock or sigusr2 (pipe not readable), or length of command in ProChar
 }
 
+#define FILELEN \
+    while (1) {struct stat statval; \
+        if (fstat(file,&statval) < 0) {ERRORINJ return 0;} \
+        filelen = statval.st_size; break;}
+#define SETPOS \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    *arrayPos(index,1) = filelen; \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+#define WRLKWEOF \
+    while (1) {struct flock lockval; \
+        lockval.l_start = 0; lockval.l_len = writelen; lockval.l_type = F_WRLCK; lockval.l_whence = SEEK_END; \
+        int retval = fcntl(file,F_SETLKW,&lockval); \
+        if (retval == -1 && errno == EINTR) continue; \
+        if (retval == -1) {ERRORINJ return 0;} else break;}
+#define WRITELEN \
+    if (lseek(file,filelen,SEEK_SET) < 0) return -1; \
+    if (write(file,writebuf,writelen) < 0) return -1;
+#define UNLKEOF \
+    while (1) {struct flock lockval; \
+        lockval.l_start = 0; lockval.l_len = writelen; lockval.l_type = F_UNLCK; lockval.l_whence = SEEK_END; \
+        if (fcntl(file,F_SETLK,&lockval) == -1) {ERRORINJ return 0;} else break;}
+#define ENDPOS \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    *arrayPos(index,1) = INT_MAX; \
+    if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno)); \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+#define READPID \
+    while (1) {char pidstr[PROCESS_PIDLEN]; \
+	    if (lseek(file,0,SEEK_SET) < 0) return -1; \
+    	if (read(file,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) return -1; \
+    	unsigned long long temp; if (sscanf(pidstr,"%llu",&temp) != 1) return -1; pid = temp; break;}
+#define SIGPID \
+    if (kill(pid, SIGUSR2) < 0) return -1;
+
 int processWrite(int index, char *writebuf, int writelen)
 {
-#if 0
     int file = *arrayWrite(index,1);
     if (file < 0) return -1;
     int filelen;
@@ -191,16 +224,13 @@ int processWrite(int index, char *writebuf, int writelen)
     SETPOS // within mutex, set *arrayPos(index,1) to filelen
     WRLKWEOF // wait for lock from eof of size writelen
     FILELEN
-    if (filelen > *arrayPos(index,1)) {FIXPOS} // within mutex, set *arrayPos(index,1) to filelen, and signal cond
-    int retval;
     WRITELEN // write writelen bytes to file at filelen from writebuf
+    UNLKEOF
     ENDPOS // within mutex, set *arrayPos(index,1) to infinite, and signal cond
-    int pid;
+    pid_t pid;
     READPID // seek to start of file, read PROCESS_PIDLEN bytes, sscanf into pid
     SIGPID // send SIGUSR2 to process identified by pid
-    return retval;
-#endif
-    return -1;
+    return 0;
 }
 
 void processYield()
