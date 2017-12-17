@@ -36,15 +36,20 @@ struct Helper {
 #define PROCESS_STEP 20
 #define PROCESS_IGNORE 3
 
-#define ERRORINJ \
-	while (1) {int help = -1; if (write(helper.size,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
+#define GIVEPOS \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    *arrayMore(helper.index,1) = 0; \
+    if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno)); \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+#define ERRORINJ GIVEPOS \
+    while (1) {int help = -1; if (write(helper.size,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
 #define YIELDINJ \
 	while (1) {int help = 0; if (write(helper.size,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
 #define SEEKPOS \
     if (lseek(helper.file,readpos,SEEK_SET) < 0) {ERRORINJ return 0;}
 #define MINIMUM \
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
-    posmin = *arrayPos(helper.index,1); \
+    posmin = *arrayLess(helper.index,1); \
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno)); \
     if (posmin < INT_MAX) lockmin = posmin; \
     else {struct flock lockval; \
@@ -74,8 +79,14 @@ struct Helper {
         for (int i = 0; i < len-len_; i++) buf[i] = buf[i+len_]; len -= len_; readpos += len_;}
 #define WAITPOS \
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
-    while (readpos == *arrayPos(helper.index,1)) \
+    while (readpos+1 >= *arrayLess(helper.index,1)) \
         if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno)); \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+#define TAKEPOS \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    while (readpos+1 >= *arrayLess(helper.index,1)) \
+        if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno)); \
+    *arrayMore(helper.index,1) = readpos+1; \
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 #define RDLKWMIN \
     while (1) {struct flock lockval; \
@@ -83,7 +94,7 @@ struct Helper {
         int retval = fcntl(helper.file,F_SETLKW,&lockval); \
         if (retval == -1 && errno == EINTR) continue; \
         if (retval == -1) {ERRORINJ return 0;} else lockval.l_type = F_UNLCK; \
-        if (fcntl(helper.file,F_SETLK,&lockval) == -1) {ERRORINJ return 0;} else break;}
+        if (fcntl(helper.file,F_SETLK,&lockval) == -1) {ERRORINJ return 0;} break;}
 #define WRLKTPID \
     while (1) {struct flock lockval; \
         lockval.l_start = 0; lockval.l_len = 1; lockval.l_type = F_WRLCK; lockval.l_whence = SEEK_SET; \
@@ -139,11 +150,13 @@ void *helperRead(void *arg)
             continue;}
         else if (readpos == posmin) {
             YIELDINJ
-            WAITPOS // wait for readpos < *arrayPos(helper.index,1)
+            WAITPOS // wait for readpos+1 < *arrayLess(helper.index,1)
             continue;}
         else if (readpos == lockmin) {
             YIELDINJ
+            TAKEPOS
             RDLKWMIN // wait lockable on readpos
+            GIVEPOS
             continue;}
         else if (filemin < 0) {ERRORINJ return 0;}
         else if (readpos == filemin) {
@@ -164,39 +177,41 @@ void *helperRead(void *arg)
     return 0;
 }
 
+#define ENDPOS \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    *arrayLess(index,1) = INT_MAX; \
+    if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno)); \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 #define FILELEN \
     while (1) {struct stat statval; \
-        if (fstat(file,&statval) < 0) {ERRORINJ return 0;} \
+        if (fstat(file,&statval) < 0) {ENDPOS return -1;} \
         filelen = statval.st_size; break;}
 #define SETPOS \
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
-    *arrayPos(index,1) = filelen; \
+    while (filelen < *arrayMore(index,1)) \
+        if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno)); \
+     *arrayLess(index,1) = filelen; \
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 #define WRLKWEOF \
     while (1) {struct flock lockval; \
         lockval.l_start = 0; lockval.l_len = writelen; lockval.l_type = F_WRLCK; lockval.l_whence = SEEK_END; \
         int retval = fcntl(file,F_SETLKW,&lockval); \
         if (retval == -1 && errno == EINTR) continue; \
-        if (retval == -1) {ERRORINJ return 0;} else break;}
+        if (retval == -1) {ENDPOS return -1;} else break;}
 #define WRITELEN \
-    if (lseek(file,filelen,SEEK_SET) < 0) return -1; \
-    if (write(file,writebuf,writelen) < 0) return -1;
+    if (lseek(file,filelen,SEEK_SET) < 0) {ENDPOS return -1;} \
+    if (write(file,writebuf,writelen) < 0) {ENDPOS return -1;}
 #define UNLKEOF \
     while (1) {struct flock lockval; \
         lockval.l_start = 0; lockval.l_len = writelen; lockval.l_type = F_UNLCK; lockval.l_whence = SEEK_END; \
-        if (fcntl(file,F_SETLK,&lockval) == -1) {ERRORINJ return 0;} else break;}
-#define ENDPOS \
-    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
-    *arrayPos(index,1) = INT_MAX; \
-    if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno)); \
-    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+        if (fcntl(file,F_SETLK,&lockval) == -1) {ENDPOS return -1;} else break;}
 #define READPID \
     while (1) {char pidstr[PROCESS_PIDLEN]; \
-	    if (lseek(file,0,SEEK_SET) < 0) return -1; \
-    	if (read(file,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) return -1; \
-    	unsigned long long temp; if (sscanf(pidstr,"%llu",&temp) != 1) return -1; pid = temp; break;}
+	    if (lseek(file,0,SEEK_SET) < 0) {ENDPOS return -1;} \
+    	if (read(file,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) {ENDPOS return -1;} \
+    	unsigned long long temp; if (sscanf(pidstr,"%llu",&temp) != 1) {ENDPOS return -1;} pid = temp; break;}
 #define SIGPID \
-    if (kill(pid, SIGUSR2) < 0 && errno != ESRCH) return -1;
+    if (kill(pid, SIGUSR2) < 0 && errno != ESRCH) {ENDPOS return -1;}
 
 int processWrite(int index, int writelen)
 {
@@ -205,12 +220,12 @@ int processWrite(int index, int writelen)
     if (file < 0) return -1;
     int filelen;
     FILELEN // get filelen
-    SETPOS // within mutex, set *arrayPos(index,1) to filelen
+    SETPOS // within mutex, set *arrayLess(index,1) to filelen
     WRLKWEOF // wait for lock from eof of size writelen
     FILELEN
     WRITELEN // write writelen bytes to file at filelen from writebuf
     UNLKEOF
-    ENDPOS // within mutex, set *arrayPos(index,1) to infinite, and signal cond
+    ENDPOS // within mutex, set *arrayLess(index,1) to infinite, and signal cond
     pid_t pid;
     READPID // seek to start of file, read PROCESS_PIDLEN bytes, sscanf into pid
     SIGPID // send SIGUSR2 to process identified by pid
@@ -245,7 +260,8 @@ void processInit(int len)
 	if (len == 0) return; toggle = 1;
 	if (len < 0) exitErrstr("init too len\n");
     *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
-    helper.index = current = sizeRead(); *enlocYield(1) = 0; *enlocIgnore(1) = 0;
+    helper.index = current = sizeRead();
+    *enlocYield(1) = 0; *enlocIgnore(1) = 0; *enlocLess(1) = 0; *enlocMore(1) = INT_MAX;
     *enlocWrite(1) = open(filename,O_RDWR);
     helper.file = open(filename,O_RDWR);;
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));

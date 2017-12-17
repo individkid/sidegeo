@@ -388,6 +388,7 @@ DECLARE_LOCAL(Yield,int)
 DECLARE_LOCAL(Ignore,int)
 DECLARE_LOCAL(Write,int)
 DECLARE_LOCAL(Helper,pthread_t)
-DECLARE_LOCAL(Pos,int)
+DECLARE_LOCAL(Less,int)
+DECLARE_LOCAL(More,int)
 
 #endif
