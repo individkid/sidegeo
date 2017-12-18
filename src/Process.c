@@ -73,11 +73,11 @@ struct Helper {
     while (1) {int help = -1; if (write(SIZE,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
 #define YIELDINJ(SIZE) \
 	while (1) {int help = 0; if (write(SIZE,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
-#define FILEPOS(INDEX,FILE,SIZE,POS) \
+#define READPOS(INDEX,FILE,SIZE,POS) \
     if (lseek(FILE,POS,SEEK_SET) < 0) {ERRORINJ(INDEX,SIZE) return 0;}
 #define WRITEPOS(INDEX,FILE,POS) \
     if (lseek(FILE,0,SEEK_SET) < 0) {GIVEMORE(INDEX) return -1;}
-#define FILELEN(INDEX,FILE,SIZE,LEN) \
+#define READLEN(INDEX,FILE,SIZE,LEN) \
     while (1) {struct stat statval; \
         if (fstat(FILE,&statval) < 0) {ERRORINJ(INDEX,SIZE) return 0;} \
         LEN = statval.st_size; break;}
@@ -117,9 +117,9 @@ struct Helper {
     if (POS < INT_MAX) LOCK = POS; \
     else GETLOCK(INDEX,FILE,SIZE,SEEK_SET,PROCESS_PIDLEN,INT_MAX,F_RDLCK,LOCK) \
     if (LOCK < INT_MAX) LEN = LOCK; \
-    else FILELEN(INDEX,FILE,SIZE,LEN)
+    else READLEN(INDEX,FILE,SIZE,LEN)
 #define READBUF(INDEX,FILE,SIZE,PIPE,BUF,LEN,LENGTH,POS,LIM) \
-    FILEPOS(INDEX,FILE,SIZE,POS) \
+    READPOS(INDEX,FILE,SIZE,POS) \
     while (POS < LIM) { \
         int len_ = PROCESS_STEP-LEN; \
         if (LEN+len_ > LIM-POS) len_ = LIM-POS-LEN; \
@@ -143,7 +143,7 @@ struct Helper {
         int retval = sprintf(pidstr,"%llu",(unsigned long long)getpid()); \
         if (retval < 0) exitErrstr("sprintf too pid\n"); \
         while (retval < PROCESS_PIDLEN) {pidstr[retval] = ' '; retval++;} \
-        FILEPOS(INDEX,FILE,SIZE,0) \
+        READPOS(INDEX,FILE,SIZE,0) \
         if (write(FILE,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) {ERRORINJ(INDEX,SIZE) return 0;} else break;}
 #define READPID(INDEX,FILE,PID) \
     while (1) {char pidstr[PROCESS_PIDLEN]; \
@@ -185,27 +185,27 @@ void *helperRead(void *arg)
             continue;}
         else if (readpos == lockmin) {
             YIELDINJ(helper.size)
-            TAKELESS(helper.index,readpos+1)
-            WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,readpos,1,F_RDLCK) // wait lockable on readpos
-            WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,readpos,1,F_UNLCK)
-            GIVELESS(helper.index)
+            TAKELESS(helper.index,readpos+1) // wait for arrayMore and set arrayLess = readpos+1
+            WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,readpos,1,F_RDLCK) // wait lock on readpos
+            WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,readpos,1,F_UNLCK) // unlock right away
+            GIVELESS(helper.index) // set arrayLess to 0
             continue;}
-        else if (filemin < 0) {ERRORINJ(helper.index,helper.size) return 0;}
         else if (readpos == filemin) {
             YIELDINJ(helper.size)
             int retval;
             TRYLOCK(helper.index,helper.file,helper.size,0,1,F_WRLCK,SEEK_SET,retval) //try lock on pos 0
             if (retval < 0) { // lock not acquired
                 WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,0,1,F_RDLCK) // wait lock on pos 0
-                WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,0,1,F_UNLCK)
+                WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,0,1,F_UNLCK) // unlock right away
                 continue;}
             WRITEPID(helper.index,helper.file,helper.size) // write pid to pos 0
             while (1) {
-                MINIMUM(helper.index,helper.file,helper.size,filemin,lockmin,posmin)
+                MINIMUM(helper.index,helper.file,helper.size,filemin,lockmin,posmin) // filemin <= lockmin <= posmin
                 if (readpos < filemin) {
-                    WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,0,1,F_UNLCK)
+                    WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,0,1,F_UNLCK) // unlock pos 0
                     break;}
-                WAITSIG}} // pselect for sigusr2
+                WAITSIG} // pselect for sigusr2
+            continue;}
         else exitErrstr("helper too minimum\n");}
     return 0;
 }
@@ -219,9 +219,9 @@ int processWrite(int index, int writelen)
     WRITELEN(index,file,filelen) // get filelen
     TAKEMORE(index,filelen) // within mutex, set *arrayMore(index,1) to filelen
     WRITELOCK(index,file,SEEK_END,0,writelen,F_WRLCK) // wait for lock from eof of size writelen
-    WRITELEN(index,file,filelen)
+    WRITELEN(index,file,filelen) // get filelen
     WRITEBUF(index,file,filelen,writebuf,writelen) // write writelen bytes to file at filelen from writebuf
-    WRITELOCK(index,file,SEEK_END,0,writelen,F_UNLCK)
+    WRITELOCK(index,file,SEEK_END,0,writelen,F_UNLCK) // unlock written bytes
     GIVEMORE(index) // within mutex, set *arrayMore(index,1) to infinite, and signal cond
     pid_t pid;
     READPID(index,file,pid) // seek to start of file, read PROCESS_PIDLEN bytes, sscanf into pid
