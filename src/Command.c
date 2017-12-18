@@ -68,7 +68,7 @@ void enqueCommand(Command cmd)
 
 void countCommands(int size)
 {
-    for (int i = size; i < sizeCommand(); i++)
+    for (int i = 0; i < size; i++)
     enqueMachine(command); 
 }
 

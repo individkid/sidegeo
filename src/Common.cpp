@@ -262,7 +262,7 @@ void timewheelBefore();
 void timewheelConsume(void *arg);
 void timewheelProduce(void *arg);
 void timewheelAfter();
-long long getTime();
+long long timewheelDelay();
 
 EXTERNCEND
 
@@ -294,7 +294,7 @@ DEFINE_STAGE(CmnHsChar,char,CmnHsCmd)
 DEFINE_STAGE(CmnHsInt,int,CmnHsChar)
 DEFINE_STAGE(CmnHsData,enum Data,CmnHsInt)
 
-DEFINE_MUTEX(CmnTimewheels,QueueTime,timewheelBefore,timewheelAfter,timewheelConsume,timewheelProduce,getTime)
+DEFINE_MUTEX(CmnTimewheels,QueueTime,timewheelBefore,timewheelAfter,timewheelConsume,timewheelProduce,timewheelDelay)
 DEFINE_STAGE(CmnControl,enum Control,CmnTimewheels)
 DEFINE_STAGE(CmnChange,struct Change,CmnControl)
 DEFINE_STAGE(CmnTwChar,char,CmnChange)
