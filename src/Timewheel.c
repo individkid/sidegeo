@@ -87,7 +87,7 @@ int saturate(long long val, int min, int max)
 
 long long evaluate(struct Ratio *ratio)
 {
-	return 0; // TODO
+	return 0; // TODO if (state->vld == 2 || state->vld == 3) requestMetric(state->met,change.sub);
 }
 
 void timewheelBefore()
@@ -121,15 +121,14 @@ void timewheelProduce(void *arg)
         long long delay = evaluate(&state->dly);
         long long schedule = evaluate(&state->sch);
         int val = saturate(update,state->min,state->max);
-        struct Change change = {.val = val, .sub = sub};
+        struct Change change; change.val = val; change.sub = sub;
         *scheduleTime(ofTime(current+schedule)) = sub;
         *scheduleWheel(ofTime(current+delay)) = change;}
     while (readyWheel(current)) {
         struct Change change = *advanceWheel();
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
-        if (state->vld == 1 || state->vld == 3) pipeWave(state->wav,state->amt);
-        if (state->vld == 2 || state->vld == 3) requestMetric(state->met,change.sub);}
+        if (state->vld == 1 || state->vld == 3) pipeWave(state->wav,state->amt);}
 }
 
 void timewheelAfter()

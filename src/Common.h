@@ -170,10 +170,6 @@ enum Control {
     Source,
     Start};
 
-void signalProcesses();
-void signalTimewheels();
-void signalHaskells();
-
 #define DECLARE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...);
 #define DEFINE_MSGSTR(NAME) \
@@ -318,13 +314,13 @@ DECLARE_POINTER(Pseudo,char)
 DECLARE_POINTER(Name,char *)
 
 
-DECLARE_SOURCE(ConCommands)
-DECLARE_STAGE(ConCommand,Command)
-DECLARE_STAGE(ConCmdChar,char)
+DECLARE_SOURCE(CslCommands)
+DECLARE_STAGE(CslCommand,Command)
+DECLARE_STAGE(CslCmdChar,char)
 
-DECLARE_SOURCE(ConProcesses)
-DECLARE_STAGE(ConOption,char)
-DECLARE_STAGE(ConOptioner,int)
+DECLARE_SOURCE(CslProcesses)
+DECLARE_STAGE(CslOption,char)
+DECLARE_STAGE(CslOptioner,int)
 
 DECLARE_DEST(Outputs)
 DECLARE_STAGE(Output,char)
@@ -332,7 +328,7 @@ DECLARE_STAGE(Output,char)
 DECLARE_LOCAL(Line,enum Menu)
 DECLARE_LOCAL(Match,int)
 DECLARE_META(Echo,char)
-DECLARE_POINTER(ConPtr,char)
+DECLARE_POINTER(CslPtr,char)
 
 
 DECLARE_DEST(Timewheels)

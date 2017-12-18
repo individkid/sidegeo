@@ -135,6 +135,7 @@ EXTERNC pqueue_pri_t when##NAME();
 #ifdef __cplusplus
 
 struct QueueBase {
+    int flag;
     QueueBase *next;
     virtual ~QueueBase() {}
     virtual int size() = 0;
@@ -144,6 +145,7 @@ struct QueueBase {
 
 struct QueueMutex;
 struct QueueXfer {
+    int flag;
     QueueBase *next;
     QueueXfer *xptr;
     QueueMutex *mutex;
@@ -198,10 +200,22 @@ struct QueueMutex {
     virtual void signal() = 0;
     virtual void before() = 0;
     virtual void after() = 0;
-    virtual int xfer() = 0;
-    virtual int noxfer() = 0;
     virtual int delay() = 0;
     virtual int nodelay() = 0;
+    int xfer()
+    {
+        int retval = 0;
+        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
+        if (ptr->xfer()) retval = 1;
+        return retval;
+    }
+    int noxfer()
+    {
+        int retval = 0;
+        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
+        if (ptr->noxfer()) retval = 1;
+        return retval;
+    }
     void *loop(void *arg)
     {
         before();
@@ -219,8 +233,6 @@ struct QueueCompat : QueueMutex {
     virtual void signal() {exitErrstr("mutex too compat\n");}
     virtual void before() {exitErrstr("mutex too compat\n");}
     virtual void after() {exitErrstr("mutex too compat\n");}
-    virtual int xfer() {exitErrstr("mutex too compat\n"); return 0;}
-    virtual int noxfer() {exitErrstr("mutex too compat\n"); return 0;}
     virtual int delay() {exitErrstr("mutex too compat\n"); return 0;}
     virtual int nodelay() {exitErrstr("mutex too compat\n"); return 0;}
 };
@@ -231,20 +243,16 @@ struct QueueFunc : QueueMutex {
     void (*afterPtr)();
     int (*delayPtr)();
     int (*nodelayPtr)();
-    int (*xferPtr)();
-    int (*noxferPtr)();
     QueueFunc(void (*fnc3)(void *), void (*fnc4)(void *),
         void (*fnc)(), void (*fnc0)(), void (*fnc1)(),
         int (*fnc6)(), int (*fnc7)(), int (*fnc8)(), int (*fnc9)()) : QueueMutex(fnc3,fnc4) {
         signalPtr = fnc; beforePtr = fnc0; afterPtr = fnc1;
-        xferPtr = fnc6; noxferPtr = fnc7; delayPtr = fnc8; nodelayPtr = fnc9;
+        delayPtr = fnc8; nodelayPtr = fnc9;
     }
     virtual ~QueueFunc() {}
     virtual void signal() {if (signalPtr) (*signalPtr)();}
     virtual void before() {if (beforePtr) (*beforePtr)();}
     virtual void after() {if (afterPtr) (*afterPtr)();}
-    virtual int xfer() {return (xferPtr ? (*xferPtr)() : 0);}
-    virtual int noxfer() {return (noxferPtr() ? (*noxferPtr)() : 0);}
     virtual int delay() {return (delayPtr ? (*delayPtr)() : 0);}
     virtual int nodelay() {return (nodelayPtr ? (*nodelayPtr)() : 0);}
 };
@@ -290,20 +298,6 @@ struct QueueStdin : QueueMutex {
     {
         (*func1)();
         if (validTermios) tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios); validTermios = 0;
-    }
-    virtual int xfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->xfer()) retval = 1;
-        return retval;
-    }
-    virtual int noxfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->noxfer()) retval = 1;
-        return retval;
     }
     virtual int delay()
     {
@@ -357,20 +351,6 @@ struct QueueFdset : QueueMutex {
     virtual void after() {
         (*func1)();
     }
-    virtual int xfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->xfer()) retval = 1;
-        return retval;
-    }
-    virtual int noxfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->noxfer()) retval = 1;
-        return retval;
-    }
     virtual int delay()
     {
         rfds = fds;
@@ -422,20 +402,6 @@ struct QueueTime : QueueMutex {
     {
         (*func1)();
     }
-    virtual int xfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->xfer()) retval = 1;
-        return retval;
-    }
-    virtual int noxfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->noxfer()) retval = 1;
-        return retval;
-    }
     virtual int delay()
     {
         long long time = (*func)();
@@ -483,20 +449,6 @@ struct QueueCond : QueueMutex {
     {
         (*func1)();
     }
-    virtual int xfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->xfer()) retval = 1;
-        return retval;
-    }
-    virtual int noxfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->noxfer()) retval = 1;
-        return retval;
-    }
     virtual int delay() {return 0;}
     virtual int nodelay() {return 0;}
 };
@@ -517,140 +469,94 @@ extern "C" void remove##NAME(ELEM val) {NAME##Inst.remove(val);} \
 extern "C" int member##NAME(ELEM val) {return NAME##Inst.member(val);} \
 extern "C" int readable##NAME(ELEM val) {return NAME##Inst.readable(val);}
 
-struct QueueSource : QueueXfer {
-    QueueSource(QueueMutex *ptr0, QueueMutex *ptr1)
+struct QueuePort : QueueXfer {
+    int flag;
+    QueueCond *cond;
+    QueuePort(QueueMutex *ptr0, QueueMutex *ptr1, int fl = 0)
     {
+        flag = fl;
         mutex = ptr0;
         ptr1->xptr = this;
         next = 0;
     }
-    QueueSource(QueueMutex *ptr0, QueueXfer *ptr1)
+    QueuePort(QueueMutex *ptr0, QueueXfer *ptr1, int fl = 0)
     {
+        flag = fl;
         mutex = ptr0;
+        ptr1->xptr = this;
+        next = 0;
+    }
+    QueuePort(QueueCond *ptr0, QueueMutex *ptr1, int fl = 0)
+    {
+        flag = fl;
+        mutex = cond = ptr0;
+        ptr1->xptr = this;
+        next = 0;
+    }
+    QueuePort(QueueCond *ptr0, QueueXfer *ptr1, int fl = 0)
+    {
+        flag = fl;
+        mutex = cond = ptr0;
         ptr1->xptr = this;
         next = 0;
     }
     virtual int xfer()
     {
-        if (mutex == 0) exitErrstr("xfer too mutex\n");
+        if (mutex == 0) exitErrstr("source too mutex\n");
         mutex->lock();
-        QueueBase *source = next;
-        QueueBase *dest = mutex->next;
         int retval = 0;
-        for (; source != 0; source = source->next, dest = dest->next) {
-        if (dest == 0) exitErrstr("xfer too ptr\n");
-        if (source->size() > 0) {source->use(); dest->xfer(source->size()); retval = 1;}}
-        if (retval) mutex->signal();
+        while (1) {
+            QueueBase *source = (flag ? next : mutex->next);
+            QueueBase *dest = (flag ? mutex->next : next);
+            for (; dest != 0; source = source->next, dest = dest->next) {
+                if (source == 0) exitErrstr("xfer too ptr\n");
+                if (source->size() > 0) {
+                    source->use(); dest->xfer(source->size());
+                    if (dest->flag < 2) retval = 1;}}
+            if (flag && retval) {mutex->signal(); break;} // busy source
+            else if (flag) break; // idle source
+            else if (cond && retval) break; // busy cond
+            else if (cond) cond->wait(); // idle cond
+            else break;} // not cond
         mutex->unlock();
-        return 0;
+        return retval;
     }
     virtual int noxfer()
     {
-        return 0;
+        if (mutex == 0) exitErrstr("source too mutex\n");
+        QueueBase *dest = next;
+        int retval = 0;
+        for (; dest != 0; dest = dest->next)
+            if (dest->flag < 1 && dest->size() > 0) retval = 1;
+        return retval;
     }
     void ack(int *siz)
     {
         mutex->lock();
-        QueueBase *source = next;
-        QueueBase *dest = mutex->next;
+        QueueBase *source = (flag ? next : mutex->next);
+        QueueBase *dest = (flag ? mutex->next : next);
         int retval = 0;
-        for (; source != 0; source = source->next, dest = dest->next) {
-        if (dest == 0) exitErrstr("xfer too ptr\n");
-        if (*siz > 0) {source->use(); dest->xfer(*siz); retval = 1;}
-        source = source->next; dest = dest->next;}
-        if (retval) mutex->signal();
+        for (; source != 0; source = source->next, dest = dest->next, siz++) {
+            if (dest == 0) exitErrstr("xfer too ptr\n");
+            if (*siz > 0) {
+                source->use(); dest->xfer(*siz);
+                if (dest->flag < 2) retval = 1;}}
+        if (flag && retval) mutex->signal();
         mutex->unlock();
     }
 };
 
 #define DEFINE_SOURCE(NAME,NEXT,XPTR) \
-QueueSource NAME##Inst = QueueSource(&NEXT##Inst,&XPTR##Inst); \
+QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,1); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 
-struct QueueDest : QueueXfer {
-    QueueDest(QueueMutex *ptr0, QueueMutex *ptr1)
-    {
-        mutex = ptr0;
-        ptr1->xptr = this;
-        next = 0;
-    }
-    QueueDest(QueueMutex *ptr0, QueueXfer *ptr1)
-    {
-        mutex = ptr0;
-        ptr1->xptr = this;
-        next = 0;
-    }
-    virtual int xfer()
-    {
-        if (mutex == 0) exitErrstr("source too mutex\n");
-        mutex->lock();
-        QueueBase *source = mutex->next;
-        QueueBase *dest = next;
-        int retval = 0;
-        for (; dest != 0; source = source->next, dest = dest->next) {
-        if (source == 0) exitErrstr("xfer too ptr\n");
-        if (source->size() > 0) {source->use(); dest->xfer(source->size()); retval = 1;}}
-        mutex->unlock();
-        return retval;
-    }
-    virtual int noxfer()
-    {
-        if (mutex == 0) exitErrstr("source too mutex\n");
-        QueueBase *dest = next;
-        int retval = 0;
-        for (; dest != 0; dest = dest->next)
-        if (dest->size() > 0) retval = 1;
-        return retval;
-    }
-};
-
 #define DEFINE_DEST(NAME,NEXT,XPTR) \
-QueueDest NAME##Inst = QueueDest(&NEXT##Inst,&XPTR##Inst); \
+QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,0); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
-struct QueueWait : QueueXfer {
-    QueueCond *cond;
-    QueueWait(QueueCond *ptr0, QueueMutex *ptr1)
-    {
-        mutex = cond = ptr0;
-        ptr1->xptr = this;
-        next = 0;
-    }
-    QueueWait(QueueCond *ptr0, QueueXfer *ptr1)
-    {
-        mutex = cond = ptr0;
-        ptr1->xptr = this;
-        next = 0;
-    }
-    virtual int xfer()
-    {
-        if (cond == 0) exitErrstr("source too cond\n");
-        cond->lock();
-        int retval = 0;
-        while (!retval) {
-        QueueBase *source = cond->next;
-        QueueBase *dest = next;
-        for (; dest != 0; source = source->next, dest = dest->next) {
-        if (source == 0) exitErrstr("xfer too ptr\n");
-        if (source->size() > 0) {source->use(); dest->xfer(source->size()); retval = 1;}}
-        if (!retval) cond->wait();}
-        cond->unlock();
-        return 1;
-    }
-    virtual int noxfer()
-    {
-        if (cond == 0) exitErrstr("source too cond\n");
-        QueueBase *dest = next;
-        int retval = 0;
-        for (; dest != 0; dest = dest->next)
-        if (dest->size() > 0) retval = 1;
-        return retval;
-    }
-};
-
 #define DEFINE_WAIT(NAME,NEXT,XPTR) \
-QueueWait NAME##Inst = QueueWait(&NEXT##Inst,&XPTR##Inst); \
+QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,0); \
 extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
 
 #define QUEUE_STEP 10
@@ -663,23 +569,16 @@ template<class TYPE> struct QueueStruct : QueueBase {
     TYPE *tail;
     QueueStruct()
     {
+        flag = 0;
         base = 0;
         limit = 0;
         head = 0;
         tail = 0;
         next = 0;
     }
-    QueueStruct(QueueBase *ptr)
+    QueueStruct(QueueBase *ptr, int fl = 0)
     {
-        base = 0;
-        limit = 0;
-        head = 0;
-        tail = 0;
-        ptr->next = this;
-        next = 0;
-    }
-    QueueStruct(QueueMutex *ptr)
-    {
+        flag = fl;
         base = 0;
         limit = 0;
         head = 0;
@@ -687,8 +586,19 @@ template<class TYPE> struct QueueStruct : QueueBase {
         ptr->next = this;
         next = 0;
     }
-    QueueStruct(QueueXfer *ptr)
+    QueueStruct(QueueMutex *ptr, int fl = 0)
     {
+        flag = fl;
+        base = 0;
+        limit = 0;
+        head = 0;
+        tail = 0;
+        ptr->next = this;
+        next = 0;
+    }
+    QueueStruct(QueueXfer *ptr, int fl = 0)
+    {
+        flag = fl;
         base = 0;
         limit = 0;
         head = 0;
@@ -799,7 +709,11 @@ extern "C" void use##NAME() {NAME##Inst.use();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
 extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);}
 
-#define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst)
+#define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,2)
+
+#define DEFINE_WORK(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,1)
+
+#define DEFINE_EXTRA(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
 
 template<class TYPE> struct QueueMeta {
     QueueStruct<QueueStruct<TYPE> > meta;

@@ -159,23 +159,23 @@ void frontend(char key)
     else if (esc == 0 && key == 127) *enlocOutput(1) = ofmotion(Back);
     else if (esc == 0 && key == 27) last[esc++] = key;
     else if (esc == 0 && inj > 0) *enlocOutput(1) = key;
-    else if (esc == 1 && key == '\n') {esc = 0; *enlocConCommand(1) = 0;}
+    else if (esc == 1 && key == '\n') {esc = 0; *enlocCslCommand(1) = 0;}
     else if (esc == 2 && key == 53) last[esc++] = key;
     else if (esc == 2 && key == 54) last[esc++] = key;
-    else if (esc == 2 && key == 65) {esc = 0; *enlocConCmdChar(1) = ofmotion(North); *enlocConCommand(1) = &menu;}
-    else if (esc == 2 && key == 66) {esc = 0; *enlocConCmdChar(1) = ofmotion(South); *enlocConCommand(1) = &menu;}
-    else if (esc == 2 && key == 67) {esc = 0; *enlocConCmdChar(1) = ofmotion(East); *enlocConCommand(1) = &menu;}
-    else if (esc == 2 && key == 68) {esc = 0; *enlocConCmdChar(1) = ofmotion(West); *enlocConCommand(1) = &menu;}
-    else if (esc == 2 && key == 70) {esc = 0; *enlocConCmdChar(1) = ofmotion(Suspend); *enlocConCommand(1) = &menu;}
-    else if (esc == 2 && key == 72) {esc = 0; *enlocConCmdChar(1) = ofmotion(Click); *enlocConCommand(1) = &menu;}
-    else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; *enlocConCmdChar(1) = ofmotion(Counter); *enlocConCommand(1) = &menu;}
-    else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; *enlocConCmdChar(1) = ofmotion(Wise); *enlocConCommand(1) = &menu;}
+    else if (esc == 2 && key == 65) {esc = 0; *enlocCslCmdChar(1) = ofmotion(North); *enlocCslCommand(1) = &menu;}
+    else if (esc == 2 && key == 66) {esc = 0; *enlocCslCmdChar(1) = ofmotion(South); *enlocCslCommand(1) = &menu;}
+    else if (esc == 2 && key == 67) {esc = 0; *enlocCslCmdChar(1) = ofmotion(East); *enlocCslCommand(1) = &menu;}
+    else if (esc == 2 && key == 68) {esc = 0; *enlocCslCmdChar(1) = ofmotion(West); *enlocCslCommand(1) = &menu;}
+    else if (esc == 2 && key == 70) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Suspend); *enlocCslCommand(1) = &menu;}
+    else if (esc == 2 && key == 72) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Click); *enlocCslCommand(1) = &menu;}
+    else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Counter); *enlocCslCommand(1) = &menu;}
+    else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Wise); *enlocCslCommand(1) = &menu;}
     else {esc = 0; *enlocOutput(1) = ofmotion(Space);}
 }
 
 void backend(char chr)
 {
-    if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
+    if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeCslPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
     if (motionof(chr) == Enter) {
         enum Menu line = tailline();
@@ -189,29 +189,29 @@ void backend(char chr)
         *enlocLine(1) = line; *enlocMatch(1) = 0;
         if (collect != Menus && mode == item[collect].mode) {
             // change mode to selected leaf
-            mark[mode] = line; *enlocConCmdChar(1) = ofindex(line); *enlocConCommand(1) = &menu;}
+            mark[mode] = line; *enlocCslCmdChar(1) = ofindex(line); *enlocCslCommand(1) = &menu;}
         else {
             // go to line in selected menu indicated by mode
             *enlocLine(1) = mark[mode]; *enlocMatch(1) = 0;}}
-    else if (motionof(chr) == Back && depth > 0 && sizeConPtr() > 0) unlocConPtr(1);
-    else if (motionof(chr) == Back && depth > 0 && sizeConPtr() == 0) {useEcho(--depth); referConPtr();}
+    else if (motionof(chr) == Back && depth > 0 && sizeCslPtr() > 0) unlocCslPtr(1);
+    else if (motionof(chr) == Back && depth > 0 && sizeCslPtr() == 0) {useEcho(--depth); referCslPtr();}
     else if (motionof(chr) == Back && sizeLine() > 1) {unlocLine(1); unlocMatch(1);}
     else if (motionof(chr) == Back && sizeLine() == 1) writemenu();
-    else if (alphaof(chr) == '\r') {useEcho(depth++); referConPtr();}
+    else if (alphaof(chr) == '\r') {useEcho(depth++); referCslPtr();}
     else if (alphaof(chr) == '\n' && depth > 0) {
-        *enlocConPtr(1) = alphaof(chr);
-        int len = sizeConPtr();
-        writestr(arrayConPtr(0,len));
-        delocConPtr(1); len--;
-        if (*arrayConPtr(0,1) == '-') {
-        if (len > 1 && *arrayConPtr(1,1) == '-') {
-        memcpy(enlocConOption(2),"-e",2); delocConOption(2);}
-        memcpy(enlocConOption(len),delocConPtr(len),len);}
-        useEcho(--depth); referConPtr();}
-    else if (alphaof(chr) > 0 && depth > 0) *enlocConPtr(1) = alphaof(chr);
+        *enlocCslPtr(1) = alphaof(chr);
+        int len = sizeCslPtr();
+        writestr(arrayCslPtr(0,len));
+        delocCslPtr(1); len--;
+        if (*arrayCslPtr(0,1) == '-') {
+        if (len > 1 && *arrayCslPtr(1,1) == '-') {
+        memcpy(enlocCslOption(2),"-e",2); delocCslOption(2);}
+        memcpy(enlocCslOption(len),delocCslPtr(len),len);}
+        useEcho(--depth); referCslPtr();}
+    else if (alphaof(chr) > 0 && depth > 0) *enlocCslPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
     else if (motionof(chr) == Space) writemenu();
-    if (depth > 0) writestr(arrayConPtr(0,sizeConPtr()));
+    if (depth > 0) writestr(arrayCslPtr(0,sizeCslPtr()));
     else writeitem(tailline(),tailmatch());
 }
 
@@ -232,6 +232,6 @@ void produceConsole(void *arg)
 
 void afterConsole()
 {
-    if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeConPtr(); i++) writechr(' '); writechr('\r');}
+    if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeCslPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
 }
