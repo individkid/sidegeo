@@ -245,7 +245,7 @@ struct QueueFunc : QueueMutex {
     int (*nodelayPtr)();
     QueueFunc(void (*fnc3)(void *), void (*fnc4)(void *),
         void (*fnc)(), void (*fnc0)(), void (*fnc1)(),
-        int (*fnc6)(), int (*fnc7)(), int (*fnc8)(), int (*fnc9)()) : QueueMutex(fnc3,fnc4) {
+        int (*fnc8)(), int (*fnc9)()) : QueueMutex(fnc3,fnc4) {
         signalPtr = fnc; beforePtr = fnc0; afterPtr = fnc1;
         delayPtr = fnc8; nodelayPtr = fnc9;
     }

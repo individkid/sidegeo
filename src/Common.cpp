@@ -238,7 +238,6 @@ void signalHaskells()
 }
 
 void commandSignal();
-int commandXfer() ;
 void commandConsume(void *arg);
 int commandDelay();
 int commandNodelay() ;
@@ -270,7 +269,7 @@ inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
 
-DEFINE_MUTEX(CmnCommands,QueueFunc,commandConsume,commandProduce,commandSignal,0,0,commandXfer,0,commandDelay,commandNodelay)
+DEFINE_MUTEX(CmnCommands,QueueFunc,commandConsume,commandProduce,commandSignal,0,0,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdChar,char,CmnCommand)
 DEFINE_STAGE(CmnCmdInt,int,CmnCmdChar)

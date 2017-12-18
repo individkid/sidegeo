@@ -327,10 +327,6 @@ void commandSignal()
 {
     glfwPostEmptyEvent();
 }
-int commandXfer()
-{
-    return (sizeCommand() > commandCount);
-}
 void commandConsume(void *arg)
 {
     countCommands(sizeCommand()-commandCount); commandCount = sizeCommand();
