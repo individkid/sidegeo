@@ -211,7 +211,6 @@ void backend(char chr)
     else if (alphaof(chr) > 0 && depth > 0) *enlocConPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
     else if (motionof(chr) == Space) writemenu();
-    else if (motionof(chr) == Escape) exitCmnOutputs();
     if (depth > 0) writestr(arrayConPtr(0,sizeConPtr()));
     else writeitem(tailline(),tailmatch());
 }
@@ -221,12 +220,12 @@ void beforeConsole()
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
 }
 
-void consumeConsole(int index)
+void consumeConsole(void *arg)
 {
     backend(*delocOutput(1));
 }
 
-void produceConsole(int index)
+void produceConsole(void *arg)
 {
     frontend(readchr());
 }

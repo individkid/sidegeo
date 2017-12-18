@@ -58,43 +58,44 @@ void setupDataMap()
     if (strcmp(*arrayName(0,sizeName()),dataName[j]) == 0) *arrayDataMap(i,1) = dataEnum[j];}
 }
 
-void *haskell(void *arg)
+void haskellBefore()
 {
     hs_init(0,0);
+}
 
-    while (sizeEvent() == 0) {
-        xferHsCommands();
-        xferHaskells();
+void haskellConsume(void *arg)
+{
+    while (sizeEvent() > 0)
+    if (*arrayEvent(0,1) == Acknowledge) {
+        ackHsCommands(delocHsInt(4)); delocEvent(1);}
+    else if (*arrayEvent(0,1) == Upload) {
+        delocEvent(1);
+        enum Data data = *delocHsData(1);
+        int len = *delocHsInt(1);
+        useClient(data); referMeta();
+        delocMeta(sizeMeta());
+        useHsInt(); xferMeta(len);
+        memcpy(enlocMeta(len),delocHsInt(len),len);}
+    else if (*arrayEvent(0,1) == Download) {
+        delocEvent(1);
+        enum Data data = *delocHsData(1);
+        useClient(data); referMeta();
+        int len = sizeMeta();
+        *enlocHsCommand(1) = &download;
+        *enlocHsInt(1) = len;
+        memcpy(enlocHsInt(len),arrayMeta(0,len),len);
+        *enlocHsCmdData(1) = data;}
+    else if (*arrayEvent(0,1) == Enumerate) {
+        if (handleEvent() != 0) exitErrstr("haskell return true\n");
+        setupEventMap();
+        setupKindMap();
+        setupDataMap();}
+    else if (handleEvent() != 0) exitErrstr("haskell return true\n");
+}
 
-        while (sizeEvent() > 0 && *arrayEvent(0,1) != Done)
-        if (*arrayEvent(0,1) == Acknowledge) {ackHsCommands(delocHsInt(4)); delocEvent(1);}
-        else if (*arrayEvent(0,1) == Upload) {
-            delocEvent(1);
-            enum Data data = *delocHsData(1);
-            int len = *delocHsInt(1);
-            useClient(data); referMeta();
-            delocMeta(sizeMeta());
-            useHsInt(); xferMeta(len);
-            memcpy(enlocMeta(len),delocHsInt(len),len);}
-        else if (*arrayEvent(0,1) == Download) {
-            delocEvent(1);
-            enum Data data = *delocHsData(1);
-            useClient(data); referMeta();
-            int len = sizeMeta();
-            *enlocHsCommand(1) = &download;
-            *enlocHsInt(1) = len;
-            memcpy(enlocHsInt(len),arrayMeta(0,len),len);
-            *enlocHsCmdData(1) = data;}
-        else if (*arrayEvent(0,1) == Enumerate) {
-            if (handleEvent() != 0) exitErrstr("haskell return true\n");
-            setupEventMap();
-            setupKindMap();
-            setupDataMap();}
-        else if (handleEvent() != 0) exitErrstr("haskell return true\n");
-    }
-
+void haskellAfter()
+{
     hs_exit();
-    return 0;
 }
 
 int *accessInt(int size)

@@ -18,6 +18,8 @@
 
 #include "Queue.h"
 
+int QueueMutex::done = 0;
+
 EXTERNCBEGIN
 
 #include <stdarg.h>
@@ -26,6 +28,10 @@ EXTERNCBEGIN
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
 int sigusr2 = 0;
+
+void exitQueue() {
+	QueueMutex::done = 0;
+}
 
 void *int2void(int val)
 {

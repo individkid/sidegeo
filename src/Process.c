@@ -288,7 +288,7 @@ void processBefore()
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }
 
-void processConsume(int index)
+void processConsume(void *arg)
 {
     if (sizeConfigurer() > 0) {
         int idx = *delocConfigurer(1); useConfigure();
@@ -299,7 +299,7 @@ void processConsume(int index)
 
 int processConfigure(int index, int len); // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
 int processOption(int len); // given unlocPcsChar(len), return 0 or length of filename in enlocPcsChar
-void processProduce(int index)
+void processProduce(void *arg)
 {
     if (toggle && *arrayRead(current,1) < 0) processYield();
     else if (toggle && *arrayRead(current,1) >= 0 &&

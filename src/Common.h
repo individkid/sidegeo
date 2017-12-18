@@ -57,7 +57,7 @@ enum Menu { // lines in the menu; select with enter key
 enum Mode { // menu and menus; navigate and enter by keys
     Sculpt,Mouse,Roller,Level,Classify,Sample,Action,Modes};
 #define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Configure}
-enum Motion {Escape,Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
+enum Motion {Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
 struct Item { // per-menu-line info
     enum Menu collect; // item[item[x].collect].mode == item[x].mode
     enum Mode mode; // item[mode[x]].mode == x
@@ -77,8 +77,7 @@ enum Event {
     Acknowledge, // copy enque command and arguments
     Upload, // copy to client copy of buffer
     Download, // copy from client copy of buffer
-    Enumerate, // initialize maps between enum and int
-    Done}; // terminate
+    Enumerate}; // initialize maps between enum and int
 enum Kind {
     Poly,
     Boundary,
@@ -169,8 +168,7 @@ struct Change {
 enum Control {
     Listen,
     Source,
-    Start,
-    Finish};
+    Start};
 
 void signalProcesses();
 void signalTimewheels();
@@ -238,7 +236,7 @@ DECLARE_STAGE(CmnConfigureer,int)
 DECLARE_STAGE(CmnConfigure,char)
 DECLARE_STAGE(CmnConfigurer,int)
 
-DECLARE_COND(CmnHaskells)
+DECLARE_MUTEX(CmnHaskells)
 DECLARE_STAGE(CmnEvent,enum Event)
 DECLARE_STAGE(CmnKind,enum Kind)
 DECLARE_STAGE(CmnHsCmd,Command)

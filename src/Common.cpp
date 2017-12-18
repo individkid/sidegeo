@@ -239,20 +239,30 @@ void signalHaskells()
 
 void commandSignal();
 int commandXfer() ;
-void commandConsume(int index);
+void commandConsume(void *arg);
 int commandDelay();
 int commandNodelay() ;
-void commandProduce(int index);
+void commandProduce(void *arg);
 
 void beforeConsole();
-void consumeConsole(int index);
-void produceConsole(int index);
+void consumeConsole(void *arg);
+void produceConsole(void *arg);
 void afterConsole();
 
 void processBefore();
-void processConsume(int index);
-void processProduce(int index);
+void processConsume(void *arg);
+void processProduce(void *arg);
 void processAfter();
+
+void haskellBefore();
+void haskellConsume(void *arg);
+void haskellAfter();
+
+void timewheelBefore();
+void timewheelConsume(void *arg);
+void timewheelProduce(void *arg);
+void timewheelAfter();
+long long getTime();
 
 EXTERNCEND
 
@@ -276,7 +286,7 @@ DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigureer,int,CmnConfigure)
 
-DEFINE_COND(CmnHaskells,QueueCond,0)
+DEFINE_MUTEX(CmnHaskells,QueueCond,haskellBefore,haskellAfter,haskellConsume)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnKind,enum Kind,CmnEvent)
 DEFINE_STAGE(CmnHsCmd,Command,CmnKind)
@@ -284,7 +294,7 @@ DEFINE_STAGE(CmnHsChar,char,CmnHsCmd)
 DEFINE_STAGE(CmnHsInt,int,CmnHsChar)
 DEFINE_STAGE(CmnHsData,enum Data,CmnHsInt)
 
-DEFINE_MUTEX(CmnTimewheels,QueueCompat)
+DEFINE_MUTEX(CmnTimewheels,QueueTime,timewheelBefore,timewheelAfter,timewheelConsume,timewheelProduce,getTime)
 DEFINE_STAGE(CmnControl,enum Control,CmnTimewheels)
 DEFINE_STAGE(CmnChange,struct Change,CmnControl)
 DEFINE_STAGE(CmnTwChar,char,CmnChange)

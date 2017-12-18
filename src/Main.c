@@ -305,15 +305,15 @@ int main(int argc, char **argv)
     sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
 
-    if (pthread_create(&haskellThread, 0, &haskell, 0) != 0) exitErrstr("cannot create thread\n");
-    if (pthread_create(&timewheelThread, 0, &timewheel, 0) != 0) exitErrstr("cannot create thread\n");
+    createCmnHaskells(0);
+    createCmnTimewheels(0);
     createCmnOutputs(0);
     createCmnProcesses(0);
 
     loopCmnCommands(0);
 
-    lockCmnHaskells(); *enlocCmnEvent(1) = Done; signalCmnHaskells(); unlockCmnHaskells(); if (pthread_join(haskellThread, 0) != 0) exitErrstr("cannot join thread\n");
-    lockCmnTimewheels(); *enlocCmnControl(1) = Finish; signalCmnTimewheels(); unlockCmnTimewheels(); if (pthread_join(timewheelThread, 0) != 0) exitErrstr("cannot join thread\n");
+    exitCmnHaskells();
+    exitCmnTimewheels();
     exitCmnOutputs();
     exitCmnProcesses();
 
@@ -331,7 +331,7 @@ int commandXfer()
 {
     return (sizeCommand() > commandCount);
 }
-void commandConsume(int index)
+void commandConsume(void *arg)
 {
     countCommands(sizeCommand()-commandCount); commandCount = sizeCommand();
 }
@@ -347,7 +347,7 @@ int commandNodelay()
     glfwPollEvents();
     return (sizeCluster() > 0);
 }
-void commandProduce(int index)
+void commandProduce(void *arg)
 {
     int state = *delocCmdState(1);
     int cluster = *delocCluster(1);
@@ -368,6 +368,6 @@ void commandProduce(int index)
         CASE(Terminate) done = 3;
         DEFAULT(exitErrstr("invalid machine action\n");)
         if (done) {done--; break;}} if (done) {done--; break;}}
-    if (done) {done--; exitCmnCommands();}
+    if (done) {done--; exitQueue();}
     commandCount = sizeCommand();
 }

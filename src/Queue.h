@@ -49,6 +49,7 @@ EXTERNV struct termios savedTermios;
 EXTERNV int validTermios;
 EXTERNV int sigusr2;
 
+EXTERNC void exitQueue();
 EXTERNC void *int2void(int val);
 EXTERNC int void2int(void *val);
 EXTERNC void exitErrstr(const char *fmt, ...);
@@ -155,16 +156,16 @@ struct QueueMutex {
     QueueXfer *xptr;
     pthread_t thread;
     pthread_mutex_t mutex;
-    void (*consume)(int);
-    void (*produce)(int);
-    int done;
+    void (*consume)(void *);
+    void (*produce)(void *);
+    static int done;
     QueueMutex()
     {
         consume = 0;
         produce = 0;
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
-    QueueMutex(void (*fnc3)(int), void (*fnc4)(int))
+    QueueMutex(void (*fnc3)(void *), void (*fnc4)(void *))
     {
         consume = fnc3;
         produce = fnc4;
@@ -190,6 +191,10 @@ struct QueueMutex {
     {
         if (pthread_join(thread,0) != 0) exitErrstr("cannot join thread\n");
     }
+    void exit()
+    {
+        done = 1;
+    }
     virtual void signal() = 0;
     virtual void before() = 0;
     virtual void after() = 0;
@@ -199,11 +204,10 @@ struct QueueMutex {
     virtual int nodelay() = 0;
     void *loop(void *arg)
     {
-        int index = void2int(arg);
         before();
         while (!done) {
-        if (xfer()) {consume(index); while (noxfer()) consume(index);}
-        else if (delay()) {produce(index); while (nodelay()) produce(index);}}
+        if (xfer()) {consume(arg); while (!done && noxfer()) consume(arg);}
+        else if (delay()) {produce(arg); while (!done && nodelay()) produce(arg);}}
         after();
         return 0;
     }
@@ -229,7 +233,7 @@ struct QueueFunc : QueueMutex {
     int (*nodelayPtr)();
     int (*xferPtr)();
     int (*noxferPtr)();
-    QueueFunc(void (*fnc3)(int), void (*fnc4)(int),
+    QueueFunc(void (*fnc3)(void *), void (*fnc4)(void *),
         void (*fnc)(), void (*fnc0)(), void (*fnc1)(),
         int (*fnc6)(), int (*fnc7)(), int (*fnc8)(), int (*fnc9)()) : QueueMutex(fnc3,fnc4) {
         signalPtr = fnc; beforePtr = fnc0; afterPtr = fnc1;
@@ -251,7 +255,7 @@ struct QueueStdin : QueueMutex {
     struct timespec notime;
     void (*func0)();
     void (*func1)();
-    QueueStdin(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(int), void (*fnc4)(int)) : QueueMutex(fnc3,fnc4) {
+    QueueStdin(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *), void (*fnc4)(void *)) : QueueMutex(fnc3,fnc4) {
         func0 = fnc2;
         func1 = fnc5;
     }
@@ -280,7 +284,6 @@ struct QueueStdin : QueueMutex {
         FD_SET(STDIN_FILENO, &fds);
         struct timespec temp = {0};
         notime = temp;
-        done = 0;
         (*func0)();
     }
     virtual void after()
@@ -325,7 +328,7 @@ struct QueueFdset : QueueMutex {
     struct timespec notime;
     void (*func0)();
     void (*func1)();
-    QueueFdset(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(int), void (*fnc4)(int)) : QueueMutex(fnc3,fnc4) {
+    QueueFdset(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *), void (*fnc4)(void *)) : QueueMutex(fnc3,fnc4) {
         FD_ZERO(&fds);
         maxfd = 0;
         func0 = fnc2;
@@ -389,10 +392,14 @@ struct QueueFdset : QueueMutex {
 struct QueueTime : QueueMutex {
     sigset_t saved;
     struct timespec notime;
-    long (*func)();
-    QueueTime(void (*fnc3)(int), void (*fnc4)(int), long (*fnc)()) : QueueMutex(fnc3,fnc4)
+    long long (*func)();
+    void (*func0)();
+    void (*func1)();
+    QueueTime(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *), void (*fnc4)(void *), long long (*fnc)()) : QueueMutex(fnc3,fnc4)
     {
         func = fnc;
+        func0 = fnc2;
+        func1 = fnc5;
     }
     virtual ~QueueTime() {}
     virtual void signal()
@@ -409,7 +416,11 @@ struct QueueTime : QueueMutex {
         sigdelset(&saved, SIGUSR1);
         struct timespec temp = {0};
         notime = temp;
-        done = 0;
+        (*func0)();
+    }
+    virtual void after()
+    {
+        (*func1)();
     }
     virtual int xfer()
     {
@@ -427,7 +438,7 @@ struct QueueTime : QueueMutex {
     }
     virtual int delay()
     {
-        long time = (*func)();
+        long long time = (*func)();
         if (time == 0) return 1;
         struct timespec delay = {0};
         delay.tv_nsec = time;
@@ -444,9 +455,13 @@ struct QueueTime : QueueMutex {
 
 struct QueueCond : QueueMutex {
     pthread_cond_t cond;
-    QueueCond(void (*fnc3)(int)) : QueueMutex(fnc3,0)
+    void (*func0)();
+    void (*func1)();
+    QueueCond(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *)) : QueueMutex(fnc3,0)
     {
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+        func0 = fnc2;
+        func1 = fnc5;
     }
     virtual ~QueueCond()
     {
@@ -460,8 +475,14 @@ struct QueueCond : QueueMutex {
     {
         if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
     }
-    virtual void before() {}
-    virtual void after() {}
+    virtual void before()
+    {
+        (*func0)();
+    }
+    virtual void after()
+    {
+        (*func1)();
+    }
     virtual int xfer()
     {
         int retval = 0;
@@ -488,10 +509,7 @@ extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
 extern "C" void join##NAME() {NAME##Inst.join();} \
 extern "C" void signal##NAME() {NAME##Inst.signal();} \
-extern "C" void exit##NAME() {NAME##Inst.done = 1; NAME##Inst.signal(); NAME##Inst.join();}
-
-#define DEFINE_COND(NAME,TYPE,FUNC...) DEFINE_MUTEX(NAME,TYPE,FUNC) \
-extern "C" void wait##NAME() {NAME##Inst.wait();}
+extern "C" void exit##NAME() {NAME##Inst.signal(); NAME##Inst.join();}
 
 #define DEFINE_FDSET(NAME,TYPE,ELEM,FUNC...) DEFINE_MUTEX(NAME,TYPE,FUNC) \
 extern "C" void insert##NAME(ELEM val) {NAME##Inst.insert(val);} \
