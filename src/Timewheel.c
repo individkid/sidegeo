@@ -111,6 +111,15 @@ void timewheelConsume(void *arg)
         if (state->vld == 3) pipeWave(state->wav,state->amt);}
 }
 
+long long timewheelDelay()
+{
+    long long current = getTime();
+    long long time = whenTime();
+    long long wheel = whenWheel();
+    if (time < wheel) return time-current;
+    return wheel-current;
+}
+
 void timewheelProduce(void *arg)
 {
     long long current = getTime();
@@ -124,7 +133,7 @@ void timewheelProduce(void *arg)
         struct Change change = {.val = val, .sub = sub};
         *scheduleTime(ofTime(current+schedule)) = sub;
         *scheduleWheel(ofTime(current+delay)) = change;}
-    while (readyWheel(current)) {
+    while (readyWheel(ofTime(current))) {
         struct Change change = *advanceWheel();
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
