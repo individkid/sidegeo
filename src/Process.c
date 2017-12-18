@@ -75,9 +75,15 @@ struct Helper {
 	while (1) {int help = 0; if (write(SIZE,&help,sizeof(help)) != sizeof(help)) exitErrstr("helper too pipe\n"); break;}
 #define FILEPOS(INDEX,FILE,SIZE,POS) \
     if (lseek(FILE,POS,SEEK_SET) < 0) {ERRORINJ(INDEX,SIZE) return 0;}
+#define WRITEPOS(INDEX,FILE,POS) \
+    if (lseek(FILE,0,SEEK_SET) < 0) {GIVEMORE(INDEX) return -1;}
 #define FILELEN(INDEX,FILE,SIZE,LEN) \
     while (1) {struct stat statval; \
         if (fstat(FILE,&statval) < 0) {ERRORINJ(INDEX,SIZE) return 0;} \
+        LEN = statval.st_size; break;}
+#define WRITELEN(INDEX,FILE,LEN) \
+    while (1) {struct stat statval; \
+        if (fstat(FILE,&statval) < 0) {GIVEMORE(INDEX) return -1;} \
         LEN = statval.st_size; break;}
 
 #define GETLOCK(INDEX,FILE,SIZE,WHENCE,START,LEN,TYPE,RET) \
@@ -99,6 +105,12 @@ struct Helper {
         int retval = fcntl(FILE,F_SETLKW,&lockval); \
         if (retval == -1 && errno == EINTR) continue; \
         if (retval == -1) {ERRORINJ(INDEX,SIZE) return 0;} else break;}
+#define WRITELOCK(INDEX,FILE,WHENCE,START,LEN,TYPE) \
+    while (1) {struct flock lockval; \
+        lockval.l_start = START; lockval.l_len = LEN; lockval.l_type = TYPE; lockval.l_whence = WHENCE; \
+        int retval = fcntl(FILE,F_SETLKW,&lockval); \
+        if (retval == -1 && errno == EINTR) continue; \
+        if (retval == -1) {GIVEMORE(INDEX) return -1;} else break;}
 
 #define MINIMUM(INDEX,FILE,SIZE,LEN,LOCK,POS) \
     GETLESS(INDEX,POS) \
@@ -122,6 +134,10 @@ struct Helper {
         len_ = 0; while (len_ < LEN && BUF[len_] != '\n') len_++; \
         if (write(PIPE,BUF,len_) != len_) exitErrstr("helper too pipe\n"); LENGTH += len_; \
         for (int i = 0; i < LEN-len_; i++) BUF[i] = BUF[i+len_]; LEN -= len_; POS += len_;}
+#define WRITEBUF(INDEX,FILE,POS,BUF,LEN) \
+    WRITEPOS(INDEX,FILE,POS) \
+    if (write(FILE,BUF,LEN) < 0) {GIVEMORE(INDEX) return -1;}
+
 #define WRITEPID(INDEX,FILE,SIZE) \
     while (1) {char pidstr[PROCESS_PIDLEN]; \
         int retval = sprintf(pidstr,"%llu",(unsigned long long)getpid()); \
@@ -129,27 +145,11 @@ struct Helper {
         while (retval < PROCESS_PIDLEN) {pidstr[retval] = ' '; retval++;} \
         FILEPOS(INDEX,FILE,SIZE,0) \
         if (write(FILE,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) {ERRORINJ(INDEX,SIZE) return 0;} else break;}
-
-#define WRITELEN(INDEX,FILE,LEN) \
-    while (1) {struct stat statval; \
-        if (fstat(FILE,&statval) < 0) {GIVEMORE(INDEX) return -1;} \
-        LEN = statval.st_size; break;}
-#define WRITELOCK(INDEX,FILE,WHENCE,START,LEN,TYPE) \
-    while (1) {struct flock lockval; \
-        lockval.l_start = START; lockval.l_len = LEN; lockval.l_type = TYPE; lockval.l_whence = WHENCE; \
-        int retval = fcntl(FILE,F_SETLKW,&lockval); \
-        if (retval == -1 && errno == EINTR) continue; \
-        if (retval == -1) {GIVEMORE(INDEX) return -1;} else break;}
-#define WRITEPOS(INDEX,FILE,POS) \
-        if (lseek(FILE,0,SEEK_SET) < 0) {GIVEMORE(INDEX) return -1;}
 #define READPID(INDEX,FILE,PID) \
     while (1) {char pidstr[PROCESS_PIDLEN]; \
         WRITEPOS(INDEX,FILE,0) \
         if (read(FILE,pidstr,PROCESS_PIDLEN) != PROCESS_PIDLEN) {GIVEMORE(INDEX) return -1;} \
         unsigned long long temp; if (sscanf(pidstr,"%llu",&temp) != 1) {GIVEMORE(INDEX) return -1;} PID = temp; break;}
-#define WRITEBUF(INDEX,FILE,POS,BUF,LEN) \
-    WRITEPOS(INDEX,FILE,POS) \
-    if (write(FILE,BUF,LEN) < 0) {GIVEMORE(INDEX) return -1;}
 #define WAITSIG \
     while (1) {struct sigaction sigact = {0}; sigemptyset(&sigact.sa_mask); sigact.sa_handler = &handler; \
         if (sigaction(SIGUSR2, &sigact, 0) < 0) exitErrstr("sigaction failed\n"); \
