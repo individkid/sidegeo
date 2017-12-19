@@ -154,7 +154,6 @@ struct QueueXfer {
     QueueXfer *xptr;
     QueueMutex *mutex;
     virtual int xfer() = 0;
-    virtual int noxfer() = 0;
 };
 
 struct QueueMutex {
@@ -213,19 +212,14 @@ struct QueueMutex {
         if (ptr->xfer()) retval = 1;
         return retval;
     }
-    int noxfer()
-    {
-        int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
-        if (ptr->noxfer()) retval = 1;
-        return retval;
-    }
     void *loop(void *arg)
     {
         before();
         while (!done) {
-        if (xfer()) {consume(arg); while (!done && noxfer()) consume(arg);}
-        else if (delay()) {produce(arg); while (!done && nodelay()) produce(arg);}}
+            if (xfer()) consume(arg);
+            if (!delay()) continue;
+            produce(arg);
+            while (!done && nodelay()) produce(arg);}
         after();
         return 0;
     }
@@ -524,16 +518,6 @@ struct QueuePort : QueueXfer {
         mutex->unlock();
         return retval;
     }
-    virtual int noxfer()
-    {
-        if (flag) return 0;
-        if (mutex == 0) exitErrstr("source too mutex\n");
-        QueueBase *dest = next;
-        int retval = 0;
-        for (; dest != 0; dest = dest->next)
-            if (dest->flag < 1 && dest->size() > 0) retval = 1;
-        return retval;
-    }
     void ack(int *siz)
     {
         mutex->lock();
@@ -713,10 +697,8 @@ extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
 // consumed while nonempty
-
 #define DEFINE_WORK(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,1)
 // consumed if appended to
-
 #define DEFINE_EXTRA(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,2)
 // does not trigger consume
 

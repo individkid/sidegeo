@@ -290,7 +290,7 @@ void processBefore()
 
 void processConsume(void *arg)
 {
-    if (sizeConfigurer() > 0) {
+    while (sizeConfigurer() > 0) {
         int idx = *delocConfigurer(1); useConfigure();
         if (processWrite(idx,enstrPcsChar('\n')) < 0) processError(idx);
         if (*arrayWrite(idx,1) < 0) processIgnore(idx);}

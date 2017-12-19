@@ -222,7 +222,7 @@ void beforeConsole()
 
 void consumeConsole(void *arg)
 {
-    backend(*delocOutput(1));
+    while (sizeOutput() > 0) backend(*delocOutput(1));
 }
 
 void produceConsole(void *arg)
