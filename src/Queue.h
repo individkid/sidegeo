@@ -76,9 +76,9 @@ EXTERNC void wait##NAME();
 
 #define DECLARE_SOURCE(NAME) \
 EXTERNC void ack##NAME(int *siz);
-// xfer but dont trigger consume
+// xfer and signal corresponding dest to consume
 #define DECLARE_DEST(NAME)
-// xfer and triggers consume
+// produce until signalled to xfer and consume
 #define DECLARE_WAIT(NAME)
 // wait to xfer and consume
 
@@ -95,8 +95,6 @@ EXTERNC void xfer##NAME(int siz); \
 EXTERNC int enstr##NAME(TYPE val);
 
 #define DECLARE_STAGE(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
-// consumed while nonempty
-#define DECLARE_WORK(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
 // consumed if appended to
 #define DECLARE_EXTRA(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
 // does not trigger consume
@@ -509,7 +507,7 @@ struct QueuePort : QueueXfer {
             for (; source != 0 && dest != 0; source = source->next, dest = dest->next) {
                 if (source->size() > 0) {
                     source->use(); dest->xfer(source->size());
-                    if (dest->flag < 2) retval = 1;}}
+                    if (!dest->flag) retval = 1;}}
             if (flag && retval) {mutex->signal(); retval = 0; break;} // busy source
             else if (flag) break; // idle source
             else if (cond && retval) break; // busy cond
@@ -528,7 +526,7 @@ struct QueuePort : QueueXfer {
             if (dest == 0) exitErrstr("xfer too ptr\n");
             if (*siz > 0) {
                 source->use(); dest->xfer(*siz);
-                if (dest->flag < 2) retval = 1;}}
+                if (!dest->flag) retval = 1;}}
         if (flag && retval) mutex->signal();
         mutex->unlock();
     }
@@ -696,10 +694,8 @@ extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
 extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
-// consumed while nonempty
-#define DEFINE_WORK(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,1)
 // consumed if appended to
-#define DEFINE_EXTRA(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,2)
+#define DEFINE_EXTRA(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,1)
 // does not trigger consume
 
 template<class TYPE> struct QueueMeta {
