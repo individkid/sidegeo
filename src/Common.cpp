@@ -331,10 +331,6 @@ DEFINE_SOURCE(CmdTimewheels,CmnTimewheels,CmdHaskells)
 DEFINE_STAGE(CmdControl,enum Control,CmdTimewheels)
 DEFINE_STAGE(CmdChange,struct Change,CmdControl)
 
-DEFINE_POINTER(MachPtr,Machine)
-DEFINE_POINTER(CharPtr,char)
-DEFINE_POINTER(IntPtr,int)
-
 
 DEFINE_META(Place,int)
 DEFINE_META(Embed,int)

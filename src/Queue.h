@@ -63,25 +63,24 @@ EXTERNC void unlock##NAME(); \
 EXTERNC void join##NAME(); \
 EXTERNC void signal##NAME(); \
 EXTERNC void exit##NAME();
-
+// non-pselect, timed delay, stdin pselect
 #define DECLARE_FDSET(NAME,ELEM) DECLARE_MUTEX(NAME) \
 EXTERNC void insert##NAME(ELEM val); \
 EXTERNC void remove##NAME(ELEM val); \
 EXTERNC int member##NAME(ELEM val); \
 EXTERNC int readable##NAME(ELEM val);
-
+// pselect on pipes
 #define DECLARE_COND(NAME) DECLARE_MUTEX(NAME) \
 EXTERNC void wait##NAME();
+// queue driven
 
 #define DECLARE_SOURCE(NAME) \
-EXTERNC int xfer##NAME(); \
 EXTERNC void ack##NAME(int *siz);
-
-#define DECLARE_DEST(NAME) \
-EXTERNC int xfer##NAME();
-
-#define DECLARE_WAIT(NAME) \
-EXTERNC int xfer##NAME();
+// xfer but dont trigger consume
+#define DECLARE_DEST(NAME)
+// xfer and triggers consume
+#define DECLARE_WAIT(NAME)
+// wait to xfer and consume
 
 #define DECLARE_LOCAL(NAME,TYPE) \
 EXTERNC TYPE *enloc##NAME(int siz); \
@@ -96,6 +95,11 @@ EXTERNC void xfer##NAME(int siz); \
 EXTERNC int enstr##NAME(TYPE val);
 
 #define DECLARE_STAGE(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
+// consumed while nonempty
+#define DECLARE_WORK(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
+// consumed if appended to
+#define DECLARE_EXTRA(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
+// does not trigger consume
 
 #define DECLARE_META(NAME,TYPE) \
 EXTERNC void use##NAME(int sub); \
@@ -508,12 +512,11 @@ struct QueuePort : QueueXfer {
         while (1) {
             QueueBase *source = (flag ? next : mutex->next);
             QueueBase *dest = (flag ? mutex->next : next);
-            for (; dest != 0; source = source->next, dest = dest->next) {
-                if (source == 0) exitErrstr("xfer too ptr\n");
+            for (; source != 0 && dest != 0; source = source->next, dest = dest->next) {
                 if (source->size() > 0) {
                     source->use(); dest->xfer(source->size());
                     if (dest->flag < 2) retval = 1;}}
-            if (flag && retval) {mutex->signal(); break;} // busy source
+            if (flag && retval) {mutex->signal(); retval = 0; break;} // busy source
             else if (flag) break; // idle source
             else if (cond && retval) break; // busy cond
             else if (cond) cond->wait(); // idle cond
@@ -523,6 +526,7 @@ struct QueuePort : QueueXfer {
     }
     virtual int noxfer()
     {
+        if (flag) return 0;
         if (mutex == 0) exitErrstr("source too mutex\n");
         QueueBase *dest = next;
         int retval = 0;
@@ -548,16 +552,14 @@ struct QueuePort : QueueXfer {
 
 #define DEFINE_SOURCE(NAME,NEXT,XPTR) \
 QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,1); \
-extern "C" int xfer##NAME() {return NAME##Inst.xfer();} \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
-
+// xfer, signal, no consume
 #define DEFINE_DEST(NAME,NEXT,XPTR) \
 QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,0); \
-extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
-
+// xfer, no signal, consume
 #define DEFINE_WAIT(NAME,NEXT,XPTR) \
 QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,0); \
-extern "C" int xfer##NAME() {return NAME##Inst.xfer();}
+// wait, xfer, consume
 
 #define QUEUE_STEP 10
 
@@ -709,11 +711,14 @@ extern "C" void use##NAME() {NAME##Inst.use();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
 extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);}
 
-#define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,2)
+#define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
+// consumed while nonempty
 
 #define DEFINE_WORK(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,1)
+// consumed if appended to
 
-#define DEFINE_EXTRA(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
+#define DEFINE_EXTRA(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,2)
+// does not trigger consume
 
 template<class TYPE> struct QueueMeta {
     QueueStruct<QueueStruct<TYPE> > meta;

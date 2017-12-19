@@ -40,8 +40,7 @@ extern float cutoff;
 extern float slope;
 extern float aspect;
 
-void countCommands(int size);
-void enqueCommands();
+void enqueCommands(int size);
 #ifdef BRINGUP
 void bringup();
 void enqueCommand(Command cmd);
@@ -329,7 +328,7 @@ void commandSignal()
 }
 void commandConsume(void *arg)
 {
-    countCommands(sizeCommand()-commandCount); commandCount = sizeCommand();
+    enqueCommands(sizeCommand()-commandCount); commandCount = sizeCommand();
 }
 int commandDelay()
 {

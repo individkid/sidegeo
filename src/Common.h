@@ -277,10 +277,6 @@ DECLARE_STAGE(CmdHsData,enum Data)
 DECLARE_SOURCE(CmdTimewheels)
 DECLARE_STAGE(CmdChange,struct Change)
 
-DECLARE_POINTER(MachPtr,Machine)
-DECLARE_POINTER(CharPtr,char)
-DECLARE_POINTER(IntPtr,int)
-
 
 DECLARE_META(Place,int)
 DECLARE_META(Embed,int)

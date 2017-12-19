@@ -66,17 +66,10 @@ void enqueCommand(Command cmd)
     enqueMachine(command);
 }
 
-void countCommands(int size)
+void enqueCommands(int size)
 {
     for (int i = 0; i < size; i++)
     enqueMachine(command); 
-}
-
-void enqueCommands()
-{
-    int size = sizeCommand();
-    xferCommands();
-    countCommands(sizeCommand()-size);
 }
 
 void compass(double xdelta, double ydelta)
