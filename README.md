@@ -13,6 +13,25 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * microcode has two versions of code for each task, one version for if the polygons are represented by 6 planes, and one version for if the polygons are represented by 3 points. the tasks are display, find coplanes/copoints, find sidedness of point/plane, find pierce points, reinterpret plane/point.  
   * common contains mutex queues that are staged to and from thread local queues. command has void function pointer. haskell has event enumeration. console has endline terminated string. process has command lines. Command, Event, Kind, Data, Output, Option, File are unique types. CmdChar, CmdInt, HsChar, HsInt are uniquefied types. the basename identifies the consumer of the function and arguments. Cmn prefixed queues in common map onto unprefixed queues in threads. Hs prefixed queues in haskell and Cmd prefixed queues in command map into Cmn queues in common.  
 
+The syntax of options and commands is specified by format strings with the following expressions.
+
+  * (exp|exp) is any prefix  
+  * [exp|exp] is any one  
+  * {exp} is any repetition  
+  * \<exp> is matched and not enqued to result  
+  * \\mac=exp|mac=exp/ is named expressions  
+  * ?quot! is literally matched and enqued  
+  * !quot? is literally matched and enqued  
+  * & is whitespace matched and enqued  
+  * # is numeral matched and enqued  
+  * @ is alphabetic matched and enqued  
+  * % current result length is enqued  
+  * ident (not space special or mac) is enqued to result  
+
+For example, the syntax for --time is the following.
+
+  * \id=@{[@|#]}|nm=[?+!|?-!]#{#}| =\<{&}>/ name:id% (below:id% | middle:id% | above:id%)% (min:nm% | max:nm%)% {coef:nm% (var:id% | var:id%)%}% (\<?/!> {coef:nm% (var:id% | var:id%)%})%  
+
 The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name, short description, goal for success, input conditions, and then describes flow as pseudocode, for cherry picked data state upon call and return, with the following features.
 
   * comma lists data states  
