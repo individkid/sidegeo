@@ -58,7 +58,5 @@ void handler(int sig)
 	if (sig == SIGUSR2) sigusr2 = 1;
 }
 
-void show_tree(const char *, void *, int) {}
-
 EXTERNCEND
 
