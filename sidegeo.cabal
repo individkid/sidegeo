@@ -46,7 +46,7 @@ executable sculpt
                        hint
   hs-source-dirs:      src
   c-sources:           src/Queue.cpp,
-                       src/Queue.c,
+                       src/Wrap.c,
                        src/Common.cpp,
                        src/Command.c,
                        src/Render.c,

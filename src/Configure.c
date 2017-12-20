@@ -16,7 +16,7 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Common.h"
+#include "Process.h"
 
 int processConfigure(int index, int len)
 {

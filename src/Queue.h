@@ -1002,41 +1002,42 @@ template<class KEY, class VAL> struct Rbtree {
 template<class KEY, class VAL> struct QueueTree {
     QueuePool<Rbtree<KEY,VAL> > pool;
     rbop_t rbop;
-    int top;
-    QueueTree(int (*cmp)(const void *, const void *))
+    void *top;
+    QueueTree(int (*cmp0)(const void *, const void *),int (*cmp1)(const void *, const void *))
     {
-        top = -1;
+        top = int2void(-1);
         Rbtree<KEY,VAL> temp;
-        rbop.cmp = cmp;
+        rbop.cmp = (cmp1 ? cmp1 : cmp0);
         rbop.coff = (char*)&temp.left-(char*)&temp;
         rbop.boff = (char*)&temp.mask-(char*)&temp;
         rbop.mask = (unsigned char)1;
-        rbop.nil = (void*)-1;
+        rbop.nil = int2void(-1);
     }
     int comp(const void *left, const void *right)
     {
         int lft = void2int(left);
         int rgt = void2int(right);
         if (pool.cast(lft)->key < pool.cast(rgt)->key) return -1;
-        if (pool.cast(lft)->key > pool.cast(rgt)->key) return 1;
+        if (pool.cast(rgt)->key < pool.cast(lft)->key) return 1;
         return 0;
     }
     int test(KEY key)
     {
-        int tofind = pool.size();
-        Rbtree<KEY,VAL> *temp = pool.enloc(1); pool.unloc(1); temp->key = key;
-        int found = void2int(lookup_node(top,int2void(tofind)));
-        if (found < 0) return -1;
+        int tofind = pool.alloc();
+        pool.cast(tofind)->key = key;
+        void *found = lookup_node(top,int2void(tofind),&rbop);
+        pool.free(tofind);
+        if (void2int(found) < 0) return -1;
         return 0;
     }
     int find(KEY key, VAL *val)
     {
         int tofind = pool.alloc();
         pool.cast(tofind)->key = key;
-        int found = void2int(lookup_node(top,int2void(tofind)));
+        void *found = lookup_node(top,int2void(tofind),&rbop);
         pool.free(tofind);
-        if (found < 0) return -1;
-        *val = pool.cast(found)->val;
+        if (void2int(found) < 0) return -1;
+        *val = pool.cast(void2int(found))->val;
         return 0;
     }
     int insert(KEY key, VAL val)
@@ -1058,14 +1059,14 @@ template<class KEY, class VAL> struct QueueTree {
     }
 };
 
-#define DEFINE_TREE(NAME,KEY,VAL) \
+#define DEFINE_TREE(NAME,KEY,VAL,FUNC) \
 extern "C" int comp##NAME(const void *left, const void *right); \
-QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(&comp##NAME); \
-int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
-int test##NAME(KEY key) {return NAME##Inst.test(key);} \
-int find##NAME(KEY key, VAL *val) {return NAME##Inst.find(key,val);} \
-int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
-int remove##NAME(KEY key, VAL val) {return NAME##Inst.remove(key,val);}
+QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME,FUNC); \
+extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
+extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
+extern "C" int find##NAME(KEY key, VAL *val) {return NAME##Inst.find(key,val);} \
+extern "C" int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
+extern "C" int remove##NAME(KEY key, VAL val) {return NAME##Inst.remove(key,val);}
 
 #endif // __cplusplus
 

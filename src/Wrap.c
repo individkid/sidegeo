@@ -1,5 +1,5 @@
 /*
-*    Queue.c wrapper for code to be compiled without c++ constraints
+*    Wrap.c wrapper for code to be compiled without c++ constraints
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -16,5 +16,5 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-void show_tree(const char *, void *, int) {}
+void show_tree(const char *arg0, void *arg1, int arg2) {}
 #include "rbtree.c"

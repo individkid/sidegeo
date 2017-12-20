@@ -16,7 +16,7 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Common.h"
+#include "Process.h"
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -304,8 +304,6 @@ void processConsume(void *arg)
     useOption(); xferStage(sizeOption());
 }
 
-int processConfigure(int index, int len); // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
-int processOption(int len); // given unlocPcsChar(len), return <0 error, 0 continue, >0 filename in enlocPcsChar
 void processProduce(void *arg)
 {
     if (toggle && *arrayRead(current,1) < 0) processYield();
@@ -334,3 +332,12 @@ void processAfter()
         if (retval < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
         if (retval == 0 && pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
 }
+
+int myscanf(const char *fmt, int len)
+{
+    char *buf = unlocPcsChar(len);
+    for (int i = 0; i < len; i++) {
+    }
+    return -1; // len upon success <len upon failure
+}
+

@@ -374,6 +374,7 @@ DECLARE_STAGE(PcsState,struct State)
 
 DECLARE_LOCAL(Stage,char)
 DECLARE_LOCAL(PcsChar,char)
+DECLARE_LOCAL(PcsInt,int)
 DECLARE_LOCAL(Read,int)
 DECLARE_LOCAL(Size,int)
 DECLARE_LOCAL(Yield,int)
