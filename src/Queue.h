@@ -987,15 +987,9 @@ extern "C" TYPE *advance##NAME() {return NAME##Inst.advance();} \
 extern "C" int ready##NAME(pqueue_pri_t pri) {return NAME##Inst.ready(pri);} \
 extern "C" pqueue_pri_t when##NAME() {return NAME##Inst.when();}
 
-typedef struct {
-    int (*cmp)(const void *, const void *);
-    unsigned int coff, boff;
-    unsigned char mask; // contains a one where red/black bit is set.
-    void *nil;
-} rbop_t;
-void *add_node(void **N, void *A, const rbop_t *o);
-void *del_node(void **N, const void *A, const rbop_t *o);
-void *lookup_node(void *N, const void *A, const rbop_t *o);
+EXTERNCBEGIN
+#include "rbtree.h"
+EXTERNCEND
 
 template<class KEY, class VAL> struct Rbtree {
     void *left;
