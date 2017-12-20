@@ -152,11 +152,12 @@ struct Nomial {
 };
 struct Ratio {struct Nomial n,d;};
 struct State {
-    int vld; // enable for wav, met
+    int vld; // enable for wav, met, bot, mid, top
     int wav; // index of waveform pipeline
     int met; // metric request argument
     int amt; // amout of stock
     int min,max; // saturation limits
+    int bot,mid,top; // indices to copy in saturate
     struct Ratio upd; // formula for new value
     struct Ratio dly; // formula for when to apply value
     struct Ratio sch; // formula for reschedule time
@@ -169,6 +170,7 @@ enum Control {
     Listen,
     Source,
     Start};
+enum Shift {Wav,Met,Bot,Mid,Top};
 
 #define DECLARE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...);

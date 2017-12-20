@@ -78,16 +78,16 @@ void setTime(struct timespec *delay, long long time)
 	// TODO
 }
 
-int saturate(long long val, int min, int max)
+int saturate(long long val, struct State *ptr)
 {
-	if (val > max) return max;
-	else if (val < min) return min;
-	return val;
+	if (val > ptr->max) return (((val>>Top)&1) ? arrayState(ptr->top,1)->amt : ptr->max);
+	else if (val < ptr->min) return (((val>>Bot)&1) ? arrayState(ptr->bot,1)->amt : ptr->min);
+	return (((val>>Mid)&1) ? arrayState(ptr->mid,1)->amt : val);
 }
 
 long long evaluate(struct Ratio *ratio)
 {
-	return 0; // TODO if (state->vld == 2 || state->vld == 3) requestMetric(state->met,change.sub);
+	return 0; // TODO if ((state->vld>>Met)&1) requestMetric(state->met,change.sub);
 }
 
 void timewheelBefore()
@@ -107,8 +107,7 @@ void timewheelConsume(void *arg)
         struct Change change = *unlocChange(1);
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
-        if (state->vld != 2 && state->vld != 3) exitErrstr("response too vld\n");
-        if (state->vld == 3) pipeWave(state->wav,state->amt);}
+        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
 }
 
 long long timewheelDelay()
@@ -129,7 +128,7 @@ void timewheelProduce(void *arg)
         long long update = evaluate(&state->upd);
         long long delay = evaluate(&state->dly);
         long long schedule = evaluate(&state->sch);
-        int val = saturate(update,state->min,state->max);
+        int val = saturate(update,state);
         struct Change change; change.val = val; change.sub = sub;
         *scheduleTime(ofTime(current+schedule)) = sub;
         *scheduleWheel(ofTime(current+delay)) = change;}
@@ -137,7 +136,7 @@ void timewheelProduce(void *arg)
         struct Change change = *advanceWheel();
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
-        if (state->vld == 1 || state->vld == 3) pipeWave(state->wav,state->amt);}
+        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
 }
 
 void timewheelAfter()
