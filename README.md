@@ -23,7 +23,7 @@ The syntax of options and commands is specified by format strings with the follo
   * ?quot! is literally matched and enqued  
   * !quot? is literally matched and enqued  
   * & is whitespace matched and enqued  
-  * # is numeral matched and enqued  
+  * \# is numeral matched and enqued  
   * @ is alphabetic matched and enqued  
   * % current result length is enqued  
   * ident (not space special or mac) is enqued to result  
