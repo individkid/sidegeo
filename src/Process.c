@@ -218,7 +218,7 @@ int processWrite(int index, int writelen)
     int filelen;
     WRITELEN(index,file,filelen) // get filelen
     TAKEMORE(index,filelen) // within mutex, set *arrayMore(index,1) to filelen
-    WRITELOCK(index,file,SEEK_END,0,writelen,F_WRLCK) // wait for lock from eof of size writelen
+    WRITELOCK(index,file,SEEK_END,0,writelen,F_WRLCK) // wait for lock at eof of size writelen
     WRITELEN(index,file,filelen) // get filelen
     WRITEBUF(index,file,filelen,writebuf,writelen) // write writelen bytes to file at filelen from writebuf
     WRITELOCK(index,file,SEEK_END,0,writelen,F_UNLCK) // unlock written bytes
@@ -244,17 +244,9 @@ void processYield()
     current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;
 }
 
-void processError(int index)
+int processInit(int len)
 {
-    if (pthread_cancel(*arrayHelper(index,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
-    if (*arrayRead(index,1) >= 0) removeCmnProcesses(*arrayRead(index,1));
-    *arrayRead(index,1) = *arraySize(index,1) = *arrayWrite(index,1) = -1;
-    processYield();
-}
-
-void processInit(int len)
-{
-	if (len == 0) return; toggle = 1;
+	toggle = 1;
 	if (len < 0) exitErrstr("init too len\n");
     *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
     helper.index = current = sizeRead();
@@ -270,7 +262,8 @@ void processInit(int len)
     if (pthread_create(enlocHelper(1),0,helperRead,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-    if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) processError(current);
+    if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) return -1;
+    return 0;
 }
 
 DEFINE_MSGSTR(PcsOutput)
@@ -282,6 +275,19 @@ void processIgnore(int index)
     msgstrPcsOutput("syntax error in file number %d\n",index);
 }
 
+void processComplain(int len)
+{
+    // TODO xfer from PcsChar to PcsOutput
+}
+
+void processError(int index)
+{
+    if (pthread_cancel(*arrayHelper(index,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
+    if (*arrayRead(index,1) >= 0) removeCmnProcesses(*arrayRead(index,1));
+    *arrayRead(index,1) = *arraySize(index,1) = *arrayWrite(index,1) = -1;
+    processYield();
+}
+
 void processBefore()
 {
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
@@ -291,14 +297,15 @@ void processBefore()
 void processConsume(void *arg)
 {
     while (sizeConfigurer() > 0) {
-        int idx = *delocConfigurer(1); useConfigure();
-        if (processWrite(idx,enstrPcsChar('\n')) < 0) processError(idx);
+        int idx = *delocConfigurer(1);
+        int len = (useConfigure(),enstrPcsChar('\n'));
+        if (processWrite(idx,len) < 0) processError(idx);
         if (*arrayWrite(idx,1) < 0) processIgnore(idx);}
     useOption(); xferStage(sizeOption());
 }
 
 int processConfigure(int index, int len); // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
-int processOption(int len); // given unlocPcsChar(len), return 0 or length of filename in enlocPcsChar
+int processOption(int len); // given unlocPcsChar(len), return <0 error, 0 continue, >0 filename in enlocPcsChar
 void processProduce(void *arg)
 {
     if (toggle && *arrayRead(current,1) < 0) processYield();
@@ -310,7 +317,11 @@ void processProduce(void *arg)
         if (len < 0) processError(current);
         if (len == 0) *arrayYield(current,1) = 1;}
     else if (sizeStage() > 0) {
-        useOption(); processInit(processOption(enstrPcsChar('\n')));}
+        int len = (useStage(),enstrPcsChar('\n'));
+        len = processOption(len);
+        if (len < 0) processComplain(-len);
+        if (len > 0) len = processInit(len);
+        if (len < 0) processError(current);}
     else toggle = 1;
 }
 
