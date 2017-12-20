@@ -57,8 +57,10 @@ executable sculpt
                        src/Option.c,
                        src/Configure.c,
                        src/Microcode.c,
-                       libpqueue/src/pqueue.c
-  include-dirs:        libpqueue/src
+                       libpqueue/src/pqueue.c,
+                       rbtree/rbtree.c
+  include-dirs:        libpqueue/src,
+                       rbtree
   if os(linux)
     extra-libraries:   GLEW,
                        GL,

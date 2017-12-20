@@ -39,7 +39,7 @@ void *int2void(int val)
     return (void *)(ptr+val);
 }
 
-int void2int(void *val)
+int void2int(const void *val)
 {
     char *ptr = 0;
     return ((char *)val-ptr);
@@ -57,6 +57,8 @@ void handler(int sig)
 {
 	if (sig == SIGUSR2) sigusr2 = 1;
 }
+
+void show_tree(const char *, void *, int) {}
 
 EXTERNCEND
 

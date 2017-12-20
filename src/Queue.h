@@ -34,6 +34,8 @@
 EXTERNCBEGIN
 #include <stdio.h>
 #include "pqueue.h"
+#undef nil
+#include "rbtree.h"
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
@@ -51,7 +53,7 @@ EXTERNV int sigusr2;
 
 EXTERNC void exitQueue();
 EXTERNC void *int2void(int val);
-EXTERNC int void2int(void *val);
+EXTERNC int void2int(const void *val);
 EXTERNC void exitErrstr(const char *fmt, ...);
 EXTERNC void handler(int sig);
 
@@ -133,6 +135,12 @@ EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri); \
 EXTERNC TYPE *advance##NAME(); \
 EXTERNC int ready##NAME(pqueue_pri_t pri); \
 EXTERNC pqueue_pri_t when##NAME();
+
+#define DECLARE_TREE(NAME,KEY,VAL) \
+EXTERNC int test##NAME(KEY key); \
+EXTERNC int find##NAME(KEY key, VAL *val); \
+EXTERNC int insert##NAME(KEY key, VAL val); \
+EXTERNC int remove##NAME(KEY key, VAL val);
 
 #ifdef __cplusplus
 
@@ -980,6 +988,82 @@ extern "C" TYPE *schedule##NAME(pqueue_pri_t pri) {return NAME##Inst.schedule(pr
 extern "C" TYPE *advance##NAME() {return NAME##Inst.advance();} \
 extern "C" int ready##NAME(pqueue_pri_t pri) {return NAME##Inst.ready(pri);} \
 extern "C" pqueue_pri_t when##NAME() {return NAME##Inst.when();}
+
+template<class KEY, class VAL> struct Rbtree {
+    void *left;
+    void *right;
+    unsigned char mask;
+    KEY key;
+    VAL val;
+};
+
+template<class KEY, class VAL> struct QueueTree {
+    QueuePool<Rbtree<KEY,VAL> > pool;
+    rbop_t rbop;
+    int top;
+    QueueTree(int (*cmp)(const void *, const void *))
+    {
+        top = -1;
+        Rbtree<KEY,VAL> temp;
+        rbop.cmp = cmp;
+        rbop.coff = (char*)&temp.left-(char*)&temp;
+        rbop.boff = (char*)&temp.mask-(char*)&temp;
+        rbop.mask = (unsigned char)1;
+        rbop.nil = (void*)-1;
+    }
+    int comp(const void *left, const void *right)
+    {
+        int lft = void2int(left);
+        int rgt = void2int(right);
+        if (pool.cast(lft)->key < pool.cast(rgt)->key) return -1;
+        if (pool.cast(lft)->key > pool.cast(rgt)->key) return 1;
+        return 0;
+    }
+    int test(KEY key)
+    {
+        int tofind = pool.size();
+        Rbtree<KEY,VAL> *temp = pool.enloc(1); pool.unloc(1); temp->key = key;
+        int found = void2int(lookup_node(top,int2void(tofind)));
+        if (found < 0) return -1;
+        return 0;
+    }
+    int find(KEY key, VAL *val)
+    {
+        int tofind = pool.alloc();
+        pool.cast(tofind)->key = key;
+        int found = void2int(lookup_node(top,int2void(tofind)));
+        pool.free(tofind);
+        if (found < 0) return -1;
+        *val = pool.cast(found)->val;
+        return 0;
+    }
+    int insert(KEY key, VAL val)
+    {
+        if (test(key) >= 0) return -1;
+        int node = pool.alloc();
+        pool.cast(node)->key = key;
+        pool.cast(node)->val = val;
+        add_node(&top,int2void(node),&rbop);
+        return 0;
+    }
+    int remove(KEY key, VAL val)
+    {
+        int node;
+        if (find(key,&node) < 0) return -1;
+        del_node(&top,int2void(node),&rbop);
+        pool.free(node);
+        return 0;
+    }
+};
+
+#define DEFINE_TREE(NAME,KEY,VAL) \
+extern "C" int comp##NAME(const void *left, const void *right); \
+QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(&comp##NAME); \
+int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
+int test##NAME(KEY key) {return NAME##Inst.test(key);} \
+int find##NAME(KEY key, VAL *val) {return NAME##Inst.find(key,val);} \
+int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
+int remove##NAME(KEY key, VAL val) {return NAME##Inst.remove(key,val);}
 
 #endif // __cplusplus
 
