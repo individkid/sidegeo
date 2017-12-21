@@ -55,7 +55,7 @@ executable sculpt
                        src/Console.c,
                        src/Timewheel.c,
                        src/Process.c,
-                       src/Myscan.c,
+                       src/Parse.c,
                        src/Option.c,
                        src/Configure.c,
                        src/Microcode.c,

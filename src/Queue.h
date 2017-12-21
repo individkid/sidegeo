@@ -685,6 +685,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     void pack(int sub, int siz)
     {
+        // TODO handle sub == 0 and sub == size() specially
         if (sub < 0 || sub > size()) exitErrstr("pack too siz\n");
         if (siz > 0 && sub+siz > size()) exitErrstr("pack too siz\n");
         if (siz == 0) return;
@@ -697,7 +698,8 @@ template<class TYPE> struct QueueStruct : QueueBase {
             enloc(-siz);
             for (int i = size()-1; i+siz >= sub; i--)
                 *array(i,1) = *array(i+siz,1);
-            return;}
+            return ;}
+        return;
     }
 };
 
