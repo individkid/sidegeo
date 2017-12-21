@@ -647,6 +647,10 @@ template<class TYPE> struct QueueStruct : QueueBase {
         if (head > tail) exitErrstr("unloc too siz\n");
         return tail;
     }
+    TYPE *adloc(int siz)
+    {
+        // TODO insert to head
+    }
     void reloc(int siz)
     {
         TYPE *buf = enloc(siz);
