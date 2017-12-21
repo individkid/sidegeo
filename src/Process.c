@@ -332,12 +332,3 @@ void processAfter()
         if (retval < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
         if (retval == 0 && pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
 }
-
-int myscanf(const char *fmt, int len)
-{
-    char *buf = unlocPcsChar(len);
-    for (int i = 0; i < len; i++) {
-    }
-    return -1; // len upon success <len upon failure
-}
-

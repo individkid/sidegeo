@@ -144,23 +144,17 @@ Configuration/history files consist of commands. User input appends to file. App
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
 
-The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --stock --flow --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are sums of terms of one coefficient and up to two variables. Note that values can have defaults for when topological features necessary to make the value meaningful do not exist. For example, the area of a face or length of an edge is only meaningful when the specified face or edge exists as a facet of a polytope. The values for the variables come from the following.
+The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 
-  * --stock or --source value  
-  * metric of facet qualified by topology  
-  * projected metric of facet wrt some point or focal point  
+  * value for --delay is given by --time value  
+  * values for --color is given by --time values  
+  * waves for --listen port is piped from --time value  
+  * new --time value comes from term sum quotient and saturation values  
+  * term sum quotient variables are --time values  
+  * value change delay comes from term sum quotient  
+  * reschedule delay comes from term sum quotient   
 
-Stock values are used in the following places.
-
-  * --flow value equations  
-  * --flow reschedule delay equations
-  * --flow value delay equations
-  * --delay file stepping rate  
-  * --call or --action expressions  
-  * --color specifications  
-  * --listen waveform sound pipe  
-
-For exmple, a system could consist of --stock --source --listen points at the vertices of a polytope constructed with --point, and --flow faces in several overlapping --plane polytopes.
+For exmple, a system could consist of --time --source --listen points at the vertices of a polytope constructed with --point, and --time faces in several overlapping --plane polytopes.
 
 This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
 

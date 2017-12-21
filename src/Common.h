@@ -145,10 +145,11 @@ struct Buffer {
 }; // argument to render functions
 
 struct Nomial {
-    int con0;
-    int num1,con1,var1; // var refers to val in stock
-    int num2,con2,var2a,var2b; // vars refer to vals in stocks
-    int num3,con3,var3a,var3b; // thresholds inputs outputs 
+    int cons; // constant term
+    int csub; // subscript into coefficients
+    int vsub; // subscript into variables
+    int num1; // number of one variable terms
+    int num2; // number of two variable terms
 };
 struct Ratio {struct Nomial n,d;};
 struct State {

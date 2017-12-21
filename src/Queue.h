@@ -92,7 +92,8 @@ EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int size##NAME(); \
 EXTERNC void use##NAME(); \
 EXTERNC void xfer##NAME(int siz); \
-EXTERNC int enstr##NAME(TYPE val);
+EXTERNC int enstr##NAME(TYPE val); \
+EXTERNC void pack##NAME(int sub, int siz);
 
 #define DECLARE_STAGE(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
 // consumed if appended to
@@ -682,6 +683,22 @@ template<class TYPE> struct QueueStruct : QueueBase {
         src = 0;
         return len;
     }
+    void pack(int sub, int siz)
+    {
+        if (sub < 0 || sub > size()) exitErrstr("pack too siz\n");
+        if (siz > 0 && sub+siz > size()) exitErrstr("pack too siz\n");
+        if (siz == 0) return;
+        if (siz > 0) {
+            for (int i = sub; i+siz < size(); i++)
+                *array(i,1) = *array(i+siz,1);
+            unloc(siz);
+            return;}
+        if (siz < 0) {
+            enloc(-siz);
+            for (int i = size()-1; i+siz >= sub; i--)
+                *array(i,1) = *array(i+siz,1);
+            return;}
+    }
 };
 
 template<class TYPE> QueueStruct<TYPE> *QueueStruct<TYPE>::src = 0;
@@ -697,7 +714,8 @@ extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz)
 extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" void use##NAME() {NAME##Inst.use();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
-extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);}
+extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);} \
+extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.pack(sub,siz);}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
 // consumed if appended to
@@ -1003,11 +1021,11 @@ template<class KEY, class VAL> struct QueueTree {
     QueuePool<Rbtree<KEY,VAL> > pool;
     rbop_t rbop;
     void *top;
-    QueueTree(int (*cmp0)(const void *, const void *),int (*cmp1)(const void *, const void *))
+    QueueTree(int (*cmp)(const void *, const void *))
     {
         top = int2void(-1);
         Rbtree<KEY,VAL> temp;
-        rbop.cmp = (cmp1 ? cmp1 : cmp0);
+        rbop.cmp = cmp;
         rbop.coff = (char*)&temp.left-(char*)&temp;
         rbop.boff = (char*)&temp.mask-(char*)&temp;
         rbop.mask = (unsigned char)1;
@@ -1059,9 +1077,9 @@ template<class KEY, class VAL> struct QueueTree {
     }
 };
 
-#define DEFINE_TREE(NAME,KEY,VAL,FUNC) \
+#define DEFINE_TREE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
-QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME,FUNC); \
+QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int find##NAME(KEY key, VAL *val) {return NAME##Inst.find(key,val);} \
