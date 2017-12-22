@@ -148,10 +148,10 @@ Configuration/history files consist of commands. User input appends to file. App
 The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 
   * value for --delay is given by --time value  
-  * values for --color is given by --time values  
-  * waves for --listen port is piped from --time value  
+  * values for --color are given by --time values  
+  * wave for --listen port is piped from --time value  
+  * term variables are --time values  
   * new --time value comes from term sum quotient and saturation values  
-  * term sum quotient variables are --time values  
   * value change delay comes from term sum quotient  
   * reschedule delay comes from term sum quotient   
 
