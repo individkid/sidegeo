@@ -87,6 +87,7 @@ EXTERNC TYPE *enloc##NAME(int siz); \
 EXTERNC TYPE *deloc##NAME(int siz); \
 EXTERNC TYPE *destr##NAME(TYPE val); \
 EXTERNC TYPE *unloc##NAME(int siz); \
+EXTERNC TYPE *alloc##NAME(int siz); \
 EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int size##NAME(); \
@@ -107,6 +108,7 @@ EXTERNC TYPE *enloc##NAME(int idx, int siz); \
 EXTERNC TYPE *deloc##NAME(int idx, int siz); \
 EXTERNC TYPE *destr##NAME(int idx, TYPE val); \
 EXTERNC TYPE *unloc##NAME(int idx, int siz); \
+EXTERNC TYPE *alloc##NAME(int idx, int siz); \
 EXTERNC void reloc##NAME(int idx, int siz); \
 EXTERNC TYPE *array##NAME(int idx, int sub, int siz); \
 EXTERNC int size##NAME(int idx);
@@ -139,7 +141,7 @@ EXTERNC pqueue_pri_t when##NAME();
 EXTERNC int test##NAME(KEY key); \
 EXTERNC int find##NAME(KEY key, VAL *val); \
 EXTERNC int insert##NAME(KEY key, VAL val); \
-EXTERNC int remove##NAME(KEY key, VAL val);
+EXTERNC int remove##NAME(KEY key);
 
 #ifdef __cplusplus
 
@@ -647,9 +649,10 @@ template<class TYPE> struct QueueStruct : QueueBase {
         if (head > tail) exitErrstr("unloc too siz\n");
         return tail;
     }
-    TYPE *adloc(int siz)
+    TYPE *alloc(int siz)
     {
         // TODO insert to head
+        return 0;
     }
     void reloc(int siz)
     {
@@ -714,6 +717,7 @@ QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(FUNC); \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
 extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.destr(val);} \
+extern "C" TYPE *alloc##NAME(int siz) {return NAME##Inst.alloc(siz);} \
 extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.unloc(siz);} \
 extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
@@ -1073,7 +1077,7 @@ template<class KEY, class VAL> struct QueueTree {
         add_node(&top,int2void(node),&rbop);
         return 0;
     }
-    int remove(KEY key, VAL val)
+    int remove(KEY key)
     {
         int node;
         if (find(key,&node) < 0) return -1;
@@ -1090,7 +1094,7 @@ extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Ins
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int find##NAME(KEY key, VAL *val) {return NAME##Inst.find(key,val);} \
 extern "C" int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
-extern "C" int remove##NAME(KEY key, VAL val) {return NAME##Inst.remove(key,val);}
+extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);}
 
 #endif // __cplusplus
 
