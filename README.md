@@ -19,7 +19,7 @@ The syntax of options and commands is specified by format strings with the follo
   * [exp|exp] is any one  
   * {exp} is any repetition  
   * \<exp> is matched and not enqued to result  
-  * \\mac=exp|mac=exp/ is named expressions  
+  * \\mac|exp/ is named a expression  
   * ?quot! is literally matched and enqued  
   * !quot? is literally matched and enqued  
   * & is whitespace matched and enqued  
@@ -30,7 +30,7 @@ The syntax of options and commands is specified by format strings with the follo
 
 For example, the syntax for --time is the following.
 
-  * \id=@{[@|#]}|nm=[?+!|?-!]#{#}| =\<{&}>/ name:id% (below:id% | middle:id% | above:id%)% (min:nm% | max:nm%)% {coef:nm% (var:id% | var:id%)%}% (\<?/!> {coef:nm% (var:id% | var:id%)%})%  
+  * \id|@{[@|#]}/\nm|[?+!|?-!]#{#}/\ |\<{&}>/ name:id% (below:id% | middle:id% | above:id%)% (min:nm% | max:nm%)% {coef:nm% (var:id% | var:id%)%}% (\<?/!> {coef:nm% (var:id% | var:id%)%})%  
 
 The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name, short description, goal for success, input conditions, and then describes flow as pseudocode, for cherry picked data state upon call and return, with the following features.
 
