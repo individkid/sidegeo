@@ -32,9 +32,40 @@ enum Parse {
 
 int height = 0;
 
-int parseUpto(const char *tofind)
+int parseIn(char chr, const char *chrs)
 {
+	for (int i = 0; chrs[i]; i++)
+		if (chr == chrs[i]) return 1;
+	return 0;
+}
+
+int parseTo(int sub, const char *chrs)
+{
+	for (int i = sub; i < sizeFormat(); i++)
+		if (parseIn(*arrayFormat(i,1),chrs)) return i;
 	return -1;
+}
+
+int parseFrom(int sub, const char *str)
+{
+	int lim = parseTo(sub,str);
+	int open = parseTo(sub,"?!([{<\\");
+	int close = parseTo(sub,")]}>/");
+	int either = -1;
+	if (open < 0) either = close;
+	else if (close < 0) either = open;
+	else if (open < close) either = open;
+	else either = close;
+	if (either < 0) return lim;
+	if (lim <= either) return lim;
+	if (either == open) return parseFrom(parseFrom(sub,")]}>/")+1,str);
+	return -1;
+}
+
+int parseUpto(char chr)
+{
+	char str[2]; str[0] = chr; str[1] = 0;
+	return parseFrom(0,str);
 }
 
 int parseIsAlpha(char chr)
@@ -53,7 +84,7 @@ enum Parse parsePrefix(const char *format, int *fmtlen, int *fmtsub, const char 
 	int oldsub = *patsub;
 	while (retval == Bar) retval = parseExp(format,fmtlen,fmtsub,pattern,patlen,patsub,size);
 	if (retval == Fail) {
-		int len = parseUpto(")");
+		int len = parseUpto(')');
 		if (len < 0) return Fatal;
 		delocFormat(len);
 		return Pass;}
@@ -64,20 +95,21 @@ enum Parse parsePrefix(const char *format, int *fmtlen, int *fmtsub, const char 
 enum Parse parseAlternate(const char *format, int *fmtlen, int *fmtsub, const char *pattern, int patlen, int *patsub, int size)
 {
 	int retval = Fail;
-	while (retval == Fail) retval = parseExp(format,fmtlen,fmtsub,pattern,patlen,patsub,size);
+	while (retval == Fail && parseUpto(']') < 0) retval = parseExp(format,fmtlen,fmtsub,pattern,patlen,patsub,size);
 	if (retval == Bar) {
-		int len = parseUpto("]");
+		int len = parseUpto(']');
 		if (len < 0) return Fatal;
 		delocFormat(len);
 		return Pass;}
 	if (retval == Square) return Pass;
+	if (retval == Fail) return Fail;
 	return Fatal;
 }
 
 enum Parse parseRepeat(const char *format, int *fmtlen, int *fmtsub, const char *pattern, int patlen, int *patsub, int size)
 {
 	int retval = Curly;
-	int len = parseUpto("}");
+	int len = parseUpto('}');
 	relocFormat(len);
 	while (retval == Curly) {
 		char *buf = enlocFormat(len);
@@ -85,7 +117,7 @@ enum Parse parseRepeat(const char *format, int *fmtlen, int *fmtsub, const char 
 		retval = parseExp(format,fmtlen,fmtsub,pattern,patlen,patsub,size);}
 	unlocFormat(len);
 	if (retval == Fail) {
-		int len = parseUpto("}");
+		int len = parseUpto('}');
 		if (len < 0) return Fatal;
 		delocFormat(len);
 		return Pass;}
@@ -107,7 +139,7 @@ enum Parse parseDrop(const char *format, int *fmtlen, int *fmtsub, const char *p
 
 enum Parse parseMacro(const char *pattern, int patlen, int *patsub)
 {
-	int keylen = parseUpto("|");
+	int keylen = parseUpto('|');
 	if (keylen < 0) return Fatal;
 	int tofind = sizePcsBuf();
 	memcpy(enlocPcsBuf(keylen),arrayFormat(0,keylen),keylen);
@@ -116,7 +148,7 @@ enum Parse parseMacro(const char *pattern, int patlen, int *patsub)
 	if (findString(tofind,&key) < 0) {key = tofind; insertString(key,key);}
 	else unlocPcsBuf(keylen);
 	delocFormat(keylen);
-	int vallen = parseUpto("/");
+	int vallen = parseUpto('/');
 	if (vallen < 0) return Fatal;
 	tofind = sizePcsBuf();
 	memcpy(enlocPcsBuf(vallen),arrayFormat(0,vallen),vallen);
@@ -136,7 +168,7 @@ enum Parse parseMacro(const char *pattern, int patlen, int *patsub)
 
 enum Parse parseLiteral(const char *pattern, int patlen, int *patsub)
 {
-	int len = parseUpto("!");
+	int len = parseUpto('!');
 	if (len < 0) return Fatal;
 	if (len-1 > patlen-*patsub) return Fail;
 	if (strncmp(arrayFormat(0,len-1),pattern+*patsub,len-1) == 0) {
@@ -148,7 +180,7 @@ enum Parse parseLiteral(const char *pattern, int patlen, int *patsub)
 
 enum Parse parseReverse(const char *pattern, int patlen, int *patsub)
 {
-	int len = parseUpto("?");
+	int len = parseUpto('?');
 	if (len < 0) return Fatal;
 	if (len-1 > patlen-*patsub) return Fail;
 	if (strncmp(arrayFormat(0,len-1),pattern+*patsub,len-1) == 0) {
