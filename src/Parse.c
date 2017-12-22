@@ -125,11 +125,12 @@ enum Parse parseMacro(const char *pattern, int patlen, int *patsub)
 	if (findString(tofind,&val) < 0) {val = tofind; insertString(val,val);}
 	else unlocPcsBuf(vallen);
 	delocFormat(vallen);
+	if (height > 0) {
+		*enlocNestPtr(1) = key;
+		int exists;
+		if (findMacro(key,&exists) >= 0) *enlocShadowPtr(1) = exists;
+		else *enlocShadowPtr(1) = -1;}
 	insertMacro(key,val);
-	*enlocNestPtr(1) = key;
-	int exists;
-	if (findMacro(key,&exists) >= 0) *enlocShadowPtr(1) = exists;
-	else *enlocShadowPtr(1) = -1;
 	return Pass;
 }
 
@@ -225,9 +226,9 @@ enum Parse parseExp(const char *format, int *fmtlen, int *fmtsub, const char *pa
 	int _patsub = *patsub;
 	useShadow(height); referShadowPtr();
 	useNest(height); referNestPtr();
-	useSave(height); referSavePtr();
+	usePrefix(height); referPrefixPtr();
 	height++;
-	memcpy(enlocSavePtr(*fmtlen),arrayFormat(0,*fmtlen),*fmtlen);
+	memcpy(enlocPrefixPtr(*fmtlen),arrayFormat(0,*fmtlen),*fmtlen);
 	while (retval == Pass) {
 		char special = *delocFormat(1); if (*fmtlen > 0) *fmtlen -= 1; else *fmtsub += 1;
 		if (special == '(') retval = parsePrefix(format,fmtlen,fmtsub,pattern,patlen,patsub,size);
@@ -252,23 +253,23 @@ enum Parse parseExp(const char *format, int *fmtlen, int *fmtsub, const char *pa
 		else retval = parseIdent(special,fmtlen,&ident);}
 	if (retval == Fail || retval == Fatal) {
 		// restore Format *fmtlen *fmtsub *patsub PcsChar
-		delocFormat(*fmtlen); *fmtlen = sizeSavePtr();
+		delocFormat(*fmtlen); *fmtlen = sizePrefixPtr();
 		while (*fmtsub > _fmtsub) {*fmtsub -= 1; *allocFormat(1) = format[*fmtsub];}
-		memcpy(allocFormat(sizeSavePtr()),arraySavePtr(0,sizeSavePtr()),sizeSavePtr());
+		memcpy(allocFormat(sizePrefixPtr()),arrayPrefixPtr(0,sizePrefixPtr()),sizePrefixPtr());
 		*patsub = _patsub;
 		unlocPcsChar(sizePcsChar()-_size);}
-	// restore Macro Shadow Nest Save
+	// restore Macro Shadow Nest Prefix
 	for (int i = 0; i < sizeNestPtr(); i++) {
 		removeMacro(*arrayNestPtr(i,1));
 		if (*arrayShadowPtr(i,1) >= 0) insertMacro(*arrayNestPtr(i,1),*arrayShadowPtr(i,1));}
 	delocNestPtr(sizeNestPtr());
 	delocShadowPtr(sizeShadowPtr());
-	delocSavePtr(sizeSavePtr());
+	delocPrefixPtr(sizePrefixPtr());
 	height--;
 	if (height > 0) {
 		useShadow(height-1); referShadowPtr();
 		useNest(height-1); referNestPtr();
-		useSave(height-1); referSavePtr();}
+		usePrefix(height-1); referPrefixPtr();}
 	return retval;
 }
 
