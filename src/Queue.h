@@ -651,8 +651,10 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     TYPE *alloc(int siz)
     {
-        // TODO insert to head
-        return 0;
+        int len = tail - head;
+        enloc(siz);
+        for (TYPE *ptr = head; ptr+len != tail; ptr++) *ptr = *(ptr+len);
+        return head;
     }
     void reloc(int siz)
     {
@@ -692,7 +694,8 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     void pack(int sub, int siz)
     {
-        // TODO handle sub == 0 and sub == size() specially
+        if (sub == 0) {alloc(siz); return;}
+        if (sub == size()) {enloc(siz); return;}
         if (sub < 0 || sub > size()) exitErrstr("pack too siz\n");
         if (siz > 0 && sub+siz > size()) exitErrstr("pack too siz\n");
         if (siz == 0) return;
@@ -1087,6 +1090,7 @@ template<class KEY, class VAL> struct QueueTree {
     }
 };
 
+// TODO use FUNC to compare
 #define DEFINE_TREE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \

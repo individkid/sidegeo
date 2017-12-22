@@ -107,7 +107,33 @@ enum Parse parseDrop(const char *format, int *fmtlen, int *fmtsub, const char *p
 
 enum Parse parseMacro(const char *pattern, int patlen, int *patsub)
 {
-	return Fatal;
+	int done = 0;
+	while (!done) {
+		int keylen = parseUpto("=");
+		if (keylen < 0) return Fatal;
+		int tofind = sizePcsBuf();
+		memcpy(enlocPcsBuf(keylen),arrayFormat(0,keylen),keylen);
+		*arrayPcsBuf(tofind+keylen-1,1) = 0;
+		int key;
+		if (findString(tofind,&key) < 0) {key = tofind; insertString(key,key);}
+		else unlocPcsBuf(keylen);
+		delocFormat(keylen);
+		int vallen = parseUpto("|/");
+		if (vallen < 0) return Fatal;
+		if (*arrayFormat(vallen-1,1) == '/') done = 1;
+		tofind = sizePcsBuf();
+		memcpy(enlocPcsBuf(vallen),arrayFormat(0,vallen),vallen);
+		*arrayPcsBuf(tofind+vallen-1,1) = 0;
+		int val;
+		if (findString(tofind,&val) < 0) {val = tofind; insertString(val,val);}
+		else unlocPcsBuf(vallen);
+		delocFormat(vallen);
+		insertMacro(key,val);
+		*enlocNestPtr(1) = key;
+		int exists;
+		if (findMacro(key,&exists) >= 0) *enlocShadowPtr(1) = exists;
+		else *enlocShadowPtr(1) = -1;}
+	return Pass;
 }
 
 enum Parse parseLiteral(const char *pattern, int patlen, int *patsub)
