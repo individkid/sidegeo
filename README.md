@@ -119,13 +119,14 @@ Configuration/history files consist of commands. User input appends to file. App
   * --inflate initializes to facets between inside and outside regions  
   * --fill adds faces attached to outside region and removes inside faces  
   * --hollow adds faces attached to inside region and removes outside faces  
-  * --remove takes buffer type and subscript to invalidate  
+  * --force takes buffer type and subscript to change  
   * --test check current state against given value  
   * --sample takes per-boundary sidedness to sample with similar embed  
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
   * --time formulae for value, reschedule delay, assignment delay  
+  * --metric funtion name, facet specifications for term values  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
   * --color takes plane subscript and decoration  
@@ -150,12 +151,12 @@ The --call result string may be longer than the destination, and may contain new
   * value for --delay is given by --time value  
   * values for --color are given by --time values  
   * wave for --listen port is piped from --time value  
-  * term variables are --time values  
+  * term variables are --time values and --metric values  
   * new --time value comes from term sum quotient and saturation values  
   * value change delay comes from term sum quotient  
   * reschedule delay comes from term sum quotient   
 
-For exmple, a system could consist of --time --source --listen points at the vertices of a polytope constructed with --point, and --time faces in several overlapping --plane polytopes.
+For exmple, a system could consist of --time --source --listen points at the vertices of a polytope constructed with --point, and --metric faces in several overlapping --plane polytopes. Stocks values in --time --source --listen items associated with points could flow along lines of sight. A line of sight metric could be 0 if any impermeable face intervenes between the points, and 1 if no impermeable faces intervene. Then, the --time formula for the stock associated with a point could multiply the metric by the stock associated with the other point.
 
 This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
 

@@ -48,17 +48,24 @@ int parseTo(int sub, const char *chrs)
 
 int parseFrom(int sub, const char *str)
 {
-	int lim = parseTo(sub,str);
-	int open = parseTo(sub,"?!([{<\\");
-	int close = parseTo(sub,")]}>/");
-	int either = -1;
-	if (open < 0) either = close;
-	else if (close < 0) either = open;
-	else if (open < close) either = open;
-	else either = close;
-	if (either < 0) return lim;
-	if (lim <= either) return lim;
-	if (either == open) return parseFrom(parseFrom(sub,")]}>/")+1,str);
+	if (sub < 0) return -1;
+	while (1) {
+		int lim = parseTo(sub,str);
+		int quote0 = parseTo(sub,"?");
+		int quote1 = parseTo(sub,"!");
+		int open = parseTo(sub,"([{<\\");
+		int close = parseTo(sub,")]}>/");
+		int any = lim;
+		if ((any < 0) || (quote0 >= 0 && quote0 < any)) any = quote0;
+		if ((any < 0) || (quote1 >= 0 && quote1 < any)) any = quote1;
+		if ((any < 0) || (open >= 0 && open < any)) any = open;
+		if ((any < 0) || (close >= 0 && close < any)) any = close;
+		if (any == lim) return lim;
+		else if (any == quote0) {if ((sub = parseTo(any,"!")) < 0) return -1;}
+		else if (any == quote1) {if ((sub = parseTo(any,"?")) < 0) return -1;}
+		else if (any == open) return parseFrom(parseFrom(any+1,")]}>/"),str);
+		else break;
+		sub += 1;}
 	return -1;
 }
 
