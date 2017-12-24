@@ -47,6 +47,7 @@ void parseInit(const char *fmt, int len, struct Parse *parse)
 	parse->patlen = len;
 	parse->patsub = 0;
 	parse->depth = 0;
+	strcpy(enlocFormat(parse->fmtlen),fmt);
 }
 
 int parseFail(struct Parse *parse)
@@ -72,6 +73,11 @@ void parseOpen(struct Nest *nest, struct Parse *parse)
 	usePrefix(parse->depth); referPrefixPtr();
 	parse->depth += 1;
 	memcpy(enlocPrefixPtr(parse->fmtsub),arrayFormat(0,parse->fmtsub),parse->fmtsub);
+}
+
+void parseCount(struct Nest *nest)
+{
+	*enlocPcsInt(1) = sizePcsChar()-nest->chrsiz;
 }
 
 void parseFormat(struct Nest *nest, struct Parse *parse)
@@ -106,11 +112,6 @@ void parseClose(struct Nest *nest, struct Parse *parse)
 		useShadow(parse->depth-1); referShadowPtr();
 		useNest(parse->depth-1); referNestPtr();
 		usePrefix(parse->depth-1); referPrefixPtr();}
-}
-
-void parseCount(struct Nest *nest)
-{
-	*enlocPcsInt(1) = sizePcsChar()-nest->chrsiz;
 }
 
 int parseIsAlpha(char chr)
@@ -352,7 +353,6 @@ int parse(const char *fmt, int len) // len is for PcsChar; fmt is 0 terminated
 {
 	struct Parse parse;
 	parseInit(fmt,len,&parse);
-	strcpy(enlocFormat(parse.fmtlen),fmt);
 	int retval = parseExp(0,&parse);
 	if (retval < 0) exitErrstr("parse too format\n");
 	if (retval < 1) return parseFail(&parse);
