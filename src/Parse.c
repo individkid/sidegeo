@@ -18,7 +18,15 @@
 
 #include "Process.h"
 
-int height = 0;
+struct Parse {
+	const char *format;
+	int fmtlen;
+	int *fmtsub;
+	int *fmtpre;
+	const char *pattern;
+	int patlen;
+	int *patsub;
+	int depth;};
 
 int parseIn(char chr, const char *chrs)
 {
@@ -69,88 +77,88 @@ int parseIsAlpha(char chr)
 	return 0;
 }
 
-void parseDeloc(int len, int *fmtsub, int *fmtpre)
+void parseDeloc(int len, struct Parse *parse)
 {
 	delocFormat(len);
-	if (*fmtpre > len) *fmtpre -= len;
-	else {len -= *fmtpre; *fmtsub += len;}
+	if (*parse->fmtpre > len) *parse->fmtpre -= len;
+	else {len -= *parse->fmtpre; *parse->fmtsub += len;}
 }
 
-void parseAlloc(int len, const char *format, int *fmtsub, int *fmtpre)
+void parseAlloc(int len, struct Parse *parse)
 {}
 
-int parseExp(int skip, const char *format, int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int patlen, int *patsub, int *chrlen);
+int parseExp(int skip, struct Parse *parse);
 
-int parsePrefix(int skip, const char *format, int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int patlen, int *patsub, int *chrlen)
+int parsePrefix(int skip, struct Parse *parse)
 {
 	if (*arrayFormat(0,1) != '(') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
+	parseDeloc(1,parse);
 	int retval = 1;
 	while (1) {
-		int temp = parseExp(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
+		int temp = parseExp(skip,parse);
 		if (temp < 0) return -1;
 		if (temp == 0) {retval = 0; skip = 1; continue;}
 		if (*arrayFormat(0,1) != '|') break;
-		parseDeloc(1,fmtsub,fmtpre);}
+		parseDeloc(1,parse);}
 	if (*arrayFormat(0,1) != ')') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
+	parseDeloc(1,parse);
 	return retval;
 }
 
-int parseAlternate(int skip, const char *format, int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int patlen, int *patsub, int *chrlen)
+int parseAlternate(int skip, struct Parse *parse)
 {
 	if (*arrayFormat(0,1) != '[') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
+	parseDeloc(1,parse);
 	int retval = 0;
 	while (1) {
-		int temp = parseExp(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
+		int temp = parseExp(skip,parse);
 		if (temp < 0) return -1;
 		if (temp == 1) {retval = 1; skip = 1;}
-		if (temp == 0) temp = parseExp(1,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
+		if (temp == 0) temp = parseExp(1,parse);
 		if (temp < 0) return -1;
 		if (*arrayFormat(0,1) != '|') break;
-		parseDeloc(1,fmtsub,fmtpre);}
+		parseDeloc(1,parse);}
 	if (*arrayFormat(0,1) != ']') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
+	parseDeloc(1,parse);
 	return retval;
 }
 
-int parseRepeat(int skip, const char *format, int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int patlen, int *patsub, int *chrlen)
+int parseRepeat(int skip, struct Parse *parse)
 {
 	if (*arrayFormat(0,1) != '{') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
-	int _fmtsub = *fmtsub;
+	parseDeloc(1,parse);
+	int fmtsub = *parse->fmtsub;
 	while (1) {
-		int retval = parseExp(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
+		int retval = parseExp(skip,parse);
 		if (retval < 0) return -1;
-		if (retval == 1) {parseAlloc(*fmtsub-_fmtsub,format,fmtsub,fmtpre); continue;}
-		retval = parseExp(1,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
+		if (retval == 1) {parseAlloc(*parse->fmtsub-fmtsub,parse); continue;}
+		retval = parseExp(1,parse);
 		if (retval < 0) return -1;
 		break;}
 	if (*arrayFormat(0,1) != '}') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
+	parseDeloc(1,parse);
 	return 1;
 }
 
-int parseDrop(int skip, const char *format, int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int patlen, int *patsub, int *chrlen)
+int parseDrop(int skip, struct Parse *parse)
 {
 	if (*arrayFormat(0,1) != '<') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
-	int _chrlen = *chrlen;
-	int retval = parseExp(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
-	if (retval == 1) {unlocPcsChar(*chrlen-_chrlen); *chrlen = _chrlen;}
+	parseDeloc(1,parse);
+	int size = sizePcsChar();
+	int retval = parseExp(skip,parse);
+	if (retval == 1) unlocPcsChar(sizePcsChar()-size);
 	if (*arrayFormat(0,1) != '>') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
+	parseDeloc(1,parse);
 	return retval;
 }
 
-int parseMacro(int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int patlen, int *patsub)
+int parseMacro(int skip, struct Parse *parse)
 {
 	if (*arrayFormat(0,1) != '\\') return -1;
-	parseDeloc(1,fmtsub,fmtpre);
+	parseDeloc(1,parse);
 	int keylen = 0;
-	while (keylen < fmtlen && *arrayFormat(keylen,1) != '|') keylen += 1;
-	if (keylen >= fmtlen) return -1;
+	while (keylen < parse->fmtlen && *arrayFormat(keylen,1) != '|') keylen += 1;
+	if (parse->fmtsub+keylen >= fmtlen) return -1;
 	parseDeloc(keylen,fmtsub,fmtpre);
 	int tofind = sizePcsBuf();
 	memcpy(enlocPcsBuf(keylen),arrayFormat(0,keylen),keylen);
@@ -160,16 +168,16 @@ int parseMacro(int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int pa
 	if (findString(tofind,&key) < 0) {key = tofind; insertString(key,key);}
 	else unlocPcsBuf(keylen);
 	int vallen = 0;
-	while (vallen < fmtlen && *arrayFormat(vallen,1) != '/') vallen += 1;
-	if (vallen >= fmtlen) return -1;
-	parseDeloc(vallen,fmtsub,fmtpre);
+	while (parse->fmtsub+vallen < parse->fmtlen && *arrayFormat(vallen,1) != '/') vallen += 1;
+	if (parse->fmtsub+vallen >= fmtlen) return -1;
+	parseDeloc(vallen,parse);
 	tofind = sizePcsBuf();
 	memcpy(enlocPcsBuf(vallen),arrayFormat(0,vallen),vallen);
 	*arrayPcsBuf(tofind+vallen-1,1) = 0;
 	int val;
 	if (findString(tofind,&val) < 0) {val = tofind; insertString(val,val);}
 	else unlocPcsBuf(vallen);
-	if (height > 0) {
+	if (parse->depth > 0) {
 		*enlocNestPtr(1) = key;
 		int exists;
 		if (findMacro(key,&exists) >= 0) *enlocShadowPtr(1) = exists;
@@ -178,96 +186,143 @@ int parseMacro(int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int pa
 	return 1;
 }
 
-int parseLiteral()
+int parseLiteral(int skip, struct Parse *parse)
 {
-	return -1;
+	if (*arrayFormat(0,1) != '?') return -1;
+	parseDeloc(1,parse);
+	int litlen = 0;
+	while (parse->fmtsub+litlen < parse->fmtlen &&
+		parse->patsub+litlen < parse->patlen &&
+		*arrayFormat(litlen,1) != '!') litlen += 1;
+	if (*arrayFormat(litlen,1) != '!') return -1;
+	if (strncmp(arrayFormat(0,litlen),parse->pattern+parse->patsub,litlen) != 0) return 0;
+	parse->patsub += litlen;
+	parseDeloc(litlen+1,parse);
+	return 1;
 }
 
-int parseReverse()
+int parseReverse(int skip, struct Parse *parse)
 {
-	return -1;
+	if (*arrayFormat(0,1) != '!') return -1;
+	parseDeloc(1,parse);
+	int litlen = 0;
+	while (parse->fmtsub+litlen < parse->fmtlen &&
+		parse->patsub+litlen < parse->patlen &&
+		*arrayFormat(litlen,1) != '?') litlen += 1;
+	if (*arrayFormat(litlen,1) != '?') return -1;
+	if (!skip) {
+		if (strncmp(arrayFormat(0,litlen),parse->pattern+parse->patsub,litlen) != 0) return 0;
+		parse->patsub += litlen;}
+	parseDeloc(litlen+1,parse);
+	return 1;
 }
 
-int parseSpace()
+int parseSpace(int skip, struct Parse *parse)
 {
-	return -1;
+	if (*arrayFormat(0,1) != '&') return -1;
+	parseDeloc(1,parse);
+	if (!skip) {
+		if (parse->patsub >= parse->patlen) return 0;
+		if (' ' != *(parse->pattern+parse->patsub)) return 0;
+		parse->patsub += 1;}
+	return 1;
 }
 
-int parseNumeral()
+int parseNumeral(int skip, struct Parse *parse)
 {
-	return -1;
+	if (*arrayFormat(0,1) != '&') return -1;
+	parseDeloc(1,parse);
+	if (!skip) {
+		if (parse->patsub >= parse->patlen) return 0;
+		if ('0' > *(parse->pattern+parse->patsub) ||
+			'9' < *(parse->pattern+parse->patsub)) return 0;
+		parse->patsub += 1;}
+	return 1;
 }
 
-int parseAlpha()
+int parseAlpha(int skip, struct Parse *parse)
 {
-	return -1;
+	if (*arrayFormat(0,1) != '&') return -1;
+	parseDeloc(1,parse);
+	if (!skip) {
+		if (parse->patsub >= parse->patlen) return 0;
+		if (!('a' <= *(parse->pattern+parse->patsub) &&
+			'z' >= *(parse->pattern+parse->patsub)) &&
+			!('A' <= *(parse->pattern+parse->patsub) &&
+			'Z' >= *(parse->pattern+parse->patsub))) return 0;
+		parse->patsub += 1;}
+	return 1;
 }
 
-int parseWild()
+int parseWild(int skip, struct Parse *parse)
 {
-	return -1;
+	if (*arrayFormat(0,1) != '.') return -1;
+	parseDeloc(1,parse);
+	if (!skip) {
+		if (parse->patsub >= parse->patlen) return 0;
+		parse->patsub += 1;}
+	return 1;
 }
 
-int parseIdent(int skip, int fmtlen, int *fmtsub, int *fmtpre, int *chrlen)
+int parseIdent(int skip, struct Parse *parse)
 {
 	int idtlen = 0;
-	char chr = *arrayFormat(0,1); parseDeloc(1,fmtsub,fmtpre);
+	char chr = *arrayFormat(0,1); parseDeloc(1,parse);
 	*enlocPcsBuf(1) = chr; idtlen += 1;
 	if (parseIsAlpha(chr))
-		while (*fmtsub < fmtlen && parseIsAlpha(*arrayFormat(0,1))) {
+		while (*parse->fmtsub < parse->fmtlen && parseIsAlpha(*arrayFormat(0,1))) {
 			char chr = *arrayFormat(0,1);
-			parseDeloc(1,fmtsub,fmtpre);
+			parseDeloc(1,parse);
 			*enlocPcsBuf(1) = chr; idtlen += 1;}
 	int val;
 	if (findMacro(sizePcsBuf()-idtlen,&val)) {
 		memcpy(allocFormat(idtlen),unlocPcsChar(idtlen+1),idtlen);
-		*fmtpre += idtlen;}
-	else if (!skip) {
+		*parse->fmtpre += idtlen;}
+	else if (!skip)
 		memcpy(enlocPcsChar(idtlen),unlocPcsBuf(idtlen+1),idtlen);
-		*chrlen += idtlen;}
 	return 1;
 }
 
-int parseExp(int skip, const char *format, int fmtlen, int *fmtsub, int *fmtpre, const char *pattern, int patlen, int *patsub, int *chrlen)
+int parseExp(int skip, struct Parse *parse)
 {
 	int retval = 1;
 	int idtlen = 0;
-	int _size = sizePcsChar();
-	int _fmtsub = *fmtsub;
-	int _patsub = *patsub;
-	useShadow(height); referShadowPtr();
-	useNest(height); referNestPtr();
-	usePrefix(height); referPrefixPtr();
-	height++;
-	memcpy(enlocPrefixPtr(*fmtsub),arrayFormat(0,*fmtsub),*fmtsub);
-	while (retval == 1 && *fmtsub < fmtlen) {
+	int chrsiz = sizePcsChar();
+	int fmtsub = *parse->fmtsub;
+	int patsub = *parse->patsub;
+	useShadow(parse->depth); referShadowPtr();
+	useNest(parse->depth); referNestPtr();
+	usePrefix(parse->depth); referPrefixPtr();
+	parse->depth += 1;
+	memcpy(enlocPrefixPtr(*parse->fmtsub),arrayFormat(0,*parse->fmtsub),*parse->fmtsub);
+	while (retval == 1 && *parse->fmtsub < parse->fmtlen) {
 		char special = *arrayFormat(0,1);
-		if (special == '(') retval = parsePrefix(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
-		else if (special == '[') retval = parseAlternate(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
-		else if (special == '{') retval = parseRepeat(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
-		else if (special == '<') retval = parseDrop(skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen);
-		else if (special == '\\') retval = parseMacro(fmtlen,fmtsub,fmtpre,pattern,patlen,patsub);
-		else if (special == '?') retval = parseLiteral();
-		else if (special == '!') retval = parseReverse();
-		else if (special == '&') retval = parseSpace();
-		else if (special == '#') retval = parseNumeral();
-		else if (special == '@') retval = parseAlpha();
-		else if (special == '.') retval = parseWild();
-		else if (special == '%') *enlocPcsInt(1) = *chrlen;
+		if (special == '(') retval = parsePrefix(skip,parse);
+		else if (special == '[') retval = parseAlternate(skip,parse);
+		else if (special == '{') retval = parseRepeat(skip,parse);
+		else if (special == '<') retval = parseDrop(skip,parse);
+		else if (special == '\\') retval = parseMacro(skip,parse);
+		else if (special == '?') retval = parseLiteral(skip,parse);
+		else if (special == '!') retval = parseReverse(skip,parse);
+		else if (special == '&') retval = parseSpace(skip,parse);
+		else if (special == '#') retval = parseNumeral(skip,parse);
+		else if (special == '@') retval = parseAlpha(skip,parse);
+		else if (special == '.') retval = parseWild(skip,parse);
+		else if (special == '%') *enlocPcsInt(1) = sizePcsChar()-chrsiz;;
 		else if (special == ')') break;
 		else if (special == ']') break;
 		else if (special == '}') break;
 		else if (special == '>') break;
 		else if (special == '/') break;
 		else if (special == '|') break;
-		else retval = parseIdent(skip,fmtlen,fmtsub,fmtpre,chrlen);}
+		else retval = parseIdent(skip,parse);}
 	if (retval == 0) {
 		// restore Format *fmtsub *fmtsub *patsub PcsChar
-		delocFormat(*fmtsub); *fmtsub = sizePrefixPtr();
-		while (*fmtsub > _fmtsub) {*fmtsub -= 1; *allocFormat(1) = format[*fmtsub];}
+		delocFormat(*parse->fmtsub); *parse->fmtsub = sizePrefixPtr();
+		while (*parse->fmtsub > fmtsub) {*parse->fmtsub -= 1; *allocFormat(1) = format[*parse->fmtsub];}
 		memcpy(allocFormat(sizePrefixPtr()),arrayPrefixPtr(0,sizePrefixPtr()),sizePrefixPtr());
-		*patsub = _patsub;
-		unlocPcsChar(sizePcsChar()-_size);}
+		*parse->patsub = patsub;
+		unlocPcsChar(sizePcsChar()-chrsiz);}
 	// restore Macro Shadow Nest Prefix
 	for (int i = 0; i < sizeNestPtr(); i++) {
 		removeMacro(*arrayNestPtr(i,1));
@@ -275,30 +330,34 @@ int parseExp(int skip, const char *format, int fmtlen, int *fmtsub, int *fmtpre,
 	delocNestPtr(sizeNestPtr());
 	delocShadowPtr(sizeShadowPtr());
 	delocPrefixPtr(sizePrefixPtr());
-	height--;
-	if (height > 0) {
-		useShadow(height-1); referShadowPtr();
-		useNest(height-1); referNestPtr();
-		usePrefix(height-1); referPrefixPtr();}
+	parse->depth -= 1;
+	if (parse->depth > 0) {
+		useShadow(parse->depth-1); referShadowPtr();
+		useNest(parse->depth-1); referNestPtr();
+		usePrefix(parse->depth-1); referPrefixPtr();}
 	return retval;
 }
 
 int parse(const char *fmt, int len) // len is for PcsChar; fmt is 0 terminated
 {
-	int size = sizePcsInt();
-	int chrlen = 0;
-	int patsub = 0;
-	int fmtlen = strlen(fmt);
-	int fmtsub = 0;
-	int fmtpre = 0;
+	int chrsiz = sizePcsChar();
+	int intsiz = sizePcsInt();
+	struct Parse parse;
+	parse.format = fmt;
+	parse.fmtlen = strlen(fmt);
+	parse.fmtsub = 0;
+	parse.fmtpre = 0;
+	parse.pattern = arrayPcsChar(size-len,len);
+	parse.patlen = len;
+	parse.patsub = 0;
+	parse.depth = 0;
 	strcpy(enlocFormat(fmtlen),fmt);
-	// skip,format,fmtlen,fmtsub,fmtpre,pattern,patlen,patsub,chrlen
-	int retval = parseExp(1,fmt,fmtlen,&fmtsub,&fmtpre,arrayPcsChar(size-len,len),len,&patsub,&chrlen);
+	int retval = parseExp(0,&parse);
 	if (retval != 0) {
-		unlocPcsChar(chrlen);
-		unlocPcsInt(sizePcsInt()-size);
-		return -patsub;} // negative how far got through pattern
-	packPcsChar(sizePcsChar()-chrlen-len,len);
-	return (sizePcsInt()-size); // number of lengths
+		unlocPcsChar(sizePcsChar()-chrsiz);
+		unlocPcsInt(sizePcsInt()-intsiz);
+		return -parse.patsub;} // negative how far got through pattern
+	packPcsChar(sizePcsChar()-chrsiz-len,len);
+	return (sizePcsInt()-intsiz); // number of lengths
 }
 
