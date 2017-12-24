@@ -19,6 +19,8 @@
 #include "Process.h"
 
 struct Parse {
+	int chrsiz; // start of result chars
+	int intsiz; // start of result sizes
 	const char *format;
 	int fmtlen; // length of format
 	int fmtsub; // location in format
@@ -35,14 +37,29 @@ struct Nest {
 
 void parseInit(const char *fmt, int len, struct Parse *parse)
 {
+	parse->chrsiz = sizePcsChar();
+	parse->intsiz = sizePcsInt();
 	parse->format = fmt;
 	parse->fmtlen = strlen(fmt);
 	parse->fmtsub = 0;
 	parse->fmtpre = 0;
-	parse->pattern = arrayPcsChar(sizePcsChar()-len,len);
+	parse->pattern = arrayPcsChar(parse->chrsiz-len,len);
 	parse->patlen = len;
 	parse->patsub = 0;
 	parse->depth = 0;
+}
+
+int parseFail(struct Parse *parse)
+{
+	unlocPcsChar(sizePcsChar()-parse->chrsiz);
+	unlocPcsInt(sizePcsInt()-parse->intsiz);
+	return -parse->patsub; // negative how far got through pattern
+}
+
+int parsePass(int len, struct Parse *parse)
+{
+	packPcsChar(sizePcsChar()-parse->chrsiz-len,len);
+	return (sizePcsInt()-parse->intsiz); // number of lengths
 }
 
 void parseOpen(struct Nest *nest, struct Parse *parse)
@@ -333,17 +350,12 @@ int parseExp(int skip, struct Parse *parse)
 
 int parse(const char *fmt, int len) // len is for PcsChar; fmt is 0 terminated
 {
-	int chrsiz = sizePcsChar();
-	int intsiz = sizePcsInt();
 	struct Parse parse;
 	parseInit(fmt,len,&parse);
 	strcpy(enlocFormat(parse.fmtlen),fmt);
 	int retval = parseExp(0,&parse);
-	if (retval < 1) {
-		unlocPcsChar(sizePcsChar()-chrsiz);
-		unlocPcsInt(sizePcsInt()-intsiz);
-		return -parse.patsub;} // negative how far got through pattern
-	packPcsChar(sizePcsChar()-chrsiz-len,len);
-	return (sizePcsInt()-intsiz); // number of lengths
+	if (retval < 0) exitErrstr("parse too format\n");
+	if (retval < 1) return parseFail(&parse);
+	return parsePass(len,&parse);
 }
 
