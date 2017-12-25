@@ -32,6 +32,7 @@ struct Parse {
 
 struct Nest {
 	int chrsiz;
+	int intsiz;
 	int fmtsub;
 	int patsub;};
 
@@ -66,6 +67,7 @@ int parsePass(int len, struct Parse *parse)
 void parseOpen(struct Nest *nest, struct Parse *parse)
 {
 	nest->chrsiz = sizePcsChar();
+	nest->intsiz = sizePcsInt();
 	nest->fmtsub = parse->fmtsub;
 	nest->patsub = parse->patsub;
 	useShadow(parse->depth); referShadowPtr();
@@ -93,9 +95,10 @@ void parseFormat(struct Nest *nest, struct Parse *parse)
 
 void parseMatch(struct Nest *nest, struct Parse *parse)
 {
-	// restore *patsub PcsChar
+	// restore *patsub PcsChar PcsInt
 	parse->patsub = nest->patsub;
 	unlocPcsChar(sizePcsChar()-nest->chrsiz);
+	unlocPcsInt(sizePcsInt()-nest->intsiz);
 }
 
 void parseClose(struct Nest *nest, struct Parse *parse)
@@ -335,7 +338,7 @@ int parseExp(int skip, struct Parse *parse)
 		else if (special == '#') retval = parseNumeral(parse);
 		else if (special == '@') retval = parseAlpha(parse);
 		else if (special == '.') retval = parseWild(parse);
-		else if (special == '%') {if (skip < 1) parseCount(&nest);}
+		else if (special == '%') parseCount(&nest);
 		else if (special == ')') break;
 		else if (special == ']') break;
 		else if (special == '}') break;
