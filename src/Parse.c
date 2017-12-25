@@ -31,10 +31,10 @@ struct Parse {
 	int depth;};
 
 struct Nest {
-	int chrsiz;
-	int intsiz;
-	int fmtsub;
-	int patsub;};
+	int chrsiz; // size at start of exp
+	int intsiz; // size at start of exp
+	int fmtsub; // location at start of exp
+	int patsub;}; // matched at start of exp
 
 void parseInit(const char *fmt, int len, struct Parse *parse)
 {
@@ -84,13 +84,15 @@ void parseCount(struct Nest *nest)
 
 void parseFormat(struct Nest *nest, struct Parse *parse)
 {
-	// restore Format *fmtsub *fmtpre
-	delocFormat(parse->fmtsub);
-	parse->fmtsub = sizePrefixPtr();
+	// restore Format *fmtsub *fmtpre Prefix
+	delocFormat(parse->fmtpre);
+	parse->fmtpre = sizePrefixPtr();
 	while (parse->fmtsub > nest->fmtsub) {
 		parse->fmtsub -= 1;
 		*allocFormat(1) = parse->format[parse->fmtsub];}
-	memcpy(allocFormat(sizePrefixPtr()),arrayPrefixPtr(0,sizePrefixPtr()),sizePrefixPtr());
+	int size = sizePrefixPtr();
+	memcpy(allocFormat(size),delocPrefixPtr(size),size);
+	;
 }
 
 void parseMatch(struct Nest *nest, struct Parse *parse)
