@@ -86,13 +86,11 @@ void parseFormat(struct Nest *nest, struct Parse *parse)
 {
 	// restore Format *fmtsub *fmtpre Prefix
 	delocFormat(parse->fmtpre);
-	parse->fmtpre = sizePrefixPtr();
+	int size = parse->fmtpre = sizePrefixPtr();
 	while (parse->fmtsub > nest->fmtsub) {
 		parse->fmtsub -= 1;
 		*allocFormat(1) = parse->format[parse->fmtsub];}
-	int size = sizePrefixPtr();
 	memcpy(allocFormat(size),delocPrefixPtr(size),size);
-	;
 }
 
 void parseMatch(struct Nest *nest, struct Parse *parse)
@@ -268,7 +266,9 @@ int parseSpace(struct Parse *parse)
 	if (*arrayFormat(0,1) != '&') return -1;
 	parseDeloc(1,parse);
 	if (parse->patsub >= parse->patlen) return 0;
-	if (' ' != *(parse->pattern+parse->patsub)) return 0;
+	if (' ' != *(parse->pattern+parse->patsub) &&
+		'\t' != *(parse->pattern+parse->patsub) &&
+		'\n' != *(parse->pattern+parse->patsub)) return 0;
 	parse->patsub += 1;
 	return 1;
 }
