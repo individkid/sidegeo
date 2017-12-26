@@ -20,9 +20,11 @@
 #include "stdlib.h"
 #include <limits.h>
 
-void forceBuffer();
 void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
+
+void forceBuffer();
+void forceShader();
 
 #define FORCE_THREAD(THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
@@ -103,6 +105,7 @@ int processConfigure(int index, int len)
 			else if FORCE_TYPE(HsInt,Hs)
 			else if FORCE_TYPE(HsData,Hs)
 			else if FORCE_SHARED(forceBuffer,Cmd,Cmd)
+			else if FORCE_SHARED(forceShader,Cmd,Cmd)
 			else if FORCE_SHARED(PlaneBuf,Cmd,Data)
 			else if FORCE_SHARED(VersorBuf,Cmd,Data)
 			else if FORCE_SHARED(PointBuf,Cmd,Data)
@@ -140,6 +143,7 @@ int processConfigure(int index, int len)
 			else if FORCE_UNIQUE(Face,Hs,Kind)
 			else if FORCE_UNIQUE(Other,Hs,Kind)
 			else if FORCE_SHARED(forceBuffer,Hs,Cmd)
+			else if FORCE_SHARED(forceShader,Hs,Cmd)
 			else if FORCE_SHARED(PlaneBuf,Hs,Data)
 			else if FORCE_SHARED(VersorBuf,Hs,Data)
 			else if FORCE_SHARED(PointBuf,Hs,Data)
