@@ -42,7 +42,7 @@ extern float aspect;
 
 void enqueCommands(int size);
 #ifdef BRINGUP
-void bringup();
+void bringupBuiltin();
 void enqueCommand(Command cmd);
 #endif
 
@@ -193,6 +193,7 @@ void *timewheel(void *arg);
 int main(int argc, char **argv)
 {
     if (sizeof(GLuint) != sizeof(MyGLuint)) exitErrstr("gluint too sizeof\n");
+    if (sizeof(GLuint) != sizeof(MyGLuint)) exitErrstr("gluint too sizeof\n");
 
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
@@ -294,7 +295,7 @@ int main(int argc, char **argv)
     glfwSwapBuffers(windowHandle);
 
 #ifdef BRINGUP
-    enqueCommand(&bringup);
+    enqueCommand(&bringupBuiltin);
 #endif
 
     // TODO combine argv int lines to enque to enlocOption

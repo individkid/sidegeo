@@ -283,6 +283,73 @@ void enqueShader(enum Shader shader)
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
+enum Action bringupEmpty(int state)
+{
+    return Advance;
+}
+
+enum Action bringupShader(int state)
+{
+    enqueShader(*delocShader(1));
+    return Advance;
+}
+
+enum Action bringupBuffer(int state)
+{
+    struct Buffer *buffer = *arrayBuffer(0,1);
+    int todo = *arrayCmdInt(0,1);
+    int done = *arrayCmdInt(1,1);
+    char *data = arrayCmdChar(0,todo);
+    if (state-- == 0) {
+        relocBuffer(1); relocCmdInt(4); relocCmdChar(todo);
+        return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
+    if (state-- == 0) {
+        buffer->write++;
+        if (buffer->room < done+todo) enqueWrap(buffer,done+todo);
+        relocBuffer(1); relocCmdInt(4); relocCmdChar(todo);
+        return Continue;}
+    if (state-- == 0) {
+        relocBuffer(1); relocCmdInt(4); relocCmdChar(todo);
+        return (buffer->room < done+todo ? Defer : Continue);}
+    int size = buffer->dimn*bufferType(buffer->type);
+    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+    glBufferSubData(GL_ARRAY_BUFFER,done*size,todo*size,data);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    if (buffer->done < done+todo) buffer->done = done+todo;
+    buffer->write--;
+    delocBuffer(1); delocCmdInt(4); delocCmdChar(todo);
+    return Advance;
+}
+
+void setupBuffer(struct Buffer *buffer, int todo, int done, void *data)
+{
+    if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
+    *enlocBuffer(1) = buffer;
+    *enlocCmdInt(1) = todo;
+    *enlocCmdInt(1) = done;
+    int size = buffer->dimn*bufferType(buffer->type);
+    memcpy(enlocCmdChar(todo*size),(char *)data,todo*size);
+    enqueMachine(bringupBuffer);
+}
+
+void forceBuffer()
+{
+    enum Data data = *delocCmdData(1);
+    // first argument is number of following arguments including initial offset
+    int todo = *delocCmdInt(1)-1;
+    int done = *delocCmdInt(1);
+    int bufsiz = todo*server[data].dimn;
+    SWITCH(server[data].type,GL_UNSIGNED_INT) {
+        GLuint buf[bufsiz];
+        for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
+        setupBuffer(&server[data],todo,done,buf);}
+    CASE(GL_FLOAT) {
+        GLfloat buf[bufsiz];
+        for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
+        setupBuffer(&server[data],todo,done,buf);}
+    DEFAULT(exitErrstr("invalid buffer type\n");)
+}
+
 #ifdef BRINGUP
 #define NUM_PLANES 4
 #define NUM_POINTS 4
@@ -290,27 +357,11 @@ void enqueShader(enum Shader shader)
 #define NUM_FRAMES 3
 #define NUM_SIDES 3
 
-void bringupBuffer(struct Buffer *buffer, int todo, int room, void *data)
-{
-    if (buffer->done+todo > room) todo = room-buffer->done;
-    if (buffer->room < buffer->done+todo) enqueWrap(buffer,buffer->done+todo);
-    if (buffer->done+todo <= buffer->room) {
-        int size = buffer->dimn*bufferType(buffer->type);
-        glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-        glBufferSubData(GL_ARRAY_BUFFER,buffer->done*size,todo*size,(char*)data+buffer->done*size);
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        buffer->done += todo;}
-}
-
-#ifdef BRINGUP
 extern enum Shader dishader;
-#else
-extern enum Shader dishader;
-#endif
 extern int sequenceNumber;
 double sqrt(double x);
 void transformRight();
-void bringup()
+void bringupBuiltin()
 {
     // f = 1
     // h^2 = f^2 - 0.5^2
@@ -372,37 +423,13 @@ void bringup()
         0,1,2,
     };
 
-    if (server[PlaneBuf].read > 0 || server[PlaneBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
-    if (server[VersorBuf].read > 0 || server[VersorBuf].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
-    if (server[FaceSub].read > 0 || server[FaceSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
-    if (server[PointSub].read > 0 || server[PointSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
-    if (server[SideSub].read > 0 || server[SideSub].write > 0) {*enlocDefer(1) = sequenceNumber + sizeCommand(); enqueCommand(&bringup); return;}
-
-    server[PlaneBuf].write++;
-    server[VersorBuf].write++;
-    server[FaceSub].write++;
-    server[PointSub].write++;
-    server[SideSub].write++;
-
-    if (server[PlaneBuf].done < NUM_PLANES) bringupBuffer(&server[PlaneBuf],1,NUM_PLANES,plane);
-    if (server[VersorBuf].done < NUM_PLANES) bringupBuffer(&server[VersorBuf],1,NUM_PLANES,versor);
-    if (server[FaceSub].done < NUM_FACES) bringupBuffer(&server[FaceSub],1,NUM_FACES,face);
-    if (server[PointSub].done < NUM_POINTS) bringupBuffer(&server[PointSub],1,NUM_POINTS,vertex);
-    if (server[SideSub].done < NUM_SIDES) bringupBuffer(&server[SideSub],1,NUM_SIDES,wrt);
- 
-    if (server[PlaneBuf].done < NUM_PLANES) {enqueCommand(&bringup); return;}
-    if (server[VersorBuf].done < NUM_PLANES) {enqueCommand(&bringup); return;}
-    if (server[FaceSub].done < NUM_FACES) {enqueCommand(&bringup); return;}
-    if (server[PointSub].done < NUM_POINTS) {enqueCommand(&bringup); return;}
-    if (server[SideSub].done < NUM_SIDES) {enqueCommand(&bringup); return;}
-
-    server[PlaneBuf].write--;
-    server[VersorBuf].write--;
-    server[FaceSub].write--;
-    server[PointSub].write--;
-    server[SideSub].write--;
-
-    enqueCommand(&transformRight); enqueShader(dishader);
+    enqueMachine(bringupEmpty);
+    setupBuffer(&server[PlaneBuf],NUM_PLANES,0,plane);
+    setupBuffer(&server[VersorBuf],NUM_PLANES,0,versor);
+    setupBuffer(&server[FaceSub],NUM_FACES,0,face);
+    setupBuffer(&server[PointSub],NUM_POINTS,0,vertex);
+    setupBuffer(&server[SideSub],NUM_SIDES,0,wrt);
+    enlocShader(dishader); followMachine(bringupShader);
 }
 #endif
 

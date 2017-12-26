@@ -11,7 +11,7 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * process is a separate thread that reads through commandline and configurefile arguments, and waits for injected arguments. process has per-file threads that allow process to continue at eof or yield.  
   * command is the main thread because glfw needs the main thread and callbacks should be simple. command is woken by user action, or by glfwPostEmptyEvent from process, configure, timeheel, haskell.  
   * microcode has two versions of code for each task, one version for if the polygons are represented by 6 planes, and one version for if the polygons are represented by 3 points. the tasks are display, find coplanes/copoints, find sidedness of point/plane, find pierce points, reinterpret plane/point.  
-  * common contains mutex queues that are staged to and from thread local queues. command has void function pointer. haskell has event enumeration. console has endline terminated string. process has command lines. Command, Event, Kind, Data, Output, Option, File are unique types. CmdChar, CmdInt, HsChar, HsInt are uniquefied types. the basename identifies the consumer of the function and arguments. Cmn prefixed queues in common map onto unprefixed queues in threads. Hs prefixed queues in haskell and Cmd prefixed queues in command map into Cmn queues in common.  
+  * common contains mutex queues that are staged to and from thread local queues. command has void function pointer. haskell has event enumeration. console has endline terminated string. process has command lines. Command, Event, Kind, Data, Output, Option, File are unique types. CmdChar, CmdInt, HsChar, HsInt are uniquefied types. the basename identifies the consumer of the queue items. Cmn prefixed queues in common map onto unprefixed queues in threads. Hs prefixed queues in haskell and Cmd prefixed queues in command map into Cmn queues in common.  
 
 The syntax of options and commands is specified by format strings with the following expressions.
 
@@ -137,7 +137,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --matrix takes transformation of display, ignored if not -F file  
   * --project takes slope and cutoff, ignored if not -F file  
   * --configure warp, refine, tweak, color, filter, delay  
-  * --inject specifies user action to inject, ignored if not at eof  
+  * --inject specifies command line option to inject  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
   * --start goes to a new polytope with optional name for going back  

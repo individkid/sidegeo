@@ -354,6 +354,13 @@ int parseExp(int skip, struct Parse *parse)
 	return retval;
 }
 
+void parseGlobal(const char *fmt)
+{
+	struct Parse parse;
+	parseInit(fmt,0,&parse);
+	if (parseMacro(&parse) != 1) exitErrstr("parse too global\n");
+}
+
 int parse(const char *fmt, int len) // len is for PcsChar; fmt is 0 terminated
 {
 	struct Parse parse;
