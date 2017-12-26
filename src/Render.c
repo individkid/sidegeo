@@ -350,6 +350,11 @@ void forceBuffer()
     DEFAULT(exitErrstr("invalid buffer type\n");)
 }
 
+void forceShader()
+{
+    enqueShader(*delocShader(1));
+}
+
 #ifdef BRINGUP
 #define NUM_PLANES 4
 #define NUM_POINTS 4

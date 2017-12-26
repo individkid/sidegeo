@@ -77,7 +77,8 @@ enum Event {
     Acknowledge, // copy enque command and arguments
     Upload, // copy to client copy of buffer
     Download, // copy from client copy of buffer
-    Enumerate}; // initialize maps between enum and int
+    Enumerate, // initialize maps between enum and int
+    Events};
 enum Kind {
     Poly,
     Boundary,
@@ -173,6 +174,20 @@ enum Control {
     Start};
 enum Shift {Wav,Met,Bot,Mid,Top};
 
+enum PcsType {
+    PcsCmdCmd,
+    PcsCmdChar,
+    PcsCmdInt,
+    PcsCmdData,
+    PcsShader,
+    PcsEvent,
+    PcsKind,
+    PcsHsCmd,
+    PcsHsChar,
+    PcsHsInt,
+    PcsHsData,
+    PcsTypes};
+
 #define DECLARE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...);
 #define DEFINE_MSGSTR(NAME) \
@@ -258,14 +273,14 @@ DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(CmdState,int)
 DECLARE_LOCAL(Cluster,int)
 DECLARE_LOCAL(Machine,Machine)
+DECLARE_LOCAL(Render,struct Render)
+DECLARE_LOCAL(Buffer,struct Buffer *)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
 DECLARE_STAGE(CmdChar,char)
 DECLARE_STAGE(CmdInt,int)
 DECLARE_STAGE(CmdData,enum Data)
-DECLARE_STAGE(Render,struct Render)
-DECLARE_STAGE(Buffer,struct Buffer *)
 DECLARE_STAGE(Shader,enum Shader)
 
 DECLARE_SOURCE(CmdOutputs)
@@ -361,13 +376,21 @@ DECLARE_SOURCE(PcsOutputs)
 DECLARE_STAGE(PcsOutput,char)
 
 DECLARE_SOURCE(PcsCommands)
-DECLARE_STAGE(PcsCommand,Command)
+DECLARE_STAGE(PcsCmdCmd,Command)
 DECLARE_STAGE(PcsCmdChar,char)
 DECLARE_STAGE(PcsCmdInt,int)
 DECLARE_STAGE(PcsCmdData,enum Data)
 DECLARE_STAGE(PcsRender,struct Render)
 DECLARE_STAGE(PcsBuffer,struct Buffer *)
 DECLARE_STAGE(PcsShader,enum Shader)
+
+DECLARE_SOURCE(PcsHaskells)
+DECLARE_STAGE(PcsEvent,enum Event)
+DECLARE_STAGE(PcsKind,enum Kind)
+DECLARE_STAGE(PcsHsCmd,Command)
+DECLARE_STAGE(PcsHsChar,char)
+DECLARE_STAGE(PcsHsInt,int)
+DECLARE_STAGE(PcsHsData,enum Data)
 
 DECLARE_SOURCE(PcsTimewheels)
 DECLARE_STAGE(PcsControl,enum Control)
@@ -378,7 +401,6 @@ DECLARE_STAGE(PcsCoefficient,int)
 DECLARE_STAGE(PcsVariable,int)
 DECLARE_STAGE(PcsState,struct State)
 
-DECLARE_LOCAL(Stage,char)
 DECLARE_LOCAL(PcsChar,char)
 DECLARE_LOCAL(PcsInt,int)
 DECLARE_LOCAL(PcsBuf,char)
@@ -388,6 +410,8 @@ DECLARE_TREE(Macro,int,int)
 DECLARE_META(Shadow,int)
 DECLARE_META(Nest,int)
 DECLARE_META(Prefix,char)
+
+DECLARE_LOCAL(Stage,char)
 DECLARE_LOCAL(Read,int)
 DECLARE_LOCAL(Size,int)
 DECLARE_LOCAL(Yield,int)
@@ -399,5 +423,11 @@ DECLARE_LOCAL(More,int)
 DECLARE_POINTER(ShadowPtr,int)
 DECLARE_POINTER(NestPtr,int)
 DECLARE_POINTER(PrefixPtr,char)
+
+DECLARE_POINTER(PcsCmdPtr,Command)
+DECLARE_POINTER(PcsCharPtr,char)
+DECLARE_POINTER(PcsIntPtr,int)
+DECLARE_TREE(Base,enum PcsType,int)
+DECLARE_TREE(Count,enum PcsType,int)
 
 #endif
