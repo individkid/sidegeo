@@ -78,8 +78,9 @@ int processCompare(const void *left, const void *right)
 {
 	int lft = void2int(left);
 	int rgt = void2int(right);
-	int len = 0;
-	while (*arrayPcsBuf(lft+len,1) && *arrayPcsBuf(rgt+len,1)) len += 1;
+	int len = strlenPcsBuf(lft,0);
+	int ren = strlenPcsBuf(rgt,0);
+	if (ren < len) len = ren;
 	return strncmp(arrayPcsBuf(lft,len),arrayPcsBuf(rgt,len),len);
 }
 

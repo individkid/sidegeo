@@ -204,30 +204,34 @@ int parseMacro(struct Parse *parse)
 	int keylen = 0;
 	while (parse->fmtsub+keylen < parse->fmtlen && *arrayFormat(keylen,1) != '|') keylen += 1;
 	if (parse->fmtsub+keylen >= parse->fmtlen) return -1;
-	parseDeloc(keylen,parse);
+	parseDeloc(keylen+1,parse);
 	int tofind = sizePcsBuf();
-	memcpy(enlocPcsBuf(keylen),arrayFormat(0,keylen),keylen);
-	delocFormat(keylen);
-	*arrayPcsBuf(tofind+keylen-1,1) = 0;
+	memcpy(enlocPcsBuf(keylen+1),arrayFormat(0,keylen+1),keylen+1);
+	*arrayPcsBuf(tofind+keylen,1) = 0;
 	int key;
-	if (findString(tofind,&key) < 0) {key = tofind; insertString(key,key);}
-	else unlocPcsBuf(keylen);
+	if (findString(tofind,&key) < 0) {
+		key = tofind;
+		if (insertString(key,key) < 0) exitErrstr("key too string\n");}
+	else unlocPcsBuf(keylen+1);
 	int vallen = 0;
 	while (parse->fmtsub+vallen < parse->fmtlen && *arrayFormat(vallen,1) != '/') vallen += 1;
 	if (parse->fmtsub+vallen >= parse->fmtlen) return -1;
-	parseDeloc(vallen,parse);
+	parseDeloc(vallen+1,parse);
 	tofind = sizePcsBuf();
-	memcpy(enlocPcsBuf(vallen),arrayFormat(0,vallen),vallen);
-	*arrayPcsBuf(tofind+vallen-1,1) = 0;
+	memcpy(enlocPcsBuf(vallen+1),arrayFormat(0,vallen+1),vallen+1);
+	*arrayPcsBuf(tofind+vallen,1) = 0;
 	int val;
-	if (findString(tofind,&val) < 0) {val = tofind; insertString(val,val);}
-	else unlocPcsBuf(vallen);
+	if (findString(tofind,&val) < 0) {
+		val = tofind;
+		if (insertString(val,val) < 0) exitErrstr("val too string\n");}
+	else unlocPcsBuf(vallen+1);
 	if (parse->depth > 0) {
 		*enlocNestPtr(1) = key;
 		int exists;
 		if (findMacro(key,&exists) >= 0) *enlocShadowPtr(1) = exists;
 		else *enlocShadowPtr(1) = -1;}
-	insertMacro(key,val);
+	if (testMacro(key) >= 0 && removeMacro(key) < 0) exitErrstr("key too macro\n");
+	if (insertMacro(key,val) < 0) exitErrstr("val too macro\n");
 	return 1;
 }
 
@@ -315,12 +319,11 @@ int parseIdent(struct Parse *parse)
 	parseDeloc(idtlen,parse);
 	*enlocPcsBuf(1) = 0;
 	int val;
-	if (findMacro(sizePcsBuf()-idtlen,&val) >= 0) {
-		int len = 0;
-		while (*arrayPcsBuf(val,1)) len += 1;
+	if (findMacro(sizePcsBuf()-idtlen-1,&val) >= 0) {
+		int len = strlenPcsBuf(val,0);
 		memcpy(allocFormat(len),arrayPcsBuf(val,len),len);
-		unlocPcsBuf(sizePcsBuf()-idtlen);
-		parse->fmtpre += idtlen;}
+  		parse->fmtpre += len;
+		unlocPcsBuf(idtlen+1);}
 	else memcpy(enlocPcsChar(idtlen),unlocPcsBuf(idtlen+1),idtlen);
 	return 1;
 }

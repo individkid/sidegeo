@@ -100,6 +100,7 @@ EXTERNC TYPE *unloc##NAME(int siz); \
 EXTERNC TYPE *alloc##NAME(int siz); \
 EXTERNC void reloc##NAME(int siz); \
 EXTERNC TYPE *array##NAME(int sub, int siz); \
+EXTERNC int strlen##NAME(int sub, TYPE val); \
 EXTERNC int enstr##NAME(TYPE val); \
 EXTERNC void pack##NAME(int sub, int siz); \
 EXTERNC struct QueueBase *ptr##NAME();
@@ -121,6 +122,7 @@ EXTERNC TYPE *unloc##NAME(int idx, int siz); \
 EXTERNC TYPE *alloc##NAME(int idx, int siz); \
 EXTERNC void reloc##NAME(int idx, int siz); \
 EXTERNC TYPE *array##NAME(int idx, int sub, int siz); \
+EXTERNC int strlen##NAME(int idx, int sub, TYPE val); \
 EXTERNC int enstr##NAME(int idx, TYPE val); \
 EXTERNC void pack##NAME(int idx, int sub, int siz);
 
@@ -701,11 +703,18 @@ template<class TYPE> struct QueueStruct : QueueBase {
         if (sub+siz > size()) exitErrstr("array too siz\n");
         return head + sub;
     }
+    int strlen(int sub, TYPE val)
+    {
+        int len = 0;
+        while (sub+len < size() && *array(sub+len,1) != val) len += 1;
+        if (sub+len >= size()) exitErrstr("no string end\n");
+        return len;
+    }
     int enstr(TYPE val)
     {
         if (!src) exitErrstr("enstr too src\n");
         int len = src->size(); TYPE *buf = src->destr(val);
-        len -= src->size(); len--; memcpy(enloc(len),buf,len);
+        len -= src->size(); len -= 1; memcpy(enloc(len),buf,len);
         src = 0;
         return len;
     }
@@ -744,6 +753,7 @@ extern "C" TYPE *alloc##NAME(int siz) {return NAME##Inst.alloc(siz);} \
 extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.unloc(siz);} \
 extern "C" void reloc##NAME(int siz) {NAME##Inst.reloc(siz);} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz);} \
+extern "C" int strlen##NAME(int sub, TYPE val) {return NAME##Inst.strlen(sub,val);} \
 extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);} \
 extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.pack(sub,siz);} \
 extern "C" QueueBase *ptr##NAME() {return NAME##Inst.ptr();}
@@ -801,6 +811,10 @@ template<class TYPE> struct QueueMeta {
     {
         return meta.array(idx,1)->array(sub,siz);
     }
+    int strlen(int idx, int sub, TYPE val)
+    {
+        return meta.array(idx,1)->strlen(sub,val);
+    }
     int enstr(int idx, TYPE val)
     {
         return meta.array(idx,1)->enstr(val);
@@ -822,6 +836,7 @@ extern "C" TYPE *destr##NAME(int idx, TYPE val) {return NAME##Inst.destr(idx,val
 extern "C" TYPE *unloc##NAME(int idx, int siz) {return NAME##Inst.unloc(idx,siz);} \
 extern "C" void reloc##NAME(int idx, int siz) {NAME##Inst.reloc(idx,siz);} \
 extern "C" TYPE *array##NAME(int idx, int sub, int siz) {return NAME##Inst.array(idx,sub,siz);} \
+extern "C" int strlen##NAME(int idx, int sub, TYPE val) {return NAME##Inst.strlen(idx,sub,val);} \
 extern "C" int enstr##NAME(int idx, TYPE val) {return NAME##Inst.enstr(idx,val);} \
 extern "C" void pack##NAME(int idx, int sub, int siz) {NAME##Inst.pack(idx,sub,siz);}
 
