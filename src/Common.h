@@ -231,7 +231,7 @@ float *invmat(float *u, int n);
 
 EXTERNCEND
 
-DECLARE_MUTEX(CmnCommands)
+DECLARE_FUNC(CmnCommands)
 DECLARE_STAGE(CmnCommand,Command)
 DECLARE_STAGE(CmnCmdChar,char)
 DECLARE_STAGE(CmnCmdInt,int)
@@ -240,7 +240,7 @@ DECLARE_STAGE(CmnRender,struct Render)
 DECLARE_STAGE(CmnBuffer,struct Buffer *)
 DECLARE_STAGE(CmnShader,enum Shader)
 
-DECLARE_MUTEX(CmnOutputs)
+DECLARE_STDIN(CmnOutputs)
 DECLARE_STAGE(CmnOutput,char)
 
 DECLARE_FDSET(CmnProcesses,int)
@@ -251,7 +251,7 @@ DECLARE_STAGE(CmnConfigureer,int)
 DECLARE_STAGE(CmnConfigure,char)
 DECLARE_STAGE(CmnConfigurer,int)
 
-DECLARE_MUTEX(CmnHaskells)
+DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,enum Event)
 DECLARE_STAGE(CmnKind,enum Kind)
 DECLARE_STAGE(CmnHsCmd,Command)
@@ -259,7 +259,7 @@ DECLARE_STAGE(CmnHsChar,char)
 DECLARE_STAGE(CmnHsInt,int)
 DECLARE_STAGE(CmnHsData,enum Data)
 
-DECLARE_MUTEX(CmnTimewheels)
+DECLARE_TIME(CmnTimewheels)
 DECLARE_STAGE(CmnControl,enum Control)
 DECLARE_STAGE(CmnChange,struct Change)
 DECLARE_STAGE(CmnTwChar,char)

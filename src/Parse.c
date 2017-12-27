@@ -315,10 +315,13 @@ int parseIdent(struct Parse *parse)
 	parseDeloc(idtlen,parse);
 	*enlocPcsBuf(1) = 0;
 	int val;
-	if (findMacro(sizePcsBuf()-idtlen,&val)) {
-		memcpy(allocFormat(idtlen),unlocPcsChar(idtlen+1),idtlen);
+	if (findMacro(sizePcsBuf()-idtlen,&val) >= 0) {
+		int len = 0;
+		while (*arrayPcsBuf(val,1)) len += 1;
+		memcpy(allocFormat(len),arrayPcsBuf(val,len),len);
+		unlocPcsBuf(sizePcsBuf()-idtlen);
 		parse->fmtpre += idtlen;}
-	memcpy(enlocPcsChar(idtlen),unlocPcsBuf(idtlen+1),idtlen);
+	else memcpy(enlocPcsChar(idtlen),unlocPcsBuf(idtlen+1),idtlen);
 	return 1;
 }
 

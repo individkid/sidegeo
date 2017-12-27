@@ -74,10 +74,21 @@ void configureFail(int chrsiz, int intsiz)
 	unlocPcsChar(sizePcsChar()-chrsiz);
 }
 
+int processCompare(const void *left, const void *right)
+{
+	int lft = void2int(left);
+	int rgt = void2int(right);
+	int len = 0;
+	while (*arrayPcsBuf(lft+len,1) && *arrayPcsBuf(rgt+len,1)) len += 1;
+	return strncmp(arrayPcsBuf(lft,len),arrayPcsBuf(rgt,len),len);
+}
+
 int processConfigure(int index, int len)
 {
 	int chrsiz = sizePcsChar()-len;
 	int intsiz = sizePcsInt();
+	initString(processCompare);
+	initMacro(processCompare);
 	parseGlobal("\\id|@{[@|#]}/\\nm|[?+!|?-!]#{#}/\\ |<{&}>/");
 	if (parse("<?force!> {[id|nm]%}%",len) > 0) {
     	*enlocPcsChar(1) = 0;

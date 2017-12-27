@@ -269,7 +269,7 @@ inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
 
-DEFINE_MUTEX(CmnCommands,QueueFunc,commandConsume,commandProduce,commandSignal,0,0,commandDelay,commandNodelay)
+DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,0,0,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdChar,char,CmnCommand)
 DEFINE_STAGE(CmnCmdInt,int,CmnCmdChar)
@@ -278,15 +278,15 @@ DEFINE_STAGE(CmnRender,struct Render,CmnCmdData)
 DEFINE_STAGE(CmnBuffer,struct Buffer *,CmnRender)
 DEFINE_STAGE(CmnShader,enum Shader,CmnBuffer)
 
-DEFINE_MUTEX(CmnOutputs,QueueStdin,beforeConsole,afterConsole,consumeConsole,produceConsole)
+DEFINE_STDIN(CmnOutputs,beforeConsole,afterConsole,consumeConsole,produceConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
-DEFINE_FDSET(CmnProcesses,QueueFdset,int,processBefore,processAfter,processConsume,processProduce)
+DEFINE_FDSET(CmnProcesses,int,processBefore,processAfter,processConsume,processProduce)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigureer,int,CmnConfigure)
 
-DEFINE_MUTEX(CmnHaskells,QueueCond,haskellBefore,haskellAfter,haskellConsume)
+DEFINE_COND(CmnHaskells,haskellBefore,haskellAfter,haskellConsume)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnKind,enum Kind,CmnEvent)
 DEFINE_STAGE(CmnHsCmd,Command,CmnKind)
@@ -294,7 +294,7 @@ DEFINE_STAGE(CmnHsChar,char,CmnHsCmd)
 DEFINE_STAGE(CmnHsInt,int,CmnHsChar)
 DEFINE_STAGE(CmnHsData,enum Data,CmnHsInt)
 
-DEFINE_MUTEX(CmnTimewheels,QueueTime,timewheelBefore,timewheelAfter,timewheelConsume,timewheelProduce,timewheelDelay)
+DEFINE_TIME(CmnTimewheels,timewheelBefore,timewheelAfter,timewheelConsume,timewheelProduce,timewheelDelay)
 DEFINE_STAGE(CmnControl,enum Control,CmnTimewheels)
 DEFINE_STAGE(CmnChange,struct Change,CmnControl)
 DEFINE_STAGE(CmnTwChar,char,CmnChange)
