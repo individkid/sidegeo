@@ -38,26 +38,38 @@ void forceShader();
 
 #define FORCE_TYPE(TYPE,THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
-	if (!testCount(Pcs##TYPE)) insertCount(Pcs##TYPE,sizePcs##THREAD##Int()); \
+	if (testCount(Pcs##TYPE) < 0) insertCount(Pcs##TYPE,sizePcs##THREAD##Int()); \
 	*enlocPcs##THREAD##Int(1) = 0;}
 
 #define FORCE_UNIQUE(INST,THREAD,TYPE) \
 	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0) { \
-	if (!testBase(Pcs##TYPE)) insertBase(Pcs##TYPE,sizePcs##TYPE()); \
+	if (testBase(Pcs##TYPE) < 0) { \
+	insertBase(Pcs##TYPE,ptrPcs##TYPE()); \
+	insertUndo(Pcs##TYPE,sizePcs##TYPE());} \
 	*enlocPcs##TYPE(1) = INST; \
 	int found = -1; \
-	if (findCount(Pcs##TYPE,&found)) *arrayPcs##THREAD##Int(found,1) += 1;}
+	if (findCount(Pcs##TYPE,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
 
 #define FORCE_SHARED(INST,THD,TYP) \
 	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && typ##TYP == Pcs##THD##TYP) { \
-	if (!testBase(Pcs##THD##TYP)) insertBase(Pcs##THD##TYP,sizePcs##THD##TYP()); \
+	if (testBase(Pcs##THD##TYP) < 0) { \
+	insertBase(Pcs##THD##TYP,ptrPcs##THD##TYP()); \
+	insertUndo(Pcs##THD##TYP,sizePcs##THD##TYP());} \
 	*enlocPcs##THD##TYP(1) = INST; \
 	int found = -1; \
-	if (findCount(Pcs##THD##TYP,&found)) *arrayPcs##THD##Int(found,1) += 1;}
+	if (findCount(Pcs##THD##TYP,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
 
 void configureFail(int chrsiz, int intsiz)
 {
-	// TODO unloc each to its findBase
+	enum PcsType key;
+	while (chooseBase(&key) >= 0) {
+		struct QueueBase *ptr;
+		int siz;
+		if (findBase(key,&ptr) < 0) exitErrstr("base too key\n");
+		if (findUndo(key,&siz) < 0) exitErrstr("undo too key\n");
+		unlocQueueBase(ptr,sizeQueueBase(ptr)-siz);
+		if (removeBase(key) < 0) exitErrstr("base too remove\n");
+		if (removeUndo(key) < 0) exitErrstr("undo too remove\n");}
 	unlocPcsInt(sizePcsInt()-intsiz);
 	unlocPcsChar(sizePcsChar()-chrsiz);
 }
@@ -87,7 +99,9 @@ int processConfigure(int index, int len)
 				if (endptr != nptr+siz) {configureFail(chrsiz,intsiz); return -1;}
 				if (val > INT_MAX) {configureFail(chrsiz,intsiz); return -1;}
 				if (val < INT_MIN) {configureFail(chrsiz,intsiz); return -1;}
-				if (!testBase(typInt)) insertBase(typInt,sizePcsIntPtr());
+				if (!testBase(typInt)) {
+				insertBase(typInt,ptrPcsIntPtr());
+				insertUndo(typInt,sizePcsIntPtr());}
 				*enlocPcsIntPtr(1) = val;
 				int found = -1;
 				if (findCount(typInt,&found)) *arrayPcsIntPtr(found,1) += 1;}
@@ -156,7 +170,9 @@ int processConfigure(int index, int len)
 			else if FORCE_SHARED(SideSub,Hs,Data)
 			else if FORCE_SHARED(HalfSub,Hs,Data)
 			else {
-				if (!testBase(typChar)) insertBase(typChar,sizePcsCharPtr());
+				if (!testBase(typChar)) {
+				insertBase(typChar,ptrPcsCharPtr());
+				insertUndo(typChar,sizePcsCharPtr());}
 				memcpy(enlocPcsCharPtr(siz),arrayPcsChar(chrpos,siz),siz);
 				int found = -1;
 				if (findCount(typInt,&found)) *arrayPcsIntPtr(found,1) += siz;}

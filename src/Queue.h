@@ -48,12 +48,15 @@ EXTERNCEND
 EXTERNV struct termios savedTermios;
 EXTERNV int validTermios;
 EXTERNV int sigusr2;
+struct QueueBase;
 
 EXTERNC void exitQueue();
 EXTERNC void *int2void(int val);
 EXTERNC int void2int(const void *val);
 EXTERNC void exitErrstr(const char *fmt, ...);
 EXTERNC void handler(int sig);
+EXTERNC void unlocQueueBase(struct QueueBase *ptr, int siz);
+EXTERNC int sizeQueueBase(struct QueueBase *ptr);
 
 #define DECLARE_MUTEX(NAME) \
 EXTERNC void *loop##NAME(void *arg); \
@@ -94,7 +97,8 @@ EXTERNC int size##NAME(); \
 EXTERNC void use##NAME(); \
 EXTERNC void xfer##NAME(int siz); \
 EXTERNC int enstr##NAME(TYPE val); \
-EXTERNC void pack##NAME(int sub, int siz);
+EXTERNC void pack##NAME(int sub, int siz); \
+EXTERNC struct QueueBase *ptr##NAME();
 
 #define DECLARE_STAGE(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
 // consumed if appended to
@@ -141,7 +145,8 @@ EXTERNC pqueue_pri_t when##NAME();
 EXTERNC int test##NAME(KEY key); \
 EXTERNC int find##NAME(KEY key, VAL *val); \
 EXTERNC int insert##NAME(KEY key, VAL val); \
-EXTERNC int remove##NAME(KEY key);
+EXTERNC int remove##NAME(KEY key); \
+EXTERNC int choose##NAME(KEY *key);
 
 #ifdef __cplusplus
 
@@ -152,6 +157,8 @@ struct QueueBase {
     virtual int size() = 0;
     virtual void xfer(int siz) = 0;
     virtual void use() = 0;
+    virtual void undo(int siz) = 0;
+    QueueBase *ptr() {return this;}
 };
 
 struct QueueMutex;
@@ -684,6 +691,10 @@ template<class TYPE> struct QueueStruct : QueueBase {
         for (int i = 0; i < siz; i++) dest[i] = source[i];
         src = 0;
     }
+    virtual void undo(int siz)
+    {
+        unloc(siz);
+    }
     int enstr(TYPE val)
     {
         if (!src) exitErrstr("enstr too src\n");
@@ -728,7 +739,8 @@ extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" void use##NAME() {NAME##Inst.use();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
 extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);} \
-extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.pack(sub,siz);}
+extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.pack(sub,siz);} \
+extern "C" QueueBase *ptr##NAME() {return NAME##Inst.ptr();}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
 // consumed if appended to
@@ -822,7 +834,10 @@ extern "C" void reloc##NAME(int siz) {NAME##Inst.ptr->reloc(siz);} \
 extern "C" int size##NAME() {return NAME##Inst.ptr->size();} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.ptr->array(sub,siz);} \
 extern "C" void use##NAME() {NAME##Inst.ptr->use();} \
-extern "C" void xfer##NAME(int siz) {NAME##Inst.ptr->xfer(siz);}
+extern "C" void xfer##NAME(int siz) {NAME##Inst.ptr->xfer(siz);} \
+extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.ptr->enstr(val);} \
+extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.ptr->pack(sub,siz);} \
+extern "C" QueueBase *ptr##NAME() {return NAME##Inst.ptr->ptr();}
 
 struct Link {
     int next,last; // links if positive, index into head or tail if negative
@@ -869,19 +884,31 @@ struct QueueLink {
     }
     int begin(int pool)
     {
-        return *head.array(pool,1);
+        if (pool < 0) return -1;
+        if (pool >= head.size()) return -1;
+        if (*head.array(pool,1) < 0) return -1;
+        return *head.array(pool,1)-1;
     }
     int rbegin(int pool)
     {
-        return *tail.array(pool,1);
+        if (pool < 0) return -1;
+        if (pool >= head.size()) return -1;
+        if (*tail.array(pool,1) < 0) return -1;
+        return *tail.array(pool,1)-1;
     }
     int next(int index)
     {
-        return link.array(index,1)->next;
+        if (index < 0) return -1;
+        if (index >= link.size()) return -1;
+        if (link.array(index,1)->next < 0) return -1;
+        return link.array(index,1)->next-1;
     }
     int last(int index)
     {
-        return link.array(index,1)->last;
+        if (index < 0) return -1;
+        if (index >= link.size()) return -1;
+        if (link.array(index,1)->last < 0) return -1;
+        return link.array(index,1)->last-1;
     }
 };
 
@@ -916,6 +943,12 @@ template<class TYPE> struct QueuePool {
     TYPE *cast(int sub)
     {
         return pool.array(sub,1);
+    }
+    int choose()
+    {
+        int sub = link.begin(1);
+        if (sub < 0) return -1;
+        return link.get(sub);
     }
 };
 
@@ -1082,15 +1115,26 @@ template<class KEY, class VAL> struct QueueTree {
     }
     int remove(KEY key)
     {
-        int node;
-        if (find(key,&node) < 0) return -1;
+        int tofind = pool.alloc();
+        pool.cast(tofind)->key = key;
+        void *found = lookup_node(top,int2void(tofind),&rbop);
+        pool.free(tofind);
+        int node = void2int(found);
+        if (node < 0) return -1;
         del_node(&top,int2void(node),&rbop);
         pool.free(node);
         return 0;
     }
+    int choose(KEY *key)
+    {
+        int sub = pool.choose();
+        if (sub < 0) return -1;
+        *key = pool.cast(sub)->key;
+        return 0;
+    }
 };
 
-// TODO use FUNC to compare
+// TODO use FUNC to compare; add compare function for strings
 #define DEFINE_TREE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
@@ -1098,7 +1142,8 @@ extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Ins
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int find##NAME(KEY key, VAL *val) {return NAME##Inst.find(key,val);} \
 extern "C" int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
-extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);}
+extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
+extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);}
 
 #endif // __cplusplus
 

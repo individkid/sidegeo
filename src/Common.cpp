@@ -461,6 +461,7 @@ DEFINE_POINTER(PrefixPtr,char)
 DEFINE_POINTER(PcsCmdPtr,Command)
 DEFINE_POINTER(PcsCharPtr,char)
 DEFINE_POINTER(PcsIntPtr,int)
-DEFINE_TREE(Base,enum PcsType,int)
+DEFINE_TREE(Base,enum PcsType,struct QueueBase *)
+DEFINE_TREE(Undo,enum PcsType,int)
 DEFINE_TREE(Count,enum PcsType,int)
 

@@ -58,5 +58,14 @@ void handler(int sig)
 	if (sig == SIGUSR2) sigusr2 = 1;
 }
 
-EXTERNCEND
+void unlocQueueBase(QueueBase *ptr, int siz)
+{
+    ptr->undo(siz);
+}
 
+int sizeQueueBase(struct QueueBase *ptr)
+{
+    return ptr->size();
+}
+
+EXTERNCEND

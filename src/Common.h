@@ -427,7 +427,8 @@ DECLARE_POINTER(PrefixPtr,char)
 DECLARE_POINTER(PcsCmdPtr,Command)
 DECLARE_POINTER(PcsCharPtr,char)
 DECLARE_POINTER(PcsIntPtr,int)
-DECLARE_TREE(Base,enum PcsType,int)
+DECLARE_TREE(Base,enum PcsType,struct QueueBase *)
+DECLARE_TREE(Undo,enum PcsType,int)
 DECLARE_TREE(Count,enum PcsType,int)
 
 #endif
