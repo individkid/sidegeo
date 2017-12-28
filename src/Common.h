@@ -398,34 +398,31 @@ DECLARE_STAGE(PcsCoefficient,int)
 DECLARE_STAGE(PcsVariable,int)
 DECLARE_STAGE(PcsState,struct State)
 
-DECLARE_LOCAL(PcsChar,char)
-DECLARE_LOCAL(PcsInt,int)
-DECLARE_LOCAL(PcsBuf,char)
-DECLARE_LOCAL(Format,char)
-DECLARE_TREE(String,int,int)
-DECLARE_TREE(Macro,int,int)
-DECLARE_META(Shadow,int)
-DECLARE_META(Nest,int)
-DECLARE_META(Prefix,char)
+DECLARE_LOCAL(PcsChar,char) // given and/or result
+DECLARE_LOCAL(PcsInt,int) // given and/or result
 
-DECLARE_LOCAL(Stage,char)
-DECLARE_LOCAL(Read,int)
-DECLARE_LOCAL(Size,int)
-DECLARE_LOCAL(Yield,int)
-DECLARE_LOCAL(Ignore,int)
-DECLARE_LOCAL(Write,int)
-DECLARE_LOCAL(Helper,pthread_t)
-DECLARE_LOCAL(Less,int)
-DECLARE_LOCAL(More,int)
+DECLARE_LOCAL(PcsBuf,char) // buffer for val and key strings
+DECLARE_LOCAL(Format,char) // modifiable copy of format string
+DECLARE_TREE(String,int,int) // whether string is in buffer
+DECLARE_TREE(Macro,int,int) // val to replace key in format
+DECLARE_META(Shadow,int) // vals to restore in macros
+DECLARE_META(Nest,int) // keys for restore in macros
+DECLARE_META(Prefix,char) // modified format portion for restore
 DECLARE_POINTER(ShadowPtr,int)
 DECLARE_POINTER(NestPtr,int)
 DECLARE_POINTER(PrefixPtr,char)
 
-DECLARE_POINTER(PcsCmdPtr,Command)
-DECLARE_POINTER(PcsCharPtr,char)
-DECLARE_POINTER(PcsIntPtr,int)
-DECLARE_TREE(Base,enum PcsType,struct QueueBase *)
-DECLARE_TREE(Undo,enum PcsType,int)
-DECLARE_TREE(Count,enum PcsType,int)
+DECLARE_LOCAL(Stage,char) // copy of options for process
+DECLARE_LOCAL(Read,int) // data pipe handles
+DECLARE_LOCAL(Size,int) // size pipe handles
+DECLARE_LOCAL(Yield,int) // whether file is yielding
+DECLARE_LOCAL(Ignore,int) // ignored error count
+DECLARE_LOCAL(Write,int) // file handles
+DECLARE_LOCAL(Helper,pthread_t) // thread handle
+DECLARE_LOCAL(Less,int) // reading upto here
+DECLARE_LOCAL(More,int) // writing as owner from here
+DECLARE_TREE(Base,enum PcsType,struct QueueBase *) // queue to restore upon mismatch
+DECLARE_TREE(Undo,enum PcsType,int) // size to restore upon mismatch
+DECLARE_TREE(Count,enum PcsType,int) // location in PcsIntPtr of match count
 
 #endif

@@ -85,12 +85,15 @@ void parseCount(struct Nest *nest)
 void parseFormat(struct Nest *nest, struct Parse *parse)
 {
 	// restore Format *fmtsub *fmtpre Prefix
-	delocFormat(parse->fmtpre);
-	int size = parse->fmtpre = sizePrefixPtr();
-	while (parse->fmtsub > nest->fmtsub) {
-		parse->fmtsub -= 1;
-		*allocFormat(1) = parse->format[parse->fmtsub];}
-	memcpy(allocFormat(size),delocPrefixPtr(size),size);
+	int sub = nest->fmtsub;
+	int dif = parse->fmtsub - nest->fmtsub;
+	int pre = parse->fmtpre;
+	int siz = sizePrefixPtr();
+	parse->fmtpre = siz;
+	parse->fmtsub = sub;
+	delocFormat(pre);
+	memcpy(allocFormat(dif),parse->format+sub,dif);
+	memcpy(allocFormat(siz),delocPrefixPtr(siz),siz);
 }
 
 void parseMatch(struct Nest *nest, struct Parse *parse)
@@ -189,9 +192,12 @@ int parseDrop(int skip, struct Parse *parse)
 {
 	if (*arrayFormat(0,1) != '<') return -1;
 	parseDeloc(1,parse);
-	int size = sizePcsChar();
+	int chrsiz = sizePcsChar();
+	int intsiz = sizePcsInt();
 	int retval = parseExp(skip,parse);
-	if (retval == 1) unlocPcsChar(sizePcsChar()-size);
+	if (retval == 1) {
+		unlocPcsChar(sizePcsChar()-chrsiz);
+		unlocPcsInt(sizePcsInt()-intsiz);}
 	if (*arrayFormat(0,1) != '>') return -1;
 	parseDeloc(1,parse);
 	return retval;
@@ -279,7 +285,7 @@ int parseSpace(struct Parse *parse)
 
 int parseNumeral(struct Parse *parse)
 {
-	if (*arrayFormat(0,1) != '&') return -1;
+	if (*arrayFormat(0,1) != '#') return -1;
 	parseDeloc(1,parse);
 	if (parse->patsub >= parse->patlen) return 0;
 	if ('0' > *(parse->pattern+parse->patsub) ||
@@ -290,13 +296,13 @@ int parseNumeral(struct Parse *parse)
 
 int parseAlpha(struct Parse *parse)
 {
-	if (*arrayFormat(0,1) != '&') return -1;
+	if (*arrayFormat(0,1) != '@') return -1;
 	parseDeloc(1,parse);
 	if (parse->patsub >= parse->patlen) return 0;
-	if (!('a' <= *(parse->pattern+parse->patsub) &&
-		'z' >= *(parse->pattern+parse->patsub)) &&
-		!('A' <= *(parse->pattern+parse->patsub) &&
-		'Z' >= *(parse->pattern+parse->patsub))) return 0;
+	if (('a' > *(parse->pattern+parse->patsub) ||
+		 'z' < *(parse->pattern+parse->patsub)) &&
+		('A' > *(parse->pattern+parse->patsub) ||
+		 'Z' < *(parse->pattern+parse->patsub))) return 0;
 	parse->patsub += 1;
 	return 1;
 }
@@ -313,7 +319,8 @@ int parseWild(struct Parse *parse)
 int parseIdent(struct Parse *parse)
 {
 	int idtlen = 0;
-	while (parse->fmtsub+idtlen < parse->fmtlen && parseIsAlpha(*arrayFormat(idtlen,1))) idtlen += 1;
+	while (parse->fmtsub+idtlen < parse->fmtlen &&
+		parseIsAlpha(*arrayFormat(idtlen,1))) idtlen += 1;
 	if (idtlen == 0) idtlen = 1;
 	memcpy(enlocPcsBuf(idtlen),arrayFormat(0,idtlen),idtlen);
 	parseDeloc(idtlen,parse);

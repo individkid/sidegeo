@@ -28,9 +28,6 @@ void forceShader();
 
 #define FORCE_THREAD(THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
-	usePcs##THREAD##Cmd(); referPcsCmdPtr(); \
-	usePcs##THREAD##Int(); referPcsIntPtr(); \
-	usePcs##THREAD##Char(); referPcsCharPtr(); \
 	typCmd = Pcs##THREAD##Cmd; \
 	typChar = Pcs##THREAD##Char; \
 	typInt = Pcs##THREAD##Int; \
@@ -44,8 +41,8 @@ void forceShader();
 #define FORCE_UNIQUE(INST,THREAD,TYPE) \
 	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0) { \
 	if (testBase(Pcs##TYPE) < 0) { \
-	insertBase(Pcs##TYPE,ptrPcs##TYPE()); \
-	insertUndo(Pcs##TYPE,sizePcs##TYPE());} \
+		insertBase(Pcs##TYPE,ptrPcs##TYPE()); \
+		insertUndo(Pcs##TYPE,sizePcs##TYPE());} \
 	*enlocPcs##TYPE(1) = INST; \
 	int found = -1; \
 	if (findCount(Pcs##TYPE,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
@@ -53,11 +50,35 @@ void forceShader();
 #define FORCE_SHARED(INST,THD,TYP) \
 	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && typ##TYP == Pcs##THD##TYP) { \
 	if (testBase(Pcs##THD##TYP) < 0) { \
-	insertBase(Pcs##THD##TYP,ptrPcs##THD##TYP()); \
-	insertUndo(Pcs##THD##TYP,sizePcs##THD##TYP());} \
+		insertBase(Pcs##THD##TYP,ptrPcs##THD##TYP()); \
+		insertUndo(Pcs##THD##TYP,sizePcs##THD##TYP());} \
 	*enlocPcs##THD##TYP(1) = INST; \
 	int found = -1; \
 	if (findCount(Pcs##THD##TYP,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
+
+#define FORCE_CHAR(THD) \
+	(typChar == Pcs##THD##Char) { \
+	if (testBase(typChar) < 0) { \
+		insertBase(typChar,ptrPcs##THD##Char()); \
+		insertUndo(typChar,sizePcs##THD##Char());} \
+	memcpy(enlocPcs##THD##Char(siz),arrayPcsChar(chrpos,siz),siz); \
+	int found = -1; \
+	if (findCount(typInt,&found)) *arrayPcs##THD##Int(found,1) += siz;}
+
+#define FORCE_INT(THD) \
+	((*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') && typInt == Pcs##THD##Int) { \
+	char *nptr = arrayPcsChar(chrpos,siz); \
+	char *endptr = 0; \
+	long int val = strtol(nptr,&endptr,10); \
+	if (endptr != nptr+siz) {configureFail(chrsiz,intsiz); return -1;} \
+	if (val > INT_MAX) {configureFail(chrsiz,intsiz); return -1;} \
+	if (val < INT_MIN) {configureFail(chrsiz,intsiz); return -1;} \
+	if (testBase(typInt) < 0) { \
+		insertBase(typInt,ptrPcs##THD##Int()); \
+		insertUndo(typInt,sizePcs##THD##Int());} \
+	*enlocPcs##THD##Int(1) = val; \
+	int found = -1; \
+	if (findCount(typInt,&found)) *arrayPcs##THD##Int(found,1) += 1;}
 
 void configureFail(int chrsiz, int intsiz)
 {
@@ -99,32 +120,18 @@ int processConfigure(int index, int len)
 		enum PcsType typChar = PcsCmdChar;
 		enum PcsType typInt = PcsCmdInt;
 		enum PcsType typData = PcsCmdData;
-		usePcsCmdCmd(); referPcsCmdPtr();
-		usePcsCmdChar(); referPcsCharPtr();
-		usePcsCmdInt(); referPcsIntPtr();
 		while (intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) {
 			int siz = *arrayPcsInt(intpos,1)-chrpos;
-			if (*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') {
-				char *nptr = arrayPcsChar(chrpos,siz);
-				char *endptr = 0;
-				long int val = strtol(nptr,&endptr,10);
-				if (endptr != nptr+siz) {configureFail(chrsiz,intsiz); return -1;}
-				if (val > INT_MAX) {configureFail(chrsiz,intsiz); return -1;}
-				if (val < INT_MIN) {configureFail(chrsiz,intsiz); return -1;}
-				if (!testBase(typInt)) {
-				insertBase(typInt,ptrPcsIntPtr());
-				insertUndo(typInt,sizePcsIntPtr());}
-				*enlocPcsIntPtr(1) = val;
-				int found = -1;
-				if (findCount(typInt,&found)) *arrayPcsIntPtr(found,1) += 1;}
+			if FORCE_INT(Cmd)
+			else if FORCE_INT(Hs)
 			else if FORCE_THREAD(Cmd)
 			else if FORCE_THREAD(Hs)
-			else if FORCE_TYPE(CmdCmd,Cmd) // for completeness only
+			// else if FORCE_TYPE(CmdCmd,Cmd)
 			else if FORCE_TYPE(CmdChar,Cmd)
 			else if FORCE_TYPE(CmdInt,Cmd)
 			else if FORCE_TYPE(CmdData,Cmd)
 			else if FORCE_TYPE(Shader,Cmd)
-			else if FORCE_TYPE(Event,Hs) // for completeness only
+			// else if FORCE_TYPE(Event,Hs)
 			else if FORCE_TYPE(Kind,Hs)
 			else if FORCE_TYPE(HsCmd,Hs)
 			else if FORCE_TYPE(HsChar,Hs)
@@ -181,18 +188,19 @@ int processConfigure(int index, int len)
 			else if FORCE_SHARED(PlaneSub,Hs,Data)
 			else if FORCE_SHARED(SideSub,Hs,Data)
 			else if FORCE_SHARED(HalfSub,Hs,Data)
-			else {
-				if (!testBase(typChar)) {
-				insertBase(typChar,ptrPcsCharPtr());
-				insertUndo(typChar,sizePcsCharPtr());}
-				memcpy(enlocPcsCharPtr(siz),arrayPcsChar(chrpos,siz),siz);
-				int found = -1;
-				if (findCount(typInt,&found)) *arrayPcsIntPtr(found,1) += siz;}
-			chrpos = *arrayPcsInt(intpos,1);
-			intpos += 1;}
+			else if FORCE_CHAR(Cmd)
+			else if FORCE_CHAR(Hs)
+			else {configureFail(chrsiz,intsiz); return -1;}
+			chrpos = *arrayPcsInt(intpos,1); intpos += 1;}
 		if (intpos != sizePcsInt()) {configureFail(chrsiz,intsiz); return -1;}
     	unlocPcsInt(sizePcsInt()-intsiz); unlocPcsChar(sizePcsChar()-chrsiz);
 		return 1;}
+	else if (parse("<?time!> id% (below:id% | middle:id% | above:id%)"
+		" (min:nm% | max:nm%) numer:{nm% (var:id% | var:id%)}"
+		" (<?/!> denom:{nm% (var:id% | var:id%)})",len) > 0) {
+		struct State state;
+
+	}
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
 		return 1;}
