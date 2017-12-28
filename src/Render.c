@@ -209,7 +209,6 @@ enum Action renderWait(int state)
     return Advance;
 }
 
-void enqueShader(enum Shader shader);
 enum Action renderUnlock(int state)
 {
     struct Render *arg = arrayRender(0,1);
@@ -221,8 +220,6 @@ enum Action renderUnlock(int state)
     for (int i = 0; i < arg->vertex; i++) vertex[i]->read--;
     for (int i = 0; i < arg->element; i++) element[i]->read--;
     for (int i = 0; i < arg->feedback; i++) {feedback[i]->read++; feedback[i]->write--;}
-    code[arg->shader].started--;
-    if (arg->restart && code[arg->shader].restart) {code[arg->shader].restart = 0; enqueShader(arg->shader);}
     delocRender(1); delocBuffer(size);
     return Advance;
 }
@@ -248,7 +245,7 @@ enum Action renderPierce(int state)
     return Advance;
 }
 
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, int restart, Machine follow)
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow)
 {
     struct Render *arg = enlocRender(1);
     struct Buffer **buf = enlocBuffer(vertex+element+feedback);
@@ -259,8 +256,6 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     arg->feedback = feedback;
     for (int i = 0; i < vertex+element+feedback; i++) buf[i] = &server[buffer[i]];
     for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
-    arg->restart = restart;
-    code[shader].started++;
     enqueMachine(&renderLock);
     if (feedback > 0) followMachine(&renderWrap);
     followMachine(&renderDraw);
@@ -271,15 +266,14 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
 
 void enqueShader(enum Shader shader)
 {
-    if (code[shader].started) {code[shader].restart = 1; return;}
-    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,1,0);}
-    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,1,0);}
-    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0,0);}
-    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,0,0);}
-    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0,0);}
-    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0,0);}
-    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,0,&renderPierce);}
-    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,0,&renderPierce);}
+    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,0);}
+    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,0);}
+    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0);}
+    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,0);}
+    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0);}
+    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
+    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,&renderPierce);}
+    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,&renderPierce);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 

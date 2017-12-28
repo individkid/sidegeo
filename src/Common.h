@@ -126,7 +126,6 @@ struct Render {
     int element; // primitives per output buffer
     int feedback; // number of output buffers on que
     enum Shader shader;
-    int restart;
     const char *name;
 }; // argument to render functions
 typedef unsigned MyGLuint;
@@ -236,9 +235,9 @@ DECLARE_STAGE(CmnCommand,Command)
 DECLARE_STAGE(CmnCmdChar,char)
 DECLARE_STAGE(CmnCmdInt,int)
 DECLARE_STAGE(CmnCmdData,enum Data)
+DECLARE_STAGE(CmnShader,enum Shader)
 DECLARE_STAGE(CmnRender,struct Render)
 DECLARE_STAGE(CmnBuffer,struct Buffer *)
-DECLARE_STAGE(CmnShader,enum Shader)
 
 DECLARE_STDIN(CmnOutputs)
 DECLARE_STAGE(CmnOutput,char)
@@ -380,8 +379,6 @@ DECLARE_STAGE(PcsCmdCmd,Command)
 DECLARE_STAGE(PcsCmdChar,char)
 DECLARE_STAGE(PcsCmdInt,int)
 DECLARE_STAGE(PcsCmdData,enum Data)
-DECLARE_STAGE(PcsRender,struct Render)
-DECLARE_STAGE(PcsBuffer,struct Buffer *)
 DECLARE_STAGE(PcsShader,enum Shader)
 
 DECLARE_SOURCE(PcsHaskells)

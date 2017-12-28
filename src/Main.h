@@ -51,9 +51,7 @@ struct Code {
     GLuint program;
     int input;
     int output;
-    int limit;
-    int started;
-    int restart;};
+    int limit;};
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
