@@ -195,9 +195,10 @@ int processConfigure(int index, int len)
 		if (intpos != sizePcsInt()) {configureFail(chrsiz,intsiz); return -1;}
     	unlocPcsInt(sizePcsInt()-intsiz); unlocPcsChar(sizePcsChar()-chrsiz);
 		return 1;}
-	else if (parse("<?time!> id% (below:id% | middle:id% | above:id%)"
-		" (min:nm% | max:nm%) numer:{nm% (var:id% | var:id%)}"
-		" (<?/!> denom:{nm% (var:id% | var:id%)})",len) > 0) {
+	else if (parse("<?time!> id%"
+		" (min:nm%) <?,!> (max:nm%) <?,!>"
+		" numer:{nm% (id%| id%| id%)} <?,!>"
+		" denom:{nm% (id%| id%| id%)}",len) > 0) {
 		struct State state;
 
 	}

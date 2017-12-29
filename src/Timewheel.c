@@ -80,14 +80,47 @@ void setTime(struct timespec *delay, long long time)
 
 int saturate(long long val, struct State *ptr)
 {
-	if (val > ptr->max) return (((val>>Top)&1) ? arrayState(ptr->top,1)->amt : ptr->max);
-	else if (val < ptr->min) return (((val>>Bot)&1) ? arrayState(ptr->bot,1)->amt : ptr->min);
-	return (((val>>Mid)&1) ? arrayState(ptr->mid,1)->amt : val);
+	if (val > ptr->max) return ptr->max;
+	else if (val < ptr->min) return ptr->min;
+	return val;
+}
+
+int amount(int sub)
+{
+    struct State *state = arrayState(sub,1);
+    if ((state->vld>>Met)&1) requestMetric(state->met,sub);
+    return state->amt;
+}
+
+long long nomial(struct Nomial *poly)
+{
+    long long rslt = poly->cons;
+    int csub = poly->csub;
+    int vsub = poly->vsub;
+    for (int i = 0; i < poly->num1; i++) {
+        rslt += *arrayCoefficient(csub,1) *
+        amount(*arrayVariable(vsub,1));
+        csub += 1;
+        vsub += 1;}
+    for (int i = 0; i < poly->num2; i++) {
+        rslt += *arrayCoefficient(csub,1) *
+        amount(*arrayVariable(vsub,1)) *
+        amount(*arrayVariable(vsub+1,1));
+        csub += 1;
+        vsub += 2;}
+    for (int i = 0; i < poly->num3; i++) {
+        int cmp = *arrayCoefficient(csub,1);
+        int val = amount(*arrayVariable(vsub,1));
+        if (val < cmp) rslt += amount(*arrayVariable(vsub+1,1));
+        else rslt += amount(*arrayVariable(vsub+1,1));
+        csub += 1;
+        vsub += 3;}
+    return rslt;
 }
 
 long long evaluate(struct Ratio *ratio)
 {
-	return 0; // TODO if ((state->vld>>Met)&1) requestMetric(state->met,change.sub);
+    return nomial(&ratio->n) / nomial(&ratio->d);
 }
 
 void timewheelBefore()

@@ -150,15 +150,15 @@ struct Nomial {
     int vsub; // subscript into variables
     int num1; // number of one variable terms
     int num2; // number of two variable terms
+    int num3; // number of three variable terms
 };
 struct Ratio {struct Nomial n,d;};
 struct State {
-    int vld; // enable for wav, met, bot, mid, top
+    int vld; // enable for wav, met
     int wav; // index of waveform pipeline
     int met; // metric request argument
     int amt; // amout of stock
     int min,max; // saturation limits
-    int bot,mid,top; // indices to copy in saturate
     struct Ratio upd; // formula for new value
     struct Ratio dly; // formula for when to apply value
     struct Ratio sch; // formula for reschedule time
@@ -171,7 +171,7 @@ enum Control {
     Listen,
     Source,
     Start};
-enum Shift {Wav,Met,Bot,Mid,Top};
+enum Shift {Wav,Met};
 
 enum PcsType {
     PcsCmdCmd,
