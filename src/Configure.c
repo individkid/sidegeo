@@ -147,11 +147,9 @@ int timeVar(int chrpos, int intpos)
 	return siz;
 }
 
-#define TIME_FATAL exitErrstr("time too format\n")
-
-#define TIME_FACTOR(FUNC,FATAL,FAIL) \
+#define TIME_FACTOR(FUNC,FAIL) \
 	siz = timeCoef(*chrpos,*intpos); \
-	if (siz < 0) FATAL; \
+	if (siz < 0) return -1; \
 	*intpos += 1; \
 	if (siz == 0) FAIL; \
 	*chrpos += siz;
@@ -163,25 +161,25 @@ int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int sizcof, in
 	poly->num0 = 0;
 	int siz;
 	while (1) {
-		TIME_FACTOR(timeCoef,return -1,break)
+		TIME_FACTOR(timeCoef,break)
 		poly->num0 += 1;}
 	poly->num1 = 0;
 	while (1) {
-		TIME_FACTOR(timeCoef,return -1,break)
-		TIME_FACTOR(timeVar,TIME_FATAL,TIME_FATAL)
+		TIME_FACTOR(timeCoef,break)
+		TIME_FACTOR(timeVar,return -1)
 		poly->num1 += 1;}
 	poly->num2 = 0;
 	while (1) {
-		TIME_FACTOR(timeCoef,return -1,break)
-		TIME_FACTOR(timeVar,TIME_FATAL,TIME_FATAL)
-		TIME_FACTOR(timeVar,TIME_FATAL,TIME_FATAL)
+		TIME_FACTOR(timeCoef,break)
+		TIME_FACTOR(timeVar,return -1)
+		TIME_FACTOR(timeVar,return -1)
 		poly->num2 += 1;}
 	poly->num3 = 0;
 	while (1) {
-		TIME_FACTOR(timeCoef,return -1,break)
-		TIME_FACTOR(timeVar,TIME_FATAL,TIME_FATAL)
-		TIME_FACTOR(timeVar,TIME_FATAL,TIME_FATAL)
-		TIME_FACTOR(timeVar,TIME_FATAL,TIME_FATAL)
+		TIME_FACTOR(timeCoef,break)
+		TIME_FACTOR(timeVar,return -1)
+		TIME_FACTOR(timeVar,return -1)
+		TIME_FACTOR(timeVar,return -1)
 		poly->num3 += 1;}
 	return 0;
 }
