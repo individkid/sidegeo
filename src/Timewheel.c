@@ -78,7 +78,7 @@ void setTime(struct timespec *delay, long long time)
 	// TODO
 }
 
-int saturate(long long val, struct State *ptr)
+float saturate(float val, struct State *ptr)
 {
 	if (val > ptr->max) return ptr->max;
 	else if (val < ptr->min) return ptr->min;
@@ -92,11 +92,15 @@ int amount(int sub)
     return state->amt;
 }
 
-long long nomial(struct Nomial *poly)
+float nomial(struct Nomial *poly)
 {
-    long long rslt = poly->cons;
+    float rslt = 0;
     int csub = poly->csub;
     int vsub = poly->vsub;
+    for (int i = 0; i < poly->num0; i++) {
+        rslt += *arrayCoefficient(csub,1);
+        csub += 1;
+        vsub += 0;}
     for (int i = 0; i < poly->num1; i++) {
         rslt += *arrayCoefficient(csub,1) *
         amount(*arrayVariable(vsub,1));
@@ -118,7 +122,7 @@ long long nomial(struct Nomial *poly)
     return rslt;
 }
 
-long long evaluate(struct Ratio *ratio)
+float evaluate(struct Ratio *ratio)
 {
     return nomial(&ratio->n) / nomial(&ratio->d);
 }

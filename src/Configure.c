@@ -20,8 +20,14 @@
 #include "stdlib.h"
 #include <limits.h>
 
+// only this thread sends new state to timewheel
+int sizsta = 0;
+int sizcof = 0;
+int sizvar = 0;
+
 void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
+int parseString(const char *str, int len, int *val);
 
 void forceBuffer();
 void forceShader();
@@ -45,7 +51,8 @@ void forceShader();
 		insertUndo(Pcs##TYPE,sizePcs##TYPE());} \
 	*enlocPcs##TYPE(1) = INST; \
 	int found = -1; \
-	if (findCount(Pcs##TYPE,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
+	enum PcsType typ = Pcs##TYPE; \
+	if (findCount(&typ,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
 
 #define FORCE_SHARED(INST,THD,TYP) \
 	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && typ##TYP == Pcs##THD##TYP) { \
@@ -54,7 +61,8 @@ void forceShader();
 		insertUndo(Pcs##THD##TYP,sizePcs##THD##TYP());} \
 	*enlocPcs##THD##TYP(1) = INST; \
 	int found = -1; \
-	if (findCount(Pcs##THD##TYP,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
+	enum PcsType typ = Pcs##THD##TYP; \
+	if (findCount(&typ,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
 
 #define FORCE_CHAR(THD) \
 	(typChar == Pcs##THD##Char) { \
@@ -63,7 +71,7 @@ void forceShader();
 		insertUndo(typChar,sizePcs##THD##Char());} \
 	memcpy(enlocPcs##THD##Char(siz),arrayPcsChar(chrpos,siz),siz); \
 	int found = -1; \
-	if (findCount(typInt,&found)) *arrayPcs##THD##Int(found,1) += siz;}
+	if (findCount(&typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += siz;}
 
 #define FORCE_INT(THD) \
 	((*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') && typInt == Pcs##THD##Int) { \
@@ -78,7 +86,98 @@ void forceShader();
 		insertUndo(typInt,sizePcs##THD##Int());} \
 	*enlocPcs##THD##Int(1) = val; \
 	int found = -1; \
-	if (findCount(typInt,&found)) *arrayPcs##THD##Int(found,1) += 1;}
+	if (findCount(&typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
+
+#define TIME_FLOAT(RET,VAL) { \
+	RET = 0; \
+	int siz; \
+	char *nptr; \
+	char *endptr; \
+	if (RET == 0 && intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) { \
+		siz = *arrayPcsInt(intpos,1)-chrpos; \
+		nptr = arrayPcsChar(chrpos,siz); \
+		VAL = strtod(nptr,&endptr);} \
+	if (RET == 0 && endptr == nptr) RET = -1; \
+	if (RET == 0) { \
+		intpos += 1; \
+		chrpos += siz;}}
+
+#define TIME_NAME(RET) { \
+	RET = 0; \
+	int val = sizsta; \
+	if (RET == 0 && intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) { \
+		int siz = *arrayPcsInt(intpos,1)-chrpos; \
+		int key = parseString(arrayPcsChar(chrpos,siz),siz,&val);} \
+	else RET = -1; \
+	if (RET == 0 && val != sizsta) RET = -1;}
+
+#define TIME_IDENT(RET,VAL) { \
+	RET = 0; \
+	int val = -1; \
+	if (RET == 0 && intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) { \
+		int siz = *arrayPcsInt(intpos,1)-chrpos; \
+		int key = parseString(arrayPcsChar(chrpos,siz),siz,&val);} \
+	else RET = -1; \
+	if (RET == 0 && val < 0) RET = -1; \
+	else VAL = val;}
+
+#define TIME_COEF(RET) { \
+	float coef; \
+	TIME_FLOAT(RET,coef); \
+	if (RET >= 0) *enlocCoefficient(1) = coef;}
+
+#define TIME_VAR(RET) {\
+	int var; \
+	TIME_IDENT(RET,var) \
+	if (RET >= 0) *enlocVariable(1) = var;}
+
+#define TIME_POLYNOMIAL(RET,POLY) { \
+	RET = 0; \
+	POLY.csub = sizcof+sizePcsCoefficient(); \
+	POLY.vsub = sizvar+sizePcsVariable(); \
+	POLY.num0 = 0; \
+	while (RET == 0) { \
+		TIME_COEF(RET) \
+		if (RET < 0) {RET = 0; break;} \
+		POLY.num0 += 1;} \
+	POLY.num1 = 0; \
+	while (RET == 0) { \
+		TIME_COEF(RET) \
+		if (RET < 0) {RET = 0; break;} \
+		TIME_VAR(RET) \
+		if (RET < 0) break; \
+		POLY.num1 += 1;} \
+	POLY.num2 = 0; \
+	while (RET == 0) { \
+		TIME_COEF(RET) \
+		if (RET < 0) {RET = 0; break;} \
+		TIME_VAR(RET) \
+		if (RET < 0) break; \
+		TIME_VAR(RET) \
+		if (RET < 0) break; \
+		POLY.num2 += 1;} \
+	POLY.num3 = 0; \
+	while (RET == 0) { \
+		TIME_COEF(RET) \
+		if (RET < 0) {RET = 0; break;} \
+		TIME_VAR(RET) \
+		if (RET < 0) break; \
+		TIME_VAR(RET) \
+		if (RET < 0) break; \
+		TIME_VAR(RET) \
+		if (RET < 0) break; \
+		POLY.num3 += 1;}}
+
+#define TIME_PATTERN \
+	" {fl% <?+!>}%" \
+	" {fl% id% <?+!>}%" \
+	" {fl% id% id% <?+!>}%" \
+	" {fl% id% id% id%"
+
+#define TIME_RATIO \
+	TIME_PATTERN \
+	" <?/!>}%" \
+	TIME_PATTERN
 
 void configureFail(int chrsiz, int intsiz)
 {
@@ -86,11 +185,25 @@ void configureFail(int chrsiz, int intsiz)
 	while (chooseBase(&key) >= 0) {
 		struct QueueBase *ptr;
 		int siz;
-		if (findBase(key,&ptr) < 0) exitErrstr("base too key\n");
-		if (findUndo(key,&siz) < 0) exitErrstr("undo too key\n");
+		if (findBase(&key,&ptr) < 0) exitErrstr("base too key\n");
+		if (findUndo(&key,&siz) < 0) exitErrstr("undo too key\n");
 		unlocQueueBase(ptr,sizeQueueBase(ptr)-siz);
 		if (removeBase(key) < 0) exitErrstr("base too remove\n");
 		if (removeUndo(key) < 0) exitErrstr("undo too remove\n");}
+	while (chooseCount(&key) >= 0) {
+		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
+	unlocPcsInt(sizePcsInt()-intsiz);
+	unlocPcsChar(sizePcsChar()-chrsiz);
+}
+
+void configurePass(int chrsiz, int intsiz)
+{
+	enum PcsType key;
+	while (chooseBase(&key) >= 0) {
+		if (removeBase(key) < 0) exitErrstr("base too remove\n");
+		if (removeUndo(key) < 0) exitErrstr("undo too remove\n");}
+	while (chooseCount(&key) >= 0) {
+		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
 	unlocPcsInt(sizePcsInt()-intsiz);
 	unlocPcsChar(sizePcsChar()-chrsiz);
 }
@@ -111,7 +224,7 @@ int processConfigure(int index, int len)
 	int intsiz = sizePcsInt();
 	initString(processCompare);
 	initMacro(processCompare);
-	parseGlobal("\\id|@{[@|#]}/\\nm|[?+!|?-!]#{#}/\\ |<{&}>/");
+	parseGlobal("\\id|@{[@|#]}/\\sg|([?+!|?-!])/\\nm|sg#{#}/\\fl|nm(?.!{#})([e|E]sg{#}])/\\ |<{&}>/");
 	if (parse("<?force!> {[id|nm]%}%",len) > 0) {
     	*enlocPcsChar(1) = 0;
 		int chrpos = chrsiz;
@@ -193,15 +306,46 @@ int processConfigure(int index, int len)
 			else {configureFail(chrsiz,intsiz); return -1;}
 			chrpos = *arrayPcsInt(intpos,1); intpos += 1;}
 		if (intpos != sizePcsInt()) {configureFail(chrsiz,intsiz); return -1;}
-    	unlocPcsInt(sizePcsInt()-intsiz); unlocPcsChar(sizePcsChar()-chrsiz);
+		configurePass(chrsiz,intsiz);
 		return 1;}
-	else if (parse("<?time!> id%"
-		" (min:nm%) <?,!> (max:nm%) <?,!>"
-		" numer:{nm% (id%| id%| id%)} <?,!>"
-		" denom:{nm% (id%| id%| id%)}",len) > 0) {
+	else if (parse(
+		"<?time!> id% (fl)% <?,!> (fl)% <?,!>"
+		TIME_RATIO
+		TIME_RATIO
+		TIME_RATIO
+		,len) > 0) {
 		struct State state;
-
-	}
+		*enlocPcsChar(1) = 0;
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		int retval;
+		if (insertBase(PcsCoefficient,ptrPcsCoefficient()) < 0) exitErrstr("configure too time\n");
+		if (insertUndo(PcsCoefficient,sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
+		if (insertBase(PcsVariable,ptrPcsVariable()) < 0) exitErrstr("configure too time\n");
+		if (insertUndo(PcsVariable,sizePcsVariable()) < 0) exitErrstr("configure too time\n");
+		TIME_NAME(retval)
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		TIME_FLOAT(retval,state.min);
+		if (retval < 0) state.min = strtof("-INF",0);
+		TIME_FLOAT(retval,state.max);
+		if (retval < 0) state.max = strtof("+INF",0);
+		TIME_POLYNOMIAL(retval,state.upd.n)
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		TIME_POLYNOMIAL(retval,state.upd.d)
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		TIME_POLYNOMIAL(retval,state.dly.n)
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		TIME_POLYNOMIAL(retval,state.dly.d)
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		TIME_POLYNOMIAL(retval,state.sch.n)
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		TIME_POLYNOMIAL(retval,state.sch.d)
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsState(1) = state;
+		sizsta += 1;
+		sizcof += sizePcsCoefficient();
+		sizvar += sizePcsVariable();
+		configurePass(chrsiz,intsiz);}
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
 		return 1;}

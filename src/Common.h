@@ -145,9 +145,9 @@ struct Buffer {
 }; // argument to render functions
 
 struct Nomial {
-    int cons; // constant term
     int csub; // subscript into coefficients
     int vsub; // subscript into variables
+    int num0; // number of zero variable terms
     int num1; // number of one variable terms
     int num2; // number of two variable terms
     int num3; // number of three variable terms
@@ -157,14 +157,14 @@ struct State {
     int vld; // enable for wav, met
     int wav; // index of waveform pipeline
     int met; // metric request argument
-    int amt; // amout of stock
-    int min,max; // saturation limits
+    float amt; // amout of stock
+    float min,max; // saturation limits
     struct Ratio upd; // formula for new value
     struct Ratio dly; // formula for when to apply value
     struct Ratio sch; // formula for reschedule time
 };
 struct Change {
-    int val; // new value for stock
+    float val; // new value for stock
     int sub; // index of stock for value
 };
 enum Control {
@@ -185,6 +185,8 @@ enum PcsType {
     PcsHsChar,
     PcsHsInt,
     PcsHsData,
+    PcsCoefficient,
+    PcsVariable,
     PcsTypes};
 
 #define DECLARE_MSGSTR(NAME) \
@@ -263,7 +265,7 @@ DECLARE_STAGE(CmnControl,enum Control)
 DECLARE_STAGE(CmnChange,struct Change)
 DECLARE_STAGE(CmnTwChar,char)
 DECLARE_STAGE(CmnTwInt,int)
-DECLARE_STAGE(CmnCoefficient,int)
+DECLARE_STAGE(CmnCoefficient,float)
 DECLARE_STAGE(CmnVariable,int)
 DECLARE_STAGE(CmnState,struct State)
 
@@ -351,7 +353,7 @@ DECLARE_STAGE(Control,enum Control)
 DECLARE_STAGE(Change,struct Change)
 DECLARE_STAGE(TwChar,char)
 DECLARE_STAGE(TwInt,int)
-DECLARE_STAGE(Coefficient,int)
+DECLARE_STAGE(Coefficient,float)
 DECLARE_STAGE(Variable,int)
 DECLARE_STAGE(State,struct State)
 
@@ -394,16 +396,17 @@ DECLARE_STAGE(PcsControl,enum Control)
 DECLARE_STAGE(PcsChange,struct Change)
 DECLARE_STAGE(PcsTwChar,char)
 DECLARE_STAGE(PcsTwInt,int)
-DECLARE_STAGE(PcsCoefficient,int)
+DECLARE_STAGE(PcsCoefficient,float)
 DECLARE_STAGE(PcsVariable,int)
 DECLARE_STAGE(PcsState,struct State)
 
 DECLARE_LOCAL(PcsChar,char) // given and/or result
 DECLARE_LOCAL(PcsInt,int) // given and/or result
-
-DECLARE_LOCAL(PcsBuf,char) // buffer for val and key strings
-DECLARE_LOCAL(Format,char) // modifiable copy of format string
+DECLARE_LOCAL(PcsBuf,char) // buffer for strings
 DECLARE_TREE(String,int,int) // whether string is in buffer
+DECLARE_TREE(CfgState,int,int) // map from state name to location
+
+DECLARE_LOCAL(Format,char) // modifiable copy of format string
 DECLARE_TREE(Macro,int,int) // val to replace key in format
 DECLARE_META(Shadow,int) // vals to restore in macros
 DECLARE_META(Nest,int) // keys for restore in macros

@@ -142,7 +142,8 @@ EXTERNC int last##NAME(int link);
 #define DECLARE_POOL(NAME,TYPE) \
 EXTERNC int alloc##NAME(); \
 EXTERNC void free##NAME(int sub); \
-EXTERNC TYPE *cast##NAME(int sub);
+EXTERNC TYPE *cast##NAME(int sub); \
+EXTERNC int size##NAME();
 
 #define DECLARE_PRIORITY(NAME,TYPE) \
 EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri); \
@@ -153,10 +154,11 @@ EXTERNC pqueue_pri_t when##NAME();
 #define DECLARE_TREE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int test##NAME(KEY key); \
-EXTERNC int find##NAME(KEY key, VAL *val); \
+EXTERNC int find##NAME(KEY *key, VAL *val); \
 EXTERNC int insert##NAME(KEY key, VAL val); \
 EXTERNC int remove##NAME(KEY key); \
-EXTERNC int choose##NAME(KEY *key);
+EXTERNC int choose##NAME(KEY *key); \
+EXTERNC int size##NAME();
 
 #ifdef __cplusplus
 
@@ -957,6 +959,11 @@ extern "C" int last##NAME(int index) {return NAME##Inst.get(index);}
 template<class TYPE> struct QueuePool {
     QueueStruct<TYPE> pool;
     QueueLink link;
+    int count;
+    QueuePool()
+    {
+        count = 0;
+    }
     int alloc()
     {
         int head = link.begin(0);
@@ -966,11 +973,13 @@ template<class TYPE> struct QueuePool {
             link.set(head,pool.size());
             pool.enloc(1);}
         link.move(head,1);
+        count += 1;
         return link.get(head);
     }
     void free(int sub)
     {
         link.move(0,sub);
+        count -= 1;
     }
     TYPE *cast(int sub)
     {
@@ -982,13 +991,18 @@ template<class TYPE> struct QueuePool {
         if (sub < 0) return -1;
         return link.get(sub);
     }
+    int size()
+    {
+        return count;
+    }
 };
 
 #define DEFINE_POOL(NAME,TYPE) \
 QueuePool<TYPE> NAME##Inst = QueuePool<TYPE>(); \
 extern "C" int alloc##NAME() {return NAME##Inst.alloc();} \
 extern "C" void free##NAME(int sub) {NAME##Inst.free(sub);} \
-extern "C" TYPE *cast##NAME(int sub) {return NAME##Inst.cast(sub);}
+extern "C" TYPE *cast##NAME(int sub) {return NAME##Inst.cast(sub);} \
+extern "C" int size##NAME() {return NAME##Inst.size();}
 
 template<class TYPE> struct Pqueue {
     TYPE val; // subscript into a buffer
@@ -1123,21 +1137,17 @@ template<class KEY, class VAL> struct QueueTree {
     }
     int test(KEY key)
     {
-        int tofind = pool.alloc();
-        pool.cast(tofind)->key = key;
-        void *found = lookup_node(top,int2void(tofind),&rbop);
-        pool.free(tofind);
-        if (void2int(found) < 0) return -1;
-        return 0;
+        return find(&key,0);
     }
-    int find(KEY key, VAL *val)
+    int find(KEY *key, VAL *val)
     {
         int tofind = pool.alloc();
-        pool.cast(tofind)->key = key;
+        pool.cast(tofind)->key = *key;
         void *found = lookup_node(top,int2void(tofind),&rbop);
         pool.free(tofind);
         if (void2int(found) < 0) return -1;
-        *val = pool.cast(void2int(found))->val;
+        *key = pool.cast(void2int(found))->key;
+        if (val) *val = pool.cast(void2int(found))->val;
         return 0;
     }
     int insert(KEY key, VAL val)
@@ -1151,6 +1161,7 @@ template<class KEY, class VAL> struct QueueTree {
     }
     int remove(KEY key)
     {
+        if (test(key) < 0) return -1;
         int tofind = pool.alloc();
         pool.cast(tofind)->key = key;
         void *found = lookup_node(top,int2void(tofind),&rbop);
@@ -1168,6 +1179,10 @@ template<class KEY, class VAL> struct QueueTree {
         *key = pool.cast(sub)->key;
         return 0;
     }
+    int size()
+    {
+        return pool.size();
+    }
 };
 
 // TODO use FUNC to compare; add compare function for strings
@@ -1177,10 +1192,11 @@ QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
-extern "C" int find##NAME(KEY key, VAL *val) {return NAME##Inst.find(key,val);} \
+extern "C" int find##NAME(KEY *key, VAL *val) {return NAME##Inst.find(key,val);} \
 extern "C" int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
-extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);}
+extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
+extern "C" int size##NAME() {return NAME##Inst.size();}
 
 #endif // __cplusplus
 
