@@ -1137,7 +1137,12 @@ template<class KEY, class VAL> struct QueueTree {
     }
     int test(KEY key)
     {
-        return find(&key,0);
+        int tofind = pool.alloc();
+        pool.cast(tofind)->key = key;
+        void *found = lookup_node(top,int2void(tofind),&rbop);
+        pool.free(tofind);
+        if (void2int(found) < 0) return -1;
+        return 0;
     }
     int find(KEY *key, VAL *val)
     {
@@ -1147,7 +1152,7 @@ template<class KEY, class VAL> struct QueueTree {
         pool.free(tofind);
         if (void2int(found) < 0) return -1;
         *key = pool.cast(void2int(found))->key;
-        if (val) *val = pool.cast(void2int(found))->val;
+        *val = pool.cast(void2int(found))->val;
         return 0;
     }
     int insert(KEY key, VAL val)

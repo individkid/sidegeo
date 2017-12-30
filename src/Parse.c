@@ -203,14 +203,16 @@ int parseDrop(int skip, struct Parse *parse)
 	return retval;
 }
 
-int parseString(const char *str, int len, int *val)
+int parseString(const char *str, int len)
 {
 	int key = sizePcsBuf();
 	memcpy(enlocPcsBuf(len),str,len);
 	*enlocPcsBuf(1) = 0;
-	if (findString(&key,val) < 0) {
-		if (insertString(key,*val) < 0) exitErrstr("key too string\n");}
-	else unlocPcsBuf(len+1);
+	int tmp;
+	if (findString(&key,&tmp) < 0) {
+		if (insertString(key,key) < 0) exitErrstr("key too string\n");
+		return key;}
+	unlocPcsBuf(len+1);
 	return key;
 }
 
@@ -221,12 +223,12 @@ int parseMacro(struct Parse *parse)
 	int keylen = 0;
 	while (parse->fmtsub+keylen < parse->fmtlen && *arrayFormat(keylen,1) != '|') keylen += 1;
 	if (parse->fmtsub+keylen >= parse->fmtlen) return -1;
-	int key = parseString(arrayFormat(0,keylen),keylen,0);
+	int key = parseString(arrayFormat(0,keylen),keylen);
 	parseDeloc(keylen+1,parse);
 	int vallen = 0;
 	while (parse->fmtsub+vallen < parse->fmtlen && *arrayFormat(vallen,1) != '/') vallen += 1;
 	if (parse->fmtsub+vallen >= parse->fmtlen) return -1;
-	int val = parseString(arrayFormat(0,vallen),vallen,0);
+	int val = parseString(arrayFormat(0,vallen),vallen);
 	parseDeloc(vallen+1,parse);
 	if (parse->depth > 0) {
 		*enlocNestPtr(1) = key;

@@ -439,6 +439,7 @@ DEFINE_LOCAL(PcsChar,char)
 DEFINE_LOCAL(PcsInt,int)
 DEFINE_LOCAL(PcsBuf,char)
 DEFINE_TREE(String,int,int)
+DEFINE_TREE(CfgState,int,int)
 
 DEFINE_LOCAL(Format,char)
 DEFINE_TREE(Macro,int,int)
