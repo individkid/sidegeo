@@ -21,7 +21,6 @@
 #include <limits.h>
 
 // only this thread sends new state to timewheel
-int sizsta = 0;
 int sizcof = 0;
 int sizvar = 0;
 
@@ -101,31 +100,13 @@ int timeFloat(float *rslt, int chrpos, int intpos)
 	return siz;
 }
 
-int timeName(int chrpos, int intpos, int sizsta)
-{
-	int val = sizsta;
-	if (intpos >= sizePcsInt()) return -1;
-	int siz = *arrayPcsInt(intpos,1)-chrpos;
-	if (siz == 0) return 0;
-	int key = sizePcsBuf();
-	memcpy(enlocPcsBuf(siz),arrayPcsChar(chrpos,siz),siz);
-	*enlocPcsBuf(1) = 0;
-	if (testCfgState(key) >= 0) return -1;
-	if (insertCfgState(key,sizsta) < 0) exitErrstr("key too string\n");
-	return siz;
-}
-
-int timeIdent(int *val, int chrpos, int intpos)
+int timeName(int *key, int chrpos, int intpos)
 {
 	if (intpos >= sizePcsInt()) return -1;
 	int siz = *arrayPcsInt(intpos,1)-chrpos;
 	if (siz == 0) return 0;
-	int key = sizePcsBuf();
-	memcpy(enlocPcsBuf(siz),arrayPcsChar(chrpos,siz),siz);
+	*key = parseString(arrayPcsChar(chrpos,siz),siz);
 	*enlocPcsBuf(1) = 0;
-	if (testCfgState(key) < 0) return -1;
-	if (findCfgState(&key,val) < 0 || key != sizePcsBuf()-siz-1) exitErrstr("key too string\n");
-	unlocPcsBuf(siz+1);
 	return siz;
 }
 
@@ -141,7 +122,7 @@ int timeCoef(int chrpos, int intpos)
 int timeVar(int chrpos, int intpos)
 {
 	int val;
-	int siz = timeIdent(&val,chrpos,intpos);
+	int siz = timeName(&val,chrpos,intpos);
 	if (siz < 0) return -1;
 	if (siz > 0) *enlocVariable(1) = val;
 	return siz;
@@ -330,7 +311,7 @@ int processConfigure(int index, int len)
 		TIME_RATIO
 		TIME_RATIO
 		,len) > 0) {
-		struct State state;
+		struct State state = {0}; // TODO parse metric and wave
 		*enlocPcsChar(1) = 0;
 		int chrpos = chrsiz;
 		int intpos = intsiz;
@@ -339,7 +320,7 @@ int processConfigure(int index, int len)
 		if (insertUndo(PcsCoefficient,sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
 		if (insertBase(PcsVariable,ptrPcsVariable()) < 0) exitErrstr("configure too time\n");
 		if (insertUndo(PcsVariable,sizePcsVariable()) < 0) exitErrstr("configure too time\n");
-		retval = timeName(chrpos,intpos,sizsta);
+		retval = timeName(&state.idt,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		retval = timeFloat(&state.min,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
@@ -360,7 +341,6 @@ int processConfigure(int index, int len)
 		retval = timePolynomial(&state.sch.d,&chrpos,&intpos,sizcof,sizvar);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsState(1) = state;
-		sizsta += 1;
 		sizcof += sizePcsCoefficient();
 		sizvar += sizePcsVariable();
 		configurePass(chrsiz,intsiz);}

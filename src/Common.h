@@ -154,6 +154,7 @@ struct Nomial {
 };
 struct Ratio {struct Nomial n,d;};
 struct State {
+    int idt; // how other states will refer to this one
     int vld; // enable for wav, met
     int wav; // index of waveform pipeline
     int met; // metric request argument
@@ -353,14 +354,15 @@ DECLARE_STAGE(Control,enum Control)
 DECLARE_STAGE(Change,struct Change)
 DECLARE_STAGE(TwChar,char)
 DECLARE_STAGE(TwInt,int)
-DECLARE_STAGE(Coefficient,float)
-DECLARE_STAGE(Variable,int)
-DECLARE_STAGE(State,struct State)
+DECLARE_EXTRA(Coefficient,float)
+DECLARE_EXTRA(Variable,int)
+DECLARE_EXTRA(State,struct State)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
 DECLARE_META(Wave,int)
 DECLARE_POINTER(Pipe,int)
+DECLARE_TREE(Pack,int,int)
 
 DECLARE_SOURCE(TwCommands)
 DECLARE_STAGE(TwCommand,Command)
@@ -404,7 +406,6 @@ DECLARE_LOCAL(PcsChar,char) // given and/or result
 DECLARE_LOCAL(PcsInt,int) // given and/or result
 DECLARE_LOCAL(PcsBuf,char) // buffer for strings
 DECLARE_TREE(String,int,int) // whether string is in buffer
-DECLARE_TREE(CfgState,int,int) // map from state name to location
 
 DECLARE_LOCAL(Format,char) // modifiable copy of format string
 DECLARE_TREE(Macro,int,int) // val to replace key in format

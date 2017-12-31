@@ -20,6 +20,8 @@
 
 #include "Common.h"
 
+int packed = 0; // how many from State have been entered into Pack
+
 void startListen()
 {
 	// TODO
@@ -32,7 +34,8 @@ void startSource()
 
 void startState()
 {
-    // TODO
+    // TODO pack idents to state subscripts
+    // TODO if pack fails, give up, and print message first few times
 }
 
 void finishListen()

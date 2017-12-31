@@ -126,6 +126,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --embed interprets polyants as regions in polytope  
   * --polytope interprets polyants as significant facets  
   * --time formulae for value, reschedule delay, assignment delay  
+  * --change value for change to named timewheel state  
   * --metric funtion name, facet specifications for term values  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
