@@ -362,7 +362,7 @@ DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
 DECLARE_META(Wave,int)
 DECLARE_POINTER(Pipe,int)
-DECLARE_TREE(Pack,int,int)
+DECLARE_TREE(TwPack,int,int)
 
 DECLARE_SOURCE(TwCommands)
 DECLARE_STAGE(TwCommand,Command)
@@ -406,6 +406,9 @@ DECLARE_LOCAL(PcsChar,char) // given and/or result
 DECLARE_LOCAL(PcsInt,int) // given and/or result
 DECLARE_LOCAL(PcsBuf,char) // buffer for strings
 DECLARE_TREE(String,int,int) // whether string is in buffer
+DECLARE_TREE(PcsPack,int,int) // state name to per state
+DECLARE_LOCAL(Ready,int) // per state count of forward uses
+DECLARE_META(Image,int) // per state list of backward users
 
 DECLARE_LOCAL(Format,char) // modifiable copy of format string
 DECLARE_TREE(Macro,int,int) // val to replace key in format

@@ -21,8 +21,10 @@
 #include <limits.h>
 
 // only this thread sends new state to timewheel
-int sizcof = 0;
-int sizvar = 0;
+int cofsiz = 0;
+int varsiz = 0;
+int crtsiz = 0;
+int crtpos = 0;
 
 void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
@@ -106,7 +108,16 @@ int timeName(int *key, int chrpos, int intpos)
 	int siz = *arrayPcsInt(intpos,1)-chrpos;
 	if (siz == 0) return 0;
 	*key = parseString(arrayPcsChar(chrpos,siz),siz);
-	*enlocPcsBuf(1) = 0;
+	if (testPcsPack(*key) < 0) { // set up for when key is defined
+		int val = usageImage();
+		useImage(val);
+		if (insertPcsPack(*key,val) < 0) exitErrstr("name too insert\n");
+		*enlocImage(val,1) = crtpos;
+		*arrayReady(crtsiz,1) += 1;}
+	else {
+		int val;
+		if (findPcsPack(key,&val) < 0) exitErrstr("name too find\n");
+		*enlocImage(val,1) = crtpos;}
 	return siz;
 }
 
@@ -128,39 +139,46 @@ int timeVar(int chrpos, int intpos)
 	return siz;
 }
 
-#define TIME_FACTOR(FUNC,FAIL) \
+#define TIME_TERM { \
 	siz = timeCoef(*chrpos,*intpos); \
 	if (siz < 0) return -1; \
 	*intpos += 1; \
-	if (siz == 0) FAIL; \
-	*chrpos += siz;
+	if (siz == 0) break; \
+	*chrpos += siz;}
 
-int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int sizcof, int sizvar)
+#define TIME_FACTOR { \
+	siz = timeVar(*chrpos,*intpos); \
+	if (siz < 0) return -1; \
+	*intpos += 1; \
+	if (siz == 0) return -1; \
+	*chrpos += siz;}
+
+int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, int varsiz)
 {
-	poly->csub = sizcof + sizePcsCoefficient();
-	poly->vsub = sizvar + sizePcsVariable();
+	poly->csub = cofsiz + sizePcsCoefficient();
+	poly->vsub = varsiz + sizePcsVariable();
 	poly->num0 = 0;
 	int siz;
 	while (1) {
-		TIME_FACTOR(timeCoef,break)
+		TIME_TERM
 		poly->num0 += 1;}
 	poly->num1 = 0;
 	while (1) {
-		TIME_FACTOR(timeCoef,break)
-		TIME_FACTOR(timeVar,return -1)
+		TIME_TERM
+		TIME_FACTOR
 		poly->num1 += 1;}
 	poly->num2 = 0;
 	while (1) {
-		TIME_FACTOR(timeCoef,break)
-		TIME_FACTOR(timeVar,return -1)
-		TIME_FACTOR(timeVar,return -1)
+		TIME_TERM
+		TIME_FACTOR
+		TIME_FACTOR
 		poly->num2 += 1;}
 	poly->num3 = 0;
 	while (1) {
-		TIME_FACTOR(timeCoef,break)
-		TIME_FACTOR(timeVar,return -1)
-		TIME_FACTOR(timeVar,return -1)
-		TIME_FACTOR(timeVar,return -1)
+		TIME_TERM
+		TIME_FACTOR
+		TIME_FACTOR
+		TIME_FACTOR
 		poly->num3 += 1;}
 	return 0;
 }
@@ -320,8 +338,12 @@ int processConfigure(int index, int len)
 		if (insertUndo(PcsCoefficient,sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
 		if (insertBase(PcsVariable,ptrPcsVariable()) < 0) exitErrstr("configure too time\n");
 		if (insertUndo(PcsVariable,sizePcsVariable()) < 0) exitErrstr("configure too time\n");
-		retval = timeName(&state.idt,chrpos,intpos);
+		crtsiz = sizeReady();
+		*enlocReady(1) = 0;
+		retval = timeName(&crtpos,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (insertPcsPack(crtpos,crtsiz) < 0) exitErrstr("configure too insert\n");
+		state.idt = crtpos;
 		state.vld = 0;
 		retval = timeName(&state.wav,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
@@ -335,22 +357,31 @@ int processConfigure(int index, int len)
 		retval = timeFloat(&state.min,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.max = strtof("+INF",0);
-		retval = timePolynomial(&state.upd.n,&chrpos,&intpos,sizcof,sizvar);
+		retval = timePolynomial(&state.upd.n,&chrpos,&intpos,cofsiz,varsiz);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.upd.d,&chrpos,&intpos,sizcof,sizvar);
+		retval = timePolynomial(&state.upd.d,&chrpos,&intpos,cofsiz,varsiz);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.dly.n,&chrpos,&intpos,sizcof,sizvar);
+		retval = timePolynomial(&state.dly.n,&chrpos,&intpos,cofsiz,varsiz);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.dly.d,&chrpos,&intpos,sizcof,sizvar);
+		retval = timePolynomial(&state.dly.d,&chrpos,&intpos,cofsiz,varsiz);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.sch.n,&chrpos,&intpos,sizcof,sizvar);
+		retval = timePolynomial(&state.sch.n,&chrpos,&intpos,cofsiz,varsiz);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.sch.d,&chrpos,&intpos,sizcof,sizvar);
+		retval = timePolynomial(&state.sch.d,&chrpos,&intpos,cofsiz,varsiz);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsState(1) = state;
-		sizcof += sizePcsCoefficient();
-		sizvar += sizePcsVariable();
-		configurePass(chrsiz,intsiz);}
+		cofsiz += sizePcsCoefficient();
+		varsiz += sizePcsVariable();
+		configurePass(chrsiz,intsiz);
+		while (sizeImage(crtsiz) > 0) {
+			int key = *delocImage(crtsiz,1);
+			int val;
+			if (findPcsPack(&key,&val) < 0) exitErrstr("configure too find\n");
+			if (*arrayReady(val,1) > 1) *arrayReady(val,1) -= 1;
+			else if (*arrayReady(val,1) == 1) {
+				*arrayReady(val,1) = 0;
+				*enlocPcsControl(1) = Start;
+				*enlocPcsInt(1) = key;}}}
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
 		return 1;}
