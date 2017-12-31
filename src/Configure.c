@@ -23,8 +23,6 @@
 // only this thread sends new state to timewheel
 int cofsiz = 0;
 int varsiz = 0;
-int crtsiz = 0;
-int crtpos = 0;
 
 void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
@@ -89,6 +87,40 @@ void forceShader();
 	int found = -1; \
 	if (findCount(&typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
 
+void timeForward(int key)
+{
+	int sub = sizeReady()-1;
+	int val = -1;
+	if (*arrayReady(sub,1) == 0) {
+		if (insertReadier(key,sub) < 0) exitErrstr("name too ready\n");}
+	if (testImager(key) < 0) {
+		val = usageImage();
+		usedImage(val);
+		if (insertImager(key,val) < 0) exitErrstr("name too insert\n");}
+	else {
+		if (checkImager(key,&val) < 0) exitErrstr("name too find\n");
+		if (sizeImage(val) == 0 && val == sub) exitErrstr("name too assert\n");
+		if (sizeImage(val) == 0) val = -1;}
+	if (val >= 0) {
+		*enlocImage(val,1) = key;
+		*arrayReady(sub,1) += 1;}
+	if (*arrayReady(sub,1) == 0) exitErrstr("name too assert\n");
+}
+
+void timeBackward(int key)
+{
+	int image;
+	if (checkImager(key,&image) < 0) exitErrstr("image too find\n");
+	while (sizeImage(image) > 0) {
+	int key = *delocImage(image,1);
+	int ready;
+	if (checkReadier(key,&ready) < 0) exitErrstr("ready too find\n");
+	if (*arrayReady(ready,1) == 1) {
+	*enlocPcsControl(1) = Start;
+	*enlocPcsInt(1) = key;}
+	if (*arrayReady(ready,1) > 1) *arrayReady(ready,1) -= 1;}
+}
+
 int timeFloat(float *rslt, int chrpos, int intpos)
 {
 	if (intpos >= sizePcsInt()) return -1;
@@ -108,16 +140,7 @@ int timeName(int *key, int chrpos, int intpos)
 	int siz = *arrayPcsInt(intpos,1)-chrpos;
 	if (siz == 0) return 0;
 	*key = parseString(arrayPcsChar(chrpos,siz),siz);
-	if (testPcsPack(*key) < 0) { // set up for when key is defined
-		int val = usageImage();
-		useImage(val);
-		if (insertPcsPack(*key,val) < 0) exitErrstr("name too insert\n");
-		*enlocImage(val,1) = crtpos;
-		*arrayReady(crtsiz,1) += 1;}
-	else {
-		int val;
-		if (findPcsPack(key,&val) < 0) exitErrstr("name too find\n");
-		*enlocImage(val,1) = crtpos;}
+	timeForward(*key);
 	return siz;
 }
 
@@ -324,7 +347,8 @@ int processConfigure(int index, int len)
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	else if (parse(
-		"<?time!> id% (id)% (id)% (fl)% <?,!> (fl)% <?,!>"
+		"<?time!> id% <?,!> (id)% <?,!> (id)% <?,!>"
+		" (fl)% <?,!> (fl)% <?,!> (fl)% <?,!>"
 		TIME_RATIO
 		TIME_RATIO
 		TIME_RATIO
@@ -338,12 +362,9 @@ int processConfigure(int index, int len)
 		if (insertUndo(PcsCoefficient,sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
 		if (insertBase(PcsVariable,ptrPcsVariable()) < 0) exitErrstr("configure too time\n");
 		if (insertUndo(PcsVariable,sizePcsVariable()) < 0) exitErrstr("configure too time\n");
-		crtsiz = sizeReady();
 		*enlocReady(1) = 0;
-		retval = timeName(&crtpos,chrpos,intpos);
+		retval = timeName(&state.idt,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (insertPcsPack(crtpos,crtsiz) < 0) exitErrstr("configure too insert\n");
-		state.idt = crtpos;
 		state.vld = 0;
 		retval = timeName(&state.wav,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
@@ -351,6 +372,9 @@ int processConfigure(int index, int len)
 		retval = timeName(&state.met,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Met;
+		retval = timeFloat(&state.amt,chrpos,intpos);
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (retval == 0) state.amt = strtof("0",0);
 		retval = timeFloat(&state.min,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.min = strtof("-INF",0);
@@ -373,15 +397,7 @@ int processConfigure(int index, int len)
 		cofsiz += sizePcsCoefficient();
 		varsiz += sizePcsVariable();
 		configurePass(chrsiz,intsiz);
-		while (sizeImage(crtsiz) > 0) {
-			int key = *delocImage(crtsiz,1);
-			int val;
-			if (findPcsPack(&key,&val) < 0) exitErrstr("configure too find\n");
-			if (*arrayReady(val,1) > 1) *arrayReady(val,1) -= 1;
-			else if (*arrayReady(val,1) == 1) {
-				*arrayReady(val,1) = 0;
-				*enlocPcsControl(1) = Start;
-				*enlocPcsInt(1) = key;}}}
+		timeBackward(state.idt);}
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
 		return 1;}

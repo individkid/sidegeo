@@ -112,8 +112,9 @@ EXTERNC struct QueueBase *ptr##NAME();
 
 #define DECLARE_META(NAME,TYPE) \
 EXTERNC int usage##NAME(); \
-EXTERNC int size##NAME(int idx); \
+EXTERNC void used##NAME(int idx); \
 EXTERNC void use##NAME(int idx); \
+EXTERNC int size##NAME(int idx); \
 EXTERNC void xfer##NAME(int idx, int siz); \
 EXTERNC TYPE *enloc##NAME(int idx, int siz); \
 EXTERNC TYPE *deloc##NAME(int idx, int siz); \
@@ -155,6 +156,7 @@ EXTERNC pqueue_pri_t when##NAME();
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int test##NAME(KEY key); \
 EXTERNC int find##NAME(KEY *key, VAL *val); \
+EXTERNC int check##NAME(KEY key, VAL *val); \
 EXTERNC int insert##NAME(KEY key, VAL val); \
 EXTERNC int remove##NAME(KEY key); \
 EXTERNC int choose##NAME(KEY *key); \
@@ -777,17 +779,21 @@ template<class TYPE> struct QueueMeta {
     {
         return meta.size();
     }
-    int size(int idx)
-    {
-        return meta.array(idx,1)->size();
-    }
-    void use(int idx)
+    void enloc(int idx)
     {
         while (idx >= meta.size()) {
             QueueStruct<TYPE> inst = QueueStruct<TYPE>();
             *meta.enloc(1) = inst;}
+    }
+    void use(int idx)
+    {
+        enloc(idx);
         if (QueueStruct<TYPE>::src) exitErrstr("src too use\n");
         QueueStruct<TYPE>::src = meta.array(idx,1);
+    }
+    int size(int idx)
+    {
+        return meta.array(idx,1)->size();
     }
     TYPE *enloc(int idx, int siz)
     {
@@ -830,8 +836,9 @@ template<class TYPE> struct QueueMeta {
 #define DEFINE_META(NAME,TYPE) \
 QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \
 extern "C" int usage##NAME() {return NAME##Inst.size();} \
-extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);} \
+extern "C" void used##NAME(int idx) {NAME##Inst.enloc(idx);} \
 extern "C" void use##NAME(int idx) {NAME##Inst.use(idx);} \
+extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);} \
 extern "C" TYPE *enloc##NAME(int idx, int siz) {return NAME##Inst.enloc(idx,siz);} \
 extern "C" TYPE *deloc##NAME(int idx, int siz) {return NAME##Inst.deloc(idx,siz);} \
 extern "C" TYPE *destr##NAME(int idx, TYPE val) {return NAME##Inst.destr(idx,val);} \
@@ -1155,6 +1162,12 @@ template<class KEY, class VAL> struct QueueTree {
         *val = pool.cast(void2int(found))->val;
         return 0;
     }
+    int check(KEY key, VAL *val)
+    {
+        KEY tmp = key;
+        if (find(&tmp,val) < 0 || tmp != key) return -1;
+        return 0;
+    }
     int insert(KEY key, VAL val)
     {
         if (test(key) >= 0) return -1;
@@ -1198,6 +1211,7 @@ extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.i
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int find##NAME(KEY *key, VAL *val) {return NAME##Inst.find(key,val);} \
+extern "C" int check##NAME(KEY key, VAL *val) {return NAME##Inst.check(key,val);} \
 extern "C" int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \

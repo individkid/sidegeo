@@ -396,7 +396,7 @@ DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)
 DEFINE_META(Wave,int)
 DEFINE_POINTER(Pipe,int)
-DEFINE_TREE(TwPack,int,int)
+DEFINE_TREE(Pack,int,int)
 
 DEFINE_SOURCE(TwCommands,CmnCommands,Timewheels)
 DEFINE_STAGE(TwCommand,Command,TwCommands)
@@ -440,7 +440,8 @@ DEFINE_LOCAL(PcsChar,char)
 DEFINE_LOCAL(PcsInt,int)
 DEFINE_LOCAL(PcsBuf,char)
 DEFINE_TREE(String,int,int)
-DEFINE_TREE(PcsPack,int,int)
+DEFINE_TREE(Readier,int,int)
+DEFINE_TREE(Imager,int,int);
 DEFINE_LOCAL(Ready,int)
 DEFINE_META(Image,int)
 
