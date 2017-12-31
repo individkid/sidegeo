@@ -306,12 +306,12 @@ int processConfigure(int index, int len)
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	else if (parse(
-		"<?time!> id% (fl)% <?,!> (fl)% <?,!>"
+		"<?time!> id% (id)% (id)% (fl)% <?,!> (fl)% <?,!>"
 		TIME_RATIO
 		TIME_RATIO
 		TIME_RATIO
 		,len) > 0) {
-		struct State state = {0}; // TODO parse metric and wave
+		struct State state;
 		*enlocPcsChar(1) = 0;
 		int chrpos = chrsiz;
 		int intpos = intsiz;
@@ -322,6 +322,13 @@ int processConfigure(int index, int len)
 		if (insertUndo(PcsVariable,sizePcsVariable()) < 0) exitErrstr("configure too time\n");
 		retval = timeName(&state.idt,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		state.vld = 0;
+		retval = timeName(&state.wav,chrpos,intpos);
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (retval > 0) state.vld |= 1<<Wav;
+		retval = timeName(&state.met,chrpos,intpos);
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (retval > 0) state.vld |= 1<<Met;
 		retval = timeFloat(&state.min,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.min = strtof("-INF",0);
