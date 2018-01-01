@@ -31,14 +31,18 @@ int parseString(const char *str, int len);
 void forceBuffer();
 void forceShader();
 
-#define FORCE_THREAD(THREAD) \
+#define FORCE_TYPES(THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
 	typCmd = Pcs##THREAD##Cmd; \
 	typChar = Pcs##THREAD##Char; \
 	typInt = Pcs##THREAD##Int; \
 	typData = Pcs##THREAD##Data;}
 
-#define FORCE_TYPE(TYPE,THREAD) \
+#define FORCE_TYPE(TYPE) \
+	(strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
+	typInt = Pcs##TYPE;}
+
+#define FORCE_COUNT(TYPE,THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
 	if (testCount(Pcs##TYPE) < 0) insertCount(Pcs##TYPE,sizePcs##THREAD##Int()); \
 	*enlocPcs##THREAD##Int(1) = 0;}
@@ -50,8 +54,7 @@ void forceShader();
 		insertUndo(Pcs##TYPE,sizePcs##TYPE());} \
 	*enlocPcs##TYPE(1) = INST; \
 	int found = -1; \
-	enum PcsType typ = Pcs##TYPE; \
-	if (findCount(&typ,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
+	if (checkCount(Pcs##TYPE,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
 
 #define FORCE_SHARED(INST,THD,TYP) \
 	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && typ##TYP == Pcs##THD##TYP) { \
@@ -60,8 +63,7 @@ void forceShader();
 		insertUndo(Pcs##THD##TYP,sizePcs##THD##TYP());} \
 	*enlocPcs##THD##TYP(1) = INST; \
 	int found = -1; \
-	enum PcsType typ = Pcs##THD##TYP; \
-	if (findCount(&typ,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
+	if (checkCount(Pcs##THD##TYP,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
 
 #define FORCE_CHAR(THD) \
 	(typChar == Pcs##THD##Char) { \
@@ -70,10 +72,10 @@ void forceShader();
 		insertUndo(typChar,sizePcs##THD##Char());} \
 	memcpy(enlocPcs##THD##Char(siz),arrayPcsChar(chrpos,siz),siz); \
 	int found = -1; \
-	if (findCount(&typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += siz;}
+	if (checkCount(typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += siz;}
 
-#define FORCE_INT(THD) \
-	((*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') && typInt == Pcs##THD##Int) { \
+#define FORCE_INT(THD,TYPE) \
+	((*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') && typInt == Pcs##TYPE) { \
 	char *nptr = arrayPcsChar(chrpos,siz); \
 	char *endptr = 0; \
 	long int val = strtol(nptr,&endptr,10); \
@@ -81,11 +83,11 @@ void forceShader();
 	if (val > INT_MAX) {configureFail(chrsiz,intsiz); return -1;} \
 	if (val < INT_MIN) {configureFail(chrsiz,intsiz); return -1;} \
 	if (testBase(typInt) < 0) { \
-		insertBase(typInt,ptrPcs##THD##Int()); \
-		insertUndo(typInt,sizePcs##THD##Int());} \
-	*enlocPcs##THD##Int(1) = val; \
+		insertBase(typInt,ptrPcs##TYPE()); \
+		insertUndo(typInt,sizePcs##TYPE());} \
+	*enlocPcs##TYPE(1) = val; \
 	int found = -1; \
-	if (findCount(&typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
+	if (checkCount(typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
 
 void timeForward(int key)
 {
@@ -273,21 +275,24 @@ int processConfigure(int index, int len)
 		enum PcsType typData = PcsCmdData;
 		while (intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) {
 			int siz = *arrayPcsInt(intpos,1)-chrpos;
-			if FORCE_INT(Cmd)
-			else if FORCE_INT(Hs)
-			else if FORCE_THREAD(Cmd)
-			else if FORCE_THREAD(Hs)
-			// else if FORCE_TYPE(CmdCmd,Cmd)
-			else if FORCE_TYPE(CmdChar,Cmd)
-			else if FORCE_TYPE(CmdInt,Cmd)
-			else if FORCE_TYPE(CmdData,Cmd)
-			else if FORCE_TYPE(Shader,Cmd)
-			// else if FORCE_TYPE(Event,Hs)
-			else if FORCE_TYPE(Kind,Hs)
-			else if FORCE_TYPE(HsCmd,Hs)
-			else if FORCE_TYPE(HsChar,Hs)
-			else if FORCE_TYPE(HsInt,Hs)
-			else if FORCE_TYPE(HsData,Hs)
+			if FORCE_INT(Cmd,CmdInt)
+			else if FORCE_INT(Hs,HsInt)
+			else if FORCE_INT(Tw,Variable)
+			else if FORCE_INT(Tw,Coefficient)
+			else if FORCE_TYPES(Cmd)
+			else if FORCE_TYPES(Hs)
+			else if FORCE_TYPE(TwInt)
+			// else if FORCE_COUNT(CmdCmd,Cmd)
+			else if FORCE_COUNT(CmdChar,Cmd)
+			else if FORCE_COUNT(CmdInt,Cmd)
+			else if FORCE_COUNT(CmdData,Cmd)
+			else if FORCE_COUNT(Shader,Cmd)
+			// else if FORCE_COUNT(Event,Hs)
+			else if FORCE_COUNT(Kind,Hs)
+			else if FORCE_COUNT(HsCmd,Hs)
+			else if FORCE_COUNT(HsChar,Hs)
+			else if FORCE_COUNT(HsInt,Hs)
+			else if FORCE_COUNT(HsData,Hs)
 			else if FORCE_SHARED(forceBuffer,Cmd,Cmd)
 			else if FORCE_SHARED(forceShader,Cmd,Cmd)
 			else if FORCE_SHARED(PlaneBuf,Cmd,Data)
@@ -365,7 +370,7 @@ int processConfigure(int index, int len)
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		state.vld = 0;
+		state.vld = 1<<Map;
 		retval = timeName(&state.wav,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Wav;

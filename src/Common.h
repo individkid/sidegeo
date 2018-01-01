@@ -172,7 +172,11 @@ enum Control {
     Listen,
     Source,
     Start};
-enum Shift {Wav,Met};
+enum Shift {
+    Wav, // send new amount to waveform pipeline
+    Met, // send metric command when read
+    Map, // indices are not packed
+    Shifts};
 
 enum PcsType {
     PcsCmdCmd,
@@ -186,6 +190,8 @@ enum PcsType {
     PcsHsChar,
     PcsHsInt,
     PcsHsData,
+    PcsTwChar,
+    PcsTwInt,
     PcsCoefficient,
     PcsVariable,
     PcsTypes};
