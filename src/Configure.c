@@ -31,63 +31,48 @@ int parseString(const char *str, int len);
 void forceBuffer();
 void forceShader();
 
-#define FORCE_TYPES(THREAD) \
+#define FORCE_THREAD(THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
-	typCmd = Pcs##THREAD##Cmd; \
-	typChar = Pcs##THREAD##Char; \
-	typInt = Pcs##THREAD##Int; \
-	typData = Pcs##THREAD##Data;}
-
-#define FORCE_TYPE(TYPE) \
-	(strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
-	typInt = Pcs##TYPE;}
+	thread = Pcs##THREAD;}
 
 #define FORCE_COUNT(TYPE,THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
-	if (testCount(Pcs##TYPE) < 0) insertCount(Pcs##TYPE,sizePcs##THREAD##Int()); \
+	if (testCount(Pcs##THREAD) < 0) insertCount(Pcs##THREAD,sizePcs##THREAD##Int()); \
 	*enlocPcs##THREAD##Int(1) = 0;}
 
-#define FORCE_UNIQUE(INST,THREAD,TYPE) \
+#define FORCE_UNIQUE(INST,TYPE,THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0) { \
-	if (testBase(Pcs##TYPE) < 0) { \
-		insertBase(Pcs##TYPE,ptrPcs##TYPE()); \
-		insertUndo(Pcs##TYPE,sizePcs##TYPE());} \
+	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
 	*enlocPcs##TYPE(1) = INST; \
-	int found = -1; \
-	if (checkCount(Pcs##TYPE,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
+	int found; \
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
 
-#define FORCE_SHARED(INST,THD,TYP) \
-	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && typ##TYP == Pcs##THD##TYP) { \
-	if (testBase(Pcs##THD##TYP) < 0) { \
-		insertBase(Pcs##THD##TYP,ptrPcs##THD##TYP()); \
-		insertUndo(Pcs##THD##TYP,sizePcs##THD##TYP());} \
-	*enlocPcs##THD##TYP(1) = INST; \
-	int found = -1; \
-	if (checkCount(Pcs##THD##TYP,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
+#define FORCE_SHARED(INST,TYPE,THREAD) \
+	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && thread == Pcs##THREAD) { \
+	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
+	*enlocPcs##TYPE(1) = INST; \
+	int found; \
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
 
-#define FORCE_CHAR(THD) \
-	(typChar == Pcs##THD##Char) { \
-	if (testBase(typChar) < 0) { \
-		insertBase(typChar,ptrPcs##THD##Char()); \
-		insertUndo(typChar,sizePcs##THD##Char());} \
-	memcpy(enlocPcs##THD##Char(siz),arrayPcsChar(chrpos,siz),siz); \
-	int found = -1; \
-	if (checkCount(typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += siz;}
+#define FORCE_CHAR(TYPE,THREAD) \
+	(thread == Pcs##THREAD) { \
+	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
+	memcpy(enlocPcs##TYPE(siz),arrayPcsChar(chrpos,siz),siz); \
+	int found; \
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += siz;}
 
-#define FORCE_INT(THD,TYPE) \
-	((*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') && typInt == Pcs##TYPE) { \
+#define FORCE_INT(TYPE,THREAD) \
+	((*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') && thread == Pcs##THREAD) { \
 	char *nptr = arrayPcsChar(chrpos,siz); \
 	char *endptr = 0; \
 	long int val = strtol(nptr,&endptr,10); \
 	if (endptr != nptr+siz) {configureFail(chrsiz,intsiz); return -1;} \
 	if (val > INT_MAX) {configureFail(chrsiz,intsiz); return -1;} \
 	if (val < INT_MIN) {configureFail(chrsiz,intsiz); return -1;} \
-	if (testBase(typInt) < 0) { \
-		insertBase(typInt,ptrPcs##TYPE()); \
-		insertUndo(typInt,sizePcs##TYPE());} \
+	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
 	*enlocPcs##TYPE(1) = val; \
 	int found = -1; \
-	if (checkCount(typInt,&found) >= 0) *arrayPcs##THD##Int(found,1) += 1;}
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
 
 void timeForward(int key)
 {
@@ -221,15 +206,13 @@ int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, in
 
 void configureFail(int chrsiz, int intsiz)
 {
-	enum PcsType key;
-	while (chooseBase(&key) >= 0) {
-		struct QueueBase *ptr;
+	struct QueueBase *ptr;
+	while (chooseBase(&ptr) >= 0) {
 		int siz;
-		if (findBase(&key,&ptr) < 0) exitErrstr("base too key\n");
-		if (findUndo(&key,&siz) < 0) exitErrstr("undo too key\n");
+		if (findBase(&ptr,&siz) < 0) exitErrstr("base too siz\n");
 		unlocQueueBase(ptr,sizeQueueBase(ptr)-siz);
-		if (removeBase(key) < 0) exitErrstr("base too remove\n");
-		if (removeUndo(key) < 0) exitErrstr("undo too remove\n");}
+		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
+	enum PcsThread key;
 	while (chooseCount(&key) >= 0) {
 		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
 	unlocPcsInt(sizePcsInt()-intsiz);
@@ -238,10 +221,10 @@ void configureFail(int chrsiz, int intsiz)
 
 void configurePass(int chrsiz, int intsiz)
 {
-	enum PcsType key;
-	while (chooseBase(&key) >= 0) {
-		if (removeBase(key) < 0) exitErrstr("base too remove\n");
-		if (removeUndo(key) < 0) exitErrstr("undo too remove\n");}
+	struct QueueBase *ptr;
+	while (chooseBase(&ptr) >= 0) {
+		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
+	enum PcsThread key;
 	while (chooseCount(&key) >= 0) {
 		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
 	unlocPcsInt(sizePcsInt()-intsiz);
@@ -269,19 +252,15 @@ int processConfigure(int index, int len)
     	*enlocPcsChar(1) = 0;
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		enum PcsType typCmd = PcsCmdCmd;
-		enum PcsType typChar = PcsCmdChar;
-		enum PcsType typInt = PcsCmdInt;
-		enum PcsType typData = PcsCmdData;
+		enum PcsThread thread = PcsCmd;
 		while (intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) {
 			int siz = *arrayPcsInt(intpos,1)-chrpos;
-			if FORCE_INT(Cmd,CmdInt)
-			else if FORCE_INT(Hs,HsInt)
-			else if FORCE_INT(Tw,Variable)
-			else if FORCE_INT(Tw,Coefficient)
-			else if FORCE_TYPES(Cmd)
-			else if FORCE_TYPES(Hs)
-			else if FORCE_TYPE(TwInt)
+			if FORCE_INT(CmdInt,Cmd)
+			else if FORCE_INT(HsInt,Hs)
+			else if FORCE_INT(TwInt,Tw)
+			else if FORCE_THREAD(Cmd)
+			else if FORCE_THREAD(Hs)
+			else if FORCE_THREAD(Tw)
 			// else if FORCE_COUNT(CmdCmd,Cmd)
 			else if FORCE_COUNT(CmdChar,Cmd)
 			else if FORCE_COUNT(CmdInt,Cmd)
@@ -293,59 +272,60 @@ int processConfigure(int index, int len)
 			else if FORCE_COUNT(HsChar,Hs)
 			else if FORCE_COUNT(HsInt,Hs)
 			else if FORCE_COUNT(HsData,Hs)
-			else if FORCE_SHARED(forceBuffer,Cmd,Cmd)
-			else if FORCE_SHARED(forceShader,Cmd,Cmd)
-			else if FORCE_SHARED(PlaneBuf,Cmd,Data)
-			else if FORCE_SHARED(VersorBuf,Cmd,Data)
-			else if FORCE_SHARED(PointBuf,Cmd,Data)
-			else if FORCE_SHARED(PierceBuf,Cmd,Data)
-			else if FORCE_SHARED(SideBuf,Cmd,Data)
-			else if FORCE_SHARED(FaceSub,Cmd,Data)
-			else if FORCE_SHARED(FrameSub,Cmd,Data)
-			else if FORCE_SHARED(PointSub,Cmd,Data)
-			else if FORCE_SHARED(PlaneSub,Cmd,Data)
-			else if FORCE_SHARED(SideSub,Cmd,Data)
-			else if FORCE_SHARED(HalfSub,Cmd,Data)
-			else if FORCE_UNIQUE(Diplane,Cmd,Shader)
-			else if FORCE_UNIQUE(Dipoint,Cmd,Shader)
-			else if FORCE_UNIQUE(Coplane,Cmd,Shader)
-			else if FORCE_UNIQUE(Copoint,Cmd,Shader)
-			else if FORCE_UNIQUE(Adplane,Cmd,Shader)
-			else if FORCE_UNIQUE(Adpoint,Cmd,Shader)
-			else if FORCE_UNIQUE(Perplane,Cmd,Shader)
-			else if FORCE_UNIQUE(Perpoint,Cmd,Shader)
-			else if FORCE_UNIQUE(Replane,Cmd,Shader)
-			else if FORCE_UNIQUE(Repoint,Cmd,Shader)
-			else if FORCE_UNIQUE(Side,Hs,Event)
-			else if FORCE_UNIQUE(Update,Hs,Event)
-			else if FORCE_UNIQUE(Inflate,Hs,Event)
-			else if FORCE_UNIQUE(Fill,Hs,Event)
-			else if FORCE_UNIQUE(Hollow,Hs,Event)
-			else if FORCE_UNIQUE(Remove,Hs,Event)
-			else if FORCE_UNIQUE(Call,Hs,Event)
-			else if FORCE_UNIQUE(Acknowledge,Hs,Event)
-			else if FORCE_UNIQUE(Upload,Hs,Event)
-			else if FORCE_UNIQUE(Download,Hs,Event)
-			else if FORCE_UNIQUE(Enumerate,Hs,Event)
-			else if FORCE_UNIQUE(Poly,Hs,Kind)
-			else if FORCE_UNIQUE(Boundary,Hs,Kind)
-			else if FORCE_UNIQUE(Face,Hs,Kind)
-			else if FORCE_UNIQUE(Other,Hs,Kind)
-			else if FORCE_SHARED(forceBuffer,Hs,Cmd)
-			else if FORCE_SHARED(forceShader,Hs,Cmd)
-			else if FORCE_SHARED(PlaneBuf,Hs,Data)
-			else if FORCE_SHARED(VersorBuf,Hs,Data)
-			else if FORCE_SHARED(PointBuf,Hs,Data)
-			else if FORCE_SHARED(PierceBuf,Hs,Data)
-			else if FORCE_SHARED(SideBuf,Hs,Data)
-			else if FORCE_SHARED(FaceSub,Hs,Data)
-			else if FORCE_SHARED(FrameSub,Hs,Data)
-			else if FORCE_SHARED(PointSub,Hs,Data)
-			else if FORCE_SHARED(PlaneSub,Hs,Data)
-			else if FORCE_SHARED(SideSub,Hs,Data)
-			else if FORCE_SHARED(HalfSub,Hs,Data)
-			else if FORCE_CHAR(Cmd)
-			else if FORCE_CHAR(Hs)
+			else if FORCE_SHARED(forceBuffer,CmdCmd,Cmd)
+			else if FORCE_SHARED(forceShader,CmdCmd,Cmd)
+			else if FORCE_SHARED(PlaneBuf,CmdData,Cmd)
+			else if FORCE_SHARED(VersorBuf,CmdData,Cmd)
+			else if FORCE_SHARED(PointBuf,CmdData,Cmd)
+			else if FORCE_SHARED(PierceBuf,CmdData,Cmd)
+			else if FORCE_SHARED(SideBuf,CmdData,Cmd)
+			else if FORCE_SHARED(FaceSub,CmdData,Cmd)
+			else if FORCE_SHARED(FrameSub,CmdData,Cmd)
+			else if FORCE_SHARED(PointSub,CmdData,Cmd)
+			else if FORCE_SHARED(PlaneSub,CmdData,Cmd)
+			else if FORCE_SHARED(SideSub,CmdData,Cmd)
+			else if FORCE_SHARED(HalfSub,CmdData,Cmd)
+			else if FORCE_UNIQUE(Diplane,Shader,Cmd)
+			else if FORCE_UNIQUE(Dipoint,Shader,Cmd)
+			else if FORCE_UNIQUE(Coplane,Shader,Cmd)
+			else if FORCE_UNIQUE(Copoint,Shader,Cmd)
+			else if FORCE_UNIQUE(Adplane,Shader,Cmd)
+			else if FORCE_UNIQUE(Adpoint,Shader,Cmd)
+			else if FORCE_UNIQUE(Perplane,Shader,Cmd)
+			else if FORCE_UNIQUE(Perpoint,Shader,Cmd)
+			else if FORCE_UNIQUE(Replane,Shader,Cmd)
+			else if FORCE_UNIQUE(Repoint,Shader,Cmd)
+			else if FORCE_UNIQUE(Side,Event,Hs)
+			else if FORCE_UNIQUE(Update,Event,Hs)
+			else if FORCE_UNIQUE(Inflate,Event,Hs)
+			else if FORCE_UNIQUE(Fill,Event,Hs)
+			else if FORCE_UNIQUE(Hollow,Event,Hs)
+			else if FORCE_UNIQUE(Remove,Event,Hs)
+			else if FORCE_UNIQUE(Call,Event,Hs)
+			else if FORCE_UNIQUE(Acknowledge,Event,Hs)
+			else if FORCE_UNIQUE(Upload,Event,Hs)
+			else if FORCE_UNIQUE(Download,Event,Hs)
+			else if FORCE_UNIQUE(Enumerate,Event,Hs)
+			else if FORCE_UNIQUE(Poly,Kind,Hs)
+			else if FORCE_UNIQUE(Boundary,Kind,Hs)
+			else if FORCE_UNIQUE(Face,Kind,Hs)
+			else if FORCE_UNIQUE(Other,Kind,Hs)
+			else if FORCE_SHARED(forceBuffer,HsCmd,Hs)
+			else if FORCE_SHARED(forceShader,HsCmd,Hs)
+			else if FORCE_SHARED(PlaneBuf,HsData,Hs)
+			else if FORCE_SHARED(VersorBuf,HsData,Hs)
+			else if FORCE_SHARED(PointBuf,HsData,Hs)
+			else if FORCE_SHARED(PierceBuf,HsData,Hs)
+			else if FORCE_SHARED(SideBuf,HsData,Hs)
+			else if FORCE_SHARED(FaceSub,HsData,Hs)
+			else if FORCE_SHARED(FrameSub,HsData,Hs)
+			else if FORCE_SHARED(PointSub,HsData,Hs)
+			else if FORCE_SHARED(PlaneSub,HsData,Hs)
+			else if FORCE_SHARED(SideSub,HsData,Hs)
+			else if FORCE_SHARED(HalfSub,HsData,Hs)
+			else if FORCE_CHAR(CmdChar,Cmd)
+			else if FORCE_CHAR(HsChar,Hs)
+			else if FORCE_CHAR(TwChar,Tw)
 			else {configureFail(chrsiz,intsiz); return -1;}
 			chrpos = *arrayPcsInt(intpos,1); intpos += 1;}
 		if (intpos != sizePcsInt()) {configureFail(chrsiz,intsiz); return -1;}
@@ -363,10 +343,8 @@ int processConfigure(int index, int len)
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		int retval;
-		if (insertBase(PcsCoefficient,ptrPcsCoefficient()) < 0) exitErrstr("configure too time\n");
-		if (insertUndo(PcsCoefficient,sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
-		if (insertBase(PcsVariable,ptrPcsVariable()) < 0) exitErrstr("configure too time\n");
-		if (insertUndo(PcsVariable,sizePcsVariable()) < 0) exitErrstr("configure too time\n");
+		if (insertBase(ptrPcsCoefficient(),sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
+		if (insertBase(ptrPcsVariable(),sizePcsVariable()) < 0) exitErrstr("configure too time\n");
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}

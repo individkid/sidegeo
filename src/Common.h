@@ -178,22 +178,10 @@ enum Shift {
     Map, // indices are not packed
     Shifts};
 
-enum PcsType {
-    PcsCmdCmd,
-    PcsCmdChar,
-    PcsCmdInt,
-    PcsCmdData,
-    PcsShader,
-    PcsEvent,
-    PcsKind,
-    PcsHsCmd,
-    PcsHsChar,
-    PcsHsInt,
-    PcsHsData,
-    PcsTwChar,
-    PcsTwInt,
-    PcsCoefficient,
-    PcsVariable,
+enum PcsThread {
+    PcsCmd,
+    PcsHs,
+    PcsTw,
     PcsTypes};
 
 #define DECLARE_MSGSTR(NAME) \
@@ -435,8 +423,7 @@ DECLARE_LOCAL(Write,int) // file handles
 DECLARE_LOCAL(Helper,pthread_t) // thread handle
 DECLARE_LOCAL(Less,int) // reading upto here
 DECLARE_LOCAL(More,int) // writing as owner from here
-DECLARE_TREE(Base,enum PcsType,struct QueueBase *) // queue to restore upon mismatch
-DECLARE_TREE(Undo,enum PcsType,int) // size to restore upon mismatch
-DECLARE_TREE(Count,enum PcsType,int) // location in PcsIntPtr of match count
+DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
+DECLARE_TREE(Count,enum PcsThread,int) // location in PcsIntPtr of match count
 
 #endif
