@@ -76,7 +76,6 @@ void startSource()
 void startMetric()
 {
     startCount();
-    // TODO
 }
 
 void startVariable(int *sub, int num)
@@ -139,12 +138,11 @@ void pipeWave(int wave, int value)
 	// TODO
 }
 
-void metric();
 void requestMetric(int index, int response)
 {
-    // TODO use struct Metric instead
-	*enlocTwCommand(1) = &metric;
-	*enlocTwCmdInt(1) = index;
+    struct Shape *shape = arrayShape(index,1);
+	*enlocTwCommand(1) = shape->metric;
+	*enlocTwCmdInt(1) = shape->index;
 	*enlocTwCmdInt(1) = response;
 }
 

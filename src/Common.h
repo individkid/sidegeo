@@ -172,6 +172,8 @@ struct Speak {
 };
 struct Shape {
     int idt; // how other states will refer to this one
+    void (*metric)();
+    int index;
 };
 struct Change {
     float val; // new value for stock
