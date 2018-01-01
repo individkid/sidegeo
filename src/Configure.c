@@ -71,7 +71,7 @@ void forceShader();
 	if (val < INT_MIN) {configureFail(chrsiz,intsiz); return -1;} \
 	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
 	*enlocPcs##TYPE(1) = val; \
-	int found = -1; \
+	int found; \
 	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
 
 void timeForward(int key)
@@ -85,7 +85,7 @@ void timeForward(int key)
 		usedImage(val);
 		if (insertImager(key,val) < 0) exitErrstr("name too insert\n");}
 	else {
-		if (checkImager(key,&val) < 0) exitErrstr("name too find\n");
+		val = indexImager(key);
 		if (sizeImage(val) == 0 && val == sub) exitErrstr("name too assert\n");
 		if (sizeImage(val) == 0) val = -1;}
 	if (val >= 0) {
@@ -96,15 +96,13 @@ void timeForward(int key)
 
 void timeBackward(int key)
 {
-	int image;
-	if (checkImager(key,&image) < 0) exitErrstr("image too find\n");
+	int image = indexImager(key);
 	while (sizeImage(image) > 0) {
 	int key = *delocImage(image,1);
-	int ready;
-	if (checkReadier(key,&ready) < 0) exitErrstr("ready too find\n");
+	int ready = indexReadier(key);
 	if (*arrayReady(ready,1) == 1) {
 	*enlocPcsControl(1) = Start;
-	*enlocPcsInt(1) = key;}
+	*enlocPcsTwInt(1) = key;}
 	if (*arrayReady(ready,1) > 1) *arrayReady(ready,1) -= 1;}
 }
 
@@ -165,8 +163,6 @@ int timeVar(int chrpos, int intpos)
 
 int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, int varsiz)
 {
-	poly->csub = cofsiz + sizePcsCoefficient();
-	poly->vsub = varsiz + sizePcsVariable();
 	poly->num0 = 0;
 	int siz;
 	while (1) {
@@ -359,6 +355,8 @@ int processConfigure(int index, int len)
 		retval = timeFloat(&state.min,chrpos,intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.max = strtof("+INF",0);
+		state.csub = cofsiz + sizePcsCoefficient();
+		state.vsub = varsiz + sizePcsVariable();
 		retval = timePolynomial(&state.upd.n,&chrpos,&intpos,cofsiz,varsiz);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		retval = timePolynomial(&state.upd.d,&chrpos,&intpos,cofsiz,varsiz);

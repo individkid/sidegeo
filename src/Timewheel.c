@@ -20,22 +20,103 @@
 
 #include "Common.h"
 
-int packed = 0; // how many from State have been entered into Pack
+int stateCount = 0; // how many from State have been entered into Pack
+int listenCount = 0;
+int sourceCount = 0;
+int metricCount = 0;
+
+pqueue_pri_t ofTime(double time)
+{
+    return 0; // TODO
+}
+
+double timeOf(pqueue_pri_t time)
+{
+    return 0; // TODO
+}
+
+double getTime()
+{
+    return 0; // TODO
+}
+
+void setTime(struct timespec *delay, double time)
+{
+    // TODO
+}
+
+void startCount()
+{
+    while (listenCount < sizeMike()) {
+        if (insertPack(arrayMike(listenCount,1)->idt,listenCount) < 0) exitErrstr("listen too pack\n");
+        listenCount += 1;}
+    while (sourceCount < sizeSpeak()) {
+        if (insertPack(arraySpeak(sourceCount,1)->idt,sourceCount) < 0) exitErrstr("source too pack\n");
+        sourceCount += 1;}
+    while (metricCount < sizeShape()) {
+        if (insertPack(arrayShape(metricCount,1)->idt,metricCount) < 0) exitErrstr("source too pack\n");
+        metricCount += 1;}
+    while (stateCount < sizeState()) {
+        if (insertPack(arrayState(stateCount,1)->idt,stateCount) < 0) exitErrstr("source too pack\n");
+        stateCount += 1;}
+}
 
 void startListen()
 {
+    startCount();
 	// TODO
 }
 
 void startSource()
 {
+    startCount();
 	// TODO
+}
+
+void startMetric()
+{
+    startCount();
+    // TODO
+}
+
+void startVariable(int *sub, int num)
+{
+    int *var = arrayVariable(*sub,1);
+    while (num) {
+    *var = indexPack(*var);
+    var += 1;
+    num -= 1;}
+}
+
+void startNomial(int *sub, struct Nomial *nom)
+{
+    startVariable(sub,nom->num1*1);
+    startVariable(sub,nom->num2*2);
+    startVariable(sub,nom->num3*3);
+}
+
+void startRatio(int *sub, struct Ratio *rat)
+{
+    startNomial(sub,&rat->n);
+    startNomial(sub,&rat->d);
 }
 
 void startState()
 {
-    // TODO pack idents to state subscripts
-    // TODO if pack fails, give up, and print message first few times
+    startCount();
+    int sub = indexPack(*delocTwInt(1));
+    struct State *state = arrayState(sub,1);
+    if ((state->vld>>Map)&1) {
+        state->vld &= ~(1<<Map);
+        if ((state->vld>>Wav)&1) state->wav = indexPack(state->wav);
+        if ((state->vld>>Met)&1) state->met = indexPack(state->met);
+        int var = state->vsub;
+        startRatio(&var,&state->upd);
+        startRatio(&var,&state->dly);
+        startRatio(&var,&state->sch);}
+    if ((state->vld>>Run)&1) state->vld &= ~(1<<Run);
+    else state->vld |= 1<<Run;
+    if ((state->vld>>Run)&1) *scheduleTime(ofTime(getTime())) = sub;
 }
 
 void finishListen()
@@ -43,9 +124,14 @@ void finishListen()
 	// TODO
 }
 
-void finishSource ()
+void finishSource()
 {
 	// TODO
+}
+
+void finishMetric()
+{
+    // TODO
 }
 
 void pipeWave(int wave, int value)
@@ -56,29 +142,10 @@ void pipeWave(int wave, int value)
 void metric();
 void requestMetric(int index, int response)
 {
+    // TODO use struct Metric instead
 	*enlocTwCommand(1) = &metric;
 	*enlocTwCmdInt(1) = index;
 	*enlocTwCmdInt(1) = response;
-}
-
-pqueue_pri_t ofTime(long long time)
-{
-	return 0; // TODO
-}
-
-long long timeOf(pqueue_pri_t time)
-{
-	return 0; // TODO
-}
-
-long long getTime()
-{
-	return 0; // TODO
-}
-
-void setTime(struct timespec *delay, long long time)
-{
-	// TODO
 }
 
 float saturate(float val, struct State *ptr)
@@ -95,39 +162,39 @@ int amount(int sub)
     return state->amt;
 }
 
-float nomial(struct Nomial *poly)
+double nomial(int *csub, int *vsub, struct Nomial *poly)
 {
-    float rslt = 0;
-    int csub = poly->csub;
-    int vsub = poly->vsub;
+    double rslt = 0;
     for (int i = 0; i < poly->num0; i++) {
-        rslt += *arrayCoefficient(csub,1);
-        csub += 1;
-        vsub += 0;}
+        rslt += *arrayCoefficient(*csub,1);
+        *csub += 1;
+        *vsub += 0;}
     for (int i = 0; i < poly->num1; i++) {
-        rslt += *arrayCoefficient(csub,1) *
-        amount(*arrayVariable(vsub,1));
-        csub += 1;
-        vsub += 1;}
+        rslt += *arrayCoefficient(*csub,1) *
+        amount(*arrayVariable(*vsub,1));
+        *csub += 1;
+        *vsub += 1;}
     for (int i = 0; i < poly->num2; i++) {
-        rslt += *arrayCoefficient(csub,1) *
-        amount(*arrayVariable(vsub,1)) *
-        amount(*arrayVariable(vsub+1,1));
-        csub += 1;
-        vsub += 2;}
+        rslt += *arrayCoefficient(*csub,1) *
+        amount(*arrayVariable(*vsub,1)) *
+        amount(*arrayVariable(*vsub+1,1));
+        *csub += 1;
+        *vsub += 2;}
     for (int i = 0; i < poly->num3; i++) {
-        int cmp = *arrayCoefficient(csub,1);
-        int val = amount(*arrayVariable(vsub,1));
-        if (val < cmp) rslt += amount(*arrayVariable(vsub+1,1));
-        else rslt += amount(*arrayVariable(vsub+1,1));
-        csub += 1;
-        vsub += 3;}
+        int cmp = *arrayCoefficient(*csub,1);
+        int val = amount(*arrayVariable(*vsub,1));
+        if (val < cmp) rslt += amount(*arrayVariable(*vsub+1,1));
+        else rslt += amount(*arrayVariable(*vsub+1,1));
+        *csub += 1;
+        *vsub += 3;}
     return rslt;
 }
 
-float evaluate(struct Ratio *ratio)
+double evaluate(int *csub, int *vsub, struct Ratio *ratio)
 {
-    return nomial(&ratio->n) / nomial(&ratio->d);
+    double numer = nomial(csub,vsub,&ratio->n);
+    double denom = nomial(csub,vsub,&ratio->d);
+    return numer / denom;
 }
 
 void timewheelBefore()
@@ -144,31 +211,33 @@ void timewheelConsume(void *arg)
         CASE(Start) startState();
         DEFAULT(exitErrstr("time too control\n");)}
     while (sizeChange() > 0) {
-        struct Change change = *unlocChange(1);
+        struct Change change = *delocChange(1);
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
         if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
 }
 
-long long timewheelDelay()
+double timewheelDelay()
 {
-    long long current = getTime();
-    long long time = whenTime();
-    long long wheel = whenWheel();
+    double current = getTime();
+    double time = whenTime();
+    double wheel = whenWheel();
     if (time < wheel) return time-current;
     return wheel-current;
 }
 
 void timewheelProduce(void *arg)
 {
-    long long current = getTime();
+    double current = getTime();
     while (readyTime(ofTime(current))) {
         int sub = *advanceTime();
         struct State *state = arrayState(sub,1);
-        long long update = evaluate(&state->upd);
-        long long delay = evaluate(&state->dly);
-        long long schedule = evaluate(&state->sch);
-        int val = saturate(update,state);
+        int csub = state->csub;
+        int vsub = state->vsub;
+        double update = evaluate(&csub,&vsub,&state->upd);
+        double delay = evaluate(&csub,&vsub,&state->dly);
+        double schedule = evaluate(&csub,&vsub,&state->sch);
+        float val = saturate(update,state);
         struct Change change; change.val = val; change.sub = sub;
         *scheduleTime(ofTime(current+schedule)) = sub;
         *scheduleWheel(ofTime(current+delay)) = change;}
@@ -183,6 +252,7 @@ void timewheelAfter()
 {
     finishListen();
     finishSource();
+    finishMetric();
 	PaError err = Pa_Terminate();
 	if (err != paNoError) printf("PortAudio error: %s\n",Pa_GetErrorText(err));
 }

@@ -145,8 +145,6 @@ struct Buffer {
 }; // argument to render functions
 
 struct Nomial {
-    int csub; // subscript into coefficients
-    int vsub; // subscript into variables
     int num0; // number of zero variable terms
     int num1; // number of one variable terms
     int num2; // number of two variable terms
@@ -160,9 +158,20 @@ struct State {
     int met; // metric request argument
     float amt; // amout of stock
     float min,max; // saturation limits
+    int csub; // subscript into coefficients
+    int vsub; // subscript into variables
     struct Ratio upd; // formula for new value
     struct Ratio dly; // formula for when to apply value
     struct Ratio sch; // formula for reschedule time
+};
+struct Mike {
+    int idt; // how other states will refer to this one
+};
+struct Speak {
+    int idt; // how other states will refer to this one
+};
+struct Shape {
+    int idt; // how other states will refer to this one
 };
 struct Change {
     float val; // new value for stock
@@ -171,11 +180,13 @@ struct Change {
 enum Control {
     Listen,
     Source,
+    Metric,
     Start};
 enum Shift {
     Wav, // send new amount to waveform pipeline
     Met, // send metric command when read
     Map, // indices are not packed
+    Run, // state is to be scheduled
     Shifts};
 
 enum PcsThread {
@@ -351,6 +362,9 @@ DECLARE_STAGE(TwInt,int)
 DECLARE_EXTRA(Coefficient,float)
 DECLARE_EXTRA(Variable,int)
 DECLARE_EXTRA(State,struct State)
+DECLARE_EXTRA(Mike,struct Mike)
+DECLARE_EXTRA(Speak,struct Speak)
+DECLARE_EXTRA(Shape,struct Shape)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)

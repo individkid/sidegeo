@@ -268,6 +268,9 @@ EXTERNCEND
 inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
+inline bool operator!=(const Mike &left, const Mike &right) {return false;}
+inline bool operator!=(const Speak &left, const Speak &right) {return false;}
+inline bool operator!=(const Shape &left, const Shape &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,0,0,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
@@ -391,6 +394,9 @@ DEFINE_STAGE(TwInt,int,TwChar)
 DEFINE_EXTRA(Coefficient,float,TwInt)
 DEFINE_EXTRA(Variable,int,Coefficient)
 DEFINE_EXTRA(State,struct State,Variable)
+DEFINE_EXTRA(Mike,struct Mike,State)
+DEFINE_EXTRA(Speak,struct Speak,Mike)
+DEFINE_EXTRA(Shape,struct Shape,Speak)
 
 DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)

@@ -157,6 +157,7 @@ EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int test##NAME(KEY key); \
 EXTERNC int find##NAME(KEY *key, VAL *val); \
 EXTERNC int check##NAME(KEY key, VAL *val); \
+EXTERNC VAL index##NAME(KEY key); \
 EXTERNC int insert##NAME(KEY key, VAL val); \
 EXTERNC int remove##NAME(KEY key); \
 EXTERNC int choose##NAME(KEY *key); \
@@ -1168,6 +1169,12 @@ template<class KEY, class VAL> struct QueueTree {
         if (find(&tmp,val) < 0 || tmp != key) return -1;
         return 0;
     }
+    VAL index(KEY key)
+    {
+        VAL tmp;
+        if (check(key,&tmp) < 0) exitErrstr("index too key\n");
+        return tmp;
+    }
     int insert(KEY key, VAL val)
     {
         if (test(key) >= 0) return -1;
@@ -1212,6 +1219,7 @@ extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Ins
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int find##NAME(KEY *key, VAL *val) {return NAME##Inst.find(key,val);} \
 extern "C" int check##NAME(KEY key, VAL *val) {return NAME##Inst.check(key,val);} \
+extern "C" VAL index##NAME(KEY key) {return NAME##Inst.index(key);} \
 extern "C" int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
