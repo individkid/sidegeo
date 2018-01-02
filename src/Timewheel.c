@@ -153,7 +153,7 @@ float saturate(float val, struct State *ptr)
 	return val;
 }
 
-int amount(int sub)
+float amount(int sub)
 {
     struct State *state = arrayState(sub,1);
     if ((state->vld>>Met)&1) requestMetric(state->met,sub);
