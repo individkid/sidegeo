@@ -108,36 +108,38 @@ void timeBackward(int key)
 	if (*arrayReady(ready,1) > 1) *arrayReady(ready,1) -= 1;}
 }
 
-int timeFloat(float *rslt, int chrpos, int intpos)
+int timeFloat(float *rslt, int *chrpos, int *intpos)
 {
-	if (intpos >= sizePcsInt()) return -1;
-	int siz = *arrayPcsInt(intpos,1)-chrpos;
-	if (siz == 0) return 0;
-	char *nptr = arrayPcsChar(chrpos,siz);
+	if (*intpos >= sizePcsInt()) return -1;
+	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
+	if (siz == 0) {*intpos += 1; return 0;}
+	char *nptr = arrayPcsChar(*chrpos,siz);
 	char *endptr = nptr;
 	float val = strtof(nptr,&endptr);
 	if (endptr == nptr) return -1;
 	*rslt = val;
+	*chrpos += siz;
 	return siz;
 }
 
-int timeIdent(int *key, int chrpos, int intpos)
+int timeIdent(int *key, int *chrpos, int *intpos)
 {
-	if (intpos >= sizePcsInt()) return -1;
-	int siz = *arrayPcsInt(intpos,1)-chrpos;
-	if (siz == 0) return 0;
-	*key = parseString(arrayPcsChar(chrpos,siz),siz);
+	if (*intpos >= sizePcsInt()) return -1;
+	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
+	if (siz == 0) {*intpos += 1; return 0;}
+	*key = parseString(arrayPcsChar(*chrpos,siz),siz);
+	*chrpos += siz;
 	return siz;
 }
 
-int timeName(int *key, int chrpos, int intpos)
+int timeName(int *key, int *chrpos, int *intpos)
 {
 	int siz = timeIdent(key,chrpos,intpos);
 	if (siz > 0) timeForward(*key);
 	return siz;
 }
 
-int timeCoef(int chrpos, int intpos)
+int timeCoef(int *chrpos, int *intpos)
 {
 	float val;
 	int siz = timeFloat(&val,chrpos,intpos);
@@ -146,7 +148,7 @@ int timeCoef(int chrpos, int intpos)
 	return siz;
 }
 
-int timeVar(int chrpos, int intpos)
+int timeVar(int *chrpos, int *intpos)
 {
 	int val;
 	int siz = timeName(&val,chrpos,intpos);
@@ -156,18 +158,14 @@ int timeVar(int chrpos, int intpos)
 }
 
 #define TIME_TERM { \
-	siz = timeCoef(*chrpos,*intpos); \
+	siz = timeCoef(chrpos,intpos); \
 	if (siz < 0) return -1; \
-	*intpos += 1; \
-	if (siz == 0) break; \
-	*chrpos += siz;}
+	if (siz == 0) break;}
 
 #define TIME_FACTOR { \
-	siz = timeVar(*chrpos,*intpos); \
+	siz = timeVar(chrpos,intpos); \
 	if (siz < 0) return -1; \
-	*intpos += 1; \
-	if (siz == 0) return -1; \
-	*chrpos += siz;}
+	if (siz == 0) return -1;}
 
 int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, int varsiz)
 {
@@ -197,16 +195,18 @@ int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, in
 	return 0;
 }
 
-#define TIME_PATTERN \
-	" {fl% <?+!>}%" \
-	" {fl% id% <?+!>}%" \
-	" {fl% id% id% <?+!>}%" \
-	" {fl% id% id% id%"
-
-#define TIME_RATIO \
-	TIME_PATTERN \
-	" <?/!>}%" \
-	TIME_PATTERN
+int configureVector(int *chrpos, int *intpos)
+{
+		MyGLfloat vec[3];
+		int tot = 0;
+		for (int i = 0; i < 3; i++) {
+			int siz = timeFloat(vec+i,chrpos,intpos);
+			if (siz < 0) return -1;
+			tot += siz;}
+		int len = sizeof*vec*3;
+		memcpy(enlocPcsCmdByte(len),vec,len);
+		return tot;
+}
 
 void configureFail(int chrsiz, int intsiz)
 {
@@ -235,22 +235,6 @@ void configurePass(int chrsiz, int intsiz)
 	unlocPcsChar(sizePcsChar()-chrsiz);
 }
 
-int configureVector(int chrsiz, int intsiz)
-{
-		MyGLfloat vec[3];
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		for (int i = 0; i < 3; i++) {
-			int siz = timeFloat(vec+i,chrpos,intpos);
-			if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
-			chrpos += siz;
-			intpos += 1;}
-		int len = sizeof*vec*3;
-		memcpy(enlocPcsCmdByte(len),vec,len);
-		configurePass(chrsiz,intsiz);
-		return 1;
-}
-
 int processCompare(const void *left, const void *right)
 {
 	int lft = void2int(left);
@@ -261,6 +245,17 @@ int processCompare(const void *left, const void *right)
 	return strncmp(arrayPcsBuf(lft,len),arrayPcsBuf(rgt,len),len);
 }
 
+#define TIME_PATTERN \
+	" {fl% <?+!>}%" \
+	" {fl% id% <?+!>}%" \
+	" {fl% id% id% <?+!>}%" \
+	" {fl% id% id% id%"
+
+#define TIME_RATIO \
+	TIME_PATTERN \
+	" <?/!>}%" \
+	TIME_PATTERN
+
 int processConfigure(int index, int len)
 {
 	int chrsiz = sizePcsChar()-len;
@@ -269,12 +264,20 @@ int processConfigure(int index, int len)
 	initMacro(processCompare);
 	parseGlobal("\\id|@{[@|#]}/\\sg|([?+!|?-!])/\\nm|sg#{#}/\\fl|nm(?.!{#})([e|E]sg{#}])/\\ |<{&}>/");
 	if (parse("<?plane!> fl% fl% fl%",len) > 0) {
-		if (configureVector(chrsiz,intsiz) < 0) return -1;
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		int siz = configureVector(&chrpos,&intpos);
+		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = plane;
+		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?point!> fl% fl% fl%",len) > 0) {
-		if (configureVector(chrsiz,intsiz) < 0) return -1;
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		int siz = configureVector(&chrpos,&intpos);
+		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = point;
+		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?force!> {[id|nm]%}%",len) > 0) {
     	*enlocPcsChar(1) = 0;
@@ -347,29 +350,28 @@ int processConfigure(int index, int len)
 		TIME_RATIO
 		,len) > 0) {
 		struct State state;
-		*enlocPcsChar(1) = 0;
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		int retval;
 		if (insertBase(ptrPcsCoefficient(),sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
 		if (insertBase(ptrPcsVariable(),sizePcsVariable()) < 0) exitErrstr("configure too time\n");
 		*enlocReady(1) = 0;
-		retval = timeName(&state.idt,chrpos,intpos);
+		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		state.vld = 1<<Map;
-		retval = timeName(&state.wav,chrpos,intpos);
+		retval = timeName(&state.wav,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Wav;
-		retval = timeName(&state.met,chrpos,intpos);
+		retval = timeName(&state.met,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Met;
-		retval = timeFloat(&state.amt,chrpos,intpos);
+		retval = timeFloat(&state.amt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.amt = strtof("0",0);
-		retval = timeFloat(&state.min,chrpos,intpos);
+		retval = timeFloat(&state.min,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.min = strtof("-INF",0);
-		retval = timeFloat(&state.min,chrpos,intpos);
+		retval = timeFloat(&state.min,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.max = strtof("+INF",0);
 		state.csub = cofsiz + sizePcsCoefficient();
@@ -389,23 +391,20 @@ int processConfigure(int index, int len)
 		*enlocPcsState(1) = state;
 		cofsiz += sizePcsCoefficient();
 		varsiz += sizePcsVariable();
-		configurePass(chrsiz,intsiz);
 		timeBackward(state.idt);
+		configurePass(chrsiz,intsiz);
 		return 1;}
 	else if (parse("<?change!> id% fl%",len) > 0) {
 		struct Change change;
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		int siz = timeIdent(&change.sub,chrpos,intpos);
+		int siz = timeIdent(&change.sub,&chrpos,&intpos);
 		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
-		chrpos += siz;
-		intpos += 1;
-		siz = timeFloat(&change.val,chrpos,intpos);
+		siz = timeFloat(&change.val,&chrpos,&intpos);
 		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
-		chrpos += siz;
-		intpos += 1;
 		change.vld = 1<<Map;
 		*enlocPcsChange(1) = change;
+		configurePass(chrsiz,intsiz);
 		return 1;}
 	// TODO metric listen source
 	else if (parse("<?inject!> {.}%",len) > 0) {
