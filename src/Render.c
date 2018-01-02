@@ -349,6 +349,16 @@ void forceShader()
     enqueShader(*delocShader(1));
 }
 
+void plane()
+{
+    // TODO append, find sidednesses, haskell classify, render
+}
+
+void point()
+{
+    // TODO append, construct planes, find sidednesses, haskell classify, render
+}
+
 #ifdef BRINGUP
 #define NUM_PLANES 4
 #define NUM_POINTS 4

@@ -30,6 +30,8 @@ int parseString(const char *str, int len);
 
 void forceBuffer();
 void forceShader();
+void plane();
+void point();
 
 #define FORCE_THREAD(THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
@@ -119,13 +121,19 @@ int timeFloat(float *rslt, int chrpos, int intpos)
 	return siz;
 }
 
-int timeName(int *key, int chrpos, int intpos)
+int timeIdent(int *key, int chrpos, int intpos)
 {
 	if (intpos >= sizePcsInt()) return -1;
 	int siz = *arrayPcsInt(intpos,1)-chrpos;
 	if (siz == 0) return 0;
 	*key = parseString(arrayPcsChar(chrpos,siz),siz);
-	timeForward(*key);
+	return siz;
+}
+
+int timeName(int *key, int chrpos, int intpos)
+{
+	int siz = timeIdent(key,chrpos,intpos);
+	if (siz > 0) timeForward(*key);
 	return siz;
 }
 
@@ -227,6 +235,22 @@ void configurePass(int chrsiz, int intsiz)
 	unlocPcsChar(sizePcsChar()-chrsiz);
 }
 
+int configureVector(int chrsiz, int intsiz)
+{
+		MyGLfloat vec[3];
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		for (int i = 0; i < 3; i++) {
+			int siz = timeFloat(vec+i,chrpos,intpos);
+			if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
+			chrpos += siz;
+			intpos += 1;}
+		int len = sizeof*vec*3;
+		memcpy(enlocPcsCmdByte(len),vec,len);
+		configurePass(chrsiz,intsiz);
+		return 1;
+}
+
 int processCompare(const void *left, const void *right)
 {
 	int lft = void2int(left);
@@ -244,6 +268,14 @@ int processConfigure(int index, int len)
 	initString(processCompare);
 	initMacro(processCompare);
 	parseGlobal("\\id|@{[@|#]}/\\sg|([?+!|?-!])/\\nm|sg#{#}/\\fl|nm(?.!{#})([e|E]sg{#}])/\\ |<{&}>/");
+	if (parse("<?plane!> fl% fl% fl%",len) > 0) {
+		if (configureVector(chrsiz,intsiz) < 0) return -1;
+		*enlocPcsCmdCmd(1) = plane;
+		return 1;}
+	if (parse("<?point!> fl% fl% fl%",len) > 0) {
+		if (configureVector(chrsiz,intsiz) < 0) return -1;
+		*enlocPcsCmdCmd(1) = point;
+		return 1;}
 	if (parse("<?force!> {[id|nm]%}%",len) > 0) {
     	*enlocPcsChar(1) = 0;
 		int chrpos = chrsiz;
@@ -358,7 +390,8 @@ int processConfigure(int index, int len)
 		cofsiz += sizePcsCoefficient();
 		varsiz += sizePcsVariable();
 		configurePass(chrsiz,intsiz);
-		timeBackward(state.idt);}
+		timeBackward(state.idt);
+		return 1;}
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
 		return 1;}
