@@ -41,7 +41,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
 
 void enqueMachine(Machine machine)
 {
-    *enlocCmdState(1) = 0;
+    *enlocArgument(1) = 0;
     *enlocCluster(1) = 1;
     *enlocMachine(1) = machine;
 }
@@ -84,7 +84,7 @@ void compass(double xdelta, double ydelta)
 
 void inject()
 {
-    char chr = *delocCmdChar(1);
+    char chr = *delocCmdInt(1);
     SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
     CASE(South) compass(0.0,COMPASS_DELTA);
     CASE(West) compass(-COMPASS_DELTA,0.0);
@@ -98,7 +98,7 @@ void inject()
 
 void menu()
 {
-    char chr = *delocCmdChar(1);
+    char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
         enum Menu line = indexof(chr);
         click = Init; mode[item[line].mode] = line;}

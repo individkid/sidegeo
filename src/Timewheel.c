@@ -47,11 +47,11 @@ void setTime(struct timespec *delay, double time)
 
 void startCount()
 {
-    while (listenCount < sizeMike()) {
-        if (insertPack(arrayMike(listenCount,1)->idt,listenCount) < 0) exitErrstr("listen too pack\n");
+    while (listenCount < sizeSignal()) {
+        if (insertPack(arraySignal(listenCount,1)->idt,listenCount) < 0) exitErrstr("listen too pack\n");
         listenCount += 1;}
-    while (sourceCount < sizeSpeak()) {
-        if (insertPack(arraySpeak(sourceCount,1)->idt,sourceCount) < 0) exitErrstr("source too pack\n");
+    while (sourceCount < sizeSound()) {
+        if (insertPack(arraySound(sourceCount,1)->idt,sourceCount) < 0) exitErrstr("source too pack\n");
         sourceCount += 1;}
     while (metricCount < sizeShape()) {
         if (insertPack(arrayShape(metricCount,1)->idt,metricCount) < 0) exitErrstr("source too pack\n");
@@ -141,7 +141,7 @@ void pipeWave(int wave, int value)
 void requestMetric(int index, int response)
 {
     struct Shape *shape = arrayShape(index,1);
-	*enlocTwCommand(1) = shape->metric;
+	*enlocTwCmdCmd(1) = shape->metric;
 	*enlocTwCmdInt(1) = shape->index;
 	*enlocTwCmdInt(1) = response;
 }

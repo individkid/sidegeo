@@ -193,7 +193,7 @@ void *timewheel(void *arg);
 int main(int argc, char **argv)
 {
     if (sizeof(GLuint) != sizeof(MyGLuint)) exitErrstr("gluint too sizeof\n");
-    if (sizeof(GLuint) != sizeof(MyGLuint)) exitErrstr("gluint too sizeof\n");
+    if (sizeof(GLfloat) != sizeof(MyGLfloat)) exitErrstr("glfloat too sizeof\n");
 
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
@@ -345,7 +345,7 @@ int commandNodelay()
 }
 void commandProduce(void *arg)
 {
-    int state = *delocCmdState(1);
+    int state = *delocArgument(1);
     int cluster = *delocCluster(1);
     Machine *machine = delocMachine(cluster);
     if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
@@ -356,7 +356,7 @@ void commandProduce(void *arg)
         FALL(Reque) {
             Machine *reloc = enlocMachine(cluster-i);
             for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
-            *enlocCmdState(1) = state;
+            *enlocArgument(1) = state;
             *enlocCluster(1) = cluster-i;
             done = 2;}
         CASE(Advance) {state = 0; done = 1;}

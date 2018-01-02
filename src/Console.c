@@ -61,6 +61,7 @@ int last[4] = {0};
 enum Menu mark[Modes] = INIT;
 int depth = 0;
 
+void inject();
 void menu();
 
 enum Menu tailline()
@@ -159,17 +160,17 @@ void frontend(char key)
     else if (esc == 0 && key == 127) *enlocOutput(1) = ofmotion(Back);
     else if (esc == 0 && key == 27) last[esc++] = key;
     else if (esc == 0 && inj > 0) *enlocOutput(1) = key;
-    else if (esc == 1 && key == '\n') {esc = 0; *enlocCslCommand(1) = 0;}
+    else if (esc == 1 && key == '\n') {esc = 0; *enlocCslCmdCmd(1) = 0;}
     else if (esc == 2 && key == 53) last[esc++] = key;
     else if (esc == 2 && key == 54) last[esc++] = key;
-    else if (esc == 2 && key == 65) {esc = 0; *enlocCslCmdChar(1) = ofmotion(North); *enlocCslCommand(1) = &menu;}
-    else if (esc == 2 && key == 66) {esc = 0; *enlocCslCmdChar(1) = ofmotion(South); *enlocCslCommand(1) = &menu;}
-    else if (esc == 2 && key == 67) {esc = 0; *enlocCslCmdChar(1) = ofmotion(East); *enlocCslCommand(1) = &menu;}
-    else if (esc == 2 && key == 68) {esc = 0; *enlocCslCmdChar(1) = ofmotion(West); *enlocCslCommand(1) = &menu;}
-    else if (esc == 2 && key == 70) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Suspend); *enlocCslCommand(1) = &menu;}
-    else if (esc == 2 && key == 72) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Click); *enlocCslCommand(1) = &menu;}
-    else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Counter); *enlocCslCommand(1) = &menu;}
-    else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; *enlocCslCmdChar(1) = ofmotion(Wise); *enlocCslCommand(1) = &menu;}
+    else if (esc == 2 && key == 65) {esc = 0; *enlocCslCmdInt(1) = ofmotion(North); *enlocCslCmdCmd(1) = &inject;}
+    else if (esc == 2 && key == 66) {esc = 0; *enlocCslCmdInt(1) = ofmotion(South); *enlocCslCmdCmd(1) = &inject;}
+    else if (esc == 2 && key == 67) {esc = 0; *enlocCslCmdInt(1) = ofmotion(East); *enlocCslCmdCmd(1) = &inject;}
+    else if (esc == 2 && key == 68) {esc = 0; *enlocCslCmdInt(1) = ofmotion(West); *enlocCslCmdCmd(1) = &inject;}
+    else if (esc == 2 && key == 70) {esc = 0; *enlocCslCmdInt(1) = ofmotion(Suspend); *enlocCslCmdCmd(1) = &inject;}
+    else if (esc == 2 && key == 72) {esc = 0; *enlocCslCmdInt(1) = ofmotion(Click); *enlocCslCmdCmd(1) = &inject;}
+    else if (esc == 3 && key == 126 && last[2] == 53) {esc = 0; *enlocCslCmdInt(1) = ofmotion(Counter); *enlocCslCmdCmd(1) = &inject;}
+    else if (esc == 3 && key == 126 && last[2] == 54) {esc = 0; *enlocCslCmdInt(1) = ofmotion(Wise); *enlocCslCmdCmd(1) = &inject;}
     else {esc = 0; *enlocOutput(1) = ofmotion(Space);}
 }
 
@@ -189,7 +190,7 @@ void backend(char chr)
         *enlocLine(1) = line; *enlocMatch(1) = 0;
         if (collect != Menus && mode == item[collect].mode) {
             // change mode to selected leaf
-            mark[mode] = line; *enlocCslCmdChar(1) = ofindex(line); *enlocCslCommand(1) = &menu;}
+            mark[mode] = line; *enlocCslCmdInt(1) = ofindex(line); *enlocCslCmdCmd(1) = &menu;}
         else {
             // go to line in selected menu indicated by mode
             *enlocLine(1) = mark[mode]; *enlocMatch(1) = 0;}}

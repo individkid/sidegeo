@@ -293,17 +293,17 @@ enum Action bringupBuffer(int state)
     struct Buffer *buffer = *arrayBuffer(0,1);
     int todo = *arrayCmdInt(0,1);
     int done = *arrayCmdInt(1,1);
-    char *data = arrayCmdChar(0,todo);
+    char *data = arrayCmdByte(0,todo);
     if (state-- == 0) {
-        relocBuffer(1); relocCmdInt(4); relocCmdChar(todo);
+        relocBuffer(1); relocCmdInt(4); relocCmdByte(todo);
         return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
     if (state-- == 0) {
         buffer->write++;
         if (buffer->room < done+todo) enqueWrap(buffer,done+todo);
-        relocBuffer(1); relocCmdInt(4); relocCmdChar(todo);
+        relocBuffer(1); relocCmdInt(4); relocCmdByte(todo);
         return Continue;}
     if (state-- == 0) {
-        relocBuffer(1); relocCmdInt(4); relocCmdChar(todo);
+        relocBuffer(1); relocCmdInt(4); relocCmdByte(todo);
         return (buffer->room < done+todo ? Defer : Continue);}
     int size = buffer->dimn*bufferType(buffer->type);
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
@@ -311,7 +311,7 @@ enum Action bringupBuffer(int state)
     glBindBuffer(GL_ARRAY_BUFFER,0);
     if (buffer->done < done+todo) buffer->done = done+todo;
     buffer->write--;
-    delocBuffer(1); delocCmdInt(4); delocCmdChar(todo);
+    delocBuffer(1); delocCmdInt(4); delocCmdByte(todo);
     return Advance;
 }
 
@@ -322,7 +322,7 @@ void setupBuffer(struct Buffer *buffer, int todo, int done, void *data)
     *enlocCmdInt(1) = todo;
     *enlocCmdInt(1) = done;
     int size = buffer->dimn*bufferType(buffer->type);
-    memcpy(enlocCmdChar(todo*size),(char *)data,todo*size);
+    memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
     enqueMachine(bringupBuffer);
 }
 

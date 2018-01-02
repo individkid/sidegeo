@@ -99,6 +99,8 @@ enum Data {
     HalfSub, // per plane prior vertices
     Datas};
 
+typedef unsigned MyGLuint;
+typedef float MyGLfloat;
 typedef void (*Command)();
 enum Action {
     Reque, // be polite to other commands
@@ -128,7 +130,6 @@ struct Render {
     enum Shader shader;
     const char *name;
 }; // argument to render functions
-typedef unsigned MyGLuint;
 struct Buffer {
     const char *name;
     MyGLuint handle; // source memory handle
@@ -164,13 +165,13 @@ struct State {
     struct Ratio dly; // formula for when to apply value
     struct Ratio sch; // formula for reschedule time
 };
-struct Mike {
+struct Signal { // information for opening source
     int idt; // how other states will refer to this one
 };
-struct Speak {
+struct Sound { // information for opening destination
     int idt; // how other states will refer to this one
 };
-struct Shape {
+struct Shape { // information for measuring shapes
     int idt; // how other states will refer to this one
     void (*metric)();
     int index;
@@ -242,21 +243,15 @@ EXTERNCEND
 
 DECLARE_FUNC(CmnCommands)
 DECLARE_STAGE(CmnCommand,Command)
-DECLARE_STAGE(CmnCmdChar,char)
 DECLARE_STAGE(CmnCmdInt,int)
+DECLARE_STAGE(CmnCmdByte,char)
 DECLARE_STAGE(CmnCmdData,enum Data)
-DECLARE_STAGE(CmnShader,enum Shader)
-DECLARE_STAGE(CmnRender,struct Render)
-DECLARE_STAGE(CmnBuffer,struct Buffer *)
 
 DECLARE_STDIN(CmnOutputs)
 DECLARE_STAGE(CmnOutput,char)
 
 DECLARE_FDSET(CmnProcesses,int)
 DECLARE_STAGE(CmnOption,char)
-DECLARE_STAGE(CmnOptioner,int)
-DECLARE_STAGE(CmnConfigure,char)
-DECLARE_STAGE(CmnConfigureer,int)
 DECLARE_STAGE(CmnConfigure,char)
 DECLARE_STAGE(CmnConfigurer,int)
 
@@ -264,14 +259,13 @@ DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,enum Event)
 DECLARE_STAGE(CmnKind,enum Kind)
 DECLARE_STAGE(CmnHsCmd,Command)
-DECLARE_STAGE(CmnHsChar,char)
 DECLARE_STAGE(CmnHsInt,int)
+DECLARE_STAGE(CmnHsByte,char)
 DECLARE_STAGE(CmnHsData,enum Data)
 
 DECLARE_TIME(CmnTimewheels)
-DECLARE_STAGE(CmnControl,enum Control)
 DECLARE_STAGE(CmnChange,struct Change)
-DECLARE_STAGE(CmnTwChar,char)
+DECLARE_STAGE(CmnControl,enum Control)
 DECLARE_STAGE(CmnTwInt,int)
 DECLARE_STAGE(CmnCoefficient,float)
 DECLARE_STAGE(CmnVariable,int)
@@ -279,18 +273,19 @@ DECLARE_STAGE(CmnState,struct State)
 
 
 DECLARE_LOCAL(Defer,int)
-DECLARE_LOCAL(CmdState,int)
+DECLARE_LOCAL(Argument,int)
 DECLARE_LOCAL(Cluster,int)
 DECLARE_LOCAL(Machine,Machine)
+
 DECLARE_LOCAL(Render,struct Render)
 DECLARE_LOCAL(Buffer,struct Buffer *)
+DECLARE_LOCAL(Shader,enum Shader)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
-DECLARE_STAGE(CmdChar,char)
 DECLARE_STAGE(CmdInt,int)
+DECLARE_STAGE(CmdByte,char)
 DECLARE_STAGE(CmdData,enum Data)
-DECLARE_STAGE(Shader,enum Shader)
 
 DECLARE_SOURCE(CmdOutputs)
 DECLARE_STAGE(CmdOutput,char)
@@ -299,8 +294,8 @@ DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,enum Event)
 DECLARE_STAGE(CmdKind,enum Kind)
 DECLARE_STAGE(CmdHsCmd,Command)
-DECLARE_STAGE(CmdHsChar,char)
 DECLARE_STAGE(CmdHsInt,int)
+DECLARE_STAGE(CmdHsByte,char)
 DECLARE_STAGE(CmdHsData,enum Data)
 
 DECLARE_SOURCE(CmdTimewheels)
@@ -320,19 +315,19 @@ DECLARE_LOCAL(EventMap,int)
 DECLARE_LOCAL(KindMap,int)
 DECLARE_LOCAL(DataMap,enum Data)
 
+DECLARE_SOURCE(HsCommands)
+DECLARE_STAGE(HsCmdCmd,Command)
+DECLARE_STAGE(HsCmdInt,int)
+DECLARE_STAGE(HsCmdByte,char)
+DECLARE_STAGE(HsCmdData,enum Data)
+
 DECLARE_WAIT(Haskells)
 DECLARE_STAGE(Event,enum Event)
 DECLARE_STAGE(Kind,enum Kind)
 DECLARE_STAGE(HsCmd,Command)
-DECLARE_STAGE(HsChar,char)
 DECLARE_STAGE(HsInt,int)
+DECLARE_STAGE(HsByte,char)
 DECLARE_STAGE(HsData,enum Data)
-
-DECLARE_SOURCE(HsCommands)
-DECLARE_STAGE(HsCommand,Command)
-DECLARE_STAGE(HsCmdChar,char)
-DECLARE_STAGE(HsCmdInt,int)
-DECLARE_STAGE(HsCmdData,enum Data)
 
 DECLARE_POINTER(Meta,int)
 DECLARE_POINTER(Pseudo,char)
@@ -340,12 +335,11 @@ DECLARE_POINTER(Name,char *)
 
 
 DECLARE_SOURCE(CslCommands)
-DECLARE_STAGE(CslCommand,Command)
-DECLARE_STAGE(CslCmdChar,char)
+DECLARE_STAGE(CslCmdCmd,Command)
+DECLARE_STAGE(CslCmdInt,int)
 
 DECLARE_SOURCE(CslProcesses)
 DECLARE_STAGE(CslOption,char)
-DECLARE_STAGE(CslOptioner,int)
 
 DECLARE_DEST(Outputs)
 DECLARE_STAGE(Output,char)
@@ -357,15 +351,14 @@ DECLARE_POINTER(CslPtr,char)
 
 
 DECLARE_DEST(Timewheels)
-DECLARE_STAGE(Control,enum Control)
 DECLARE_STAGE(Change,struct Change)
-DECLARE_STAGE(TwChar,char)
+DECLARE_STAGE(Control,enum Control)
 DECLARE_STAGE(TwInt,int)
 DECLARE_EXTRA(Coefficient,float)
 DECLARE_EXTRA(Variable,int)
 DECLARE_EXTRA(State,struct State)
-DECLARE_EXTRA(Mike,struct Mike)
-DECLARE_EXTRA(Speak,struct Speak)
+DECLARE_EXTRA(Signal,struct Signal)
+DECLARE_EXTRA(Sound,struct Sound)
 DECLARE_EXTRA(Shape,struct Shape)
 
 DECLARE_PRIORITY(Time,int)
@@ -375,8 +368,7 @@ DECLARE_POINTER(Pipe,int)
 DECLARE_TREE(Pack,int,int)
 
 DECLARE_SOURCE(TwCommands)
-DECLARE_STAGE(TwCommand,Command)
-DECLARE_STAGE(TwCmdChar,int)
+DECLARE_STAGE(TwCmdCmd,Command)
 DECLARE_STAGE(TwCmdInt,int)
 
 
@@ -390,30 +382,31 @@ DECLARE_STAGE(PcsOutput,char)
 
 DECLARE_SOURCE(PcsCommands)
 DECLARE_STAGE(PcsCmdCmd,Command)
-DECLARE_STAGE(PcsCmdChar,char)
 DECLARE_STAGE(PcsCmdInt,int)
+DECLARE_STAGE(PcsCmdByte,char)
 DECLARE_STAGE(PcsCmdData,enum Data)
-DECLARE_STAGE(PcsShader,enum Shader)
 
 DECLARE_SOURCE(PcsHaskells)
 DECLARE_STAGE(PcsEvent,enum Event)
 DECLARE_STAGE(PcsKind,enum Kind)
 DECLARE_STAGE(PcsHsCmd,Command)
-DECLARE_STAGE(PcsHsChar,char)
 DECLARE_STAGE(PcsHsInt,int)
+DECLARE_STAGE(PcsHsByte,char)
 DECLARE_STAGE(PcsHsData,enum Data)
 
 DECLARE_SOURCE(PcsTimewheels)
-DECLARE_STAGE(PcsControl,enum Control)
 DECLARE_STAGE(PcsChange,struct Change)
-DECLARE_STAGE(PcsTwChar,char)
+DECLARE_STAGE(PcsControl,enum Control)
 DECLARE_STAGE(PcsTwInt,int)
 DECLARE_STAGE(PcsCoefficient,float)
 DECLARE_STAGE(PcsVariable,int)
 DECLARE_STAGE(PcsState,struct State)
+DECLARE_EXTRA(PcsSignal,struct Signal)
+DECLARE_EXTRA(PcsSound,struct Sound)
+DECLARE_EXTRA(PcsShape,struct Shape)
 
-DECLARE_LOCAL(PcsChar,char) // given and/or result
 DECLARE_LOCAL(PcsInt,int) // given and/or result
+DECLARE_LOCAL(PcsChar,char) // given and/or result
 DECLARE_LOCAL(PcsBuf,char) // buffer for strings
 DECLARE_TREE(String,int,int) // whether string is in buffer
 DECLARE_TREE(Readier,int,int) // name index to ready index

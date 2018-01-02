@@ -81,7 +81,7 @@ void haskellConsume(void *arg)
         enum Data data = *delocHsData(1);
         useClient(data); referMeta();
         int len = sizeMeta();
-        *enlocHsCommand(1) = &download;
+        *enlocHsCmd(1) = &download;
         *enlocHsInt(1) = len;
         memcpy(enlocHsInt(len),arrayMeta(0,len),len);
         *enlocHsCmdData(1) = data;}
@@ -228,8 +228,8 @@ char *stringArgument()
 {
     if (sizeHsInt() == 0) exitErrstr("no valid other\n");
     int len = *delocHsInt(1);
-    if (sizeHsChar() < len) exitErrstr("no valid string\n");
-    return delocHsChar(len);
+    if (sizeHsByte() < len) exitErrstr("no valid string\n");
+    return delocHsByte(len);
 }
 
 int intArgument()
