@@ -32,6 +32,9 @@ void forceBuffer();
 void forceShader();
 void plane();
 void point();
+void inflate();
+void fill();
+void hollow();
 
 #define FORCE_THREAD(THREAD) \
 	(strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
@@ -277,6 +280,26 @@ int processConfigure(int index, int len)
 		int siz = configureVector(&chrpos,&intpos);
 		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = point;
+		configurePass(chrsiz,intsiz);
+		return 1;}
+	if (parse("<?inflate!>",len) > 0) {
+		*enlocPcsCmdInt(1) = index;
+		*enlocPcsCmdCmd(1) = inflate;
+		return 1;}
+	if (parse("<?fill!> fl% fl% fl%",len) > 0) {
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		int siz = configureVector(&chrpos,&intpos);
+		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdCmd(1) = fill;
+		configurePass(chrsiz,intsiz);
+		return 1;}
+	if (parse("<?hollow!> fl% fl% fl%",len) > 0) {
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		int siz = configureVector(&chrpos,&intpos);
+		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdCmd(1) = hollow;
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?force!> {[id|nm]%}%",len) > 0) {
