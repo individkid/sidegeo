@@ -392,6 +392,22 @@ int processConfigure(int index, int len)
 		configurePass(chrsiz,intsiz);
 		timeBackward(state.idt);
 		return 1;}
+	else if (parse("<?change!> id% fl%",len) > 0) {
+		struct Change change;
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		int siz = timeIdent(&change.sub,chrpos,intpos);
+		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
+		chrpos += siz;
+		intpos += 1;
+		siz = timeFloat(&change.val,chrpos,intpos);
+		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
+		chrpos += siz;
+		intpos += 1;
+		change.vld = 1<<Map;
+		*enlocPcsChange(1) = change;
+		return 1;}
+	// TODO metric listen source
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
 		return 1;}

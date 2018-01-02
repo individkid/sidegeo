@@ -143,6 +143,9 @@ void metric()
     int index = *delocCmdInt(1);
     int stock = *delocCmdInt(1);
     // TODO enque machines to calculate change val
-    struct Change change = {.sub = stock, .val = 0};
+    struct Change change;
+    change.sub = stock;
+    change.val = 0;
+    change.vld = 0;
     *enlocCmdChange(1) = change;
 }

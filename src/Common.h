@@ -179,6 +179,7 @@ struct Shape { // information for measuring shapes
 struct Change {
     float val; // new value for stock
     int sub; // index of stock for value
+    int vld; // whether sub is packed or not
 };
 enum Control {
     Listen,

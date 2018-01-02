@@ -210,7 +210,8 @@ void timewheelConsume(void *arg)
         DEFAULT(exitErrstr("time too control\n");)}
     while (sizeChange() > 0) {
         struct Change change = *delocChange(1);
-        struct State *state = arrayState(change.sub,1);
+        int sub = ((change.vld>>Map)&1 ? indexPack(change.sub) : change.sub);
+        struct State *state = arrayState(sub,1);
         state->amt = change.val;
         if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
 }

@@ -351,12 +351,31 @@ void forceShader()
 
 void plane()
 {
-    // TODO append, find sidednesses, haskell classify, render
+    // TODO append, find points, find sidednesses wrt points,
+    // TODO haskell classify, update faces or frames, render
 }
 
 void point()
 {
-    // TODO append, construct planes, find sidednesses, haskell classify, render
+    // TODO append, construct planes, find points, find sidednesses wrt points,
+    // TODO haskell classify, update faces or frames, render
+}
+
+void inflate()
+{
+    // TODO haskell inflate, update faces or frames, render
+}
+
+void fill()
+{
+    // TODO find sidednesses wrt pierce point,
+    // TODO haskell fill, update faces or frames, render
+}
+
+void hollow()
+{
+    // TODO find sidednesses wrt pierce point,
+    // TODO haskell hollow, update faces or frames, render
 }
 
 #ifdef BRINGUP
