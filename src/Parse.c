@@ -58,9 +58,9 @@ int parseFail(struct Parse *parse)
 	return -parse->patsub; // negative how far got through pattern
 }
 
-int parsePass(int len, struct Parse *parse)
+int parsePass(struct Parse *parse)
 {
-	packPcsChar(sizePcsChar()-parse->chrsiz-len,len);
+	packPcsChar(parse->chrsiz-parse->patlen,parse->patlen);
 	return (sizePcsInt()-parse->intsiz); // number of lengths
 }
 
@@ -77,9 +77,9 @@ void parseOpen(struct Nest *nest, struct Parse *parse)
 	memcpy(enlocPrefixPtr(parse->fmtsub),arrayFormat(0,parse->fmtsub),parse->fmtsub);
 }
 
-void parseCount(struct Nest *nest)
+void parseCount(struct Parse *parse)
 {
-	*enlocPcsInt(1) = sizePcsChar()-nest->chrsiz;
+	*enlocPcsInt(1) = sizePcsChar()-parse->patlen;
 }
 
 void parseFormat(struct Nest *nest, struct Parse *parse)
@@ -353,7 +353,7 @@ int parseExp(int skip, struct Parse *parse)
 		else if (special == '#') retval = parseNumeral(parse);
 		else if (special == '@') retval = parseAlpha(parse);
 		else if (special == '.') retval = parseWild(parse);
-		else if (special == '%') parseCount(&nest);
+		else if (special == '%') parseCount(parse);
 		else if (special == ')') break;
 		else if (special == ']') break;
 		else if (special == '}') break;
@@ -381,6 +381,6 @@ int parse(const char *fmt, int len) // len is for PcsChar; fmt is 0 terminated
 	int retval = parseExp(0,&parse);
 	if (retval < 0) exitErrstr("parse too format\n");
 	if (retval < 1) return parseFail(&parse);
-	return parsePass(len,&parse);
+	return parsePass(&parse);
 }
 

@@ -36,48 +36,94 @@ void inflate();
 void fill();
 void hollow();
 
-#define FORCE_THREAD(THREAD) \
-	(strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
-	thread = Pcs##THREAD;}
+#define FORCE_THREAD(THREAD) { \
+	int siz = *arrayPcsInt(intpos,1)-chrpos; \
+	if (strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
+	thread = Pcs##THREAD; \
+	chrpos += siz; \
+	intpos += 1; \
+	continue;}}
 
-#define FORCE_COUNT(TYPE,THREAD) \
-	(strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
+#define FORCE_COUNT(TYPE,THREAD) { \
+	int siz = *arrayPcsInt(intpos,1)-chrpos; \
+	if (strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
 	if (testCount(Pcs##THREAD) < 0) insertCount(Pcs##THREAD,sizePcs##THREAD##Int()); \
-	*enlocPcs##THREAD##Int(1) = 0;}
+	*enlocPcs##THREAD##Int(1) = 0; \
+	chrpos += siz; \
+	intpos += 1; \
+	continue;}}
 
-#define FORCE_UNIQUE(INST,TYPE,THREAD) \
-	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0) { \
+#define FORCE_UNIQUE(INST,TYPE,THREAD) { \
+	int siz = *arrayPcsInt(intpos,1)-chrpos; \
+	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0) { \
 	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
 	*enlocPcs##TYPE(1) = INST; \
 	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1; \
+	chrpos += siz; \
+	intpos += 1; \
+	continue;}}
 
-#define FORCE_SHARED(INST,TYPE,THREAD) \
-	(strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && thread == Pcs##THREAD) { \
+#define FORCE_SHARED(INST,TYPE,THREAD) { \
+	int siz = *arrayPcsInt(intpos,1)-chrpos; \
+	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && thread == Pcs##THREAD) { \
 	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
 	*enlocPcs##TYPE(1) = INST; \
 	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1; \
+	chrpos += siz; \
+	intpos += 1; \
+	continue;}}
+
+int forceChar(char **rslt, int *chrpos, int *intpos)
+{
+	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
+	if (siz == 0) {*intpos += 1; return 0;}
+	*rslt = arrayPcsChar(*chrpos,siz);
+	*chrpos += siz;
+	*intpos += 1;
+	return siz;
+}
 
 #define FORCE_CHAR(TYPE,THREAD) \
-	(thread == Pcs##THREAD) { \
+	if (thread == Pcs##THREAD) { \
+	char *val; \
+	int siz = forceChar(&val,&chrpos,&intpos); \
+	if (siz <= 0) return siz; \
 	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
-	memcpy(enlocPcs##TYPE(siz),arrayPcsChar(chrpos,siz),siz); \
+	memcpy(enlocPcs##TYPE(siz),val,siz); \
 	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += siz;}
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += siz; \
+	continue;}
+
+int forceInt(int *rslt, int *chrpos, int *intpos)
+{
+	if (*intpos >= sizePcsInt()) return -1;
+	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
+	if (siz == 0) {*intpos += 1; return 0;}
+	char *nptr = arrayPcsChar(*chrpos,siz);
+	char *endptr = nptr;
+	long int val = strtol(nptr,&endptr,10);
+	if (endptr != nptr+siz) return -1;
+	if (val > INT_MAX) return -1;
+	if (val < INT_MIN) return -1;
+	*rslt = val;
+	*chrpos += siz;
+	*intpos += 1;
+	return siz;
+}
 
 #define FORCE_INT(TYPE,THREAD) \
-	((*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-') && thread == Pcs##THREAD) { \
-	char *nptr = arrayPcsChar(chrpos,siz); \
-	char *endptr = 0; \
-	long int val = strtol(nptr,&endptr,10); \
-	if (endptr != nptr+siz) {configureFail(chrsiz,intsiz); return -1;} \
-	if (val > INT_MAX) {configureFail(chrsiz,intsiz); return -1;} \
-	if (val < INT_MIN) {configureFail(chrsiz,intsiz); return -1;} \
+	if (thread == Pcs##THREAD && sizePcsChar() > 0 && \
+	(*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-')) { \
+	int val; \
+	int siz = forceInt(&val,&chrpos,&intpos); \
+	if (siz <= 0) return siz; \
 	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
 	*enlocPcs##TYPE(1) = val; \
 	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1;}
+	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1; \
+	continue;}
 
 void timeForward(int key)
 {
@@ -119,9 +165,10 @@ int timeFloat(float *rslt, int *chrpos, int *intpos)
 	char *nptr = arrayPcsChar(*chrpos,siz);
 	char *endptr = nptr;
 	float val = strtof(nptr,&endptr);
-	if (endptr == nptr) return -1;
+	if (endptr != nptr+siz) return -1;
 	*rslt = val;
 	*chrpos += siz;
+	*intpos += 1;
 	return siz;
 }
 
@@ -132,6 +179,7 @@ int timeIdent(int *key, int *chrpos, int *intpos)
 	if (siz == 0) {*intpos += 1; return 0;}
 	*key = parseString(arrayPcsChar(*chrpos,siz),siz);
 	*chrpos += siz;
+	*intpos += 1;
 	return siz;
 }
 
@@ -200,15 +248,25 @@ int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, in
 
 int configureVector(int *chrpos, int *intpos)
 {
-		MyGLfloat vec[3];
-		int tot = 0;
-		for (int i = 0; i < 3; i++) {
-			int siz = timeFloat(vec+i,chrpos,intpos);
-			if (siz < 0) return -1;
-			tot += siz;}
-		int len = sizeof*vec*3;
-		memcpy(enlocPcsCmdByte(len),vec,len);
-		return tot;
+	MyGLfloat vec[3];
+	int tot = 0;
+	for (int i = 0; i < 3; i++) {
+		int siz = timeFloat(vec+i,chrpos,intpos);
+		if (siz < 0) return -1;
+		tot += siz;}
+	int len = sizeof*vec*3;
+	memcpy(enlocPcsCmdByte(len),vec,len);
+	return tot;
+}
+
+int configureArray(int *chrpos, int *intpos)
+{
+	int count = sizePcsInt();
+	*enlocPcsInt(1) = 0;
+	while (*intpos < sizePcsInt() && *arrayPcsInt(*intpos,1) > *chrpos) {
+	if (forceInt(enlocPcsCmdInt(1),chrpos,intpos) < 0) return -1;
+	*arrayPcsInt(count,1) += 1;}
+	return 0;
 }
 
 void configureFail(int chrsiz, int intsiz)
@@ -266,19 +324,20 @@ int processConfigure(int index, int len)
 	initString(processCompare);
 	initMacro(processCompare);
 	parseGlobal("\\id|@{[@|#]}/\\sg|([?+!|?-!])/\\nm|sg#{#}/\\fl|nm(?.!{#})([e|E]sg{#}])/\\ |<{&}>/");
-	if (parse("<?plane!> fl% fl% fl%",len) > 0) {
+	if (parse("<?plane!> nm% fl% fl% fl%",len) > 0) {
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		int siz = configureVector(&chrpos,&intpos);
-		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdInt(1) = index;
+		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureVector(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = plane;
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?point!> fl% fl% fl%",len) > 0) {
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		int siz = configureVector(&chrpos,&intpos);
-		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdInt(1) = index;
+		if (configureVector(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = point;
 		configurePass(chrsiz,intsiz);
 		return 1;}
@@ -286,19 +345,23 @@ int processConfigure(int index, int len)
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = inflate;
 		return 1;}
-	if (parse("<?fill!> fl% fl% fl%",len) > 0) {
+	if (parse("<?fill!> nm% {nm%}% {nm%}%",len) > 0) {
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		int siz = configureVector(&chrpos,&intpos);
-		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdInt(1) = index;
+		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = fill;
 		configurePass(chrsiz,intsiz);
 		return 1;}
-	if (parse("<?hollow!> fl% fl% fl%",len) > 0) {
+	if (parse("<?hollow!> nm% {nm%}% {nm%}%",len) > 0) {
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		int siz = configureVector(&chrpos,&intpos);
-		if (siz < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdInt(1) = index;
+		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = hollow;
 		configurePass(chrsiz,intsiz);
 		return 1;}
@@ -308,61 +371,58 @@ int processConfigure(int index, int len)
 		int intpos = intsiz;
 		enum PcsThread thread = PcsCmd;
 		while (intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) {
-			int siz = *arrayPcsInt(intpos,1)-chrpos;
-			if FORCE_INT(CmdInt,Cmd)
-			else if FORCE_INT(HsInt,Hs)
-			else if FORCE_THREAD(Cmd)
-			else if FORCE_THREAD(Hs)
-			else if FORCE_COUNT(CmdInt,Cmd)
-			else if FORCE_COUNT(CmdByte,Cmd)
-			else if FORCE_COUNT(HsInt,Hs)
-			else if FORCE_COUNT(HsByte,Hs)
-			else if FORCE_SHARED(forceBuffer,CmdCmd,Cmd)
-			else if FORCE_SHARED(forceShader,CmdCmd,Cmd)
-			else if FORCE_SHARED(PlaneBuf,CmdData,Cmd)
-			else if FORCE_SHARED(VersorBuf,CmdData,Cmd)
-			else if FORCE_SHARED(PointBuf,CmdData,Cmd)
-			else if FORCE_SHARED(PierceBuf,CmdData,Cmd)
-			else if FORCE_SHARED(SideBuf,CmdData,Cmd)
-			else if FORCE_SHARED(FaceSub,CmdData,Cmd)
-			else if FORCE_SHARED(FrameSub,CmdData,Cmd)
-			else if FORCE_SHARED(PointSub,CmdData,Cmd)
-			else if FORCE_SHARED(PlaneSub,CmdData,Cmd)
-			else if FORCE_SHARED(SideSub,CmdData,Cmd)
-			else if FORCE_SHARED(HalfSub,CmdData,Cmd)
-			else if FORCE_UNIQUE(Side,Event,Hs)
-			else if FORCE_UNIQUE(Update,Event,Hs)
-			else if FORCE_UNIQUE(Inflate,Event,Hs)
-			else if FORCE_UNIQUE(Fill,Event,Hs)
-			else if FORCE_UNIQUE(Hollow,Event,Hs)
-			else if FORCE_UNIQUE(Remove,Event,Hs)
-			else if FORCE_UNIQUE(Call,Event,Hs)
-			else if FORCE_UNIQUE(Acknowledge,Event,Hs)
-			else if FORCE_UNIQUE(Upload,Event,Hs)
-			else if FORCE_UNIQUE(Download,Event,Hs)
-			else if FORCE_UNIQUE(Enumerate,Event,Hs)
-			else if FORCE_UNIQUE(Poly,Kind,Hs)
-			else if FORCE_UNIQUE(Boundary,Kind,Hs)
-			else if FORCE_UNIQUE(Face,Kind,Hs)
-			else if FORCE_UNIQUE(Other,Kind,Hs)
-			else if FORCE_SHARED(forceBuffer,HsCmd,Hs)
-			else if FORCE_SHARED(forceShader,HsCmd,Hs)
-			else if FORCE_SHARED(PlaneBuf,HsData,Hs)
-			else if FORCE_SHARED(VersorBuf,HsData,Hs)
-			else if FORCE_SHARED(PointBuf,HsData,Hs)
-			else if FORCE_SHARED(PierceBuf,HsData,Hs)
-			else if FORCE_SHARED(SideBuf,HsData,Hs)
-			else if FORCE_SHARED(FaceSub,HsData,Hs)
-			else if FORCE_SHARED(FrameSub,HsData,Hs)
-			else if FORCE_SHARED(PointSub,HsData,Hs)
-			else if FORCE_SHARED(PlaneSub,HsData,Hs)
-			else if FORCE_SHARED(SideSub,HsData,Hs)
-			else if FORCE_SHARED(HalfSub,HsData,Hs)
-			else if FORCE_CHAR(CmdByte,Cmd)
-			else if FORCE_CHAR(HsByte,Hs)
-			else {configureFail(chrsiz,intsiz); return -1;}
-			chrpos = *arrayPcsInt(intpos,1); intpos += 1;}
-		if (intpos != sizePcsInt()) {configureFail(chrsiz,intsiz); return -1;}
+			FORCE_INT(CmdInt,Cmd)
+			FORCE_INT(HsInt,Hs)
+			FORCE_THREAD(Cmd)
+			FORCE_THREAD(Hs)
+			FORCE_COUNT(CmdInt,Cmd)
+			FORCE_COUNT(CmdByte,Cmd)
+			FORCE_COUNT(HsInt,Hs)
+			FORCE_COUNT(HsByte,Hs)
+			FORCE_SHARED(forceBuffer,CmdCmd,Cmd)
+			FORCE_SHARED(forceShader,CmdCmd,Cmd)
+			FORCE_SHARED(PlaneBuf,CmdData,Cmd)
+			FORCE_SHARED(VersorBuf,CmdData,Cmd)
+			FORCE_SHARED(PointBuf,CmdData,Cmd)
+			FORCE_SHARED(PierceBuf,CmdData,Cmd)
+			FORCE_SHARED(SideBuf,CmdData,Cmd)
+			FORCE_SHARED(FaceSub,CmdData,Cmd)
+			FORCE_SHARED(FrameSub,CmdData,Cmd)
+			FORCE_SHARED(PointSub,CmdData,Cmd)
+			FORCE_SHARED(PlaneSub,CmdData,Cmd)
+			FORCE_SHARED(SideSub,CmdData,Cmd)
+			FORCE_SHARED(HalfSub,CmdData,Cmd)
+			FORCE_UNIQUE(Side,Event,Hs)
+			FORCE_UNIQUE(Update,Event,Hs)
+			FORCE_UNIQUE(Inflate,Event,Hs)
+			FORCE_UNIQUE(Fill,Event,Hs)
+			FORCE_UNIQUE(Hollow,Event,Hs)
+			FORCE_UNIQUE(Remove,Event,Hs)
+			FORCE_UNIQUE(Call,Event,Hs)
+			FORCE_UNIQUE(Acknowledge,Event,Hs)
+			FORCE_UNIQUE(Upload,Event,Hs)
+			FORCE_UNIQUE(Download,Event,Hs)
+			FORCE_UNIQUE(Enumerate,Event,Hs)
+			FORCE_UNIQUE(Poly,Kind,Hs)
+			FORCE_UNIQUE(Boundary,Kind,Hs)
+			FORCE_UNIQUE(Face,Kind,Hs)
+			FORCE_UNIQUE(Other,Kind,Hs)
+			FORCE_SHARED(forceBuffer,HsCmd,Hs)
+			FORCE_SHARED(forceShader,HsCmd,Hs)
+			FORCE_SHARED(PlaneBuf,HsData,Hs)
+			FORCE_SHARED(VersorBuf,HsData,Hs)
+			FORCE_SHARED(PointBuf,HsData,Hs)
+			FORCE_SHARED(PierceBuf,HsData,Hs)
+			FORCE_SHARED(SideBuf,HsData,Hs)
+			FORCE_SHARED(FaceSub,HsData,Hs)
+			FORCE_SHARED(FrameSub,HsData,Hs)
+			FORCE_SHARED(PointSub,HsData,Hs)
+			FORCE_SHARED(PlaneSub,HsData,Hs)
+			FORCE_SHARED(SideSub,HsData,Hs)
+			FORCE_SHARED(HalfSub,HsData,Hs)
+			FORCE_CHAR(CmdByte,Cmd)
+			FORCE_CHAR(HsByte,Hs)
+			else {configureFail(chrsiz,intsiz); return -1;}}
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	else if (parse(
