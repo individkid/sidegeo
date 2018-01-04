@@ -23,7 +23,7 @@
 
 #include "Common.h"
 
-int meta = 0;
+int filenum = 0;
 
 void setupEnum()
 {
@@ -48,7 +48,7 @@ void haskellBefore()
 void haskellConsume(void *arg)
 {
     while (sizeEvent() > 0) {
-        meta = *delocHsInt(1);
+        filenum = *delocHsInt(1);
         int size = *delocHsInt(1);
         memcpy(enlocInout(size),delocHsInt(size),size);
         if (handleEvent(indexEnum(*delocEvent(1))) != 0) exitErrstr("haskell return true\n");
@@ -74,36 +74,36 @@ int *accessInt(int size)
 
 int *place(int size)
 {
-    usePlace(meta); referMeta();
+    usePlace(filenum); referMeta();
     return accessInt(size);
 }
 
 int places()
 {
-    usePlace(meta); referMeta();
+    usePlace(filenum); referMeta();
     return sizeMeta();
 }
 
 int *embed(int size)
 {
-    useEmbed(meta); referMeta();
+    useEmbed(filenum); referMeta();
     return accessInt(size);
 }
 
 int embeds()
 {
-    useEmbed(meta); referMeta();
+    useEmbed(filenum); referMeta();
     return sizeMeta();
 }
 
 int *inout(int size)
 {
-    useInout(meta); referMeta();
+    useInout(filenum); referMeta();
     return accessInt(size);
 }
 
 int inouts()
 {
-    useInout(meta); referMeta();
+    useInout(filenum); referMeta();
     return sizeMeta();
 }

@@ -357,9 +357,8 @@ void enquePershader()
 void force()
 {
     enum Data data = *delocCmdData(1);
-    // first argument is number of following arguments including initial offset
-    int todo = *delocCmdInt(1)-1;
     int done = *delocCmdInt(1);
+    int todo = *delocCmdInt(1);
     struct File *file = setupFile(0);
     struct Buffer *buffer = arrayBuffer(file->buffer[data],1);
     int bufsiz = todo*buffer->dimn;
