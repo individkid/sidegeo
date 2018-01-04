@@ -60,10 +60,10 @@ enum Shader pershader = Perpoint;
 #endif
 
 
+void displayCursor(GLFWwindow *window, double xpos, double ypos);
 void enqueCommand(Command cmd);
 void enqueDishader();
 void enquePershader();
-void compass(double xdelta, double ydelta);
 
 void warp(double xwarp, double ywarp)
 {
@@ -78,6 +78,16 @@ void warp(double xwarp, double ywarp)
     struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
     CGWarpMouseCursorPosition(point);
 #endif
+}
+
+void compass(double xdelta, double ydelta)
+{
+    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
+    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
+    xwarp += xdelta;
+    ywarp += ydelta;
+    warp(xwarp,ywarp);
+    displayCursor(windowHandle,xwarp,ywarp);
 }
 
 void leftAdditive()

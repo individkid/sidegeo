@@ -49,6 +49,7 @@ executable sculpt
                        src/Wrap.c,
                        src/Common.cpp,
                        src/Command.c,
+                       src/Interface.c,
                        src/Render.c,
                        src/Callback.c,
                        src/Haskell.c,

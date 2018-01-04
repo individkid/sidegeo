@@ -1,5 +1,5 @@
 /*
-*    Command.c commands used by oter threads for command queue
+*    Command.c main thread circular command queue with glfw polling
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -18,25 +18,7 @@
 
 #include "Main.h"
 
-extern GLFWwindow *windowHandle;
-extern enum Menu mode[Modes];
-extern struct Item item[Menus];
-extern enum Click click;
-extern float xPos;
-extern float yPos;
-extern float zPos;
-extern int xSiz;
-extern int ySiz;
-extern float slope;
-extern float aspect;
-
-void enqueWrap(struct Buffer *buffer, int room);
-void enqueShader(enum Shader shader);
-size_t bufferType(int size);
-void warp(double xwarp, double ywarp);
-void displayClick(GLFWwindow *window, int button, int action, int mods);
-void displayCursor(GLFWwindow *window, double xpos, double ypos);
-void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
+int sequenceNumber = 0;
 
 void enqueMachine(Machine machine)
 {
@@ -65,47 +47,50 @@ void enqueCommand(Command cmd)
     enqueMachine(command);
 }
 
-void compass(double xdelta, double ydelta)
+void commandSignal()
 {
-    double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
-    double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
-    xwarp += xdelta;
-    ywarp += ydelta;
-    warp(xwarp,ywarp);
-    displayCursor(windowHandle,xwarp,ywarp);
+    glfwPostEmptyEvent();
 }
 
-void inject()
+void commandConsume(void *arg)
 {
-    char chr = *delocCmdInt(1);
-    SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
-    CASE(South) compass(0.0,COMPASS_DELTA);
-    CASE(West) compass(-COMPASS_DELTA,0.0);
-    CASE(East) compass(COMPASS_DELTA,0.0);
-    CASE(Counter) displayScroll(windowHandle,0.0,ROLLER_DELTA);
-    CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
-    CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
-    CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
-    DEFAULT(exitErrstr("invalid inject char\n");)
+    while (sizeCommand() > 0) enqueCommand(*delocCommand(1));
 }
 
-void menu()
+int commandDelay()
 {
-    char chr = *delocCmdInt(1);
-    if (indexof(chr) >= 0) {
-        enum Menu line = indexof(chr);
-        click = Init; mode[item[line].mode] = line;}
-    else exitErrstr("invalid menu char\n");
+    if (sizeCluster() == 0) glfwWaitEvents();
+    else if (sizeDefer() == sizeCluster()) glfwWaitEventsTimeout(POLL_DELAY);
+    else glfwPollEvents();
+    return (sizeCluster() > 0);
 }
 
-void metric()
+int commandNodelay()
 {
-    int index = *delocCmdInt(1);
-    int stock = *delocCmdInt(1);
-    // TODO enque machines to calculate change val
-    struct Change change;
-    change.sub = stock;
-    change.val = 0;
-    change.vld = 0;
-    *enlocCmdChange(1) = change;
+    glfwPollEvents();
+    return (sizeCluster() > 0);
+}
+
+void commandProduce(void *arg)
+{
+    int state = *delocArgument(1);
+    int cluster = *delocCluster(1);
+    Machine *machine = delocMachine(cluster);
+    if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
+    sequenceNumber++;
+    int done = 0;
+    for (int i = 0; i < cluster; i++) {while (1) {
+        SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = sequenceNumber + sizeCluster();
+        FALL(Reque) {
+            Machine *reloc = enlocMachine(cluster-i);
+            for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
+            *enlocArgument(1) = state;
+            *enlocCluster(1) = cluster-i;
+            done = 2;}
+        CASE(Advance) {state = 0; done = 1;}
+        CASE(Continue) state++;
+        CASE(Terminate) done = 3;
+        DEFAULT(exitErrstr("invalid machine action\n");)
+        if (done) {done--; break;}} if (done) {done--; break;}}
+    if (done) {done--; exitQueue();}
 }

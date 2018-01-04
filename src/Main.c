@@ -25,7 +25,6 @@ GLFWwindow *windowHandle = 0; // for use in glfwSwapBuffers
 pthread_t haskellThread = 0; // for haskell runtime system
 pthread_t timewheelThread = 0; // for stock flow delay
 pthread_t processThread = 0; // for arguments and configure creation
-int sequenceNumber = 0;
 struct Code code[Shaders] = {0};
 float invalid[2] = {1.0e38,1.0e37};
 float basisMat[27] = {0}; // per versor base points
@@ -292,48 +291,4 @@ int main(int argc, char **argv)
 
     glfwTerminate();
     return 0;
-}
-
-void commandSignal()
-{
-    glfwPostEmptyEvent();
-}
-void commandConsume(void *arg)
-{
-    while (sizeCommand() > 0) enqueCommand(*delocCommand(1));
-}
-int commandDelay()
-{
-    if (sizeCluster() == 0) glfwWaitEvents();
-    else if (sizeDefer() == sizeCluster()) glfwWaitEventsTimeout(POLL_DELAY);
-    else glfwPollEvents();
-    return (sizeCluster() > 0);
-}
-int commandNodelay()
-{
-    glfwPollEvents();
-    return (sizeCluster() > 0);
-}
-void commandProduce(void *arg)
-{
-    int state = *delocArgument(1);
-    int cluster = *delocCluster(1);
-    Machine *machine = delocMachine(cluster);
-    if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
-    sequenceNumber++;
-    int done = 0;
-    for (int i = 0; i < cluster; i++) {while (1) {
-        SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = sequenceNumber + sizeCluster();
-        FALL(Reque) {
-            Machine *reloc = enlocMachine(cluster-i);
-            for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
-            *enlocArgument(1) = state;
-            *enlocCluster(1) = cluster-i;
-            done = 2;}
-        CASE(Advance) {state = 0; done = 1;}
-        CASE(Continue) state++;
-        CASE(Terminate) done = 3;
-        DEFAULT(exitErrstr("invalid machine action\n");)
-        if (done) {done--; break;}} if (done) {done--; break;}}
-    if (done) {done--; exitQueue();}
 }
