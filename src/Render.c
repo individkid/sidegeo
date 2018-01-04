@@ -215,15 +215,12 @@ enum Action renderPierce(int state)
     glBindBuffer(GL_ARRAY_BUFFER, feedback[0]->handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(feedback[0]->type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    // TODO GLuint plane[done]; glBindBuffer(feedback[1]); glGetBufferSubData;
-    int pFound;
-    float xFound, yFound, zFound;
-    xFound = 0; yFound = 0; zFound = invalid[0];
-    for (int i = 0; i < done*dimn; i += dimn) {
+    int pFound; float xFound, yFound, zFound;
+    pFound = 0; xFound = 0; yFound = 0; zFound = invalid[0];
+    for (int i = 0, j = 0; i < done*dimn; i += dimn, j += 1) {
         int sub = i+dimn-1;
         if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
-            // TODO pFound = plane[i/dimn];
-            xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
+            pFound = j; xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
     if (zFound<invalid[1] && (qPos == arg->file || zFound < zPos)) {
         pPos = pFound; qPos = arg->file; xPos = xFound; yPos = yFound; zPos = zFound;}
     return Advance;
