@@ -28,8 +28,7 @@ void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
 int parseString(const char *str, int len);
 
-void forceBuffer();
-void forceShader();
+void force();
 void plane();
 void point();
 void inflate();
@@ -379,8 +378,7 @@ int processConfigure(int index, int len)
 			FORCE_COUNT(CmdByte,Cmd)
 			FORCE_COUNT(HsInt,Hs)
 			FORCE_COUNT(HsByte,Hs)
-			FORCE_SHARED(forceBuffer,CmdCmd,Cmd)
-			FORCE_SHARED(forceShader,CmdCmd,Cmd)
+			FORCE_SHARED(force,CmdCmd,Cmd)
 			FORCE_SHARED(PlaneBuf,CmdData,Cmd)
 			FORCE_SHARED(VersorBuf,CmdData,Cmd)
 			FORCE_SHARED(PointBuf,CmdData,Cmd)
@@ -401,8 +399,7 @@ int processConfigure(int index, int len)
     		FORCE_UNIQUE(Divide,Event,Hs)
     		FORCE_UNIQUE(Vertex,Event,Hs)
     		FORCE_UNIQUE(Migrate,Event,Hs)
-			FORCE_SHARED(forceBuffer,HsCmd,Hs)
-			FORCE_SHARED(forceShader,HsCmd,Hs)
+			FORCE_SHARED(force,HsCmd,Hs)
 			FORCE_SHARED(PlaneBuf,HsData,Hs)
 			FORCE_SHARED(VersorBuf,HsData,Hs)
 			FORCE_SHARED(PointBuf,HsData,Hs)

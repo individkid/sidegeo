@@ -316,18 +316,7 @@ void enquePershader()
     for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i);
 }
 
-enum Action bringupEmpty(int state)
-{
-    return Advance;
-}
-
-enum Action bringupShader(int state)
-{
-    enqueShader(*delocShader(1),0);
-    return Advance;
-}
-
-enum Action bringupBuffer(int state)
+enum Action renderBuffer(int state)
 {
     struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
     int todo = *arrayCmdInt(1,1);
@@ -363,10 +352,10 @@ void setupBuffer(int sub, int todo, int done, void *data)
     struct Buffer *buffer = arrayBuffer(sub,1);
     int size = buffer->dimn*bufferType(buffer->type);
     memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
-    enqueMachine(bringupBuffer);
+    enqueMachine(renderBuffer);
 }
 
-void forceBuffer()
+void force()
 {
     enum Data data = *delocCmdData(1);
     // first argument is number of following arguments including initial offset
@@ -384,11 +373,6 @@ void forceBuffer()
         for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
         setupBuffer(file->buffer[data],todo,done,buf);}
     DEFAULT(exitErrstr("invalid buffer type\n");)
-}
-
-void forceShader()
-{
-    enqueShader(*delocShader(1),0);
 }
 
 void plane()
@@ -442,10 +426,19 @@ void hollow()
 #define NUM_FRAMES 3
 #define NUM_SIDES 3
 
-extern enum Shader dishader;
-extern int sequenceNumber;
 double sqrt(double x);
-void transformRight();
+
+enum Action bringupEmpty(int state)
+{
+    return Advance;
+}
+
+enum Action bringupShader(int state)
+{
+    enqueShader(*delocShader(1),0);
+    return Advance;
+}
+
 void bringupBuiltin()
 {
     // f = 1
