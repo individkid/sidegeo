@@ -233,7 +233,7 @@ int processRead(int pipe, int size)
 {
 	int len; char *buf;
 	if (read(size,&len,sizeof(len)) != sizeof(len)) return -1;
-	if (len < 0) return -1; if (len == 0) return 0;
+	if (len <= 0) return len;
 	buf = enlocPcsChar(len);
 	if (read(pipe,buf,len) != len) {unlocPcsChar(len); return -1;}
 	return len;

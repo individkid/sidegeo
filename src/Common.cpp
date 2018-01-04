@@ -265,6 +265,8 @@ long long timewheelDelay();
 
 EXTERNCEND
 
+inline bool operator!=(const File &left, const File &right) {return false;}
+inline bool operator!=(const Buffer &left, const Buffer &right) {return false;}
 inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
@@ -277,6 +279,8 @@ DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdInt,int,CmnCommand)
 DEFINE_STAGE(CmnCmdByte,char,CmnCmdInt)
 DEFINE_STAGE(CmnCmdData,enum Data,CmnCmdByte)
+DEFINE_STAGE(CmnShader,enum Shader,CmnCmdData)
+DEFINE_STAGE(CmnRender,struct Render,CmnShader)
 
 DEFINE_STDIN(CmnOutputs,beforeConsole,afterConsole,consumeConsole,produceConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
@@ -288,8 +292,7 @@ DEFINE_STAGE(CmnConfigurer,int,CmnConfigure)
 
 DEFINE_COND(CmnHaskells,haskellBefore,haskellAfter,haskellConsume)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
-DEFINE_STAGE(CmnKind,enum Kind,CmnEvent)
-DEFINE_STAGE(CmnHsCmd,Command,CmnKind)
+DEFINE_STAGE(CmnHsCmd,Command,CmnEvent)
 DEFINE_STAGE(CmnHsInt,int,CmnHsCmd)
 DEFINE_STAGE(CmnHsByte,char,CmnHsInt)
 DEFINE_STAGE(CmnHsData,enum Data,CmnHsByte)
@@ -308,23 +311,23 @@ DEFINE_LOCAL(Argument,int)
 DEFINE_LOCAL(Cluster,int)
 DEFINE_LOCAL(Machine,Machine)
 
-DEFINE_LOCAL(Render,struct Render)
-DEFINE_LOCAL(Buffer,struct Buffer *)
-DEFINE_LOCAL(Shader,enum Shader)
+DEFINE_LOCAL(Buffer,struct Buffer)
+DEFINE_LOCAL(File,struct File)
 
 DEFINE_DEST(Commands,CmnCommands,CmnCommands)
 DEFINE_STAGE(Command,Command,Commands)
 DEFINE_STAGE(CmdInt,int,Command)
 DEFINE_STAGE(CmdByte,char,CmdInt)
 DEFINE_STAGE(CmdData,enum Data,CmdByte)
+DEFINE_STAGE(Shader,enum Shader,CmdData)
+DEFINE_STAGE(Render,struct Render,Shader)
 
 DEFINE_SOURCE(CmdOutputs,CmnOutputs,Commands)
 DEFINE_STAGE(CmdOutput,char,CmdOutputs)
 
 DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdOutputs)
 DEFINE_STAGE(CmdEvent,enum Event,CmdHaskells)
-DEFINE_STAGE(CmdKind,enum Kind,CmdEvent)
-DEFINE_STAGE(CmdHsCmd,Command,CmdKind)
+DEFINE_STAGE(CmdHsCmd,Command,CmdEvent)
 DEFINE_STAGE(CmdHsInt,int,CmdHsCmd)
 DEFINE_STAGE(CmdHsByte,char,CmdHsInt)
 DEFINE_STAGE(CmdHsData,enum Data,CmdHsByte)
@@ -335,33 +338,20 @@ DEFINE_STAGE(CmdChange,struct Change,CmdTimewheels)
 
 DEFINE_META(Place,int)
 DEFINE_META(Embed,int)
-DEFINE_LOCAL(Sideband,int)
-DEFINE_LOCAL(Correlate,int)
-DEFINE_META(Boundary,int)
-DEFINE_META(Client,int)
+DEFINE_LOCAL(Inout,int)
 DEFINE_META(EventName,char)
-DEFINE_META(KindName,char)
-DEFINE_META(DataName,char)
 DEFINE_LOCAL(EventMap,int)
-DEFINE_LOCAL(KindMap,int)
-DEFINE_LOCAL(DataMap,enum Data)
 
 DEFINE_SOURCE(HsCommands,CmnCommands,CmnHaskells)
 DEFINE_STAGE(HsCmdCmd,Command,HsCommands)
 DEFINE_STAGE(HsCmdInt,int,HsCmdCmd)
-DEFINE_STAGE(HsCmdByte,char,HsCmdInt)
-DEFINE_STAGE(HsCmdData,enum Data,HsCmdByte)
 
 DEFINE_WAIT(Haskells,CmnHaskells,HsCommands) // wait after source
 DEFINE_STAGE(Event,enum Event,Haskells)
-DEFINE_STAGE(Kind,enum Kind,Event)
-DEFINE_STAGE(HsCmd,Command,Kind)
+DEFINE_STAGE(HsCmd,Command,Event)
 DEFINE_STAGE(HsInt,int,HsCmd)
-DEFINE_STAGE(HsByte,char,HsInt)
-DEFINE_STAGE(HsData,enum Data,HsByte)
 
 DEFINE_POINTER(Meta,int)
-DEFINE_POINTER(Pseudo,char)
 DEFINE_POINTER(Name,char *)
 
 
@@ -419,8 +409,7 @@ DEFINE_STAGE(PcsCmdData,enum Data,PcsCmdByte)
 
 DEFINE_SOURCE(PcsHaskells,CmnHaskells,PcsCommands)
 DEFINE_STAGE(PcsEvent,enum Event,PcsHaskells)
-DEFINE_STAGE(PcsKind,enum Kind,PcsEvent)
-DEFINE_STAGE(PcsHsCmd,Command,PcsKind)
+DEFINE_STAGE(PcsHsCmd,Command,PcsEvent)
 DEFINE_STAGE(PcsHsInt,int,PcsHsCmd)
 DEFINE_STAGE(PcsHsByte,char,PcsHsInt)
 DEFINE_STAGE(PcsHsData,enum Data,PcsHsByte)

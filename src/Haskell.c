@@ -23,74 +23,29 @@
 
 #include "Common.h"
 
-void download();
+int meta = 0;
 
 void setupEventMap()
 {
-    const char *eventName[] = {"Plane","Classify","Inflate","Fill","Hollow","Remove","Call"};
-    const enum Event eventEnum[] = {Side,Update,Inflate,Fill,Hollow,Remove,Call};
-    int len = sizeof(eventName)/sizeof(eventName[0]);
-    enlocEventMap(Acknowledge);
-    for (int i = 0; i < usageEventName(); i++)
-    for (int j = 0; j < len; j++) {useEventName(i); referName();
-    if (strcmp(*arrayName(0,sizeName()),eventName[j]) == 0) *arrayEventMap(eventEnum[j],1) = i;}
-}
-
-void setupKindMap()
-{
-    const char *kindName[] = {"Place","Boundary","Face","Other"};
-    const enum Kind kindEnum[] = {Poly,Boundary,Face,Other};
-    int len = sizeof(kindName)/sizeof(kindName[0]);
-    enlocKindMap(Kinds);
-    for (int i = 0; i < usageKindName(); i++)
-    for (int j = 0; j < len; j++) {useKindName(i); referName();
-    if (strcmp(*arrayName(0,sizeName()),kindName[j]) == 0) *arrayDataMap(kindEnum[j],1) = i;}
-}
-
-void setupDataMap()
-{
-    const char *dataName[] = {"PlaneBuf","VersorBuf","PointBuf","PierceBuf","SideBuf","FaceSub","FrameSub","PointSub","PlaneSub","SideSub","HalfSub"};
-    const enum Data dataEnum[] = {PlaneBuf,VersorBuf,PointBuf,PierceBuf,SideBuf,FaceSub,FrameSub,PointSub,PlaneSub,SideSub,HalfSub};
-    int len = sizeof(dataName)/sizeof(dataName[0]);
-    enlocDataMap(Datas);
-    for (int i = 0; i < usageDataName(); i++)
-    for (int j = 0; j < len; j++) {useDataName(i); referName();
-    if (strcmp(*arrayName(0,sizeName()),dataName[j]) == 0) *arrayDataMap(i,1) = dataEnum[j];}
 }
 
 void haskellBefore()
 {
     hs_init(0,0);
+    setupEventMap();
 }
 
 void haskellConsume(void *arg)
 {
-    while (sizeEvent() > 0)
-    if (*arrayEvent(0,1) == Acknowledge) {
-        ackHsCommands(delocHsInt(4)); delocEvent(1);}
-    else if (*arrayEvent(0,1) == Upload) {
-        delocEvent(1);
-        enum Data data = *delocHsData(1);
-        int len = *delocHsInt(1);
-        useClient(data); referMeta();
-        delocMeta(sizeMeta());
-        useHsInt(); xferMeta(len);
-        memcpy(enlocMeta(len),delocHsInt(len),len);}
-    else if (*arrayEvent(0,1) == Download) {
-        delocEvent(1);
-        enum Data data = *delocHsData(1);
-        useClient(data); referMeta();
-        int len = sizeMeta();
-        *enlocHsCmd(1) = &download;
-        *enlocHsInt(1) = len;
-        memcpy(enlocHsInt(len),arrayMeta(0,len),len);
-        *enlocHsCmdData(1) = data;}
-    else if (*arrayEvent(0,1) == Enumerate) {
-        if (handleEvent() != 0) exitErrstr("haskell return true\n");
-        setupEventMap();
-        setupKindMap();
-        setupDataMap();}
-    else if (handleEvent() != 0) exitErrstr("haskell return true\n");
+    while (sizeEvent() > 0) {
+        meta = *delocHsInt(1);
+        int size = *delocHsInt(1);
+        memcpy(enlocInout(size),delocHsInt(size),size);
+        if (handleEvent(*arrayEventMap(*delocEvent(1),1)) != 0) exitErrstr("haskell return true\n");
+        size = sizeInout();
+        *enlocHsCmdInt(1) = size;
+        memcpy(enlocHsCmdInt(size),delocInout(size),size);
+        *enlocHsCmdCmd(1) = *delocHsCmd(1);}
 }
 
 void haskellAfter()
@@ -107,133 +62,38 @@ int *accessInt(int size)
     return arrayMeta(0,size);
 }
 
-char *accessChar(int size)
+int *place(int size)
 {
-    // if size is not zero, resize data
-    if (size == 0) size = sizePseudo();
-    if (size > sizePseudo()) enlocPseudo(size-sizePseudo());
-    if (size < sizePseudo()) unlocPseudo(sizePseudo()-size);
-    return arrayPseudo(0,size);
-}
-
-int *place(int index, int size)
-{
-    usePlace(index); referMeta();
+    usePlace(meta); referMeta();
     return accessInt(size);
 }
 
-int places(int index)
+int places()
 {
-    usePlace(index); referMeta();
+    usePlace(meta); referMeta();
     return sizeMeta();
 }
 
-int *embed(int index, int size)
+int *embed(int size)
 {
-    useEmbed(index); referMeta();
+    useEmbed(meta); referMeta();
     return accessInt(size);
 }
 
-int embeds(int index)
+int embeds()
 {
-    useEmbed(index); referMeta();
+    useEmbed(meta); referMeta();
     return sizeMeta();
 }
 
-int *sideband(int size)
+int *inout(int size)
 {
-    useSideband(); referMeta();
+    useInout(meta); referMeta();
     return accessInt(size);
 }
 
-int sidebands()
+int inouts()
 {
-    return sizeSideband();
-}
-
-int *correlate(int size)
-{
-    useCorrelate(); referMeta();
-    return accessInt(size);
-}
-
-int correlates()
-{
-    return sizeCorrelate();
-}
-
-int *boundary(int index, int size)
-{
-    useBoundary(index); referMeta();
-    return accessInt(size);
-}
-
-int boundaries(int index)
-{
-    useBoundary(index); referMeta();
+    useInout(meta); referMeta();
     return sizeMeta();
-}
-
-int *client(int index, int size)
-{
-    if (index < 0 || index >= sizeDataMap()) exitErrstr("client too data\n");
-    useClient(*arrayDataMap(index,1)); referMeta();
-    return accessInt(size);
-}
-
-int clients(int index)
-{
-    if (index < 0 || index >= sizeDataMap()) exitErrstr("client too data\n");
-    useClient(*arrayDataMap(index,1)); referMeta();
-    return sizeMeta();
-}
-
-char *eventName(int index, int size)
-{
-    useEventName(index); referPseudo();
-    return accessChar(size);
-}
-
-char *kindName(int index, int size)
-{
-    useKindName(index); referPseudo();
-    return accessChar(size);
-}
-
-char *clientName(int index, int size)
-{
-    useDataName(index); referPseudo();
-    return accessChar(size);
-}
-
-int eventArgument()
-{
-    if (sizeEvent() == 0) exitErrstr("no valid event\n");
-    enum Event event = *delocEvent(1);
-    if (event == Enumerate) return -1;
-    int num = event;
-    if (num < 0 || num >= sizeEventMap()) exitErrstr("event too map\n");
-    return *arrayEventMap(num,1);
-}
-
-int kindArgument()
-{
-    if (sizeKind() == 0) exitErrstr("no valid event\n");
-    int kind = *delocKind(1);
-    if (kind < 0 || kind >= sizeKindMap()) exitErrstr("kind too map\n");
-    return *arrayKindMap(kind,1);
-}
-
-char *stringArgument()
-{
-    if (sizeHsInt() == 0) exitErrstr("no valid other\n");
-    int len = *delocHsInt(1);
-    if (sizeHsByte() < len) exitErrstr("no valid string\n");
-    return delocHsByte(len);
-}
-
-int intArgument()
-{
-    if (sizeHsInt() == 0) exitErrstr("no valid int\n");
-    return *delocHsInt(1);
 }

@@ -26,7 +26,6 @@ pthread_t haskellThread = 0; // for haskell runtime system
 pthread_t timewheelThread = 0; // for stock flow delay
 pthread_t processThread = 0; // for arguments and configure creation
 int sequenceNumber = 0;
-struct Buffer server[Datas] = {0};
 struct Code code[Shaders] = {0};
 float invalid[2] = {1.0e38,1.0e37};
 float basisMat[27] = {0}; // per versor base points
@@ -131,20 +130,6 @@ void compileProgram(
     if (fragmentCode) glDeleteShader(fragment);
 }
 
-void buffer(struct Buffer *buffer, char *name, GLuint loc, int type, int dimn)
-{
-    buffer->name = name;
-    glGenBuffers(1, &buffer->handle);
-    glGenQueries(1, &buffer->query);
-    buffer->loc = loc;
-    buffer->type = type;
-    buffer->dimn = dimn;
-    if (loc != INVALID_LOCATION) {
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);}
-}
-
 extern const GLchar *diplaneVertex;
 extern const GLchar *diplaneGeometry;
 extern const GLchar *diplaneFragment;
@@ -236,18 +221,6 @@ int main(int argc, char **argv)
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
-
-    buffer(&server[PlaneBuf],"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
-    buffer(&server[VersorBuf],"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
-    buffer(&server[PointBuf],"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-    buffer(&server[PierceBuf],"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-    buffer(&server[SideBuf],"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
-    buffer(&server[FaceSub],"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
-    buffer(&server[FrameSub],"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
-    buffer(&server[PointSub],"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
-    buffer(&server[PlaneSub],"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
-    buffer(&server[SideSub],"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-    buffer(&server[HalfSub],"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 
     compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane,0,0);
     compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint,0,0);

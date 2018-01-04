@@ -40,7 +40,6 @@ struct Item item[Menus] = {
     {Sculpts,Level,1,"Level","target of Alternate/Transform click mode"},
     {Levels,Level,2,"Plane","target is the pierced plane"},
     {Levels,Level,2,"Polytope","target is the pierced polytope"},
-    {Levels,Level,2,"File","target is polytopes in the file of pierced"},
     {Levels,Level,2,"Session","target is all displayed polytopes"},
     {Sculpts,Classify,1,"Classify","type of thing displayed in Display mode"},
     {Classifies,Classify,2,"Vector","display pierce point and coplane"},

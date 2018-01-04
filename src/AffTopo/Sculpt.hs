@@ -27,45 +27,34 @@ foreign import ccall "place" placeC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "places" placesC :: CInt -> IO CInt
 foreign import ccall "embed" embedC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "embeds" embedsC :: CInt -> IO CInt
-foreign import ccall "sideband" sidebandC :: CInt -> IO (Ptr CInt)
-foreign import ccall "sidebands" sidebandsC :: IO CInt
-foreign import ccall "correlate" correlateC :: CInt -> IO (Ptr CInt)
-foreign import ccall "correlates" correlatesC :: IO CInt
-foreign import ccall "boundary" boundaryC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "boundaries" boundariesC :: CInt -> IO CInt
-foreign import ccall "client" clientC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "clients" clientsC :: CInt -> IO CInt
-foreign import ccall "eventName" eventNameC :: CInt -> CInt -> IO (Ptr CChar)
-foreign import ccall "kindName" kindNameC :: CInt -> CInt -> IO (Ptr CChar)
-foreign import ccall "clientName" clientNameC :: CInt -> CInt -> IO (Ptr CChar)
-foreign import ccall "eventArgument" eventArgumentC :: IO CInt
-foreign import ccall "kindArgument" kindArgumentC :: IO CInt
-foreign import ccall "stringArgument" stringArgumentC :: IO (Ptr CChar)
-foreign import ccall "intArgument" intArgumentC :: IO CInt
-foreign export ccall handleEvent :: IO Bool
+foreign import ccall "inout" inoutC :: CInt -> IO (Ptr CInt)
+foreign import ccall "inouts" inoutsC :: IO CInt
+foreign export ccall handleEvent :: CInt -> IO Bool
 
-data Event = Enumerate | Plane | Classify | Inflate | Fill | Hollow | Remove | Call | Error
+data Event = Pierce | Fill | Hollow | Face | Frame | Inflate | Divide | Vertex | Migrate | Error
 
 eventOf :: Int -> Event
-eventOf (-1) = Enumerate
-eventOf 0 = Plane
-eventOf 1 = Classify
-eventOf 2 = Inflate
-eventOf 3 = Fill
-eventOf 4 = Hollow
-eventOf 5 = Remove
-eventOf 6 = Call
+eventOf 0 = Pierce
+eventOf 1 = Fill
+eventOf 2 = Hollow
+eventOf 3 = Face
+eventOf 4 = Frame
+eventOf 5 = Inflate
+eventOf 6 = Divide
+eventOf 7 = Vertex
+eventOf 8 = Migrate
 eventOf _ = Error
 
 ofEvent :: Event -> Int
-ofEvent Enumerate = (-1)
-ofEvent Plane = 0
-ofEvent Classify = 1
-ofEvent Inflate = 2
-ofEvent Fill = 3
-ofEvent Hollow = 4
-ofEvent Remove = 5
-ofEvent Call = 6
+ofEvent Pierce = 0
+ofEvent Fill = 1
+ofEvent Hollow = 2
+ofEvent Face = 3
+ofEvent Frame = 4
+ofEvent Inflate = 5
+ofEvent Divide = 6
+ofEvent Vertex = 7
+ofEvent Migrate = 8
 ofEvent _ = undefined
 
 split :: [a] -> [Int] -> [[a]]
@@ -92,25 +81,15 @@ encodePlace place = let
  second = concat (map last (range place))
  in concat [firsts, seconds, map (\(Region x) -> x) first, map (\(Region x) -> x) second]
 
-handleEvent :: IO Bool
-handleEvent = do
- event <- eventArgumentC
- case (eventOf (fromIntegral event)) of
-  Plane -> return False
-  Classify -> return False
-  Inflate -> return False
-  Fill -> return False
-  Hollow -> return False
-  Remove -> return False
-  Call -> return False
-  Enumerate -> handleInitEvent >> handleInitKind >> handleInitClient >> return False
-  _ -> return True
-
-handleInitEvent :: IO ()
-handleInitEvent = undefined
-
-handleInitKind :: IO ()
-handleInitKind = undefined
-
-handleInitClient :: IO ()
-handleInitClient = undefined
+handleEvent :: CInt -> IO Bool
+handleEvent event = case (eventOf (fromIntegral event)) of
+ Pierce -> return False
+ Fill -> return False
+ Hollow -> return False
+ Face -> return False
+ Frame -> return False
+ Inflate -> return False
+ Divide -> return False
+ Vertex -> return False
+ Migrate -> return False
+ _ -> return True

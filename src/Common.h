@@ -49,7 +49,7 @@ enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Alternate,Transform,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
-    Levels,Plane,Polytope,File,Session,
+    Levels,Plane,Polytope,Session,
     Classifies,Vector,Graph,Polyant,Place,
     Samples,Symbolic,Numeric,
     Performs,Configure,Hyperlink,Execute,
@@ -67,24 +67,16 @@ struct Item { // per-menu-line info
 };
 
 enum Event {
-    Side, // fill in pointSub and sideSub
-    Update, // update symbolic from sideBuf
-    Inflate, // fill in faceSub and frameSub
-    Fill, // alter embed and refill faceSub and frameSub
-    Hollow, // alter embed and refill faceSub and frameSub
-    Remove, // pack out from faceSub and frameSub
-    Call, // allow given string to modify file
-    Acknowledge, // copy enque command and arguments
-    Upload, // copy to client copy of buffer
-    Download, // copy from client copy of buffer
-    Enumerate, // initialize maps between enum and int
+    Region, // wrt point, place: polyant
+    Fill, // polyant, place, embed: embed
+    Hollow, // polyant, place, embed: embed
+    Face, // place, embed: face
+    Frame, // place, embed: frame
+    Inflate, // place: embed
+    Divide, // wrt plane, boundary, place, embed: place, embed
+    Vertex, // boundary, place: vertex
+    Migrate, // wrt plane, boundary, place, embed: place, embed
     Events};
-enum Kind {
-    Poly,
-    Boundary,
-    Face,
-    Other,
-    Kinds};
 enum Data {
     PlaneBuf, // per boundary distances above base plane
     VersorBuf, // per boundary base selector
@@ -123,6 +115,7 @@ enum Shader { // one value per shader; state for bringup
     Repoint, // reconstruct from versor 0
     Shaders};
 struct Render {
+    int file; // file of planes to render
     int draw; // waiting for shader
     int vertex; // number of input buffers que
     int element; // primitives per output buffer
@@ -144,6 +137,9 @@ struct Buffer {
     int read; // count of readers
     int write; // count of writers
 }; // argument to render functions
+struct File {
+    int buffer[Datas];
+};
 
 struct Nomial {
     int num0; // number of zero variable terms
@@ -247,6 +243,8 @@ DECLARE_STAGE(CmnCommand,Command)
 DECLARE_STAGE(CmnCmdInt,int)
 DECLARE_STAGE(CmnCmdByte,char)
 DECLARE_STAGE(CmnCmdData,enum Data)
+DECLARE_STAGE(CmnShader,enum Shader)
+DECLARE_STAGE(CmnRender,struct Render)
 
 DECLARE_STDIN(CmnOutputs)
 DECLARE_STAGE(CmnOutput,char)
@@ -258,7 +256,6 @@ DECLARE_STAGE(CmnConfigurer,int)
 
 DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,enum Event)
-DECLARE_STAGE(CmnKind,enum Kind)
 DECLARE_STAGE(CmnHsCmd,Command)
 DECLARE_STAGE(CmnHsInt,int)
 DECLARE_STAGE(CmnHsByte,char)
@@ -278,22 +275,22 @@ DECLARE_LOCAL(Argument,int)
 DECLARE_LOCAL(Cluster,int)
 DECLARE_LOCAL(Machine,Machine)
 
-DECLARE_LOCAL(Render,struct Render)
-DECLARE_LOCAL(Buffer,struct Buffer *)
-DECLARE_LOCAL(Shader,enum Shader)
+DECLARE_LOCAL(Buffer,struct Buffer)
+DECLARE_LOCAL(File,struct File)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
 DECLARE_STAGE(CmdInt,int)
 DECLARE_STAGE(CmdByte,char)
 DECLARE_STAGE(CmdData,enum Data)
+DECLARE_STAGE(Shader,enum Shader)
+DECLARE_STAGE(Render,struct Render)
 
 DECLARE_SOURCE(CmdOutputs)
 DECLARE_STAGE(CmdOutput,char)
 
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,enum Event)
-DECLARE_STAGE(CmdKind,enum Kind)
 DECLARE_STAGE(CmdHsCmd,Command)
 DECLARE_STAGE(CmdHsInt,int)
 DECLARE_STAGE(CmdHsByte,char)
@@ -305,33 +302,20 @@ DECLARE_STAGE(CmdChange,struct Change)
 
 DECLARE_META(Place,int)
 DECLARE_META(Embed,int)
-DECLARE_LOCAL(Sideband,int)
-DECLARE_LOCAL(Correlate,int)
-DECLARE_META(Boundary,int)
-DECLARE_META(Client,int)
+DECLARE_LOCAL(Inout,int)
 DECLARE_META(EventName,char)
-DECLARE_META(KindName,char)
-DECLARE_META(DataName,char)
 DECLARE_LOCAL(EventMap,int)
-DECLARE_LOCAL(KindMap,int)
-DECLARE_LOCAL(DataMap,enum Data)
 
 DECLARE_SOURCE(HsCommands)
 DECLARE_STAGE(HsCmdCmd,Command)
 DECLARE_STAGE(HsCmdInt,int)
-DECLARE_STAGE(HsCmdByte,char)
-DECLARE_STAGE(HsCmdData,enum Data)
 
 DECLARE_WAIT(Haskells)
 DECLARE_STAGE(Event,enum Event)
-DECLARE_STAGE(Kind,enum Kind)
 DECLARE_STAGE(HsCmd,Command)
 DECLARE_STAGE(HsInt,int)
-DECLARE_STAGE(HsByte,char)
-DECLARE_STAGE(HsData,enum Data)
 
 DECLARE_POINTER(Meta,int)
-DECLARE_POINTER(Pseudo,char)
 DECLARE_POINTER(Name,char *)
 
 
@@ -389,7 +373,6 @@ DECLARE_STAGE(PcsCmdData,enum Data)
 
 DECLARE_SOURCE(PcsHaskells)
 DECLARE_STAGE(PcsEvent,enum Event)
-DECLARE_STAGE(PcsKind,enum Kind)
 DECLARE_STAGE(PcsHsCmd,Command)
 DECLARE_STAGE(PcsHsInt,int)
 DECLARE_STAGE(PcsHsByte,char)

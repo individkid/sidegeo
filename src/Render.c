@@ -19,9 +19,10 @@
 #include "Main.h"
 
 extern GLFWwindow *windowHandle;
-extern struct Buffer server[Datas];
 extern struct Code code[Shaders];
 extern float invalid[2];
+extern int pPos;
+extern int qPos;
 extern float xPos;
 extern float yPos;
 extern float zPos;
@@ -52,7 +53,7 @@ int bufferPrimitive(int size)
 
 void wrap()
 {
-    struct Buffer *buffer = *arrayBuffer(0,1);
+    struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
         glGenBuffers(1,&buffer->copy);
@@ -78,16 +79,17 @@ void wrap()
         DEFAULT(exitErrstr("unknown type\n");)
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
-    delocBuffer(1);
+    delocCmdInt(1);
 }
 
-void enqueWrap(struct Buffer *buffer, int room)
+void enqueWrap(int sub, int room)
 {
+    struct Buffer *buffer = arrayBuffer(sub,1);
     if (buffer->write == 0) exitErrstr("wrap not locked\n");
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    *enlocBuffer(1) = buffer; enqueCommand(wrap);
+    *enlocCmdInt(1) = sub; enqueCommand(wrap);
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
@@ -95,31 +97,35 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
+#define RENDER_BUFFER \
+    struct Render *arg = arrayRender(0,1); \
+    int size = arg->vertex+arg->element+arg->feedback; \
+    int *buf = arrayCmdInt(0,size); \
+    struct Buffer *vertex[arg->vertex]; \
+    struct Buffer *element[arg->element]; \
+    struct Buffer *feedback[arg->feedback]; \
+    for (int i = 0; i < arg->vertex; i++) vertex[i] = arrayBuffer(buf[i],1); \
+    for (int i = 0; i < arg->element; i++) element[i] = arrayBuffer(buf[arg->vertex+i],1); \
+    for (int i = 0; i < arg->feedback; i++) feedback[i] = arrayBuffer(buf[arg->vertex+arg->element+i],1);
+
+#define RENDER_RELOC relocRender(1); relocCmdInt(size);
+
 enum Action renderLock(int state)
 {
-    struct Render *arg = arrayRender(0,1);
-    int size = arg->vertex+arg->element+arg->feedback;
-    struct Buffer **buf = arrayBuffer(0,size);
-    struct Buffer **vertex = buf;
-    struct Buffer **element = buf+arg->vertex;
-    struct Buffer **feedback = buf+arg->vertex+arg->element;
-    for (int i = 0; i < arg->vertex; i++) if (vertex[i]->write > 0) {relocRender(1); relocBuffer(size); return Defer;}
-    for (int i = 0; i < arg->element; i++) if (element[i]->write > 0) {relocRender(1); relocBuffer(size); return Defer;}
-    for (int i = 0; i < arg->feedback; i++) if (feedback[i]->write > 0 || feedback[i]->read > 0) {relocRender(1); relocBuffer(size); return Defer;}
+    RENDER_BUFFER
+    for (int i = 0; i < arg->vertex; i++) if (vertex[i]->write > 0) {RENDER_RELOC return Defer;}
+    for (int i = 0; i < arg->element; i++) if (element[i]->write > 0) {RENDER_RELOC return Defer;}
+    for (int i = 0; i < arg->feedback; i++) if (feedback[i]->write > 0 || feedback[i]->read > 0) {RENDER_RELOC return Defer;}
     for (int i = 0; i < arg->vertex; i++) vertex[i]->read++;
     for (int i = 0; i < arg->element; i++) element[i]->read++;
     for (int i = 0; i < arg->feedback; i++) feedback[i]->write++;
+    for (int i = 0; i < arg->feedback; i++) feedback[i]->done = 0;
     return Advance;
 }
 
 enum Action renderWrap(int state)
 {
-    struct Render *arg = arrayRender(0,1);
-    int size = arg->vertex+arg->element+arg->feedback;
-    struct Buffer **buf = arrayBuffer(0,size);
-    struct Buffer **vertex = buf;
-    struct Buffer **element = buf+arg->vertex;
-    struct Buffer **feedback = buf+arg->vertex+arg->element;
+    RENDER_BUFFER
     for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
     for (int i = 0; i < arg->element; i++) exitErrbuf(element[i],arg->name);
     for (int i = 0; i < arg->feedback; i++) exitErrbuf(feedback[i],arg->name);
@@ -129,22 +135,17 @@ enum Action renderWrap(int state)
     int reque = 0;
     if (arg->element) for (int i = 0; i < arg->feedback; i++) {
         if (feedback[i]->done > element[0]->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < element[0]->done) {enqueWrap(feedback[i],element[0]->done); reque = 1;}}
+        if (feedback[i]->room < element[0]->done) {enqueWrap(arg->vertex+arg->element+i,element[0]->done); reque = 1;}}
     if (!arg->element && arg->vertex) for (int i = 0; i < arg->feedback; i++) {
         if (feedback[i]->done > vertex[0]->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < vertex[0]->done) {enqueWrap(feedback[i],vertex[0]->done); reque = 1;}}
-    if (reque) {relocRender(1); relocBuffer(size);}
+        if (feedback[i]->room < vertex[0]->done) {enqueWrap(arg->vertex+arg->element+i,vertex[0]->done); reque = 1;}}
+    if (reque) {RENDER_RELOC}
     return (reque?Reque:Advance);
 }
 
 enum Action renderDraw(int state)
 {
-    struct Render *arg = arrayRender(0,1);
-    int size = arg->vertex+arg->element+arg->feedback;
-    struct Buffer **buf = arrayBuffer(0,size);
-    struct Buffer **vertex = buf;
-    struct Buffer **element = buf+arg->vertex;
-    struct Buffer **feedback = buf+arg->vertex+arg->element;
+    RENDER_BUFFER
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
     msgstrCmdOutput("\rhello draw %d %d %d\n",arg->vertex,arg->element,arg->feedback);
@@ -190,12 +191,7 @@ enum Action renderDraw(int state)
 
 enum Action renderWait(int state)
 {
-    struct Render *arg = arrayRender(0,1);
-    int size = arg->vertex+arg->element+arg->feedback;
-    struct Buffer **buf = arrayBuffer(0,size);
-    struct Buffer **vertex = buf;
-    struct Buffer **element = buf+arg->vertex;
-    struct Buffer **feedback = buf+arg->vertex+arg->element;
+    RENDER_BUFFER
     if (!arg->feedback) return Advance;
     if (arg->element && feedback[0]->done == element[0]->done) return Advance;
     if (!arg->element && feedback[0]->done == vertex[0]->done) return Advance;
@@ -203,77 +199,110 @@ enum Action renderWait(int state)
     glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT_AVAILABLE, &count);
     if (count == GL_FALSE) count = 0;
     else glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT, &count);
-    if (feedback[0]->done+count < arg->draw) {relocRender(1); relocBuffer(size); return Defer;}
+    if (feedback[0]->done+count < arg->draw) {RENDER_RELOC return Defer;}
     if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = arg->draw;
     return Advance;
 }
 
-enum Action renderUnlock(int state)
-{
-    struct Render *arg = arrayRender(0,1);
-    int size = arg->vertex+arg->element+arg->feedback;
-    struct Buffer **buf = arrayBuffer(0,size);
-    struct Buffer **vertex = buf;
-    struct Buffer **element = buf+arg->vertex;
-    struct Buffer **feedback = buf+arg->vertex+arg->element;
-    for (int i = 0; i < arg->vertex; i++) vertex[i]->read--;
-    for (int i = 0; i < arg->element; i++) element[i]->read--;
-    for (int i = 0; i < arg->feedback; i++) {feedback[i]->read++; feedback[i]->write--;}
-    delocRender(1); delocBuffer(size);
-    return Advance;
-}
-
 enum Action renderPierce(int state)
 {
-    int dimn = server[PierceBuf].dimn;
-    int done = server[PierceBuf].done;
+    RENDER_BUFFER
+    if (arg->feedback != 1) exitErrstr("pierce too feedback\n");
+    int dimn = feedback[0]->dimn;
+    int done = feedback[0]->done;
     GLfloat result[done*dimn];
-    if (server[PierceBuf].read == 0) return Defer;
-    server[FaceSub].read--;
-    glBindBuffer(GL_ARRAY_BUFFER, server[PierceBuf].handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(server[PierceBuf].type), result);
+    glBindBuffer(GL_ARRAY_BUFFER, feedback[0]->handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(feedback[0]->type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    float xFound = 0;
-    float yFound = 0;
-    float zFound = invalid[0];
+    // TODO GLuint plane[done]; glBindBuffer(feedback[1]); glGetBufferSubData;
+    int pFound;
+    float xFound, yFound, zFound;
+    xFound = 0; yFound = 0; zFound = invalid[0];
     for (int i = 0; i < done*dimn; i += dimn) {
         int sub = i+dimn-1;
         if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
+            // TODO pFound = plane[i/dimn];
             xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
-    if (zFound<invalid[1]) {xPos = xFound; yPos = yFound; zPos = zFound;}
+    if (zFound<invalid[1] && (qPos == arg->file || zFound < zPos)) {
+        pPos = pFound; qPos = arg->file; xPos = xFound; yPos = yFound; zPos = zFound;}
     return Advance;
 }
 
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow)
+enum Action renderUnlock(int state)
+{
+    RENDER_BUFFER
+    for (int i = 0; i < arg->vertex; i++) vertex[i]->read--;
+    for (int i = 0; i < arg->element; i++) element[i]->read--;
+    for (int i = 0; i < arg->feedback; i++) feedback[i]->write--;
+    delocRender(1); delocCmdInt(size);
+    return Advance;
+}
+
+void enqueBuffer(int *sub, char *name, GLuint loc, int type, int dimn)
+{
+    *sub = sizeBuffer();
+    struct Buffer *buffer = enlocBuffer(1);
+    buffer->name = name;
+    glGenBuffers(1, &buffer->handle);
+    glGenQueries(1, &buffer->query);
+    buffer->loc = loc;
+    buffer->type = type;
+    buffer->dimn = dimn;
+    if (loc != INVALID_LOCATION) {
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+        glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);}
+}
+
+struct File *enqueFile(int file)
+{
+    while (sizeFile() < file) {
+        struct File *file = enlocFile(1);
+        enqueBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
+        enqueBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
+        enqueBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+        enqueBuffer(file->buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+        enqueBuffer(file->buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
+        enqueBuffer(file->buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
+        enqueBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
+        enqueBuffer(file->buffer+PointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
+        enqueBuffer(file->buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
+        enqueBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+        enqueBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);}
+    return arrayFile(file,1);
+}
+
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow, int sub)
 {
     struct Render *arg = enlocRender(1);
-    struct Buffer **buf = enlocBuffer(vertex+element+feedback);
+    int *buf = enlocCmdInt(vertex+element+feedback);
+    struct File *file = enqueFile(sub);
     arg->name = name;
+    arg->file = sub;
     arg->shader = shader;
     arg->vertex = vertex;
     arg->element = element;
     arg->feedback = feedback;
-    for (int i = 0; i < vertex+element+feedback; i++) buf[i] = &server[buffer[i]];
-    for (int i = vertex+element; i < vertex+element+feedback; i++) buf[i]->done = 0;
+    for (int i = 0; i < vertex+element+feedback; i++) buf[i] = file->buffer[buffer[i]];
     enqueMachine(&renderLock);
     if (feedback > 0) followMachine(&renderWrap);
     followMachine(&renderDraw);
     if (feedback > 0) followMachine(&renderWait);
-    followMachine(&renderUnlock);
     if (follow) followMachine(follow);
+    followMachine(&renderUnlock);
 }
 
-void enqueShader(enum Shader shader)
+void enqueShader(enum Shader shader, int file)
 {
-    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,0);}
-    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,0);}
-    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0);}
-    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,0);}
-    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0);}
-    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0);}
-    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,&renderPierce);}
-    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,&renderPierce);}
+    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,0,file);}
+    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,0,file);}
+    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,0,file);}
+    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,0,file);}
+    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,0,file);}
+    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,0,file);}
+    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,&renderPierce,file);}
+    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,&renderPierce,file);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
@@ -284,26 +313,26 @@ enum Action bringupEmpty(int state)
 
 enum Action bringupShader(int state)
 {
-    enqueShader(*delocShader(1));
+    enqueShader(*delocShader(1),0);
     return Advance;
 }
 
 enum Action bringupBuffer(int state)
 {
-    struct Buffer *buffer = *arrayBuffer(0,1);
-    int todo = *arrayCmdInt(0,1);
-    int done = *arrayCmdInt(1,1);
+    struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
+    int todo = *arrayCmdInt(1,1);
+    int done = *arrayCmdInt(2,1);
     char *data = arrayCmdByte(0,todo);
     if (state-- == 0) {
-        relocBuffer(1); relocCmdInt(4); relocCmdByte(todo);
+        relocCmdInt(3); relocCmdByte(todo);
         return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
     if (state-- == 0) {
         buffer->write++;
-        if (buffer->room < done+todo) enqueWrap(buffer,done+todo);
-        relocBuffer(1); relocCmdInt(4); relocCmdByte(todo);
+        if (buffer->room < done+todo) enqueWrap(*arrayCmdInt(0,1),done+todo);
+        relocCmdInt(3); relocCmdByte(todo);
         return Continue;}
     if (state-- == 0) {
-        relocBuffer(1); relocCmdInt(4); relocCmdByte(todo);
+        relocCmdInt(3); relocCmdByte(todo);
         return (buffer->room < done+todo ? Defer : Continue);}
     int size = buffer->dimn*bufferType(buffer->type);
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
@@ -311,16 +340,17 @@ enum Action bringupBuffer(int state)
     glBindBuffer(GL_ARRAY_BUFFER,0);
     if (buffer->done < done+todo) buffer->done = done+todo;
     buffer->write--;
-    delocBuffer(1); delocCmdInt(4); delocCmdByte(todo);
+    delocCmdInt(3); delocCmdByte(todo);
     return Advance;
 }
 
-void setupBuffer(struct Buffer *buffer, int todo, int done, void *data)
+void setupBuffer(int sub, int todo, int done, void *data)
 {
     if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
-    *enlocBuffer(1) = buffer;
+    *enlocCmdInt(1) = sub;
     *enlocCmdInt(1) = todo;
     *enlocCmdInt(1) = done;
+    struct Buffer *buffer = arrayBuffer(sub,1);
     int size = buffer->dimn*bufferType(buffer->type);
     memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
     enqueMachine(bringupBuffer);
@@ -332,21 +362,23 @@ void forceBuffer()
     // first argument is number of following arguments including initial offset
     int todo = *delocCmdInt(1)-1;
     int done = *delocCmdInt(1);
-    int bufsiz = todo*server[data].dimn;
-    SWITCH(server[data].type,GL_UNSIGNED_INT) {
+    struct File *file = enqueFile(0);
+    struct Buffer *buffer = arrayBuffer(file->buffer[data],1);
+    int bufsiz = todo*buffer->dimn;
+    SWITCH(buffer->type,GL_UNSIGNED_INT) {
         GLuint buf[bufsiz];
         for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        setupBuffer(&server[data],todo,done,buf);}
+        setupBuffer(file->buffer[data],todo,done,buf);}
     CASE(GL_FLOAT) {
         GLfloat buf[bufsiz];
         for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        setupBuffer(&server[data],todo,done,buf);}
+        setupBuffer(file->buffer[data],todo,done,buf);}
     DEFAULT(exitErrstr("invalid buffer type\n");)
 }
 
 void forceShader()
 {
-    enqueShader(*delocShader(1));
+    enqueShader(*delocShader(1),0);
 }
 
 void plane()
@@ -451,12 +483,13 @@ void bringupBuiltin()
         0,1,2,
     };
 
+    struct File *file = enqueFile(0);
     enqueMachine(bringupEmpty);
-    setupBuffer(&server[PlaneBuf],NUM_PLANES,0,plane);
-    setupBuffer(&server[VersorBuf],NUM_PLANES,0,versor);
-    setupBuffer(&server[FaceSub],NUM_FACES,0,face);
-    setupBuffer(&server[PointSub],NUM_POINTS,0,vertex);
-    setupBuffer(&server[SideSub],NUM_SIDES,0,wrt);
+    setupBuffer(file->buffer[PlaneBuf],NUM_PLANES,0,plane);
+    setupBuffer(file->buffer[VersorBuf],NUM_PLANES,0,versor);
+    setupBuffer(file->buffer[FaceSub],NUM_FACES,0,face);
+    setupBuffer(file->buffer[PointSub],NUM_POINTS,0,vertex);
+    setupBuffer(file->buffer[SideSub],NUM_SIDES,0,wrt);
     enlocShader(dishader); followMachine(bringupShader);
 }
 #endif

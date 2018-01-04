@@ -19,7 +19,6 @@
 #include "Main.h"
 
 extern GLFWwindow *windowHandle;
-extern struct Buffer server[Datas];
 extern enum Menu mode[Modes];
 extern struct Item item[Menus];
 extern enum Click click;
@@ -103,39 +102,6 @@ void menu()
         enum Menu line = indexof(chr);
         click = Init; mode[item[line].mode] = line;}
     else exitErrstr("invalid menu char\n");
-}
-
-enum Action downloadLock(int state)
-{
-    enum Data data = *arrayCmdData(0,1);
-    int len = *arrayCmdInt(0,1);
-    struct Buffer *buffer = &server[data];
-    if (buffer->read > 0 || buffer->write > 0) {relocCmdData(1); relocCmdInt(1); relocCmdInt(len); return Defer;}
-    buffer->write = 1;
-    if (buffer->room*buffer->dimn < len) enqueWrap(buffer, len/buffer->dimn + (len%buffer->dimn != 0));
-    return Advance;
-}
-
-enum Action downloadWrap(int state)
-{
-    enum Data data = *arrayCmdData(0,1);
-    int len = *arrayCmdInt(0,1);
-    struct Buffer *buffer = &server[data];
-    if (buffer->room*buffer->dimn < len) {relocCmdData(1); relocCmdInt(1); relocCmdInt(len); return Defer;}
-    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-    glBufferSubData(GL_ARRAY_BUFFER,0,len*sizeof*arrayCmdInt(0,0),(void*)arrayCmdInt(1,len));
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    buffer->write = 0;
-    delocCmdData(1); delocCmdInt(1); delocCmdInt(len); return Advance;
-}
-
-void download()
-{
-    enum Data data = *arrayCmdData(0,1);
-    int len = *arrayCmdInt(0,1);
-    struct Buffer *buffer = &server[data];
-    if (bufferType(buffer->type) != sizeof*arrayCmdInt(0,0)) exitErrstr("download too type\n");
-    relocCmdData(1); relocCmdInt(1); relocCmdInt(len); enqueMachine(&downloadLock); followMachine(&downloadWrap);
 }
 
 void metric()
