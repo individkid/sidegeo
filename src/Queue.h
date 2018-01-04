@@ -63,6 +63,7 @@ EXTERNC void *loop##NAME(void *arg); \
 EXTERNC void create##NAME(int arg); \
 EXTERNC void lock##NAME(); \
 EXTERNC void unlock##NAME(); \
+EXTERNC void done##NAME(); \
 EXTERNC void join##NAME(); \
 EXTERNC void signal##NAME(); \
 EXTERNC void exit##NAME();
@@ -192,7 +193,7 @@ struct QueueMutex {
     pthread_mutex_t mutex;
     void (*consume)(void *);
     void (*produce)(void *);
-    static int done;
+    int done;
     QueueMutex()
     {
         consume = 0;
@@ -476,9 +477,10 @@ extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
 extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
 extern "C" void lock##NAME() {NAME##Inst.lock();} \
 extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
+extern "C" void done##NAME() {NAME##Inst.done = 1;} \
 extern "C" void join##NAME() {NAME##Inst.join();} \
 extern "C" void signal##NAME() {NAME##Inst.signal();} \
-extern "C" void exit##NAME() {NAME##Inst.signal(); NAME##Inst.join();}
+extern "C" void exit##NAME() {NAME##Inst.exit(); NAME##Inst.signal(); NAME##Inst.join();}
 
 #define DEFINE_FUNC(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueFunc,FUNC)
 

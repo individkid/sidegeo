@@ -107,5 +107,5 @@ void commandProduce(void *arg)
         CASE(Terminate) done = 3;
         DEFAULT(exitErrstr("invalid machine action\n");)
         if (done) {done--; break;}} if (done) {done--; break;}}
-    if (done) {done--; exitQueue();}
+    if (done) {done--; doneCmnCommands();}
 }
