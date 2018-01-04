@@ -31,8 +31,6 @@ extern enum Shader pershader;
 
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
-void enqueCommand(Command cmd);
-enum Action command(int state);
 DEFINE_MSGSTR(CmdOutput)
 
 size_t bufferType(int size)
@@ -54,7 +52,7 @@ int bufferPrimitive(int size)
     return retval;
 }
 
-void wrap()
+enum Action dequeWrap(int state)
 {
     struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
     size_t size = buffer->dimn*bufferType(buffer->type);
@@ -83,6 +81,7 @@ void wrap()
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
     delocCmdInt(1);
+    return Advance;
 }
 
 void enqueWrap(int sub, int room)
@@ -92,7 +91,46 @@ void enqueWrap(int sub, int room)
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    *enlocCmdInt(1) = sub; enqueCommand(wrap);
+    *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
+}
+
+enum Action dequeBuffer(int state)
+{
+    struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
+    int todo = *arrayCmdInt(1,1);
+    int done = *arrayCmdInt(2,1);
+    char *data = arrayCmdByte(0,todo);
+    if (state-- == 0) {
+        relocCmdInt(3); relocCmdByte(todo);
+        return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
+    if (state-- == 0) {
+        buffer->write++;
+        if (buffer->room < done+todo) enqueWrap(*arrayCmdInt(0,1),done+todo);
+        relocCmdInt(3); relocCmdByte(todo);
+        return Continue;}
+    if (state-- == 0) {
+        relocCmdInt(3); relocCmdByte(todo);
+        return (buffer->room < done+todo ? Defer : Continue);}
+    int size = buffer->dimn*bufferType(buffer->type);
+    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+    glBufferSubData(GL_ARRAY_BUFFER,done*size,todo*size,data);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    if (buffer->done < done+todo) buffer->done = done+todo;
+    buffer->write--;
+    delocCmdInt(3); delocCmdByte(todo);
+    return Advance;
+}
+
+void enqueBuffer(int sub, int todo, int done, void *data)
+{
+    if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
+    *enlocCmdInt(1) = sub;
+    *enlocCmdInt(1) = todo;
+    *enlocCmdInt(1) = done;
+    struct Buffer *buffer = arrayBuffer(sub,1);
+    int size = buffer->dimn*bufferType(buffer->type);
+    memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
+    enqueMachine(dequeBuffer);
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
@@ -239,7 +277,7 @@ enum Action renderUnlock(int state)
     return Advance;
 }
 
-void enqueBuffer(int *sub, char *name, GLuint loc, int type, int dimn)
+void setupBuffer(int *sub, char *name, GLuint loc, int type, int dimn)
 {
     *sub = sizeBuffer();
     struct Buffer *buffer = enlocBuffer(1);
@@ -255,21 +293,21 @@ void enqueBuffer(int *sub, char *name, GLuint loc, int type, int dimn)
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
 }
 
-struct File *enqueFile(int file)
+struct File *setupFile(int file)
 {
     while (sizeFile() < file) {
         struct File *file = enlocFile(1);
-        enqueBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
-        enqueBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
-        enqueBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-        enqueBuffer(file->buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-        enqueBuffer(file->buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
-        enqueBuffer(file->buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
-        enqueBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
-        enqueBuffer(file->buffer+PointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
-        enqueBuffer(file->buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
-        enqueBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-        enqueBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);}
+        setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
+        setupBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
+        setupBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+        setupBuffer(file->buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+        setupBuffer(file->buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
+        setupBuffer(file->buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
+        setupBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
+        setupBuffer(file->buffer+PointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
+        setupBuffer(file->buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
+        setupBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+        setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);}
     return arrayFile(file,1);
 }
 
@@ -277,7 +315,7 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
 {
     struct Render *arg = enlocRender(1);
     int *buf = enlocCmdInt(vertex+element+feedback);
-    struct File *file = enqueFile(sub);
+    struct File *file = setupFile(sub);
     arg->name = name;
     arg->file = sub;
     arg->shader = shader;
@@ -316,62 +354,23 @@ void enquePershader()
     for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i);
 }
 
-enum Action renderBuffer(int state)
-{
-    struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
-    int todo = *arrayCmdInt(1,1);
-    int done = *arrayCmdInt(2,1);
-    char *data = arrayCmdByte(0,todo);
-    if (state-- == 0) {
-        relocCmdInt(3); relocCmdByte(todo);
-        return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
-    if (state-- == 0) {
-        buffer->write++;
-        if (buffer->room < done+todo) enqueWrap(*arrayCmdInt(0,1),done+todo);
-        relocCmdInt(3); relocCmdByte(todo);
-        return Continue;}
-    if (state-- == 0) {
-        relocCmdInt(3); relocCmdByte(todo);
-        return (buffer->room < done+todo ? Defer : Continue);}
-    int size = buffer->dimn*bufferType(buffer->type);
-    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-    glBufferSubData(GL_ARRAY_BUFFER,done*size,todo*size,data);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    if (buffer->done < done+todo) buffer->done = done+todo;
-    buffer->write--;
-    delocCmdInt(3); delocCmdByte(todo);
-    return Advance;
-}
-
-void setupBuffer(int sub, int todo, int done, void *data)
-{
-    if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
-    *enlocCmdInt(1) = sub;
-    *enlocCmdInt(1) = todo;
-    *enlocCmdInt(1) = done;
-    struct Buffer *buffer = arrayBuffer(sub,1);
-    int size = buffer->dimn*bufferType(buffer->type);
-    memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
-    enqueMachine(renderBuffer);
-}
-
 void force()
 {
     enum Data data = *delocCmdData(1);
     // first argument is number of following arguments including initial offset
     int todo = *delocCmdInt(1)-1;
     int done = *delocCmdInt(1);
-    struct File *file = enqueFile(0);
+    struct File *file = setupFile(0);
     struct Buffer *buffer = arrayBuffer(file->buffer[data],1);
     int bufsiz = todo*buffer->dimn;
     SWITCH(buffer->type,GL_UNSIGNED_INT) {
         GLuint buf[bufsiz];
         for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        setupBuffer(file->buffer[data],todo,done,buf);}
+        enqueBuffer(file->buffer[data],todo,done,buf);}
     CASE(GL_FLOAT) {
         GLfloat buf[bufsiz];
         for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        setupBuffer(file->buffer[data],todo,done,buf);}
+        enqueBuffer(file->buffer[data],todo,done,buf);}
     DEFAULT(exitErrstr("invalid buffer type\n");)
 }
 
@@ -433,9 +432,21 @@ enum Action bringupEmpty(int state)
     return Advance;
 }
 
+void bringupBuffer(int sub, int todo, int done, void *data)
+{
+    if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
+    *enlocCmdInt(1) = sub;
+    *enlocCmdInt(1) = todo;
+    *enlocCmdInt(1) = done;
+    struct Buffer *buffer = arrayBuffer(sub,1);
+    int size = buffer->dimn*bufferType(buffer->type);
+    memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
+    followMachine(dequeBuffer);
+}
+
 enum Action bringupShader(int state)
 {
-    enqueShader(*delocShader(1),0);
+    enqueDishader();
     return Advance;
 }
 
@@ -501,14 +512,14 @@ void bringupBuiltin()
         0,1,2,
     };
 
-    struct File *file = enqueFile(0);
+    struct File *file = setupFile(0);
     enqueMachine(bringupEmpty);
-    setupBuffer(file->buffer[PlaneBuf],NUM_PLANES,0,plane);
-    setupBuffer(file->buffer[VersorBuf],NUM_PLANES,0,versor);
-    setupBuffer(file->buffer[FaceSub],NUM_FACES,0,face);
-    setupBuffer(file->buffer[PointSub],NUM_POINTS,0,vertex);
-    setupBuffer(file->buffer[SideSub],NUM_SIDES,0,wrt);
-    *enlocCommand(1) = enqueDishader; followMachine(command);
+    bringupBuffer(file->buffer[PlaneBuf],NUM_PLANES,0,plane);
+    bringupBuffer(file->buffer[VersorBuf],NUM_PLANES,0,versor);
+    bringupBuffer(file->buffer[FaceSub],NUM_FACES,0,face);
+    bringupBuffer(file->buffer[PointSub],NUM_POINTS,0,vertex);
+    bringupBuffer(file->buffer[SideSub],NUM_SIDES,0,wrt);
+    followMachine(bringupShader);
 }
 #endif
 
