@@ -21,6 +21,7 @@ module AffTopo.Sculpt where
 import Prelude hiding ((++))
 import Foreign.Ptr
 import Foreign.C.Types
+import Foreign.C.String
 import AffTopo.Naive
 
 foreign import ccall "place" placeC :: CInt -> CInt -> IO (Ptr CInt)
@@ -30,6 +31,7 @@ foreign import ccall "embeds" embedsC :: CInt -> IO CInt
 foreign import ccall "inout" inoutC :: CInt -> IO (Ptr CInt)
 foreign import ccall "inouts" inoutsC :: IO CInt
 foreign export ccall handleEvent :: CInt -> IO Bool
+foreign export ccall handleEnum :: Ptr CChar -> IO CInt
 
 data Event = Pierce | Fill | Hollow | Face | Frame | Inflate | Divide | Vertex | Migrate | Error
 
@@ -55,7 +57,24 @@ ofEvent Inflate = 5
 ofEvent Divide = 6
 ofEvent Vertex = 7
 ofEvent Migrate = 8
-ofEvent _ = undefined
+ofEvent _ = (-1)
+
+ofString :: [Char] -> Event
+ofString "Pierce" = Pierce
+ofString "Fill" = Fill
+ofString "Hollow" = Hollow
+ofString "Face" = Face
+ofString "Frame" = Frame
+ofString "Inflate" = Inflate
+ofString "Divide" = Divide
+ofString "Vertex" = Vertex
+ofString "Migrate" = Migrate
+ofString _ = Error
+
+handleEnum :: Ptr CChar -> IO CInt
+handleEnum cstr = do
+ str <- peekCString cstr
+ return (fromIntegral (ofEvent (ofString str)))
 
 split :: [a] -> [Int] -> [[a]]
 split [] _ = []

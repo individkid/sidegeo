@@ -25,14 +25,24 @@
 
 int meta = 0;
 
-void setupEventMap()
+void setupEnum()
 {
+    int val;
+    val = handleEnum("Region"); if (val < 0 || insertEnum(Region,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Fill"); if (val < 0 || insertEnum(Fill,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Hollow"); if (val < 0 || insertEnum(Hollow,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Face"); if (val < 0 || insertEnum(Face,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Migrate"); if (val < 0 || insertEnum(Migrate,val) < 0) exitErrstr("enum too event\n");
 }
 
 void haskellBefore()
 {
     hs_init(0,0);
-    setupEventMap();
+    setupEnum();
 }
 
 void haskellConsume(void *arg)
@@ -41,7 +51,7 @@ void haskellConsume(void *arg)
         meta = *delocHsInt(1);
         int size = *delocHsInt(1);
         memcpy(enlocInout(size),delocHsInt(size),size);
-        if (handleEvent(*arrayEventMap(*delocEvent(1),1)) != 0) exitErrstr("haskell return true\n");
+        if (handleEvent(indexEnum(*delocEvent(1))) != 0) exitErrstr("haskell return true\n");
         size = sizeInout();
         *enlocHsCmdInt(1) = size;
         memcpy(enlocHsCmdInt(size),delocInout(size),size);
