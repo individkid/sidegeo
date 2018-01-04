@@ -24,13 +24,6 @@ extern Display *displayHandle;
 #endif
 extern GLFWwindow *windowHandle;
 extern struct Code code[Shaders];
-#ifdef BRINGUP
-enum Shader dishader = Diplane;
-enum Shader pershader = Perplane;
-#else
-enum Shader dishader = Dipoint;
-enum Shader pershader = Perpoint;
-#endif
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 enum Click click = Init; // mode controlled by mouse buttons
 int escape = 0; // escape sequence from OpenGL
@@ -58,9 +51,18 @@ int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
 float aspect = 0;
+#ifdef BRINGUP
+enum Shader dishader = Diplane;
+enum Shader pershader = Perplane;
+#else
+enum Shader dishader = Dipoint;
+enum Shader pershader = Perpoint;
+#endif
+
 
 void enqueCommand(Command cmd);
-void enqueShader(enum Shader shader);
+void enqueDishader();
+void enquePershader();
 void compass(double xdelta, double ydelta);
 
 void warp(double xwarp, double ywarp)
@@ -129,7 +131,7 @@ void transformRight()
     glUniform3f(code[pershader].uniform[Feather],xPos,yPos,zPos);
     glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
     glUseProgram(0);
-    enqueShader(pershader);
+    enquePershader();
 }
 
 void matrixMatrix()
@@ -174,7 +176,7 @@ void transformRotate()
     glUseProgram(code[dishader].program);
     glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
-    enqueShader(dishader);
+    enqueDishader();
 }
 
 void transformTranslate()
@@ -188,7 +190,7 @@ void transformTranslate()
     glUseProgram(code[dishader].program);
     glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
     glUseProgram(0);
-    enqueShader(dishader);
+    enqueDishader();
 }
 
 void transformLook()
@@ -439,10 +441,10 @@ void displaySize(GLFWwindow *window, int width, int height)
         glUseProgram(code[i].program);
         glUniform1f(code[i].uniform[Aspect],aspect);}
     glUseProgram(0);
-    enqueShader(dishader);
+    enqueDishader();
 }
 
 void displayRefresh(GLFWwindow *window)
 {
-    enqueShader(dishader);
+    enqueDishader();
 }

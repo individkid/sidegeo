@@ -26,10 +26,13 @@ extern int qPos;
 extern float xPos;
 extern float yPos;
 extern float zPos;
+extern enum Shader dishader;
+extern enum Shader pershader;
 
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
 void enqueCommand(Command cmd);
+enum Action command(int state);
 DEFINE_MSGSTR(CmdOutput)
 
 size_t bufferType(int size)
@@ -303,6 +306,16 @@ void enqueShader(enum Shader shader, int file)
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
+void enqueDishader()
+{
+    for (int i = 0; i < sizeFile(); i++) enqueShader(dishader,i);
+}
+
+void enquePershader()
+{
+    for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i);
+}
+
 enum Action bringupEmpty(int state)
 {
     return Advance;
@@ -487,7 +500,7 @@ void bringupBuiltin()
     setupBuffer(file->buffer[FaceSub],NUM_FACES,0,face);
     setupBuffer(file->buffer[PointSub],NUM_POINTS,0,vertex);
     setupBuffer(file->buffer[SideSub],NUM_SIDES,0,wrt);
-    enlocShader(dishader); followMachine(bringupShader);
+    *enlocCommand(1) = enqueDishader; followMachine(command);
 }
 #endif
 
