@@ -356,7 +356,7 @@ void enquePershader()
 
 void force()
 {
-    enum Data data = *delocCmdData(1);
+    enum Data data = 0; // TODO
     int done = *delocCmdInt(1);
     int todo = *delocCmdInt(1);
     struct File *file = setupFile(0);

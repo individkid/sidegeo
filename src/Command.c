@@ -53,7 +53,7 @@ void followMachine(Machine machine)
 
 enum Action command(int state)
 {
-    Command cmd = *delocCommand(1);
+    Command cmd = *delocVoid(1);
     if (cmd) (*cmd)();
     else return Terminate;
     return Advance;
@@ -61,14 +61,8 @@ enum Action command(int state)
 
 void enqueCommand(Command cmd)
 {
-    *enlocCommand(1) = cmd;
+    *enlocVoid(1) = cmd;
     enqueMachine(command);
-}
-
-void enqueCommands(int size)
-{
-    for (int i = 0; i < size; i++)
-    enqueMachine(command); 
 }
 
 void compass(double xdelta, double ydelta)

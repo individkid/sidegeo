@@ -141,7 +141,7 @@ void pipeWave(int wave, int value)
 void requestMetric(int index, int response)
 {
     struct Shape *shape = arrayShape(index,1);
-	*enlocTwCmdCmd(1) = shape->metric;
+	*enlocTwCommand(1) = shape->metric;
 	*enlocTwCmdInt(1) = shape->index;
 	*enlocTwCmdInt(1) = response;
 }

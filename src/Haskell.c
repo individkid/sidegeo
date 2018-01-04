@@ -55,7 +55,7 @@ void haskellConsume(void *arg)
         size = sizeInout();
         *enlocHsCmdInt(1) = size;
         memcpy(enlocHsCmdInt(size),delocInout(size),size);
-        *enlocHsCmdCmd(1) = *delocHsCmd(1);}
+        *enlocHsCommand(1) = *delocHsCmd(1);}
 }
 
 void haskellAfter()

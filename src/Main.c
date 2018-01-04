@@ -294,15 +294,13 @@ int main(int argc, char **argv)
     return 0;
 }
 
-int commandCount = 0;
-
 void commandSignal()
 {
     glfwPostEmptyEvent();
 }
 void commandConsume(void *arg)
 {
-    enqueCommands(sizeCommand()-commandCount); commandCount = sizeCommand();
+    while (sizeCommand() > 0) enqueCommand(*delocCommand(1));
 }
 int commandDelay()
 {
@@ -338,5 +336,4 @@ void commandProduce(void *arg)
         DEFAULT(exitErrstr("invalid machine action\n");)
         if (done) {done--; break;}} if (done) {done--; break;}}
     if (done) {done--; exitQueue();}
-    commandCount = sizeCommand();
 }
