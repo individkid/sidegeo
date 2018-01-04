@@ -16,7 +16,22 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Main.h"
+#ifdef __linux__
+#include <GL/glew.h>
+#endif
+#ifdef __APPLE__
+#define GLFW_INCLUDE_GLCOREARB
+#endif
+#include <GLFW/glfw3.h>
+#ifdef __linux__
+#define GLFW_EXPOSE_NATIVE_X11
+#include <GLFW/glfw3native.h>
+#endif
+#ifdef __APPLE__
+#include <CoreGraphics/CoreGraphics.h>
+#endif
+
+#include "Common.h"
 #include <math.h>
 
 #ifdef __linux__

@@ -141,6 +141,29 @@ struct File {
     int buffer[Datas];
 };
 
+enum Uniform { // one value per uniform; no associated state
+    Invalid, // scalar indicating divide by near-zero
+    Basis, // 3 points on each base plane through origin
+    Affine, // rotation and translation of polytope
+    Feather, // point on plane to classify
+    Arrow, // normal to plane to classify
+    Cutoff, // cutoff plane z coordinate
+    Slope, // x over z frustrum slope
+    Aspect, // y over x ratio of frustrum intercepts
+    Uniforms};
+struct Code {
+    MyGLuint uniform[Uniforms];
+    MyGLuint program;
+    int input;
+    int output;
+    int limit;};
+enum Click { // mode changed by mouse buttons
+    Init, // no pierce point; no saved position
+    Left, // pierce point calculated; no saved position
+    Matrix, // before matrix in play
+    Right, // pierce point calculated; position saved
+    Clicks};
+
 struct Nomial {
     int num0; // number of zero variable terms
     int num1; // number of one variable terms
