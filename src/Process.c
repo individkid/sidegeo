@@ -16,10 +16,13 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Process.h"
+#include "Common.h"
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
+
+int processConfigure(int index, int len);
+int processOption(int len);
 
 int toggle = 0;
 int current = 0;
