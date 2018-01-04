@@ -137,8 +137,10 @@ Configuration/history files consist of commands. User input appends to file. App
   * --action attaches Haskell function to boundary to be activated by click  
   * --matrix takes transformation of display, ignored if not -F file  
   * --project takes slope and cutoff, ignored if not -F file  
-  * --configure warp, refine, tweak, color, filter, delay  
+  * --configure pore, membrane, interpolate, texture, rate  
   * --inject specifies command line option to inject  
+  * --menu changes to menu item to inject to console  
+  * --function binds Haskell function to function key in console  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
   * --start goes to a new polytope with optional name for going back  
@@ -146,6 +148,14 @@ Configuration/history files consist of commands. User input appends to file. App
   * --delay takes duration for interpolation with next delay 
   * --import takes module name or file path to import for subsequent calls  
   * --call takes Haskell function of source to replace destination  
+
+The constants set by --configure change behaviors by degree.
+
+ * Pore specifies timewheel state for new vertices  
+ * Membrane specifies timewheel state for new planes  
+ * Interpolate specifies interpolation value for new vertices  
+ * Texture specifies interpolation field for new planes  
+ * Rate specifies when to record transformations into file  
 
 The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 
