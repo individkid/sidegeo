@@ -393,31 +393,46 @@ void forceShader()
 
 void plane()
 {
-    // TODO append, find points, find sidednesses wrt points,
-    // TODO haskell classify, update faces or frames, render
+    // refine click finds random plane through tweak of pierce point
+    //  and appends a plane configuration to the pierce file
+    // plane configuration does wsw to add plane to file's buffer
+    //  and get sidednesses with adpoint shader
+    //  and send divide event with display response
+    // display sends face or frame event with enqueDishader response
+    // TODO need Boundary tree to uniquefy boundary argument to divide
 }
 
 void point()
 {
-    // TODO append, construct planes, find points, find sidednesses wrt points,
-    // TODO haskell classify, update faces or frames, render
+    // point configuration saves up three points
+    //  and does wsw to add constructed plane to files's buffer
+    //  and get sidednesses with adpoint shader
+    //  and send divide event with display response
+    // display sends face or frame event with enqueDishader response
 }
 
 void inflate()
 {
-    // TODO haskell inflate, update faces or frames, render
+    // inflate configuration sends inflate event with display response
+    // display sends face or frame event with enqueDishader response
 }
 
 void fill()
 {
-    // TODO find sidednesses wrt pierce point,
-    // TODO haskell fill, update faces or frames, render
+    // fill click does wsw to get sidednesses with adplane shader
+    //  and sends region event with append response
+    // append sends fill configuration and polyant to file
+    // fill configuration sends fill event with display response
+    // display sends face or frame event with enqueDishader response
 }
 
 void hollow()
 {
-    // TODO find sidednesses wrt pierce point,
-    // TODO haskell hollow, update faces or frames, render
+    // hollow click does wsw to get sidednesses with adplane shader
+    //  and sends region event with append response
+    // append sends hollow configuration and polyant to file
+    // hollow configuration sends hollow event with display response
+    // display sends face or frame event with enqueDishader response
 }
 
 #ifdef BRINGUP
