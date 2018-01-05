@@ -155,13 +155,14 @@ EXTERNC pqueue_pri_t when##NAME();
 
 #define DECLARE_TREE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
+EXTERNC int size##NAME(); \
 EXTERNC int test##NAME(KEY key); \
+EXTERNC int check##NAME(KEY key); \
 EXTERNC int find##NAME(KEY *key); \
-EXTERNC VAL *cast##NAME(KEY key); \
+EXTERNC int choose##NAME(KEY *key); \
 EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
-EXTERNC int choose##NAME(KEY *key); \
-EXTERNC int size##NAME();
+EXTERNC VAL *cast##NAME(KEY key);
 
 #ifdef __cplusplus
 
@@ -1136,7 +1137,21 @@ template<class KEY, class VAL> struct QueueTree {
         if (pool.cast(rgt)->key < pool.cast(lft)->key) return 1;
         return 0;
     }
+    int size()
+    {
+        return pool.size();
+    }
     int test(KEY key)
+    {
+        int tofind = pool.alloc();
+        pool.cast(tofind)->key = key;
+        void *found = lookup_node(top,int2void(tofind),&rbop);
+        pool.free(tofind);
+        if (void2int(found) < 0) return -1;
+        if (pool.cast(void2int(found))->key != key) return -1;
+        return 0;
+    }
+    int check(KEY key)
     {
         int tofind = pool.alloc();
         pool.cast(tofind)->key = key;
@@ -1155,14 +1170,12 @@ template<class KEY, class VAL> struct QueueTree {
         *key = pool.cast(void2int(found))->key;
         return 0;
     }
-    VAL *cast(KEY key)
+    int choose(KEY *key)
     {
-        int tofind = pool.alloc();
-        pool.cast(tofind)->key = key;
-        void *found = lookup_node(top,int2void(tofind),&rbop);
-        pool.free(tofind);
-        if (void2int(found) < 0) return 0;
-        return &pool.cast(void2int(found))->val;
+        int sub = pool.choose();
+        if (sub < 0) return -1;
+        *key = pool.cast(sub)->key;
+        return 0;
     }
     int insert(KEY key)
     {
@@ -1185,16 +1198,14 @@ template<class KEY, class VAL> struct QueueTree {
         pool.free(node);
         return 0;
     }
-    int choose(KEY *key)
+    VAL *cast(KEY key)
     {
-        int sub = pool.choose();
-        if (sub < 0) return -1;
-        *key = pool.cast(sub)->key;
-        return 0;
-    }
-    int size()
-    {
-        return pool.size();
+        int tofind = pool.alloc();
+        pool.cast(tofind)->key = key;
+        void *found = lookup_node(top,int2void(tofind),&rbop);
+        pool.free(tofind);
+        if (void2int(found) < 0) return 0;
+        return &pool.cast(void2int(found))->val;
     }
 };
 
@@ -1204,16 +1215,73 @@ extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
+extern "C" int size##NAME() {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
+extern "C" int check##NAME(KEY key) {return NAME##Inst.check(key);} \
 extern "C" int find##NAME(KEY *key) {return NAME##Inst.find(key);} \
-extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);} \
+extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
 extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
-extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
-extern "C" int size##NAME() {return NAME##Inst.size();}
+extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
 
 template<class KEY, class VAL> struct QueueTrue {
     QueueTree<KEY,QueueStruct<VAL> > tree;
+    int size()
+    {
+    }
+    int test(KEY key)
+    {
+    }
+    int check(KEY key)
+    {
+    }
+    int find(KEY *key)
+    {
+    }
+    int choose(KEY *key)
+    {
+    }
+    int insert(KEY key)
+    {
+        // assert that after tree.insert(key) *tree.cast(key) is empty
+    }
+    int remove(KEY key)
+    {
+        // empty out *tree.cast(key) and then tree.remove(key)
+    }
+    void use(KEY key)
+    {
+    }
+    int size(KEY key)
+    {
+    }
+    VAL *enloc(KEY key, int siz)
+    {
+    }
+    VAL *deloc(KEY key, int siz)
+    {
+    }
+    VAL *destr(KEY key, VAL val)
+    {
+    }
+    VAL *unloc(KEY key, int siz)
+    {
+    }
+    void reloc(KEY key, int siz)
+    {
+    }
+    VAL *array(KEY key, int sub, int siz)
+    {
+    }
+    int strlen(KEY key, int sub, VAL val)
+    {
+    }
+    int enstr(KEY key, VAL val)
+    {
+    }
+    void pack(KEY key, int sub, int siz)
+    {
+    }
 };
 
 #endif // __cplusplus
