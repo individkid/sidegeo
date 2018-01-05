@@ -218,25 +218,6 @@ float *invmat(float *u, int n)
     return u;
 }
 
-extern pthread_t haskellThread;
-extern pthread_t timewheelThread;
-extern pthread_t processThread;
-
-void signalProcesses()
-{
-    if (pthread_kill(processThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-}
-
-void signalTimewheels()
-{
-    if (pthread_kill(timewheelThread, SIGUSR1) != 0) exitErrstr("cannot kill thread\n");
-}
-
-void signalHaskells()
-{
-    signalCmnHaskells();
-}
-
 void commandSignal();
 void commandConsume(void *arg);
 int commandDelay();

@@ -31,9 +31,9 @@ int parseString(const char *str, int len);
 void force();
 void plane();
 void point();
-void inflate();
 void fill();
 void hollow();
+void inflate();
 
 #define FORCE_THREAD(THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
@@ -379,7 +379,7 @@ int processConfigure(int index, int len)
 			FORCE_COUNT(HsInt,Hs)
 			FORCE_COUNT(HsByte,Hs)
 			FORCE_SHARED(force,CmdCmd,Cmd)
-    		FORCE_UNIQUE(Region,Event,Hs)
+    		FORCE_UNIQUE(Locate,Event,Hs)
     		FORCE_UNIQUE(Fill,Event,Hs)
     		FORCE_UNIQUE(Hollow,Event,Hs)
     		FORCE_UNIQUE(Face,Event,Hs)
@@ -409,7 +409,7 @@ int processConfigure(int index, int len)
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		state.vld = 1<<Map;
+		state.vld = 1<<Map; // Map in vld because subscripts are from string position
 		retval = timeName(&state.wav,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Wav;
@@ -453,7 +453,7 @@ int processConfigure(int index, int len)
 		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
 		siz = timeFloat(&change.val,&chrpos,&intpos);
 		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
-		change.vld = 1<<Map;
+		change.vld = 1<<Map; // Map in vld because subscript is from string position
 		*enlocPcsChange(1) = change;
 		configurePass(chrsiz,intsiz);
 		return 1;}

@@ -177,18 +177,14 @@ struct QueueBase {
     QueueBase *ptr() {return this;}
 };
 
-struct QueueMutex;
-struct QueueXfer {
-    int flag;
-    QueueBase *next;
-    QueueXfer *xptr;
-    QueueMutex *mutex;
+struct QueueXbase {
+    QueueXbase *xptr;
     virtual int xfer() = 0;
 };
 
 struct QueueMutex {
     QueueBase *next;
-    QueueXfer *xptr;
+    QueueXbase *xptr;
     pthread_t thread;
     pthread_mutex_t mutex;
     void (*consume)(void *);
@@ -238,7 +234,7 @@ struct QueueMutex {
     int xfer()
     {
         int retval = 0;
-        for (QueueXfer *ptr = xptr; ptr != 0; ptr = ptr->xptr)
+        for (QueueXbase *ptr = xptr; ptr != 0; ptr = ptr->xptr)
         if (ptr->xfer()) retval = 1;
         return retval;
     }
@@ -496,31 +492,33 @@ extern "C" int readable##NAME(ELEM val) {return NAME##Inst.readable(val);}
 
 #define DEFINE_COND(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueCond,FUNC)
 
-struct QueuePort : QueueXfer {
+struct QueueXfer : QueueXbase {
     int flag;
+    QueueBase *next;
+    QueueMutex *mutex;
     QueueCond *cond;
-    QueuePort(QueueMutex *ptr0, QueueMutex *ptr1, int fl = 0)
+    QueueXfer(QueueMutex *ptr0, QueueMutex *ptr1, int fl = 0)
     {
         flag = fl;
         mutex = ptr0;
         ptr1->xptr = this;
         next = 0;
     }
-    QueuePort(QueueMutex *ptr0, QueueXfer *ptr1, int fl = 0)
+    QueueXfer(QueueMutex *ptr0, QueueXbase *ptr1, int fl = 0)
     {
         flag = fl;
         mutex = ptr0;
         ptr1->xptr = this;
         next = 0;
     }
-    QueuePort(QueueCond *ptr0, QueueMutex *ptr1, int fl = 0)
+    QueueXfer(QueueCond *ptr0, QueueMutex *ptr1, int fl = 0)
     {
         flag = fl;
         mutex = cond = ptr0;
         ptr1->xptr = this;
         next = 0;
     }
-    QueuePort(QueueCond *ptr0, QueueXfer *ptr1, int fl = 0)
+    QueueXfer(QueueCond *ptr0, QueueXbase *ptr1, int fl = 0)
     {
         flag = fl;
         mutex = cond = ptr0;
@@ -564,14 +562,14 @@ struct QueuePort : QueueXfer {
 };
 
 #define DEFINE_SOURCE(NAME,NEXT,XPTR) \
-QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,1); \
+QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,1); \
 extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 // xfer, signal, no consume
 #define DEFINE_DEST(NAME,NEXT,XPTR) \
-QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,0); \
+QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,0); \
 // xfer, no signal, consume
 #define DEFINE_WAIT(NAME,NEXT,XPTR) \
-QueuePort NAME##Inst = QueuePort(&NEXT##Inst,&XPTR##Inst,0); \
+QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,0); \
 // wait, xfer, consume
 
 #define QUEUE_STEP 10

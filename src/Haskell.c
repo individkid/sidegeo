@@ -28,7 +28,7 @@ int filenum = 0;
 void setupEnum()
 {
     int val;
-    val = handleEnum("Region"); if (val < 0 || insertEnum(Region,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Locate"); if (val < 0 || insertEnum(Locate,val) < 0) exitErrstr("enum too event\n");
     val = handleEnum("Fill"); if (val < 0 || insertEnum(Fill,val) < 0) exitErrstr("enum too event\n");
     val = handleEnum("Hollow"); if (val < 0 || insertEnum(Hollow,val) < 0) exitErrstr("enum too event\n");
     val = handleEnum("Face"); if (val < 0 || insertEnum(Face,val) < 0) exitErrstr("enum too event\n");

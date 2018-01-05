@@ -51,6 +51,7 @@ struct File *setupFile(int file);
 void enqueBuffer(int sub, int todo, int done, void *data);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
+void enqueMachine(Machine machine);
 
 void inject()
 {
@@ -83,7 +84,7 @@ void metric()
     struct Change change;
     change.sub = stock;
     change.val = 0;
-    change.vld = 0;
+    change.vld = 0; // Map bit is clear because sub is from timewheel
     *enlocCmdChange(1) = change;
 }
 
@@ -106,48 +107,81 @@ void force()
     DEFAULT(exitErrstr("invalid buffer type\n");)
 }
 
-void plane()
+void display()
+{
+    // display sends face or frame event with enqueDishader response
+}
+
+void refine()
 {
     // refine click finds random plane through tweak of pierce point
-    //  and appends a plane configuration to the pierce file
-    // plane configuration does wsw to add plane to file's buffer
+    // and kicks off appendPlane
+}
+
+enum Action appendPlane(int state)
+{
+    // do wsw to add plane to file's buffer
     //  and get sidednesses with adpoint shader
     //  and send divide event with display response
-    // display sends face or frame event with enqueDishader response
-    // TODO need Boundary tree to uniquefy boundary argument to divide
+}
+
+void plane()
+{
+    // plane configuration kicks off appendPlane
+}
+
+enum Action collectPoint(int state)
+{
+    // point configuration saves up three points to construct plane to append
 }
 
 void point()
 {
-    // point configuration saves up three points
-    //  and does wsw to add constructed plane to files's buffer
-    //  and get sidednesses with adpoint shader
-    //  and send divide event with display response
-    // display sends face or frame event with enqueDishader response
+    // point configuration kicks off collectPoint followed by appendPlane
+    // or allows collectPoint to proceed
 }
 
 void inflate()
 {
     // inflate configuration sends inflate event with display response
-    // display sends face or frame event with enqueDishader response
+}
+
+void configureClick()
+{
+    // fill or hollow configuration sends event with display response
+}
+
+void appendRegion()
+{
+    int key = *delocCmdInt(1);
+    enum Event event = (enum Event)*delocCmdInt(1);
+    // append sends configuration and polyant to file
+}
+
+enum Action sculpt(int state)
+{
+    // click does wsw to get sidednesses with adplane shader
+    // and sends region event with append response
 }
 
 void fill()
 {
-    // fill click does wsw to get sidednesses with adplane shader
-    //  and sends region event with append response
-    // append sends fill configuration and polyant to file
-    // fill configuration sends fill event with display response
-    // display sends face or frame event with enqueDishader response
+    const char *str = "fill";
+    int len = strlen(str);
+    *enlocCmdInt(1) = len;
+    *enlocCmdInt(1) = (int)Fill;
+    memcpy(enlocCmdByte(len),str,len);
+    enqueMachine(sculpt);
 }
 
 void hollow()
 {
-    // hollow click does wsw to get sidednesses with adplane shader
-    //  and sends region event with append response
-    // append sends hollow configuration and polyant to file
-    // hollow configuration sends hollow event with display response
-    // display sends face or frame event with enqueDishader response
+    const char *str = "hollow";
+    int len = strlen(str);
+    *enlocCmdInt(1) = len;
+    *enlocCmdInt(1) = (int)Hollow;
+    memcpy(enlocCmdByte(len),str,len);
+    enqueMachine(sculpt);
 }
 
 #ifdef BRINGUP

@@ -33,7 +33,7 @@
 
 #include "Common.h"
 
-int sequenceNumber = 0;
+int seqnum = 0;
 
 void enqueMachine(Machine machine)
 {
@@ -91,11 +91,11 @@ void commandProduce(void *arg)
     int state = *delocArgument(1);
     int cluster = *delocCluster(1);
     Machine *machine = delocMachine(cluster);
-    if (sizeDefer() > 0 && sequenceNumber == *arrayDefer(0,1)) delocDefer(1);
-    sequenceNumber++;
+    if (sizeDefer() > 0 && seqnum == *arrayDefer(0,1)) delocDefer(1);
+    seqnum++;
     int done = 0;
     for (int i = 0; i < cluster; i++) {while (1) {
-        SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = sequenceNumber + sizeCluster();
+        SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = seqnum + sizeCluster();
         FALL(Reque) {
             Machine *reloc = enlocMachine(cluster-i);
             for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];

@@ -33,10 +33,10 @@ foreign import ccall "inouts" inoutsC :: IO CInt
 foreign export ccall handleEvent :: CInt -> IO Bool
 foreign export ccall handleEnum :: Ptr CChar -> IO CInt
 
-data Event = Pierce | Fill | Hollow | Face | Frame | Inflate | Divide | Vertex | Migrate | Error
+data Event = Locate | Fill | Hollow | Face | Frame | Inflate | Divide | Vertex | Migrate | Error
 
 eventOf :: Int -> Event
-eventOf 0 = Pierce
+eventOf 0 = Locate
 eventOf 1 = Fill
 eventOf 2 = Hollow
 eventOf 3 = Face
@@ -48,7 +48,7 @@ eventOf 8 = Migrate
 eventOf _ = Error
 
 ofEvent :: Event -> Int
-ofEvent Pierce = 0
+ofEvent Locate = 0
 ofEvent Fill = 1
 ofEvent Hollow = 2
 ofEvent Face = 3
@@ -60,7 +60,7 @@ ofEvent Migrate = 8
 ofEvent _ = (-1)
 
 ofString :: [Char] -> Event
-ofString "Pierce" = Pierce
+ofString "Locate" = Locate
 ofString "Fill" = Fill
 ofString "Hollow" = Hollow
 ofString "Face" = Face
@@ -102,7 +102,7 @@ encodePlace place = let
 
 handleEvent :: CInt -> IO Bool
 handleEvent event = case (eventOf (fromIntegral event)) of
- Pierce -> return False
+ Locate -> return False
  Fill -> return False
  Hollow -> return False
  Face -> return False

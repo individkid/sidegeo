@@ -216,13 +216,13 @@ void timewheelConsume(void *arg)
         if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
 }
 
-double timewheelDelay()
+long long timewheelDelay()
 {
     double current = getTime();
     double time = whenTime();
     double wheel = whenWheel();
     if (time < wheel) return time-current;
-    return wheel-current;
+    return (long long)(wheel-current);
 }
 
 void timewheelProduce(void *arg)

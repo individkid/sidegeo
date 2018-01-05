@@ -67,7 +67,7 @@ struct Item { // per-menu-line info
 };
 
 enum Event {
-    Region, // wrt point, place: polyant
+    Locate, // wrt point, place: polyant
     Fill, // polyant, place, embed: embed
     Hollow, // polyant, place, embed: embed
     Face, // place, embed: face
@@ -77,19 +77,6 @@ enum Event {
     Vertex, // boundary, place: vertex
     Migrate, // wrt plane, boundary, place, embed: place, embed
     Events};
-enum Data {
-    PlaneBuf, // per boundary distances above base plane
-    VersorBuf, // per boundary base selector
-    PointBuf, // shared point per boundary triple
-    PierceBuf, // on line from focal point
-    SideBuf, // vertices wrt prior planes
-    FaceSub, // subscripts into planes
-    FrameSub, // subscripts into points
-    PointSub, // every triple of planes
-    PlaneSub, // per plane triple of points
-    SideSub, // per vertex prior planes
-    HalfSub, // per plane prior vertices
-    Datas};
 
 typedef unsigned MyGLuint;
 typedef float MyGLfloat;
@@ -101,7 +88,7 @@ enum Action {
     Continue, // increment state and call again
     Terminate // end program
 }; // multi command return value
-typedef enum Action (*Machine) (int state);
+typedef enum Action (*Machine)(int state);
 enum Shader { // one value per shader; state for bringup
     Diplane, // display planes
     Dipoint, // display points
@@ -137,6 +124,19 @@ struct Buffer {
     int read; // count of readers
     int write; // count of writers
 }; // argument to render functions
+enum Data {
+    PlaneBuf, // per boundary distances above base plane
+    VersorBuf, // per boundary base selector
+    PointBuf, // shared point per boundary triple
+    PierceBuf, // on line from focal point
+    SideBuf, // vertices wrt prior planes
+    FaceSub, // subscripts into planes
+    FrameSub, // subscripts into points
+    PointSub, // every triple of planes
+    PlaneSub, // per plane triple of points
+    SideSub, // per vertex prior planes
+    HalfSub, // per plane prior vertices
+    Datas};
 struct File {
     int buffer[Datas];
 };
