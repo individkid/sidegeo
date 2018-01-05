@@ -264,6 +264,7 @@ EXTERNCEND
 DECLARE_FUNC(CmnCommands)
 DECLARE_STAGE(CmnCommand,Command)
 DECLARE_STAGE(CmnCmdInt,int)
+DECLARE_STAGE(CmnCmdFloat,MyGLfloat)
 DECLARE_STAGE(CmnCmdByte,char)
 DECLARE_STAGE(CmnCmdCmd,Command)
 
@@ -306,6 +307,7 @@ DECLARE_STAGE(Render,struct Render)
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
 DECLARE_EXTRA(CmdInt,int)
+DECLARE_EXTRA(CmdFloat,MyGLfloat)
 DECLARE_EXTRA(CmdByte,char)
 DECLARE_EXTRA(CmdCmd,Command)
 
@@ -388,6 +390,7 @@ DECLARE_STAGE(PcsOutput,char)
 DECLARE_SOURCE(PcsCommands)
 DECLARE_STAGE(PcsCommand,Command)
 DECLARE_STAGE(PcsCmdInt,int)
+DECLARE_STAGE(PcsCmdFloat,MyGLfloat)
 DECLARE_STAGE(PcsCmdByte,char)
 DECLARE_STAGE(PcsCmdCmd,Command)
 

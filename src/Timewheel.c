@@ -48,16 +48,16 @@ void setTime(struct timespec *delay, double time)
 void startCount()
 {
     while (listenCount < sizeSignal()) {
-        if (insertPack(arraySignal(listenCount,1)->idt,listenCount) < 0) exitErrstr("listen too pack\n");
+        int key = arraySignal(listenCount,1)->idt; if (insertPack(key) < 0) exitErrstr("listen too pack\n"); else *castPack(key) = listenCount;
         listenCount += 1;}
     while (sourceCount < sizeSound()) {
-        if (insertPack(arraySound(sourceCount,1)->idt,sourceCount) < 0) exitErrstr("source too pack\n");
+        int key = arraySound(sourceCount,1)->idt; if (insertPack(key) < 0) exitErrstr("source too pack\n"); else *castPack(key) = sourceCount;
         sourceCount += 1;}
     while (metricCount < sizeShape()) {
-        if (insertPack(arrayShape(metricCount,1)->idt,metricCount) < 0) exitErrstr("source too pack\n");
+        int key = arrayShape(metricCount,1)->idt; if (insertPack(key) < 0) exitErrstr("source too pack\n"); else *castPack(key) = metricCount;
         metricCount += 1;}
     while (stateCount < sizeState()) {
-        if (insertPack(arrayState(stateCount,1)->idt,stateCount) < 0) exitErrstr("source too pack\n");
+        int key = arrayState(stateCount,1)->idt; if (insertPack(key) < 0) exitErrstr("source too pack\n"); else *castPack(key) = stateCount;
         stateCount += 1;}
 }
 
@@ -82,7 +82,7 @@ void startVariable(int *sub, int num)
 {
     int *var = arrayVariable(*sub,1);
     while (num) {
-    *var = indexPack(*var);
+    *var = *castPack(*var);
     var += 1;
     num -= 1;}
 }
@@ -103,12 +103,12 @@ void startRatio(int *sub, struct Ratio *rat)
 void startState()
 {
     startCount();
-    int sub = indexPack(*delocTwInt(1));
+    int sub = *castPack(*delocTwInt(1));
     struct State *state = arrayState(sub,1);
     if ((state->vld>>Map)&1) {
         state->vld &= ~(1<<Map);
-        if ((state->vld>>Wav)&1) state->wav = indexPack(state->wav);
-        if ((state->vld>>Met)&1) state->met = indexPack(state->met);
+        if ((state->vld>>Wav)&1) state->wav = *castPack(state->wav);
+        if ((state->vld>>Met)&1) state->met = *castPack(state->met);
         int var = state->vsub;
         startRatio(&var,&state->upd);
         startRatio(&var,&state->dly);
@@ -210,7 +210,7 @@ void timewheelConsume(void *arg)
         DEFAULT(exitErrstr("time too control\n");)}
     while (sizeChange() > 0) {
         struct Change change = *delocChange(1);
-        int sub = ((change.vld>>Map)&1 ? indexPack(change.sub) : change.sub);
+        int sub = ((change.vld>>Map)&1 ? *castPack(change.sub) : change.sub);
         struct State *state = arrayState(sub,1);
         state->amt = change.val;
         if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}

@@ -109,7 +109,9 @@ void parseClose(struct Nest *nest, struct Parse *parse)
 	// restore Macro Shadow Nest Prefix
 	for (int i = 0; i < sizeNestPtr(); i++) {
 		removeMacro(*arrayNestPtr(i,1));
-		if (*arrayShadowPtr(i,1) >= 0) insertMacro(*arrayNestPtr(i,1),*arrayShadowPtr(i,1));}
+		if (*arrayShadowPtr(i,1) >= 0) {
+			int key = *arrayNestPtr(i,1);
+			if (insertMacro(key) < 0) exitErrstr("nest too insert\n"); else *castMacro(key) = *arrayShadowPtr(i,1);}}
 	delocNestPtr(sizeNestPtr());
 	delocShadowPtr(sizeShadowPtr());
 	delocPrefixPtr(sizePrefixPtr());
@@ -209,8 +211,8 @@ int parseString(const char *str, int len)
 	memcpy(enlocPcsBuf(len),str,len);
 	*enlocPcsBuf(1) = 0;
 	int tmp;
-	if (findString(&key,&tmp) < 0) {
-		if (insertString(key,key) < 0) exitErrstr("key too string\n");
+	if (findString(&key) < 0) {
+		if (insertString(key) < 0) exitErrstr("key too string\n");
 		return key;}
 	unlocPcsBuf(len+1);
 	return key;
@@ -232,11 +234,10 @@ int parseMacro(struct Parse *parse)
 	parseDeloc(vallen+1,parse);
 	if (parse->depth > 0) {
 		*enlocNestPtr(1) = key;
-		int exists;
-		if (findMacro(&key,&exists) >= 0) *enlocShadowPtr(1) = exists;
+		if (testMacro(key) >= 0) *enlocShadowPtr(1) = *castMacro(key);
 		else *enlocShadowPtr(1) = -1;}
 	if (testMacro(key) >= 0 && removeMacro(key) < 0) exitErrstr("key too macro\n");
-	if (insertMacro(key,val) < 0) exitErrstr("val too macro\n");
+	if (insertMacro(key) < 0) exitErrstr("val too macro\n"); else *castMacro(key) = val;
 	return 1;
 }
 
@@ -324,9 +325,9 @@ int parseIdent(struct Parse *parse)
 	memcpy(enlocPcsBuf(idtlen),arrayFormat(0,idtlen),idtlen);
 	parseDeloc(idtlen,parse);
 	*enlocPcsBuf(1) = 0;
-	int val;
 	int key = sizePcsBuf()-idtlen-1;
-	if (findMacro(&key,&val) >= 0) {
+	if (findMacro(&key) >= 0) {
+		int val = *castMacro(key);
 		int len = strlenPcsBuf(val,0);
 		memcpy(allocFormat(len),arrayPcsBuf(val,len),len);
   		parse->fmtpre += len;

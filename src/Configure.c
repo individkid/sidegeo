@@ -28,12 +28,12 @@ void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
 int parseString(const char *str, int len);
 
-void force();
-void plane();
-void point();
-void fill();
-void hollow();
-void inflate();
+void configureForce();
+void configurePlane();
+void configurePoint();
+void configureFill();
+void configureHollow();
+void configureInflate();
 
 #define FORCE_THREAD(THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
@@ -46,7 +46,7 @@ void inflate();
 #define FORCE_COUNT(TYPE,THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
 	if (strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
-	if (testCount(Pcs##THREAD) < 0) insertCount(Pcs##THREAD,sizePcs##THREAD##Int()); \
+	if (testCount(Pcs##THREAD) < 0) {insertCount(Pcs##THREAD); *castCount(Pcs##THREAD) = sizePcs##THREAD##Int();} \
 	*enlocPcs##THREAD##Int(1) = 0; \
 	chrpos += siz; \
 	intpos += 1; \
@@ -55,10 +55,9 @@ void inflate();
 #define FORCE_UNIQUE(INST,TYPE,THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
 	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0) { \
-	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
+	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = INST; \
-	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1; \
+	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
 	chrpos += siz; \
 	intpos += 1; \
 	continue;}}
@@ -66,10 +65,9 @@ void inflate();
 #define FORCE_SHARED(INST,TYPE,THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
 	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && thread == Pcs##THREAD) { \
-	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
+	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = INST; \
-	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1; \
+	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
 	chrpos += siz; \
 	intpos += 1; \
 	continue;}}
@@ -89,10 +87,9 @@ int forceChar(char **rslt, int *chrpos, int *intpos)
 	char *val; \
 	int siz = forceChar(&val,&chrpos,&intpos); \
 	if (siz <= 0) return siz; \
-	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
+	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	memcpy(enlocPcs##TYPE(siz),val,siz); \
-	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += siz; \
+	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += siz; \
 	continue;}
 
 int forceInt(int *rslt, int *chrpos, int *intpos)
@@ -118,10 +115,9 @@ int forceInt(int *rslt, int *chrpos, int *intpos)
 	int val; \
 	int siz = forceInt(&val,&chrpos,&intpos); \
 	if (siz <= 0) return siz; \
-	if (testBase(ptrPcs##TYPE()) < 0) insertBase(ptrPcs##TYPE(),sizePcs##TYPE()); \
+	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = val; \
-	int found; \
-	if (checkCount(Pcs##THREAD,&found) >= 0) *arrayPcs##THREAD##Int(found,1) += 1; \
+	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
 	continue;}
 
 void timeForward(int key)
@@ -129,13 +125,13 @@ void timeForward(int key)
 	int sub = sizeReady()-1;
 	int val = -1;
 	if (*arrayReady(sub,1) == 0) {
-		if (insertReadier(key,sub) < 0) exitErrstr("name too ready\n");}
+		if (insertReadier(key) < 0) exitErrstr("name too ready\n"); else *castReadier(key) = sub;}
 	if (testImager(key) < 0) {
 		val = usageImage();
 		usedImage(val);
-		if (insertImager(key,val) < 0) exitErrstr("name too insert\n");}
+		if (insertImager(key) < 0) exitErrstr("name too insert\n"); else *castImager(key) = val;}
 	else {
-		val = indexImager(key);
+		val = *castImager(key);
 		if (sizeImage(val) == 0 && val == sub) exitErrstr("name too assert\n");
 		if (sizeImage(val) == 0) val = -1;}
 	if (val >= 0) {
@@ -146,24 +142,24 @@ void timeForward(int key)
 
 void timeBackward(int key)
 {
-	int image = indexImager(key);
+	int image = *castImager(key);
 	while (sizeImage(image) > 0) {
 	int key = *delocImage(image,1);
-	int ready = indexReadier(key);
+	int ready = *castReadier(key);
 	if (*arrayReady(ready,1) == 1) {
 	*enlocPcsControl(1) = Start;
 	*enlocPcsTwInt(1) = key;}
 	if (*arrayReady(ready,1) > 1) *arrayReady(ready,1) -= 1;}
 }
 
-int timeFloat(float *rslt, int *chrpos, int *intpos)
+int timeFloat(MyGLfloat *rslt, int *chrpos, int *intpos)
 {
 	if (*intpos >= sizePcsInt()) return -1;
 	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
 	if (siz == 0) {*intpos += 1; return 0;}
 	char *nptr = arrayPcsChar(*chrpos,siz);
 	char *endptr = nptr;
-	float val = strtof(nptr,&endptr);
+	MyGLfloat val = strtof(nptr,&endptr);
 	if (endptr != nptr+siz) return -1;
 	*rslt = val;
 	*chrpos += siz;
@@ -191,7 +187,7 @@ int timeName(int *key, int *chrpos, int *intpos)
 
 int timeCoef(int *chrpos, int *intpos)
 {
-	float val;
+	MyGLfloat val;
 	int siz = timeFloat(&val,chrpos,intpos);
 	if (siz < 0) return -1;
 	if (siz > 0) *enlocCoefficient(1) = val;
@@ -247,15 +243,12 @@ int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, in
 
 int configureVector(int *chrpos, int *intpos)
 {
-	MyGLfloat vec[3];
-	int tot = 0;
-	for (int i = 0; i < 3; i++) {
-		int siz = timeFloat(vec+i,chrpos,intpos);
-		if (siz < 0) return -1;
-		tot += siz;}
-	int len = sizeof*vec*3;
-	memcpy(enlocPcsCmdByte(len),vec,len);
-	return tot;
+	int count = sizePcsInt();
+	*enlocPcsInt(1) = 0;
+	while (*intpos < sizePcsInt() && *arrayPcsInt(*intpos,1) > *chrpos) {
+	if (timeFloat(enlocPcsCmdFloat(1),chrpos,intpos) < 0) return -1;
+	*arrayPcsInt(count,1) += 1;}
+	return 0;
 }
 
 int configureArray(int *chrpos, int *intpos)
@@ -273,7 +266,7 @@ void configureFail(int chrsiz, int intsiz)
 	struct QueueBase *ptr;
 	while (chooseBase(&ptr) >= 0) {
 		int siz;
-		if (findBase(&ptr,&siz) < 0) exitErrstr("base too siz\n");
+		if (testBase(ptr) < 0) exitErrstr("base too siz\n"); else siz = *castBase(ptr);
 		unlocQueueBase(ptr,sizeQueueBase(ptr)-siz);
 		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
 	enum PcsThread key;
@@ -328,21 +321,25 @@ int processConfigure(int index, int len)
 		int intpos = intsiz;
 		*enlocPcsCmdInt(1) = index;
 		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureVector(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		*enlocPcsCmdCmd(1) = plane;
+		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdCmd(1) = configurePlane;
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?point!> fl% fl% fl%",len) > 0) {
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		*enlocPcsCmdInt(1) = index;
-		if (configureVector(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		*enlocPcsCmdCmd(1) = point;
+		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdCmd(1) = configurePoint;
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?inflate!>",len) > 0) {
 		*enlocPcsCmdInt(1) = index;
-		*enlocPcsCmdCmd(1) = inflate;
+		*enlocPcsCmdCmd(1) = configureInflate;
 		return 1;}
 	if (parse("<?fill!> nm% {nm%}% {nm%}%",len) > 0) {
 		int chrpos = chrsiz;
@@ -351,7 +348,7 @@ int processConfigure(int index, int len)
 		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		*enlocPcsCmdCmd(1) = fill;
+		*enlocPcsCmdCmd(1) = configureFill;
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?hollow!> nm% {nm%}% {nm%}%",len) > 0) {
@@ -361,7 +358,7 @@ int processConfigure(int index, int len)
 		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		*enlocPcsCmdCmd(1) = hollow;
+		*enlocPcsCmdCmd(1) = configureHollow;
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse("<?force!> {[id|nm]%}%",len) > 0) {
@@ -378,7 +375,7 @@ int processConfigure(int index, int len)
 			FORCE_COUNT(CmdByte,Cmd)
 			FORCE_COUNT(HsInt,Hs)
 			FORCE_COUNT(HsByte,Hs)
-			FORCE_SHARED(force,CmdCmd,Cmd)
+			FORCE_SHARED(configureForce,CmdCmd,Cmd)
     		FORCE_UNIQUE(Locate,Event,Hs)
     		FORCE_UNIQUE(Fill,Event,Hs)
     		FORCE_UNIQUE(Hollow,Event,Hs)
@@ -388,7 +385,7 @@ int processConfigure(int index, int len)
     		FORCE_UNIQUE(Divide,Event,Hs)
     		FORCE_UNIQUE(Vertex,Event,Hs)
     		FORCE_UNIQUE(Migrate,Event,Hs)
-			FORCE_SHARED(force,HsCmd,Hs)
+			FORCE_SHARED(configureForce,HsCmd,Hs)
 			FORCE_CHAR(CmdByte,Cmd)
 			else {configureFail(chrsiz,intsiz); return -1;}}
 		configurePass(chrsiz,intsiz);
@@ -404,8 +401,8 @@ int processConfigure(int index, int len)
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		int retval;
-		if (insertBase(ptrPcsCoefficient(),sizePcsCoefficient()) < 0) exitErrstr("configure too time\n");
-		if (insertBase(ptrPcsVariable(),sizePcsVariable()) < 0) exitErrstr("configure too time\n");
+		if (insertBase(ptrPcsCoefficient()) < 0) exitErrstr("configure too time\n"); else *castBase(ptrPcsCoefficient()) = sizePcsCoefficient();
+		if (insertBase(ptrPcsVariable()) < 0) exitErrstr("configure too time\n"); else *castBase(ptrPcsVariable()) = sizePcsVariable();
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}

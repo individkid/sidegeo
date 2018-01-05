@@ -156,10 +156,9 @@ EXTERNC pqueue_pri_t when##NAME();
 #define DECLARE_TREE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int test##NAME(KEY key); \
-EXTERNC int find##NAME(KEY *key, VAL *val); \
-EXTERNC int check##NAME(KEY key, VAL *val); \
-EXTERNC VAL index##NAME(KEY key); \
-EXTERNC int insert##NAME(KEY key, VAL val); \
+EXTERNC int find##NAME(KEY *key); \
+EXTERNC VAL *cast##NAME(KEY key); \
+EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
 EXTERNC int choose##NAME(KEY *key); \
 EXTERNC int size##NAME();
@@ -770,12 +769,6 @@ extern "C" QueueBase *ptr##NAME() {return NAME##Inst.ptr();}
 
 template<class TYPE> struct QueueMeta {
     QueueStruct<QueueStruct<TYPE> > meta;
-    QueueMeta() {}
-    ~QueueMeta()
-    {
-        for (int i = 0; i < meta.size(); i++)
-        if (meta.array(i,1)->base) delete[] meta.array(i,1)->base;
-    }
     int size()
     {
         return meta.size();
@@ -1152,7 +1145,7 @@ template<class KEY, class VAL> struct QueueTree {
         if (void2int(found) < 0) return -1;
         return 0;
     }
-    int find(KEY *key, VAL *val)
+    int find(KEY *key)
     {
         int tofind = pool.alloc();
         pool.cast(tofind)->key = *key;
@@ -1160,27 +1153,22 @@ template<class KEY, class VAL> struct QueueTree {
         pool.free(tofind);
         if (void2int(found) < 0) return -1;
         *key = pool.cast(void2int(found))->key;
-        *val = pool.cast(void2int(found))->val;
         return 0;
     }
-    int check(KEY key, VAL *val)
+    VAL *cast(KEY key)
     {
-        KEY tmp = key;
-        if (find(&tmp,val) < 0 || tmp != key) return -1;
-        return 0;
+        int tofind = pool.alloc();
+        pool.cast(tofind)->key = key;
+        void *found = lookup_node(top,int2void(tofind),&rbop);
+        pool.free(tofind);
+        if (void2int(found) < 0) return 0;
+        return &pool.cast(void2int(found))->val;
     }
-    VAL index(KEY key)
-    {
-        VAL tmp;
-        if (check(key,&tmp) < 0) exitErrstr("index too key\n");
-        return tmp;
-    }
-    int insert(KEY key, VAL val)
+    int insert(KEY key)
     {
         if (test(key) >= 0) return -1;
         int node = pool.alloc();
         pool.cast(node)->key = key;
-        pool.cast(node)->val = val;
         add_node(&top,int2void(node),&rbop);
         return 0;
     }
@@ -1217,13 +1205,16 @@ QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
-extern "C" int find##NAME(KEY *key, VAL *val) {return NAME##Inst.find(key,val);} \
-extern "C" int check##NAME(KEY key, VAL *val) {return NAME##Inst.check(key,val);} \
-extern "C" VAL index##NAME(KEY key) {return NAME##Inst.index(key);} \
-extern "C" int insert##NAME(KEY key, VAL val) {return NAME##Inst.insert(key,val);} \
+extern "C" int find##NAME(KEY *key) {return NAME##Inst.find(key);} \
+extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);} \
+extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
 extern "C" int size##NAME() {return NAME##Inst.size();}
+
+template<class KEY, class VAL> struct QueueTrue {
+    QueueTree<KEY,QueueStruct<VAL> > tree;
+};
 
 #endif // __cplusplus
 

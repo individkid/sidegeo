@@ -28,15 +28,15 @@ int filenum = 0;
 void setupEnum()
 {
     int val;
-    val = handleEnum("Locate"); if (val < 0 || insertEnum(Locate,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Fill"); if (val < 0 || insertEnum(Fill,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Hollow"); if (val < 0 || insertEnum(Hollow,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Face"); if (val < 0 || insertEnum(Face,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex,val) < 0) exitErrstr("enum too event\n");
-    val = handleEnum("Migrate"); if (val < 0 || insertEnum(Migrate,val) < 0) exitErrstr("enum too event\n");
+    val = handleEnum("Locate"); if (val < 0 || insertEnum(Locate) < 0) exitErrstr("enum too event\n"); else *castEnum(Locate) = val;
+    val = handleEnum("Fill"); if (val < 0 || insertEnum(Fill) < 0) exitErrstr("enum too event\n"); else *castEnum(Fill) = val;
+    val = handleEnum("Hollow"); if (val < 0 || insertEnum(Hollow) < 0) exitErrstr("enum too event\n"); else *castEnum(Hollow) = val;
+    val = handleEnum("Face"); if (val < 0 || insertEnum(Face) < 0) exitErrstr("enum too event\n"); else *castEnum(Face) = val;
+    val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame) < 0) exitErrstr("enum too event\n"); else *castEnum(Frame) = val;
+    val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate) < 0) exitErrstr("enum too event\n"); else *castEnum(Inflate) = val;
+    val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
+    val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
+    val = handleEnum("Migrate"); if (val < 0 || insertEnum(Migrate) < 0) exitErrstr("enum too event\n"); else *castEnum(Migrate) = val;
 }
 
 void haskellBefore()
@@ -51,7 +51,7 @@ void haskellConsume(void *arg)
         filenum = *delocHsInt(1);
         int size = *delocHsInt(1);
         memcpy(enlocInout(size),delocHsInt(size),size);
-        if (handleEvent(indexEnum(*delocEvent(1))) != 0) exitErrstr("haskell return true\n");
+        if (handleEvent(*castEnum(*delocEvent(1))) != 0) exitErrstr("haskell return true\n");
         size = sizeInout();
         *enlocHsCmdInt(1) = size;
         memcpy(enlocHsCmdInt(size),delocInout(size),size);

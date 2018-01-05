@@ -88,7 +88,7 @@ void metric()
     *enlocCmdChange(1) = change;
 }
 
-void force()
+void configureForce()
 {
     enum Data data = 0; // TODO
     int done = *delocCmdInt(1);
@@ -107,15 +107,9 @@ void force()
     DEFAULT(exitErrstr("invalid buffer type\n");)
 }
 
-void display()
+void displayResponse()
 {
     // display sends face or frame event with enqueDishader response
-}
-
-void refine()
-{
-    // refine click finds random plane through tweak of pierce point
-    // and kicks off appendPlane
 }
 
 enum Action appendPlane(int state)
@@ -123,9 +117,16 @@ enum Action appendPlane(int state)
     // do wsw to add plane to file's buffer
     //  and get sidednesses with adpoint shader
     //  and send divide event with display response
+    return Advance;
 }
 
-void plane()
+void refineClick()
+{
+    // refine click finds random plane through tweak of pierce point
+    // and kicks off appendPlane
+}
+
+void configurePlane()
 {
     // plane configuration kicks off appendPlane
 }
@@ -133,55 +134,65 @@ void plane()
 enum Action collectPoint(int state)
 {
     // point configuration saves up three points to construct plane to append
+    return Advance;
 }
 
-void point()
+void configurePoint()
 {
     // point configuration kicks off collectPoint followed by appendPlane
     // or allows collectPoint to proceed
 }
 
-void inflate()
+void configureInflate()
 {
     // inflate configuration sends inflate event with display response
 }
 
-void configureClick()
+void configureFill()
 {
     // fill or hollow configuration sends event with display response
 }
 
-void appendRegion()
+void configureHollow()
 {
-    int key = *delocCmdInt(1);
-    enum Event event = (enum Event)*delocCmdInt(1);
-    // append sends configuration and polyant to file
+    // fill or hollow configuration sends event with display response
 }
 
-enum Action sculpt(int state)
+void appendResponse()
+{
+    // append response allows sculpt region to proceed 
+}
+
+enum Action sculptRegion(int state)
 {
     // click does wsw to get sidednesses with adplane shader
     // and sends region event with append response
+    // and appends configuration and polyant to file
+    return Advance;
 }
 
-void fill()
+void fillClick()
 {
+    relocCmdInt(2); // pierce file, pierce plane
+    relocCmdFloat(3); // pierce point
+    *enlocCmdInt(1) = (int)Fill;
     const char *str = "fill";
     int len = strlen(str);
     *enlocCmdInt(1) = len;
-    *enlocCmdInt(1) = (int)Fill;
     memcpy(enlocCmdByte(len),str,len);
-    enqueMachine(sculpt);
+    enqueMachine(sculptRegion);
 }
 
-void hollow()
+void hollowClick()
 {
+    relocCmdInt(2); // pierce file, pierce plane
+    relocCmdFloat(3); // pierce point
+    *enlocCmdInt(1) = (int)Hollow;
     const char *str = "hollow";
     int len = strlen(str);
     *enlocCmdInt(1) = len;
-    *enlocCmdInt(1) = (int)Hollow;
     memcpy(enlocCmdByte(len),str,len);
-    enqueMachine(sculpt);
+    enqueMachine(sculptRegion);
 }
 
 #ifdef BRINGUP
