@@ -44,6 +44,7 @@ extern int xSiz;
 extern int ySiz;
 extern float slope;
 extern float aspect;
+extern int layer;
 
 void displayClick(GLFWwindow *window, int button, int action, int mods);
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
@@ -52,6 +53,7 @@ void enqueBuffer(int sub, int todo, int done, void *data);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
+void enqueShader(enum Shader shader, int file, Machine follow);
 
 void inject()
 {
@@ -160,22 +162,38 @@ void configureHollow()
 
 void appendResponse()
 {
-    // copy haskell response to enlocReint(tag)
+    int tag = *delocCmdInt(1);
+    int len = *delocCmdInt(1);
+    memcpy(enlocReint(tag,len),delocCmdInt(len),len);
 }
+
+enum Action sculptFollow(int state)
+{
+    // copy adplane feedback to enlocReint(layer)
+}
+
+#define SCULPT_ENLOC(STR) \
+    relocCmdInt(2); /*pierce file, pierce plane*/ \
+    relocCmdFloat(3); /*pierce point*/ \
+    layer = tagReint(); \
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
+    const char *str = #STR; \
+    int len = strlen(str); \
+    *enlocCmdInt(1) = len; \
+    memcpy(enlocCmdByte(len),str,len); \
+    enqueMachine(sculptRegion);
 
 #define SCULPT_DELOC \
     int file = *delocCmdInt(1); \
     int plane = *delocCmdInt(1); \
-    int tag = *delocCmdInt(1); \
     MyGLfloat vec[3]; \
     for (int i = 0; i < 3; i++) vec[i] = *delocCmdFloat(1); \
     int len = *delocCmdInt(1); \
     char str[len]; memcpy(str,delocCmdByte(len),len);
 
-#define SCULPT_ENLOC \
+#define SCULPT_RELOC \
     *enlocCmdInt(1) = file; \
     *enlocCmdInt(1) = plane; \
-    *enlocCmdInt(1) = tag; \
     for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = vec[i]; \
     *enlocCmdInt(1) = len; \
     memcpy(enlocCmdByte(len),str,len);
@@ -184,51 +202,44 @@ enum Action sculptRegion(int state)
 {
     if (state-- == 0) {
     SCULPT_DELOC
-    // do wsw to get sidednesses from vec and file with adplane shader
-    *enlocCmdHsInt(1) = file;
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = tag;
-    // enlocCmdHsInt number of sidednesses
-    // memcpy enlocCmdHsInt sidednesses
-    *enlocHsCmd(1) = appendResponse;
-    *enlocCmdEvent(1) = Locate;
-    SCULPT_ENLOC
+    enqueShader(Adplane,plane,sculptFollow);
+    SCULPT_RELOC
     return Continue;}
     if (state-- == 0) {
     SCULPT_DELOC
-    SCULPT_ENLOC
-    return (sizeReint(tag) == 0 ? Defer : Continue);}
+    SCULPT_RELOC
+    return (sizeReint(layer) == 0 ? Defer : Continue);}
+    if (state-- == 0) {
+    SCULPT_DELOC
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = layer;
+    int relen = sizeReint(layer);
+    *enlocCmdHsInt(1) = relen;
+    memcpy(enlocCmdHsInt(relen),delocReint(layer,relen),relen);
+    *enlocCmdHsCmd(1) = appendResponse;
+    *enlocCmdEvent(1) = Locate;
+    SCULPT_RELOC
+    return Continue;}
+    if (state-- == 0) {
+    SCULPT_DELOC
+    SCULPT_RELOC
+    return (sizeReint(layer) == 0 ? Defer : Continue);}
     if (state-- == 0) {
     SCULPT_DELOC
     // append configuration and polyant to file
-    if (removeReint(tag) < 0) exitErrstr("reint too insert\n");}
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");}
     return Advance;
 }
 
 void fillClick()
 {
-    relocCmdInt(2); // pierce file, pierce plane
-    relocCmdFloat(3); // pierce point
-    int tag = tagReint();
-    if (insertReint(tag) < 0) exitErrstr("reint too insert\n");
-    const char *str = "fill";
-    int len = strlen(str);
-    *enlocCmdInt(1) = len;
-    memcpy(enlocCmdByte(len),str,len);
-    enqueMachine(sculptRegion);
+    SCULPT_ENLOC(fill)
 }
 
 void hollowClick()
 {
-    relocCmdInt(2); // pierce file, pierce plane
-    relocCmdFloat(3); // pierce point
-    int tag = tagReint();
-    if (insertReint(tag) < 0) exitErrstr("reint too insert\n");
-    const char *str = "hollow";
-    int len = strlen(str);
-    *enlocCmdInt(1) = len;
-    memcpy(enlocCmdByte(len),str,len);
-    enqueMachine(sculptRegion);
+    SCULPT_ENLOC(hollow)
 }
 
 #ifdef BRINGUP
