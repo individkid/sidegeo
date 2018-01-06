@@ -293,9 +293,10 @@ DECLARE_STAGE(CmnSound,struct Sound)
 DECLARE_STAGE(CmnShape,struct Shape)
 
 
-DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(Argument,int)
 DECLARE_LOCAL(Cluster,int)
+DECLARE_LOCAL(Layer,int)
+DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(Machine,Machine)
 
 DECLARE_LOCAL(Buffer,struct Buffer)

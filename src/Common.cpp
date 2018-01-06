@@ -287,9 +287,10 @@ DEFINE_STAGE(CmnSound,struct Sound,CmnSignal)
 DEFINE_STAGE(CmnShape,struct Shape,CmnSound)
 
 
-DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(Argument,int)
 DEFINE_LOCAL(Cluster,int)
+DEFINE_LOCAL(Layer,int)
+DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(Machine,Machine)
 
 DEFINE_LOCAL(Buffer,struct Buffer)

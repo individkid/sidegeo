@@ -34,12 +34,14 @@
 #include "Common.h"
 
 int seqnum = 0;
+int layer = 0;
 
 void enqueMachine(Machine machine)
 {
     *enlocArgument(1) = 0;
     *enlocCluster(1) = 1;
     *enlocMachine(1) = machine;
+    *enlocLayer(1) = layer;
 }
 
 void followMachine(Machine machine)
@@ -90,9 +92,9 @@ void commandProduce(void *arg)
 {
     int state = *delocArgument(1);
     int cluster = *delocCluster(1);
+    layer = *delocLayer(1);
+    if (sizeDefer() > 0 && seqnum == *arrayDefer(0,1)) delocDefer(1); seqnum += 1;
     Machine *machine = delocMachine(cluster);
-    if (sizeDefer() > 0 && seqnum == *arrayDefer(0,1)) delocDefer(1);
-    seqnum++;
     int done = 0;
     for (int i = 0; i < cluster; i++) {while (1) {
         SWITCH((*machine[i])(state),Defer) *enlocDefer(1) = seqnum + sizeCluster();
@@ -101,6 +103,7 @@ void commandProduce(void *arg)
             for (int j = 0; j < cluster-i; j++) reloc[j] = machine[i+j];
             *enlocArgument(1) = state;
             *enlocCluster(1) = cluster-i;
+            *enlocLayer(1) = layer;
             done = 2;}
         CASE(Advance) {state = 0; done = 1;}
         CASE(Continue) state++;
@@ -108,4 +111,5 @@ void commandProduce(void *arg)
         DEFAULT(exitErrstr("invalid machine action\n");)
         if (done) {done--; break;}} if (done) {done--; break;}}
     if (done) {done--; doneCmnCommands();}
+    layer = 0;
 }
