@@ -150,24 +150,58 @@ void configureInflate()
 
 void configureFill()
 {
-    // fill or hollow configuration sends event with display response
+    // fill configuration sends event with display response
 }
 
 void configureHollow()
 {
-    // fill or hollow configuration sends event with display response
+    // hollow configuration sends event with display response
 }
 
 void appendResponse()
 {
-    // append response allows sculpt region to proceed 
+    // copy haskell response to enlocReint(tag)
 }
+
+#define SCULPT_DELOC \
+    int file = *delocCmdInt(1); \
+    int plane = *delocCmdInt(1); \
+    int tag = *delocCmdInt(1); \
+    MyGLfloat vec[3]; \
+    for (int i = 0; i < 3; i++) vec[i] = *delocCmdFloat(1); \
+    int len = *delocCmdInt(1); \
+    char str[len]; memcpy(str,delocCmdByte(len),len);
+
+#define SCULPT_ENLOC \
+    *enlocCmdInt(1) = file; \
+    *enlocCmdInt(1) = plane; \
+    *enlocCmdInt(1) = tag; \
+    for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = vec[i]; \
+    *enlocCmdInt(1) = len; \
+    memcpy(enlocCmdByte(len),str,len);
 
 enum Action sculptRegion(int state)
 {
-    // click does wsw to get sidednesses with adplane shader
-    // and sends region event with append response
-    // and appends configuration and polyant to file
+    if (state-- == 0) {
+    SCULPT_DELOC
+    // do wsw to get sidednesses from vec and file with adplane shader
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = tag;
+    // enlocCmdHsInt number of sidednesses
+    // memcpy enlocCmdHsInt sidednesses
+    *enlocHsCmd(1) = appendResponse;
+    *enlocCmdEvent(1) = Locate;
+    SCULPT_ENLOC
+    return Continue;}
+    if (state-- == 0) {
+    SCULPT_DELOC
+    SCULPT_ENLOC
+    return (sizeReint(tag) == 0 ? Defer : Continue);}
+    if (state-- == 0) {
+    SCULPT_DELOC
+    // append configuration and polyant to file
+    if (removeReint(tag) < 0) exitErrstr("reint too insert\n");}
     return Advance;
 }
 
@@ -175,7 +209,8 @@ void fillClick()
 {
     relocCmdInt(2); // pierce file, pierce plane
     relocCmdFloat(3); // pierce point
-    *enlocCmdInt(1) = (int)Fill;
+    int tag = tagReint();
+    if (insertReint(tag) < 0) exitErrstr("reint too insert\n");
     const char *str = "fill";
     int len = strlen(str);
     *enlocCmdInt(1) = len;
@@ -187,7 +222,8 @@ void hollowClick()
 {
     relocCmdInt(2); // pierce file, pierce plane
     relocCmdFloat(3); // pierce point
-    *enlocCmdInt(1) = (int)Hollow;
+    int tag = tagReint();
+    if (insertReint(tag) < 0) exitErrstr("reint too insert\n");
     const char *str = "hollow";
     int len = strlen(str);
     *enlocCmdInt(1) = len;

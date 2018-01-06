@@ -164,6 +164,7 @@ EXTERNC int remove##NAME(KEY key); \
 EXTERNC VAL *cast##NAME(KEY key);
 
 #define DECLARE_TRUE(NAME,KEY,VAL) \
+EXTERNC int tag##NAME(); \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int usage##NAME(); \
 EXTERNC int test##NAME(KEY key); \
@@ -174,15 +175,15 @@ EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
 EXTERNC void use##NAME(KEY key); \
 EXTERNC int size##NAME(KEY key); \
-EXTERNC TYPE *enloc##NAME(KEY key, int siz); \
-EXTERNC TYPE *deloc##NAME(KEY key, int siz); \
-EXTERNC TYPE *destr##NAME(KEY key, TYPE val); \
-EXTERNC TYPE *unloc##NAME(KEY key, int siz); \
-EXTERNC TYPE *alloc##NAME(KEY key, int siz); \
+EXTERNC VAL *enloc##NAME(KEY key, int siz); \
+EXTERNC VAL *deloc##NAME(KEY key, int siz); \
+EXTERNC VAL *destr##NAME(KEY key, VAL val); \
+EXTERNC VAL *unloc##NAME(KEY key, int siz); \
+EXTERNC VAL *alloc##NAME(KEY key, int siz); \
 EXTERNC void reloc##NAME(KEY key, int siz); \
-EXTERNC TYPE *array##NAME(KEY key, int sub, int siz); \
-EXTERNC int strlen##NAME(KEY key, int sub, TYPE val); \
-EXTERNC int enstr##NAME(KEY key, TYPE val); \
+EXTERNC VAL *array##NAME(KEY key, int sub, int siz); \
+EXTERNC int strlen##NAME(KEY key, int sub, VAL val); \
+EXTERNC int enstr##NAME(KEY key, VAL val); \
 EXTERNC void pack##NAME(KEY key, int sub, int siz);
 
 #ifdef __cplusplus
@@ -1245,8 +1246,17 @@ extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
 
 template<class KEY, class VAL> struct QueueTrue {
+    int tagnum;
     QueueTree<KEY,QueueStruct<VAL> > tree;
-    QueueTrue(int (*cmp)(const void *, const void *)) : tree(cmp) {}
+    QueueTrue(int (*cmp)(const void *, const void *)) : tree(cmp) {
+        tagnum = 0;
+    }
+    int tag()
+    {
+        int tag = tagnum;
+        tagnum += 1;
+        return tag;
+    }
     void init(int (*cmp)(const void *, const void *))
     {
         tree.init(cmp);
@@ -1348,8 +1358,9 @@ template<class KEY, class VAL> struct QueueTrue {
 #define DEFINE_TRUE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTrue<KEY,VAL> NAME##Inst = QueueTrue<KEY,VAL>(comp##NAME); \
-extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
+extern "C" int tag##NAME() {return NAME##Inst.tag();} \
+extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int usage##NAME() {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int check##NAME(KEY key) {return NAME##Inst.check(key);} \
@@ -1359,14 +1370,14 @@ extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 extern "C" void use##NAME(KEY key) {NAME##Inst.use(key);} \
 extern "C" int size##NAME(KEY key) {return NAME##Inst.size(key);} \
-extern "C" TYPE *enloc##NAME(KEY key, int siz) {return NAME##Inst.enloc(key,siz);} \
-extern "C" TYPE *deloc##NAME(KEY key, int siz) {return NAME##Inst.deloc(key,siz);} \
-extern "C" TYPE *destr##NAME(KEY key, TYPE val) {return NAME##Inst.destr(key,val);} \
-extern "C" TYPE *unloc##NAME(KEY key, int siz) {return NAME##Inst.unloc(key,siz);} \
+extern "C" VAL *enloc##NAME(KEY key, int siz) {return NAME##Inst.enloc(key,siz);} \
+extern "C" VAL *deloc##NAME(KEY key, int siz) {return NAME##Inst.deloc(key,siz);} \
+extern "C" VAL *destr##NAME(KEY key, VAL val) {return NAME##Inst.destr(key,val);} \
+extern "C" VAL *unloc##NAME(KEY key, int siz) {return NAME##Inst.unloc(key,siz);} \
 extern "C" void reloc##NAME(KEY key, int siz) {NAME##Inst.reloc(key,siz);} \
-extern "C" TYPE *array##NAME(KEY key, int sub, int siz) {return NAME##Inst.array(key,sub,siz);} \
-extern "C" int strlen##NAME(KEY key, int sub, TYPE val) {return NAME##Inst.strlen(key,sub,val);} \
-extern "C" int enstr##NAME(KEY key, TYPE val) {return NAME##Inst.enstr(key,val);} \
+extern "C" VAL *array##NAME(KEY key, int sub, int siz) {return NAME##Inst.array(key,sub,siz);} \
+extern "C" int strlen##NAME(KEY key, int sub, VAL val) {return NAME##Inst.strlen(key,sub,val);} \
+extern "C" int enstr##NAME(KEY key, VAL val) {return NAME##Inst.enstr(key,val);} \
 extern "C" void pack##NAME(KEY key, int sub, int siz) {NAME##Inst.pack(key,sub,siz);}
 
 #endif // __cplusplus
