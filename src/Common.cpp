@@ -432,5 +432,5 @@ DEFINE_LOCAL(Helper,pthread_t)
 DEFINE_LOCAL(Less,int)
 DEFINE_LOCAL(More,int)
 DEFINE_TREE(Base,struct QueueBase *,int)
-DEFINE_TREE(Count,enum PcsThread,int)
+DEFINE_TREE(Count,int,int)
 

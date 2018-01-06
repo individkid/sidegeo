@@ -37,8 +37,9 @@ void configureInflate();
 
 #define FORCE_THREAD(THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
-	if (strncmp(arrayPcsChar(chrpos,siz),#THREAD,siz) == 0) { \
-	thread = Pcs##THREAD; \
+	const char *str = #THREAD; \
+	if (strncmp(arrayPcsChar(chrpos,siz),str,siz) == 0) { \
+	thread = parseString(str,strlen(str)); \
 	chrpos += siz; \
 	intpos += 1; \
 	continue;}}
@@ -46,7 +47,7 @@ void configureInflate();
 #define FORCE_COUNT(TYPE,THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
 	if (strncmp(arrayPcsChar(chrpos,siz),#TYPE,siz) == 0) { \
-	if (testCount(Pcs##THREAD) < 0) {insertCount(Pcs##THREAD); *castCount(Pcs##THREAD) = sizePcs##THREAD##Int();} \
+	if (testCount(thread) < 0) {insertCount(thread); *castCount(thread) = sizePcs##THREAD##Int();} \
 	*enlocPcs##THREAD##Int(1) = 0; \
 	chrpos += siz; \
 	intpos += 1; \
@@ -59,19 +60,20 @@ void configureInflate();
 		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
 		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = INST; \
-	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
+	if (testCount(thread) >= 0) *arrayPcs##THREAD##Int(*castCount(thread),1) += 1; \
 	chrpos += siz; \
 	intpos += 1; \
 	continue;}}
 
 #define FORCE_SHARED(INST,TYPE,THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
-	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && thread == Pcs##THREAD) { \
+	const char *str = #THREAD; \
+	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && thread == parseString(str,strlen(str))) { \
 	if (testBase(ptrPcs##TYPE()) < 0) { \
 		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
 		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = INST; \
-	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
+	if (testCount(thread) >= 0) *arrayPcs##THREAD##Int(*castCount(thread),1) += 1; \
 	chrpos += siz; \
 	intpos += 1; \
 	continue;}}
@@ -86,8 +88,9 @@ int forceChar(char **rslt, int *chrpos, int *intpos)
 	return siz;
 }
 
-#define FORCE_CHAR(TYPE,THREAD) \
-	if (thread == Pcs##THREAD) { \
+#define FORCE_CHAR(TYPE,THREAD) { \
+	const char *str = #THREAD; \
+	if (thread == parseString(str,strlen(str))) { \
 	char *val; \
 	int siz = forceChar(&val,&chrpos,&intpos); \
 	if (siz <= 0) return siz; \
@@ -96,7 +99,7 @@ int forceChar(char **rslt, int *chrpos, int *intpos)
 		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	memcpy(enlocPcs##TYPE(siz),val,siz); \
 	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += siz; \
-	continue;}
+	continue;}}
 
 int forceInt(int *rslt, int *chrpos, int *intpos)
 {
@@ -115,8 +118,9 @@ int forceInt(int *rslt, int *chrpos, int *intpos)
 	return siz;
 }
 
-#define FORCE_INT(TYPE,THREAD) \
-	if (thread == Pcs##THREAD && sizePcsChar() > 0 && \
+#define FORCE_INT(TYPE,THREAD) { \
+	const char *str = #THREAD; \
+	if (thread == parseString(str,strlen(str)) && sizePcsChar() > 0 && \
 	(*arrayPcsChar(chrpos,1) == '+' || *arrayPcsChar(chrpos,1) == '-')) { \
 	int val; \
 	int siz = forceInt(&val,&chrpos,&intpos); \
@@ -126,7 +130,7 @@ int forceInt(int *rslt, int *chrpos, int *intpos)
 		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = val; \
 	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
-	continue;}
+	continue;}}
 
 void timeForward(int key)
 {
@@ -279,7 +283,7 @@ void configureFail(int chrsiz, int intsiz)
 		siz = *castBase(ptr);
 		unlocQueueBase(ptr,sizeQueueBase(ptr)-siz);
 		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
-	enum PcsThread key;
+	int key;
 	while (chooseCount(&key) >= 0) {
 		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
 	unlocPcsInt(sizePcsInt()-intsiz);
@@ -291,7 +295,7 @@ void configurePass(int chrsiz, int intsiz)
 	struct QueueBase *ptr;
 	while (chooseBase(&ptr) >= 0) {
 		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
-	enum PcsThread key;
+	int key;
 	while (chooseCount(&key) >= 0) {
 		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
 	unlocPcsInt(sizePcsInt()-intsiz);
@@ -375,17 +379,14 @@ int processConfigure(int index, int len)
     	*enlocPcsChar(1) = 0;
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		enum PcsThread thread = PcsCmd;
+		int thread = -1;
 		while (intpos < sizePcsInt() && *arrayPcsInt(intpos,1) > chrpos) {
-			FORCE_INT(CmdInt,Cmd)
-			FORCE_INT(HsInt,Hs)
 			FORCE_THREAD(Cmd)
 			FORCE_THREAD(Hs)
 			FORCE_COUNT(CmdInt,Cmd)
 			FORCE_COUNT(CmdByte,Cmd)
 			FORCE_COUNT(HsInt,Hs)
 			FORCE_COUNT(HsByte,Hs)
-			FORCE_SHARED(configureForce,CmdCmd,Cmd)
     		FORCE_UNIQUE(Locate,Event,Hs)
     		FORCE_UNIQUE(Fill,Event,Hs)
     		FORCE_UNIQUE(Hollow,Event,Hs)
@@ -395,9 +396,12 @@ int processConfigure(int index, int len)
     		FORCE_UNIQUE(Divide,Event,Hs)
     		FORCE_UNIQUE(Vertex,Event,Hs)
     		FORCE_UNIQUE(Migrate,Event,Hs)
+			FORCE_SHARED(configureForce,CmdCmd,Cmd)
 			FORCE_SHARED(configureForce,HsCmd,Hs)
+			FORCE_INT(CmdInt,Cmd)
+			FORCE_INT(HsInt,Hs)
 			FORCE_CHAR(CmdByte,Cmd)
-			else {configureFail(chrsiz,intsiz); return -1;}}
+			configureFail(chrsiz,intsiz); return -1;}
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	else if (parse(

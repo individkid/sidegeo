@@ -438,6 +438,6 @@ DECLARE_LOCAL(Helper,pthread_t) // thread handle
 DECLARE_LOCAL(Less,int) // reading upto here
 DECLARE_LOCAL(More,int) // writing as owner from here
 DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
-DECLARE_TREE(Count,enum PcsThread,int) // location in PcsIntPtr of match count
+DECLARE_TREE(Count,int,int) // location in PcsIntPtr of match count
 
 #endif
