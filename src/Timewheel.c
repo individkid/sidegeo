@@ -48,16 +48,24 @@ void setTime(struct timespec *delay, double time)
 void startCount()
 {
     while (listenCount < sizeSignal()) {
-        int key = arraySignal(listenCount,1)->idt; if (insertPack(key) < 0) exitErrstr("listen too pack\n"); else *castPack(key) = listenCount;
+        int key = arraySignal(listenCount,1)->idt; 
+        if (insertPack(key) < 0) exitErrstr("listen too pack\n");
+        *castPack(key) = listenCount;
         listenCount += 1;}
     while (sourceCount < sizeSound()) {
-        int key = arraySound(sourceCount,1)->idt; if (insertPack(key) < 0) exitErrstr("source too pack\n"); else *castPack(key) = sourceCount;
+        int key = arraySound(sourceCount,1)->idt;
+        if (insertPack(key) < 0) exitErrstr("source too pack\n");
+        *castPack(key) = sourceCount;
         sourceCount += 1;}
     while (metricCount < sizeShape()) {
-        int key = arrayShape(metricCount,1)->idt; if (insertPack(key) < 0) exitErrstr("source too pack\n"); else *castPack(key) = metricCount;
+        int key = arrayShape(metricCount,1)->idt;
+        if (insertPack(key) < 0) exitErrstr("source too pack\n");
+        *castPack(key) = metricCount;
         metricCount += 1;}
     while (stateCount < sizeState()) {
-        int key = arrayState(stateCount,1)->idt; if (insertPack(key) < 0) exitErrstr("source too pack\n"); else *castPack(key) = stateCount;
+        int key = arrayState(stateCount,1)->idt;
+        if (insertPack(key) < 0) exitErrstr("source too pack\n");
+        *castPack(key) = stateCount;
         stateCount += 1;}
 }
 

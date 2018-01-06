@@ -1225,7 +1225,7 @@ template<class KEY, class VAL> struct QueueTree {
         pool.cast(tofind)->key = key;
         void *found = lookup_node(top,int2void(tofind),&rbop);
         pool.free(tofind);
-        if (void2int(found) < 0) return 0;
+        if (void2int(found) < 0) exitErrstr("cast too found\n");
         return &pool.cast(void2int(found))->val;
     }
 };

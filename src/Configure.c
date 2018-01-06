@@ -55,7 +55,9 @@ void configureInflate();
 #define FORCE_UNIQUE(INST,TYPE,THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
 	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0) { \
-	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
+	if (testBase(ptrPcs##TYPE()) < 0) { \
+		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
+		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = INST; \
 	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
 	chrpos += siz; \
@@ -65,7 +67,9 @@ void configureInflate();
 #define FORCE_SHARED(INST,TYPE,THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
 	if (strncmp(arrayPcsChar(chrpos,siz),#INST,siz) == 0 && thread == Pcs##THREAD) { \
-	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
+	if (testBase(ptrPcs##TYPE()) < 0) { \
+		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
+		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = INST; \
 	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
 	chrpos += siz; \
@@ -87,7 +91,9 @@ int forceChar(char **rslt, int *chrpos, int *intpos)
 	char *val; \
 	int siz = forceChar(&val,&chrpos,&intpos); \
 	if (siz <= 0) return siz; \
-	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
+	if (testBase(ptrPcs##TYPE()) < 0) { \
+		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
+		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	memcpy(enlocPcs##TYPE(siz),val,siz); \
 	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += siz; \
 	continue;}
@@ -115,7 +121,9 @@ int forceInt(int *rslt, int *chrpos, int *intpos)
 	int val; \
 	int siz = forceInt(&val,&chrpos,&intpos); \
 	if (siz <= 0) return siz; \
-	if (testBase(ptrPcs##TYPE()) < 0) {insertBase(ptrPcs##TYPE()); *castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
+	if (testBase(ptrPcs##TYPE()) < 0) { \
+		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
+		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = val; \
 	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
 	continue;}
@@ -125,11 +133,13 @@ void timeForward(int key)
 	int sub = sizeReady()-1;
 	int val = -1;
 	if (*arrayReady(sub,1) == 0) {
-		if (insertReadier(key) < 0) exitErrstr("name too ready\n"); else *castReadier(key) = sub;}
+		if (insertReadier(key) < 0) exitErrstr("name too ready\n");
+		*castReadier(key) = sub;}
 	if (testImager(key) < 0) {
 		val = usageImage();
 		usedImage(val);
-		if (insertImager(key) < 0) exitErrstr("name too insert\n"); else *castImager(key) = val;}
+		if (insertImager(key) < 0) exitErrstr("name too insert\n");
+		*castImager(key) = val;}
 	else {
 		val = *castImager(key);
 		if (sizeImage(val) == 0 && val == sub) exitErrstr("name too assert\n");
@@ -266,7 +276,7 @@ void configureFail(int chrsiz, int intsiz)
 	struct QueueBase *ptr;
 	while (chooseBase(&ptr) >= 0) {
 		int siz;
-		if (testBase(ptr) < 0) exitErrstr("base too siz\n"); else siz = *castBase(ptr);
+		siz = *castBase(ptr);
 		unlocQueueBase(ptr,sizeQueueBase(ptr)-siz);
 		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
 	enum PcsThread key;
@@ -401,8 +411,10 @@ int processConfigure(int index, int len)
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		int retval;
-		if (insertBase(ptrPcsCoefficient()) < 0) exitErrstr("configure too time\n"); else *castBase(ptrPcsCoefficient()) = sizePcsCoefficient();
-		if (insertBase(ptrPcsVariable()) < 0) exitErrstr("configure too time\n"); else *castBase(ptrPcsVariable()) = sizePcsVariable();
+		if (insertBase(ptrPcsCoefficient()) < 0) exitErrstr("configure too time\n");
+		*castBase(ptrPcsCoefficient()) = sizePcsCoefficient();
+		if (insertBase(ptrPcsVariable()) < 0) exitErrstr("configure too time\n");
+		*castBase(ptrPcsVariable()) = sizePcsVariable();
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}

@@ -108,10 +108,11 @@ void parseClose(struct Nest *nest, struct Parse *parse)
 {
 	// restore Macro Shadow Nest Prefix
 	for (int i = 0; i < sizeNestPtr(); i++) {
-		removeMacro(*arrayNestPtr(i,1));
+		if (removeMacro(*arrayNestPtr(i,1)) < 0) exitErrstr("nest too remove");
 		if (*arrayShadowPtr(i,1) >= 0) {
 			int key = *arrayNestPtr(i,1);
-			if (insertMacro(key) < 0) exitErrstr("nest too insert\n"); else *castMacro(key) = *arrayShadowPtr(i,1);}}
+			if (insertMacro(key) < 0) exitErrstr("nest too insert\n");
+			*castMacro(key) = *arrayShadowPtr(i,1);}}
 	delocNestPtr(sizeNestPtr());
 	delocShadowPtr(sizeShadowPtr());
 	delocPrefixPtr(sizePrefixPtr());
@@ -237,7 +238,8 @@ int parseMacro(struct Parse *parse)
 		if (testMacro(key) >= 0) *enlocShadowPtr(1) = *castMacro(key);
 		else *enlocShadowPtr(1) = -1;}
 	if (testMacro(key) >= 0 && removeMacro(key) < 0) exitErrstr("key too macro\n");
-	if (insertMacro(key) < 0) exitErrstr("val too macro\n"); else *castMacro(key) = val;
+	if (insertMacro(key) < 0) exitErrstr("val too macro\n");
+	*castMacro(key) = val;
 	return 1;
 }
 
