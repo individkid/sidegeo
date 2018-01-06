@@ -116,7 +116,6 @@ EXTERNC int usage##NAME(); \
 EXTERNC void used##NAME(int idx); \
 EXTERNC void use##NAME(int idx); \
 EXTERNC int size##NAME(int idx); \
-EXTERNC void xfer##NAME(int idx, int siz); \
 EXTERNC TYPE *enloc##NAME(int idx, int siz); \
 EXTERNC TYPE *deloc##NAME(int idx, int siz); \
 EXTERNC TYPE *destr##NAME(int idx, TYPE val); \
@@ -163,6 +162,28 @@ EXTERNC int choose##NAME(KEY *key); \
 EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
 EXTERNC VAL *cast##NAME(KEY key);
+
+#define DECLARE_TRUE(NAME,KEY,VAL) \
+EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
+EXTERNC int usage##NAME(); \
+EXTERNC int test##NAME(KEY key); \
+EXTERNC int check##NAME(KEY key); \
+EXTERNC int find##NAME(KEY *key); \
+EXTERNC int choose##NAME(KEY *key); \
+EXTERNC int insert##NAME(KEY key); \
+EXTERNC int remove##NAME(KEY key); \
+EXTERNC void use##NAME(KEY key); \
+EXTERNC int size##NAME(KEY key); \
+EXTERNC TYPE *enloc##NAME(KEY key, int siz); \
+EXTERNC TYPE *deloc##NAME(KEY key, int siz); \
+EXTERNC TYPE *destr##NAME(KEY key, TYPE val); \
+EXTERNC TYPE *unloc##NAME(KEY key, int siz); \
+EXTERNC TYPE *alloc##NAME(KEY key, int siz); \
+EXTERNC void reloc##NAME(KEY key, int siz); \
+EXTERNC TYPE *array##NAME(KEY key, int sub, int siz); \
+EXTERNC int strlen##NAME(KEY key, int sub, TYPE val); \
+EXTERNC int enstr##NAME(KEY key, TYPE val); \
+EXTERNC void pack##NAME(KEY key, int sub, int siz);
 
 #ifdef __cplusplus
 
@@ -1209,7 +1230,6 @@ template<class KEY, class VAL> struct QueueTree {
     }
 };
 
-// TODO use FUNC to compare; add compare function for strings
 #define DEFINE_TREE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
@@ -1226,63 +1246,128 @@ extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
 
 template<class KEY, class VAL> struct QueueTrue {
     QueueTree<KEY,QueueStruct<VAL> > tree;
+    QueueTrue(int (*cmp)(const void *, const void *)) : tree(cmp) {}
+    void init(int (*cmp)(const void *, const void *))
+    {
+        tree.init(cmp);
+    }
+    int comp(const void *left, const void *right)
+    {
+        return tree.comp(left,right);
+    }
     int size()
     {
+        return tree.size();
     }
     int test(KEY key)
     {
+        return tree.test(key);
     }
     int check(KEY key)
     {
+        return tree.check(key);
     }
     int find(KEY *key)
     {
+        return tree.find(key);
     }
     int choose(KEY *key)
     {
+        return tree.choose(key);
     }
     int insert(KEY key)
     {
-        // assert that after tree.insert(key) *tree.cast(key) is empty
+        if (tree.insert(key) < 0) return -1;
+        if (tree.cast(key)->size() > 0) return -1;
+        return 0;
     }
     int remove(KEY key)
     {
-        // empty out *tree.cast(key) and then tree.remove(key)
+        if (tree.test(key) < 0) return -1;
+        tree.cast(key)->deloc(tree.cast(key)->size());
+        if (tree.remove(key) < 0) return -1;
+        return 0;
     }
     void use(KEY key)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        tree.cast(key)->use();
     }
     int size(KEY key)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->size();
     }
     VAL *enloc(KEY key, int siz)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->enloc(siz);
     }
     VAL *deloc(KEY key, int siz)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->deloc(siz);
     }
     VAL *destr(KEY key, VAL val)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->destr(val);
     }
     VAL *unloc(KEY key, int siz)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->unloc(siz);
     }
     void reloc(KEY key, int siz)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->reloc(siz);
     }
     VAL *array(KEY key, int sub, int siz)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->array(sub,siz);
     }
     int strlen(KEY key, int sub, VAL val)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->strlen(sub,val);
     }
     int enstr(KEY key, VAL val)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->enstr(val);
     }
     void pack(KEY key, int sub, int siz)
     {
+        if (tree.test(key) < 0) exitErrstr("true too tree\n");
+        return tree.cast(key)->pack(sub,siz);
     }
 };
+
+#define DEFINE_TRUE(NAME,KEY,VAL) \
+extern "C" int comp##NAME(const void *left, const void *right); \
+QueueTrue<KEY,VAL> NAME##Inst = QueueTrue<KEY,VAL>(comp##NAME); \
+extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
+extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
+extern "C" int usage##NAME() {return NAME##Inst.size();} \
+extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
+extern "C" int check##NAME(KEY key) {return NAME##Inst.check(key);} \
+extern "C" int find##NAME(KEY *key) {return NAME##Inst.find(key);} \
+extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
+extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
+extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
+extern "C" void use##NAME(KEY key) {NAME##Inst.use(key);} \
+extern "C" int size##NAME(KEY key) {return NAME##Inst.size(key);} \
+extern "C" TYPE *enloc##NAME(KEY key, int siz) {return NAME##Inst.enloc(key,siz);} \
+extern "C" TYPE *deloc##NAME(KEY key, int siz) {return NAME##Inst.deloc(key,siz);} \
+extern "C" TYPE *destr##NAME(KEY key, TYPE val) {return NAME##Inst.destr(key,val);} \
+extern "C" TYPE *unloc##NAME(KEY key, int siz) {return NAME##Inst.unloc(key,siz);} \
+extern "C" void reloc##NAME(KEY key, int siz) {NAME##Inst.reloc(key,siz);} \
+extern "C" TYPE *array##NAME(KEY key, int sub, int siz) {return NAME##Inst.array(key,sub,siz);} \
+extern "C" int strlen##NAME(KEY key, int sub, TYPE val) {return NAME##Inst.strlen(key,sub,val);} \
+extern "C" int enstr##NAME(KEY key, TYPE val) {return NAME##Inst.enstr(key,val);} \
+extern "C" void pack##NAME(KEY key, int sub, int siz) {NAME##Inst.pack(key,sub,siz);}
 
 #endif // __cplusplus
 
