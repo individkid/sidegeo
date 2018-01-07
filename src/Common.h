@@ -124,8 +124,8 @@ struct Buffer {
     int dimn; // elements per vector
     int read; // count of readers
     int write; // count of writers
-    int wait; // sequence number of waiters
-    int take; // sequence number of lockers
+    int wait; // count of lock requests
+    int take; // count of lock acquires
 }; // argument to render functions
 enum Data {
     PlaneBuf, // per boundary distances above base plane
@@ -141,7 +141,11 @@ enum Data {
     HalfSub, // per plane prior vertices
     Datas};
 struct File {
-    int buffer[Datas];
+    int read; // read lock on haskell state
+    int write; // write lock on haskell state
+    int wait; // sequence number for lock requests
+    int take; // sequence number for lock acquires
+    int buffer[Datas]; // subscripts into buffer queue
 };
 
 enum Uniform { // one value per uniform; no associated state
@@ -214,12 +218,6 @@ enum Shift {
     Map, // indices are not packed
     Run, // state is to be scheduled
     Shifts};
-
-enum PcsThread {
-    PcsCmd,
-    PcsHs,
-    PcsTw,
-    PcsTypes};
 
 #define DECLARE_MSGSTR(NAME) \
 void msgstr##NAME(const char *fmt, ...);

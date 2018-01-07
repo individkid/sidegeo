@@ -98,7 +98,7 @@ int forceChar(char **rslt, int *chrpos, int *intpos)
 		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
 		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	memcpy(enlocPcs##TYPE(siz),val,siz); \
-	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += siz; \
+	if (testCount(thread) >= 0) *arrayPcs##THREAD##Int(*castCount(thread),1) += siz; \
 	continue;}}
 
 int forceInt(int *rslt, int *chrpos, int *intpos)
@@ -129,7 +129,7 @@ int forceInt(int *rslt, int *chrpos, int *intpos)
 		if (insertBase(ptrPcs##TYPE()) < 0) exitErrstr("base too insert\n"); \
 		*castBase(ptrPcs##TYPE()) = sizePcs##TYPE();} \
 	*enlocPcs##TYPE(1) = val; \
-	if (testCount(Pcs##THREAD) >= 0) *arrayPcs##THREAD##Int(*castCount(Pcs##THREAD),1) += 1; \
+	if (testCount(thread) >= 0) *arrayPcs##THREAD##Int(*castCount(thread),1) += 1; \
 	continue;}}
 
 void timeForward(int key)
