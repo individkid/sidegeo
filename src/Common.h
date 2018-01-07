@@ -104,6 +104,7 @@ enum Shader { // one value per shader; state for bringup
 struct Render {
     int file; // file of planes to render
     int draw; // waiting for shader
+    int wait; // buffer sequence number
     int vertex; // number of input buffers que
     int element; // primitives per output buffer
     int feedback; // number of output buffers on que
@@ -123,6 +124,8 @@ struct Buffer {
     int dimn; // elements per vector
     int read; // count of readers
     int write; // count of writers
+    int wait; // sequence number of waiters
+    int take; // sequence number of lockers
 }; // argument to render functions
 enum Data {
     PlaneBuf, // per boundary distances above base plane
@@ -301,9 +304,9 @@ DECLARE_LOCAL(Machine,Machine)
 
 DECLARE_LOCAL(Buffer,struct Buffer)
 DECLARE_LOCAL(File,struct File)
-DECLARE_STAGE(Void,Command)
-DECLARE_STAGE(Shader,enum Shader)
-DECLARE_STAGE(Render,struct Render)
+DECLARE_LOCAL(Void,Command)
+DECLARE_LOCAL(Render,struct Render)
+
 DECLARE_TRUE(Reint,int,int)
 DECLARE_TRUE(Refloat,int,MyGLfloat)
 DECLARE_TRUE(Rebyte,int,char)

@@ -79,13 +79,13 @@ int commandDelay()
     if (sizeCluster() == 0) glfwWaitEvents();
     else if (sizeDefer() == sizeCluster()) glfwWaitEventsTimeout(POLL_DELAY);
     else glfwPollEvents();
-    return (sizeCluster() > 0);
+    return (sizeCommand() == 0);
 }
 
 int commandNodelay()
 {
     glfwPollEvents();
-    return (sizeCluster() > 0);
+    return (sizeCommand() == 0);
 }
 
 void commandProduce(void *arg)

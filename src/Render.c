@@ -166,15 +166,17 @@ void exitErrbuf(struct Buffer *buf, const char *str)
 
 #define RENDER_RELOC relocRender(1); relocCmdInt(size);
 
+#define RENDER_LOCK(BUF,COND,LOCK) \
+    if (state-- == 0) {arg->wait = BUF->wait; BUF->wait += 1; RENDER_RELOC return Continue;} \
+    if (state-- == 0) {RENDER_RELOC return ((COND) || BUF->take != arg->wait ? Defer : Continue);} \
+    if (state-- == 0) {BUF->take += 1; BUF->read += 1; RENDER_RELOC return Continue;}
+
 enum Action renderLock(int state)
 {
     RENDER_BUFFER
-    for (int i = 0; i < arg->vertex; i++) if (vertex[i]->write > 0) {RENDER_RELOC return Defer;}
-    for (int i = 0; i < arg->element; i++) if (element[i]->write > 0) {RENDER_RELOC return Defer;}
-    for (int i = 0; i < arg->feedback; i++) if (feedback[i]->write > 0 || feedback[i]->read > 0) {RENDER_RELOC return Defer;}
-    for (int i = 0; i < arg->vertex; i++) vertex[i]->read++;
-    for (int i = 0; i < arg->element; i++) element[i]->read++;
-    for (int i = 0; i < arg->feedback; i++) feedback[i]->write++;
+    for (int i = 0; i < arg->vertex; i++) {RENDER_LOCK(vertex[i],vertex[i]->write > 0,read)}
+    for (int i = 0; i < arg->element; i++) {RENDER_LOCK(element[i],element[i]->write > 0,read)}
+    for (int i = 0; i < arg->feedback; i++) {RENDER_LOCK(feedback[i],feedback[i]->write > 0 || feedback[i]->read > 0,write)}
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = 0;
     return Advance;
 }
@@ -285,27 +287,28 @@ enum Action renderPierce(int state)
 enum Action renderUnlock(int state)
 {
     RENDER_BUFFER
-    for (int i = 0; i < arg->vertex; i++) vertex[i]->read--;
-    for (int i = 0; i < arg->element; i++) element[i]->read--;
-    for (int i = 0; i < arg->feedback; i++) feedback[i]->write--;
+    for (int i = 0; i < arg->vertex; i++) vertex[i]->read -= 1;
+    for (int i = 0; i < arg->element; i++) element[i]->read -= 1;
+    for (int i = 0; i < arg->feedback; i++) feedback[i]->write -= 1;
     delocRender(1); delocCmdInt(size);
     return Advance;
 }
 
 void setupBuffer(int *sub, char *name, GLuint loc, int type, int dimn)
 {
-    *sub = sizeBuffer();
-    struct Buffer *buffer = enlocBuffer(1);
-    buffer->name = name;
-    glGenBuffers(1, &buffer->handle);
-    glGenQueries(1, &buffer->query);
-    buffer->loc = loc;
-    buffer->type = type;
-    buffer->dimn = dimn;
+    struct Buffer buffer = {0};
+    buffer.name = name;
+    glGenBuffers(1, &buffer.handle);
+    glGenQueries(1, &buffer.query);
+    buffer.loc = loc;
+    buffer.type = type;
+    buffer.dimn = dimn;
     if (loc != INVALID_LOCATION) {
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
+        glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    *sub = sizeBuffer();
+    *enlocBuffer(1) = buffer;
 }
 
 struct File *setupFile(int file)

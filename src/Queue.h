@@ -392,7 +392,7 @@ struct QueueFdset : QueueMutex {
         rfds = fds;
         int lenSel = pselect(maxfd+1, &rfds, 0, 0, 0, &saved);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
-        if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+        if (lenSel < 0) exitErrstr("pselect failed: %s\n", strerror(errno));
         return lenSel;
     }
     virtual int nodelay()
@@ -400,7 +400,7 @@ struct QueueFdset : QueueMutex {
         rfds = fds;
         int lenSel = pselect(maxfd+1, &rfds, 0, 0, &notime, 0);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
-        if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+        if (lenSel < 0) exitErrstr("pselect failed: %s\n", strerror(errno));
         return lenSel;
     }
 };
@@ -446,7 +446,7 @@ struct QueueTime : QueueMutex {
         delay.tv_nsec = time;
         int lenSel = pselect(0, 0, 0, 0, &delay, &saved);
         if (lenSel < 0 && errno == EINTR) return 0;
-        if (lenSel < 0 || lenSel > 1) exitErrstr("pselect failed: %s\n", strerror(errno));
+        if (lenSel != 0) exitErrstr("pselect failed: %s\n", strerror(errno));
         return 1;
     }
     virtual int nodelay()
