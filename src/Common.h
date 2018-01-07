@@ -101,8 +101,10 @@ enum Shader { // one value per shader; state for bringup
     Replane, // reconstruct to versor 0
     Repoint, // reconstruct from versor 0
     Shaders};
+enum Lock {Zero,Read,Write};
 struct Render {
     int file; // file of planes to render
+    enum Lock lock; // whether to lock file
     int draw; // waiting for shader
     int wait; // buffer sequence number
     int vertex; // number of input buffers que

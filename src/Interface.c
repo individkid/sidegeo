@@ -53,7 +53,7 @@ void enqueBuffer(int sub, int todo, int done, void *data);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
-void enqueShader(enum Shader shader, int file, Machine follow);
+void enqueShader(enum Shader shader, int file, Machine follow, enum Lock lock);
 
 void inject()
 {
@@ -175,6 +175,7 @@ enum Action sculptFollow(int state)
 #define SCULPT_ENLOC(STR) \
     relocCmdInt(2); /*pierce file, pierce plane*/ \
     relocCmdFloat(3); /*pierce point*/ \
+    *enlocCmdInt(1) = 0; /*wait sequence number*/ \
     layer = tagReint(); \
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
     const char *str = #STR; \
@@ -186,6 +187,7 @@ enum Action sculptFollow(int state)
 #define SCULPT_DELOC \
     int file = *delocCmdInt(1); \
     int plane = *delocCmdInt(1); \
+    int wait = *delocCmdInt(1); \
     MyGLfloat vec[3]; \
     for (int i = 0; i < 3; i++) vec[i] = *delocCmdFloat(1); \
     int len = *delocCmdInt(1); \
@@ -194,23 +196,22 @@ enum Action sculptFollow(int state)
 #define SCULPT_RELOC \
     *enlocCmdInt(1) = file; \
     *enlocCmdInt(1) = plane; \
+    *enlocCmdInt(1) = wait; \
     for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = vec[i]; \
     *enlocCmdInt(1) = len; \
     memcpy(enlocCmdByte(len),str,len);
 
 enum Action sculptRegion(int state)
 {
-    if (state-- == 0) {
     SCULPT_DELOC
-    enqueShader(Adplane,plane,sculptFollow);
+    if (state-- == 0) {
+    enqueShader(Adplane,file,sculptFollow,Read);
     SCULPT_RELOC
     return Continue;}
     if (state-- == 0) {
-    SCULPT_DELOC
     SCULPT_RELOC
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     if (state-- == 0) {
-    SCULPT_DELOC
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = plane;
     *enlocCmdHsInt(1) = layer;
@@ -222,13 +223,11 @@ enum Action sculptRegion(int state)
     SCULPT_RELOC
     return Continue;}
     if (state-- == 0) {
-    SCULPT_DELOC
     SCULPT_RELOC
     return (sizeReint(layer) == 0 ? Defer : Continue);}
-    if (state-- == 0) {
-    SCULPT_DELOC
+    arrayFile(file,1)->read -= 1;
     // append configuration and polyant to file
-    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");}
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     return Advance;
 }
 

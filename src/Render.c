@@ -166,17 +166,20 @@ void exitErrbuf(struct Buffer *buf, const char *str)
 
 #define RENDER_RELOC relocRender(1); relocCmdInt(size);
 
-#define RENDER_LOCK(BUF,COND,LOCK) \
-    if (state-- == 0) {arg->wait = BUF->wait; BUF->wait += 1; RENDER_RELOC return Continue;} \
-    if (state-- == 0) {RENDER_RELOC return ((COND) || BUF->take != arg->wait ? Defer : Continue);} \
-    if (state-- == 0) {BUF->take += 1; BUF->read += 1; RENDER_RELOC return Continue;}
+#define RENDER_LOCK(WAIT,BUF,COND,LOCK) \
+    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; RENDER_RELOC return Continue;} \
+    if (state-- == 0) {RENDER_RELOC return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
+    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; RENDER_RELOC return Continue;}
 
 enum Action renderLock(int state)
 {
     RENDER_BUFFER
-    for (int i = 0; i < arg->vertex; i++) {RENDER_LOCK(vertex[i],vertex[i]->write > 0,read)}
-    for (int i = 0; i < arg->element; i++) {RENDER_LOCK(element[i],element[i]->write > 0,read)}
-    for (int i = 0; i < arg->feedback; i++) {RENDER_LOCK(feedback[i],feedback[i]->write > 0 || feedback[i]->read > 0,write)}
+    struct File *file = arrayFile(arg->file,1);
+    if (arg->lock == Read) {RENDER_LOCK(arg->wait,file,file->read > 0,read)}
+    if (arg->lock == Write) {RENDER_LOCK(arg->wait,file,file->read > 0 || file->write > 0,write)}
+    for (int i = 0; i < arg->vertex; i++) {RENDER_LOCK(arg->wait,vertex[i],vertex[i]->write > 0,read)}
+    for (int i = 0; i < arg->element; i++) {RENDER_LOCK(arg->wait,element[i],element[i]->write > 0,read)}
+    for (int i = 0; i < arg->feedback; i++) {RENDER_LOCK(arg->wait,feedback[i],feedback[i]->write > 0 || feedback[i]->read > 0,write)}
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = 0;
     return Advance;
 }
@@ -330,13 +333,14 @@ struct File *setupFile(int file)
     return arrayFile(file,1);
 }
 
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow, int sub)
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow, int sub, enum Lock lock)
 {
     struct Render *arg = enlocRender(1);
     int *buf = enlocCmdInt(vertex+element+feedback);
     struct File *file = setupFile(sub);
     arg->name = name;
     arg->file = sub;
+    arg->lock = lock;
     arg->shader = shader;
     arg->vertex = vertex;
     arg->element = element;
@@ -350,25 +354,25 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     followMachine(&renderUnlock);
 }
 
-void enqueShader(enum Shader shader, int file, Machine follow)
+void enqueShader(enum Shader shader, int file, Machine follow, enum Lock lock)
 {
-    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,follow,file);}
-    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,follow,file);}
-    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,follow,file);}
-    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,follow,file);}
-    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,follow,file);}
-    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,follow,file);}
-    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,follow,file);}
-    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,follow,file);}
+    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,follow,file,lock);}
+    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,follow,file,lock);}
+    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,follow,file,lock);}
+    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,follow,file,lock);}
+    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,follow,file,lock);}
+    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,follow,file,lock);}
+    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,follow,file,lock);}
+    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,follow,file,lock);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 
 void enqueDishader()
 {
-    for (int i = 0; i < sizeFile(); i++) enqueShader(dishader,i,0);
+    for (int i = 0; i < sizeFile(); i++) enqueShader(dishader,i,0,0);
 }
 
 void enquePershader()
 {
-    for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i,renderPierce);
+    for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i,renderPierce,0);
 }
