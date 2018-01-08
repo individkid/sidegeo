@@ -114,33 +114,36 @@ void displayResponse()
 {
 }
 
-#define DISPLAY_DELOC \
-    int wait = *delocCmdInt(1); \
-    int event = *delocCmdInt(1); \
-    int file = *delocCmdInt(1); \
-    int plane, inlen, outlen; \
-    if (file != Inflate) { \
-    plane = *delocCmdInt(1); \
-    inlen = *delocCmdInt(1); \
-    outlen = *delocCmdInt(1);} \
-    int inbuf[inlen]; memcpy(inbuf,delocCmdInt(inlen),inlen); \
-    int outbuf[outlen]; memcpy(outbuf,delocCmdInt(outlen),outlen);
+#define DISPLAY_ENLOC(EVENT) \
+    *enlocCmdInt(1) = 0; \
+    *enlocCmdInt(1) = (int)EVENT; \
+    relocCmdInt(1); \
+    if (event != Inflate) { \
+    relocCmdInt(1); \
+    int inlen = *relocCmdInt(1); \
+    relocCmdInt(inlen); \
+    int outlen = *relocCmdInt(1); \
+    relocCmdInt(outlen);} \
+    enqueMachine(displayRequest);
 
-#define DISPLAY_RELOC \
-    *enlocCmdInt(1) = wait; \
-    *enlocCmdInt(1) = event; \
-    *enlocCmdInt(1) = file; \
-    if (file != Inflate) { \
-    *enlocCmdInt(1) = plane; \
-    *enlocCmdInt(1) = inlen; \
-    memcpy(enlocCmdInt(inlen),inbuf,inlen); \
-    *enlocCmdInt(1) = outlen; \
-    memcpy(enlocCmdInt(outlen),outbuf,outlen);}
+#define DISPLAY_DELOC \
+    int wait = *deargCmdInt(1); \
+    int event = *deargCmdInt(1); \
+    int file = *deargCmdInt(1); \
+    int plane, inlen, outlen; \
+    int inbuf[inlen]; \
+    int outbuf[outlen]; \
+    if (event != Inflate) { \
+    plane = *deargCmdInt(1); \
+    inlen = *deargCmdInt(1); \
+    memcpy(inbuf,deargCmdInt(inlen),inlen); \
+    outlen = *deargCmdInt(1); \
+    memcpy(outbuf,deargCmdInt(outlen),outlen);}
 
 #define DISPLAY_LOCK(WAIT,BUF,COND,LOCK) \
-    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; DISPLAY_RELOC return Continue;} \
-    if (state-- == 0) {DISPLAY_RELOC return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
-    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; DISPLAY_RELOC return Continue;}
+    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; return Continue;} \
+    if (state-- == 0) {return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
+    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; return Continue;}
 
 enum Action displayRequest(int state)
 {
@@ -159,10 +162,8 @@ enum Action displayRequest(int state)
     memcpy(enlocCmdHsInt(outlen),outbuf,outlen);}
     *enlocCmdHsCmd(1) = displayResponse;
     *enlocCmdEvent(1) = event;
-    DISPLAY_RELOC
     return Continue;}
     if (state-- == 0) {
-    DISPLAY_RELOC
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     ptr->write -= 1;
     int size = sizeReint(layer);
@@ -206,7 +207,7 @@ void configurePoint()
 void configureInflate()
 {
     *enlocCmdInt(1) = 0;
-    *enlocCmdInt(1) = (int)Fill;
+    *enlocCmdInt(1) = (int)Inflate;
     relocCmdInt(1);
     enqueMachine(displayRequest);
 }
@@ -257,31 +258,21 @@ enum Action sculptFollow(int state)
     enqueMachine(sculptRegion);
 
 #define SCULPT_DELOC \
-    int file = *delocCmdInt(1); \
-    int plane = *delocCmdInt(1); \
-    int wait = *delocCmdInt(1); \
+    int file = *deargCmdInt(1); \
+    int plane = *deargCmdInt(1); \
+    int wait = *deargCmdInt(1); \
     MyGLfloat vec[3]; \
-    for (int i = 0; i < 3; i++) vec[i] = *delocCmdFloat(1); \
-    int len = *delocCmdInt(1); \
-    char str[len]; memcpy(str,delocCmdByte(len),len);
-
-#define SCULPT_RELOC \
-    *enlocCmdInt(1) = file; \
-    *enlocCmdInt(1) = plane; \
-    *enlocCmdInt(1) = wait; \
-    for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = vec[i]; \
-    *enlocCmdInt(1) = len; \
-    memcpy(enlocCmdByte(len),str,len);
+    for (int i = 0; i < 3; i++) vec[i] = *deargCmdFloat(1); \
+    int len = *deargCmdInt(1); \
+    char str[len]; memcpy(str,deargCmdByte(len),len);
 
 enum Action sculptRegion(int state)
 {
     SCULPT_DELOC
     if (state-- == 0) {
     enqueShader(Adplane,file,sculptFollow,Read);
-    SCULPT_RELOC
     return Continue;}
     if (state-- == 0) {
-    SCULPT_RELOC
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     if (state-- == 0) {
     *enlocCmdHsInt(1) = file;
@@ -292,10 +283,8 @@ enum Action sculptRegion(int state)
     memcpy(enlocCmdHsInt(relen),delocReint(layer,relen),relen);
     *enlocCmdHsCmd(1) = appendResponse;
     *enlocCmdEvent(1) = Locate;
-    SCULPT_RELOC
     return Continue;}
     if (state-- == 0) {
-    SCULPT_RELOC
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     arrayFile(file,1)->read -= 1;
     // append configuration and polyant to file

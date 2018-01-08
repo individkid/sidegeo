@@ -76,6 +76,40 @@ void deferCommand(Command cmd)
     enqueCommand(cmd);
 }
 
+void commandRedo()
+{
+    int size = sizeRedo();
+    for (int i = 0; i < size; i++) redoQueueBase(*arrayRedo(i,1));
+}
+
+void commandEndo()
+{
+    int size = sizeRedo();
+    for (int i = 0; i < size; i++) endoQueueBase(*arrayRedo(i,1));
+}
+
+void commandDedo()
+{
+    int size = sizeRedo();
+    for (int i = 0; i < size; i++) dedoQueueBase(*arrayRedo(i,1));
+}
+
+void commandBefore()
+{
+    *enlocRedo(1) = ptrBuffer();
+    *enlocRedo(1) = ptrFile();
+    *enlocRedo(1) = ptrVoid();
+    *enlocRedo(1) = ptrRender();
+    *enlocRedo(1) = ptrCmdInt();
+    *enlocRedo(1) = ptrCmdFloat();
+    *enlocRedo(1) = ptrCmdByte();
+}
+
+void commandAfter()
+{
+    delocRedo(sizeRedo());
+}
+
 void commandSignal()
 {
     glfwPostEmptyEvent();
@@ -116,10 +150,18 @@ void commandProduce(void *arg)
             *enlocArgument(1) = state;
             *enlocCluster(1) = cluster-i;
             *enlocLayer(1) = layer;
+            commandRedo();
             done = 2;}
-        CASE(Advance) {state = 0; done = 1;}
-        CASE(Continue) state++;
-        CASE(Terminate) done = 3;
+        CASE(Advance) {
+            if (i < cluster-1) commandEndo();
+            else commandDedo();
+            state = 0; done = 1;}
+        CASE(Continue) {
+            commandEndo();
+            state++;}
+        CASE(Terminate) {
+            commandDedo();
+            done = 3;}
         DEFAULT(exitErrstr("invalid machine action\n");)
         if (done) {done--; break;}} if (done) {done--; break;}}
     if (done) {done--; doneCmnCommands();}

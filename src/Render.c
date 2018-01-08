@@ -72,7 +72,7 @@ int bufferPrimitive(int size)
 
 enum Action dequeWrap(int state)
 {
-    struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
+    struct Buffer *buffer = arrayBuffer(*deargCmdInt(1),1);
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
         glGenBuffers(1,&buffer->copy);
@@ -98,7 +98,6 @@ enum Action dequeWrap(int state)
         DEFAULT(exitErrstr("unknown type\n");)
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
-    delocCmdInt(1);
     return Advance;
 }
 
@@ -114,20 +113,17 @@ void enqueWrap(int sub, int room)
 
 enum Action dequeBuffer(int state)
 {
-    struct Buffer *buffer = arrayBuffer(*arrayCmdInt(0,1),1);
-    int todo = *arrayCmdInt(1,1);
-    int done = *arrayCmdInt(2,1);
-    char *data = arrayCmdByte(0,todo);
+    struct Buffer *buffer = arrayBuffer(*deargCmdInt(1),1);
+    int todo = *deargCmdInt(1);
+    int done = *deargCmdInt(1);
+    char *data = deargCmdByte(todo);
     if (state-- == 0) {
-        relocCmdInt(3); relocCmdByte(todo);
         return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
     if (state-- == 0) {
         buffer->write++;
         if (buffer->room < done+todo) enqueWrap(*arrayCmdInt(0,1),done+todo);
-        relocCmdInt(3); relocCmdByte(todo);
         return Continue;}
     if (state-- == 0) {
-        relocCmdInt(3); relocCmdByte(todo);
         return (buffer->room < done+todo ? Defer : Continue);}
     int size = buffer->dimn*bufferType(buffer->type);
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
@@ -135,7 +131,6 @@ enum Action dequeBuffer(int state)
     glBindBuffer(GL_ARRAY_BUFFER,0);
     if (buffer->done < done+todo) buffer->done = done+todo;
     buffer->write--;
-    delocCmdInt(3); delocCmdByte(todo);
     return Advance;
 }
 
@@ -157,9 +152,9 @@ void exitErrbuf(struct Buffer *buf, const char *str)
 }
 
 #define RENDER_BUFFER \
-    struct Render *arg = arrayRender(0,1); \
+    struct Render *arg = deargRender(1); \
     int size = arg->vertex+arg->element+arg->feedback; \
-    int *buf = arrayCmdInt(0,size); \
+    int *buf = deargCmdInt(size); \
     struct Buffer *vertex[arg->vertex]; \
     struct Buffer *element[arg->element]; \
     struct Buffer *feedback[arg->feedback]; \
@@ -167,12 +162,10 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     for (int i = 0; i < arg->element; i++) element[i] = arrayBuffer(buf[arg->vertex+i],1); \
     for (int i = 0; i < arg->feedback; i++) feedback[i] = arrayBuffer(buf[arg->vertex+arg->element+i],1);
 
-#define RENDER_RELOC relocRender(1); relocCmdInt(size);
-
 #define RENDER_LOCK(WAIT,BUF,COND,LOCK) \
-    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; RENDER_RELOC return Continue;} \
-    if (state-- == 0) {RENDER_RELOC return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
-    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; RENDER_RELOC return Continue;}
+    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; return Continue;} \
+    if (state-- == 0) {return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
+    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; return Continue;}
 
 enum Action renderLock(int state)
 {
@@ -203,7 +196,6 @@ enum Action renderWrap(int state)
     if (!arg->element && arg->vertex) for (int i = 0; i < arg->feedback; i++) {
         if (feedback[i]->done > vertex[0]->done) exitErrstr("%s too done\n",arg->name);
         if (feedback[i]->room < vertex[0]->done) {enqueWrap(arg->vertex+arg->element+i,vertex[0]->done); reque = 1;}}
-    if (reque) {RENDER_RELOC}
     return (reque?Reque:Advance);
 }
 
@@ -265,7 +257,7 @@ enum Action renderWait(int state)
     glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT_AVAILABLE, &count);
     if (count == GL_FALSE) count = 0;
     else glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT, &count);
-    if (feedback[0]->done+count < arg->draw) {RENDER_RELOC return Defer;}
+    if (feedback[0]->done+count < arg->draw) return Defer;
     if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = arg->draw;
     return Advance;
@@ -298,7 +290,6 @@ enum Action renderUnlock(int state)
     for (int i = 0; i < arg->vertex; i++) vertex[i]->read -= 1;
     for (int i = 0; i < arg->element; i++) element[i]->read -= 1;
     for (int i = 0; i < arg->feedback; i++) feedback[i]->write -= 1;
-    delocRender(1); delocCmdInt(size);
     return Advance;
 }
 

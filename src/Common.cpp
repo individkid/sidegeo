@@ -218,6 +218,8 @@ float *invmat(float *u, int n)
     return u;
 }
 
+void commandBefore();
+void commandAfter();
 void commandSignal();
 void commandConsume(void *arg);
 int commandDelay();
@@ -255,7 +257,7 @@ inline bool operator!=(const Signal &left, const Signal &right) {return false;}
 inline bool operator!=(const Sound &left, const Sound &right) {return false;}
 inline bool operator!=(const Shape &left, const Shape &right) {return false;}
 
-DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,0,0,commandDelay,commandNodelay)
+DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdInt,int,CmnCommand)
 DEFINE_STAGE(CmnCmdFloat,MyGLfloat,CmnCmdInt)
@@ -292,6 +294,7 @@ DEFINE_LOCAL(Cluster,int)
 DEFINE_LOCAL(Layer,int)
 DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(Machine,Machine)
+DEFINE_LOCAL(Redo,struct QueueBase *)
 
 DEFINE_LOCAL(Buffer,struct Buffer)
 DEFINE_LOCAL(File,struct File)
@@ -307,7 +310,6 @@ DEFINE_STAGE(Command,Command,Commands)
 DEFINE_EXTRA(CmdInt,int,Command)
 DEFINE_EXTRA(CmdFloat,MyGLfloat,CmdInt)
 DEFINE_EXTRA(CmdByte,char,CmdFloat)
-DEFINE_EXTRA(CmdCmd,Command,CmdByte)
 
 DEFINE_SOURCE(CmdOutputs,CmnOutputs,Commands)
 DEFINE_STAGE(CmdOutput,char,CmdOutputs)

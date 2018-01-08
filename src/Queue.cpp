@@ -62,4 +62,17 @@ int sizeQueueBase(struct QueueBase *ptr)
     return ptr->size();
 }
 
+void redoQueueBase(struct QueueBase *ptr)
+{
+    ptr->redo();
+}
+void endoQueueBase(struct QueueBase *ptr)
+{
+    ptr->endo();
+}
+void dedoQueueBase(struct QueueBase *ptr)
+{
+    ptr->dedo();
+}
+
 EXTERNCEND
