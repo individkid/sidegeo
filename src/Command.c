@@ -64,6 +64,12 @@ void enqueCommand(Command cmd)
     enqueMachine(command);
 }
 
+void followCommand(Command cmd)
+{
+    *enlocVoid(1) = cmd;
+    followMachine(command);
+}
+
 void commandSignal()
 {
     glfwPostEmptyEvent();

@@ -53,6 +53,7 @@ void enqueBuffer(int sub, int todo, int done, void *data);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
+void followCommand(Command cmd);
 void enqueShader(enum Shader shader, int file, Machine follow, enum Lock lock);
 
 void inject()
@@ -111,7 +112,64 @@ void configureForce()
 
 void displayResponse()
 {
-    // display sends face or frame event with enqueDishader response
+}
+
+#define DISPLAY_DELOC \
+    int wait = *delocCmdInt(1); \
+    int event = *delocCmdInt(1); \
+    int file = *delocCmdInt(1); \
+    int plane, inlen, outlen; \
+    if (file != Inflate) { \
+    plane = *delocCmdInt(1); \
+    inlen = *delocCmdInt(1); \
+    outlen = *delocCmdInt(1);} \
+    int inbuf[inlen]; memcpy(inbuf,delocCmdInt(inlen),inlen); \
+    int outbuf[outlen]; memcpy(outbuf,delocCmdInt(outlen),outlen);
+
+#define DISPLAY_RELOC \
+    *enlocCmdInt(1) = wait; \
+    *enlocCmdInt(1) = event; \
+    *enlocCmdInt(1) = file; \
+    if (file != Inflate) { \
+    *enlocCmdInt(1) = plane; \
+    *enlocCmdInt(1) = inlen; \
+    memcpy(enlocCmdInt(inlen),inbuf,inlen); \
+    *enlocCmdInt(1) = outlen; \
+    memcpy(enlocCmdInt(outlen),outbuf,outlen);}
+
+#define DISPLAY_LOCK(WAIT,BUF,COND,LOCK) \
+    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; DISPLAY_RELOC return Continue;} \
+    if (state-- == 0) {DISPLAY_RELOC return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
+    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; DISPLAY_RELOC return Continue;}
+
+enum Action displayRequest(int state)
+{
+    DISPLAY_DELOC
+    struct File *ptr = arrayFile(file,1);
+    DISPLAY_LOCK(wait,ptr,ptr->read > 0 || ptr->write > 0,write)
+    if (state-- == 0) {
+    layer = tagReint();
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
+    *enlocCmdHsInt(1) = file;
+    if (file != Inflate) {
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = inlen;
+    memcpy(enlocCmdHsInt(inlen),inbuf,inlen);
+    *enlocCmdHsInt(1) = outlen;
+    memcpy(enlocCmdHsInt(outlen),outbuf,outlen);}
+    *enlocCmdHsCmd(1) = displayResponse;
+    *enlocCmdEvent(1) = event;
+    DISPLAY_RELOC
+    return Continue;}
+    if (state-- == 0) {
+    DISPLAY_RELOC
+    return (sizeReint(layer) == 0 ? Defer : Continue);}
+    ptr->write -= 1;
+    int size = sizeReint(layer);
+    enqueBuffer(file,size,0,arrayReint(layer,0,size));
+    followCommand(enqueDishader);
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
+    return Advance;
 }
 
 enum Action appendPlane(int state)
@@ -147,17 +205,30 @@ void configurePoint()
 
 void configureInflate()
 {
-    // inflate configuration sends inflate event with display response
+    *enlocCmdInt(1) = 0;
+    *enlocCmdInt(1) = (int)Fill;
+    relocCmdInt(1);
+    enqueMachine(displayRequest);
 }
 
 void configureFill()
 {
-    // fill configuration sends event with display response
+    *enlocCmdInt(1) = 0;
+    *enlocCmdInt(1) = (int)Fill;
+    int inlen = *arrayCmdInt(2,1);
+    int outlen = *arrayCmdInt(3+inlen,1);
+    relocCmdInt(3+inlen+outlen);
+    enqueMachine(displayRequest);
 }
 
 void configureHollow()
 {
-    // hollow configuration sends event with display response
+    *enlocCmdInt(1) = 0;
+    *enlocCmdInt(1) = (int)Hollow;
+    int inlen = *arrayCmdInt(2,1);
+    int outlen = *arrayCmdInt(3+inlen,1);
+    relocCmdInt(3+inlen+outlen);
+    enqueMachine(displayRequest);
 }
 
 void appendResponse()
