@@ -70,6 +70,12 @@ void followCommand(Command cmd)
     followMachine(command);
 }
 
+void deferCommand(Command cmd)
+{
+    *enlocDefer(1) = seqnum + sizeCluster();
+    enqueCommand(cmd);
+}
+
 void commandSignal()
 {
     glfwPostEmptyEvent();

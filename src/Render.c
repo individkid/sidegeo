@@ -43,9 +43,12 @@ extern float yPos;
 extern float zPos;
 extern enum Shader dishader;
 extern enum Shader pershader;
+int renderSwap = 0;
+int renderClear = 0;
 
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
+void deferCommand(Command cmd);
 DEFINE_MSGSTR(CmdOutput)
 
 size_t bufferType(int size)
@@ -228,8 +231,9 @@ enum Action renderDraw(int state)
         glEnableVertexAttribArray(vertex[i]->loc);
     if (arg->element)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element[0]->handle);
-    if (!arg->feedback)
+    if (renderClear == 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        renderClear = 0;}
     if (arg->element) {
         size_t size = element[0]->dimn*bufferType(element[0]->type);
         glDrawElements(code[arg->shader].input, todo*element[0]->dimn, element[0]->type, (void *)(done*size));} else
@@ -246,7 +250,8 @@ enum Action renderDraw(int state)
     for (int i = 0; i < arg->feedback; i++)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, 0, 0, 0);
     glUseProgram(0);
-    if (!arg->feedback) glfwSwapBuffers(windowHandle);
+    if (renderSwap == 1) glfwSwapBuffers(windowHandle);
+    if (renderSwap > 0) renderSwap -= 1;
     return Advance;
 }
 
@@ -369,6 +374,9 @@ void enqueShader(enum Shader shader, int file, Machine follow, enum Lock lock)
 
 void enqueDishader()
 {
+    if (renderSwap > 0 || renderClear > 0) {deferCommand(enqueDishader); return;}
+    renderSwap = sizeFile();
+    renderClear = 1;
     for (int i = 0; i < sizeFile(); i++) enqueShader(dishader,i,0,0);
 }
 

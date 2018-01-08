@@ -241,6 +241,7 @@ void appendResponse()
 enum Action sculptFollow(int state)
 {
     // copy adplane feedback to enlocReint(layer)
+    return Advance;
 }
 
 #define SCULPT_ENLOC(STR) \
