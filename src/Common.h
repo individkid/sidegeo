@@ -237,6 +237,11 @@ void msgstr##NAME(const char *fmt, ...) \
 #define BRANCH(VAL) continue; case(VAL):
 #define DEFAULT(SMT) break; default: SMT break;} break;}
 
+#define LOCK(WAIT,BUF,COND,LOCK) \
+    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; return Continue;} \
+    if (state-- == 0) {return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
+    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; return Continue;}
+
 enum Motion motionof(char code);
 char alphaof(char code);
 int indexof(char code);

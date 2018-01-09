@@ -159,7 +159,7 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
-#define RENDER_BUFFER \
+#define RENDER_DEQUE \
     struct Render *arg = deargRender(1); \
     int size = arg->vertex+arg->element+arg->feedback; \
     int *buf = deargCmdInt(size); \
@@ -170,27 +170,22 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     for (int i = 0; i < arg->element; i++) element[i] = arrayBuffer(buf[arg->vertex+i],1); \
     for (int i = 0; i < arg->feedback; i++) feedback[i] = arrayBuffer(buf[arg->vertex+arg->element+i],1);
 
-#define RENDER_LOCK(WAIT,BUF,COND,LOCK) \
-    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; return Continue;} \
-    if (state-- == 0) {return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
-    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; return Continue;}
-
 enum Action renderLock(int state)
 {
-    RENDER_BUFFER
+    RENDER_DEQUE
     struct File *file = arrayFile(arg->file,1);
-    if (arg->lock == Read) {RENDER_LOCK(arg->wait,file,file->read > 0,read)}
-    if (arg->lock == Write) {RENDER_LOCK(arg->wait,file,file->read > 0 || file->write > 0,write)}
-    for (int i = 0; i < arg->vertex; i++) {RENDER_LOCK(arg->wait,vertex[i],vertex[i]->write > 0,read)}
-    for (int i = 0; i < arg->element; i++) {RENDER_LOCK(arg->wait,element[i],element[i]->write > 0,read)}
-    for (int i = 0; i < arg->feedback; i++) {RENDER_LOCK(arg->wait,feedback[i],feedback[i]->write > 0 || feedback[i]->read > 0,write)}
+    if (arg->lock == Read) {LOCK(arg->wait,file,file->read > 0,read)}
+    if (arg->lock == Write) {LOCK(arg->wait,file,file->read > 0 || file->write > 0,write)}
+    for (int i = 0; i < arg->vertex; i++) {LOCK(arg->wait,vertex[i],vertex[i]->write > 0,read)}
+    for (int i = 0; i < arg->element; i++) {LOCK(arg->wait,element[i],element[i]->write > 0,read)}
+    for (int i = 0; i < arg->feedback; i++) {LOCK(arg->wait,feedback[i],feedback[i]->write > 0 || feedback[i]->read > 0,write)}
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = 0;
     return Advance;
 }
 
 enum Action renderWrap(int state)
 {
-    RENDER_BUFFER
+    RENDER_DEQUE
     for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
     for (int i = 0; i < arg->element; i++) exitErrbuf(element[i],arg->name);
     for (int i = 0; i < arg->feedback; i++) exitErrbuf(feedback[i],arg->name);
@@ -209,7 +204,7 @@ enum Action renderWrap(int state)
 
 enum Action renderDraw(int state)
 {
-    RENDER_BUFFER
+    RENDER_DEQUE
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
     msgstrCmdOutput("\rhello draw %d %d %d\n",arg->vertex,arg->element,arg->feedback);
@@ -257,7 +252,7 @@ enum Action renderDraw(int state)
 
 enum Action renderWait(int state)
 {
-    RENDER_BUFFER
+    RENDER_DEQUE
     if (!arg->feedback) return Advance;
     if (arg->element && feedback[0]->done == element[0]->done) return Advance;
     if (!arg->element && feedback[0]->done == vertex[0]->done) return Advance;
@@ -273,7 +268,7 @@ enum Action renderWait(int state)
 
 enum Action renderPierce(int state)
 {
-    RENDER_BUFFER
+    RENDER_DEQUE
     if (arg->feedback != 1) exitErrstr("pierce too feedback\n");
     int dimn = feedback[0]->dimn;
     int done = feedback[0]->done;
@@ -294,7 +289,7 @@ enum Action renderPierce(int state)
 
 enum Action renderUnlock(int state)
 {
-    RENDER_BUFFER
+    RENDER_DEQUE
     for (int i = 0; i < arg->vertex; i++) vertex[i]->read -= 1;
     for (int i = 0; i < arg->element; i++) element[i]->read -= 1;
     for (int i = 0; i < arg->feedback; i++) feedback[i]->write -= 1;

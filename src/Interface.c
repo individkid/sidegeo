@@ -45,6 +45,7 @@ extern int ySiz;
 extern float slope;
 extern float aspect;
 extern int layer;
+extern enum Shader dishader;
 
 void displayClick(GLFWwindow *window, int button, int action, int mods);
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
@@ -111,18 +112,21 @@ void configureForce()
 
 void displayResponse()
 {
+    int tag = *delocCmdInt(1);
+    if (sizeReint(tag) == 0) {
+    int len = *delocCmdInt(1);
+    memcpy(enlocReint(tag,len),delocCmdInt(len),len);}
+    else *arrayReint(tag,0,1) = 1;
 }
 
-#define DISPLAY_ENLOC(EVENT) \
-    *enlocCmdInt(1) = 0; \
+#define DISPLAY_RELOC(EVENT) \
+    *enlocCmdInt(1) = 0; /*topo lock*/ \
     *enlocCmdInt(1) = (int)EVENT; \
-    relocCmdInt(1); \
-    if (event != Inflate) { \
-    relocCmdInt(1); \
-    int inlen = *relocCmdInt(1); \
-    relocCmdInt(inlen); \
-    int outlen = *relocCmdInt(1); \
-    relocCmdInt(outlen);} \
+    relocCmdInt(1); /*file*/ \
+    if (EVENT != Inflate) { \
+    relocCmdInt(1); /*base plane*/ \
+    relocCmdInt(*relocCmdInt(1)); /*inside planes*/ \
+    relocCmdInt(*relocCmdInt(1));} /*outside planes*/ \
     enqueMachine(displayRequest);
 
 #define DISPLAY_DELOC \
@@ -139,19 +143,15 @@ void displayResponse()
     outlen = *deargCmdInt(1); \
     memcpy(outbuf,deargCmdInt(outlen),outlen);}
 
-#define DISPLAY_LOCK(WAIT,BUF,COND,LOCK) \
-    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; return Continue;} \
-    if (state-- == 0) {return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
-    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; return Continue;}
-
 enum Action displayRequest(int state)
 {
     DISPLAY_DELOC
     struct File *ptr = arrayFile(file,1);
-    DISPLAY_LOCK(wait,ptr,ptr->read > 0 || ptr->write > 0,write)
+    LOCK(wait,ptr,ptr->read > 0 || ptr->write > 0,write)
     if (state-- == 0) {
     layer = tagReint();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
+    *enlocCmdHsInt(1) = layer;
     *enlocCmdHsInt(1) = file;
     if (file != Inflate) {
     *enlocCmdHsInt(1) = plane;
@@ -160,15 +160,42 @@ enum Action displayRequest(int state)
     *enlocCmdHsInt(1) = outlen;
     memcpy(enlocCmdHsInt(outlen),outbuf,outlen);}
     *enlocCmdHsCmd(1) = displayResponse;
-    *enlocCmdEvent(1) = event;
+    *enlocCmdEvent(1) = event; // Fill Hollow or Inflate
+    *enlocReint(layer,1) = 0;
+    return Continue;}
+    if (state-- == 0) {
+    return (arrayReint(layer,0,1) == 0 ? Defer : Continue);}
+    if (state-- == 0) {
+    if (sizeReint(layer) != 1) exitErrstr("layer too size\n");
+    delocReint(layer,1);
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = displayResponse;
+    *enlocCmdEvent(1) = (dishader == Diplane ? Face : Frame);
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     ptr->write -= 1;
+    enum Data data = (dishader == Diplane ? FaceSub : FrameSub);
     int size = sizeReint(layer);
-    enqueBuffer(file,size,0,arrayReint(layer,0,size),enqueDishader);
+    enqueBuffer(ptr->buffer[data],size,0,arrayReint(layer,0,size),enqueDishader);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     return Advance;
+}
+
+void configureInflate()
+{
+    DISPLAY_RELOC(Inflate)
+}
+
+void configureFill()
+{
+    DISPLAY_RELOC(Fill)
+}
+
+void configureHollow()
+{
+    DISPLAY_RELOC(Hollow)
 }
 
 enum Action appendPlane(int state)
@@ -200,34 +227,6 @@ void configurePoint()
 {
     // point configuration kicks off collectPoint followed by appendPlane
     // or allows collectPoint to proceed
-}
-
-void configureInflate()
-{
-    *enlocCmdInt(1) = 0;
-    *enlocCmdInt(1) = (int)Inflate;
-    relocCmdInt(1);
-    enqueMachine(displayRequest);
-}
-
-void configureFill()
-{
-    *enlocCmdInt(1) = 0;
-    *enlocCmdInt(1) = (int)Fill;
-    int inlen = *arrayCmdInt(2,1);
-    int outlen = *arrayCmdInt(3+inlen,1);
-    relocCmdInt(3+inlen+outlen);
-    enqueMachine(displayRequest);
-}
-
-void configureHollow()
-{
-    *enlocCmdInt(1) = 0;
-    *enlocCmdInt(1) = (int)Hollow;
-    int inlen = *arrayCmdInt(2,1);
-    int outlen = *arrayCmdInt(3+inlen,1);
-    relocCmdInt(3+inlen+outlen);
-    enqueMachine(displayRequest);
 }
 
 void appendResponse()
