@@ -298,8 +298,6 @@ DEFINE_LOCAL(Redo,struct QueueBase *)
 
 DEFINE_LOCAL(Buffer,struct Buffer)
 DEFINE_LOCAL(File,struct File)
-DEFINE_LOCAL(Void,Command)
-DEFINE_LOCAL(Render,struct Render)
 
 DEFINE_TRUE(Reint,int,int)
 DEFINE_TRUE(Refloat,int,MyGLfloat)
@@ -310,6 +308,8 @@ DEFINE_STAGE(Command,Command,Commands)
 DEFINE_EXTRA(CmdInt,int,Command)
 DEFINE_EXTRA(CmdFloat,MyGLfloat,CmdInt)
 DEFINE_EXTRA(CmdByte,char,CmdFloat)
+DEFINE_EXTRA(Void,Command,CmdByte)
+DEFINE_EXTRA(Render,struct Render,Void)
 
 DEFINE_SOURCE(CmdOutputs,CmnOutputs,Commands)
 DEFINE_STAGE(CmdOutput,char,CmdOutputs)

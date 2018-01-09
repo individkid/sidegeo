@@ -305,8 +305,6 @@ DECLARE_LOCAL(Redo,struct QueueBase *)
 
 DECLARE_LOCAL(Buffer,struct Buffer)
 DECLARE_LOCAL(File,struct File)
-DECLARE_LOCAL(Void,Command)
-DECLARE_LOCAL(Render,struct Render)
 
 DECLARE_TRUE(Reint,int,int)
 DECLARE_TRUE(Refloat,int,MyGLfloat)
@@ -317,6 +315,8 @@ DECLARE_STAGE(Command,Command)
 DECLARE_EXTRA(CmdInt,int)
 DECLARE_EXTRA(CmdFloat,MyGLfloat)
 DECLARE_EXTRA(CmdByte,char)
+DECLARE_LOCAL(Void,Command)
+DECLARE_LOCAL(Render,struct Render)
 
 DECLARE_SOURCE(CmdOutputs)
 DECLARE_STAGE(CmdOutput,char)

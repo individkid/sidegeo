@@ -48,6 +48,7 @@ int renderClear = 0;
 
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
+void enqueCommand(Command cmd);
 void deferCommand(Command cmd);
 DEFINE_MSGSTR(CmdOutput)
 
@@ -111,13 +112,17 @@ void enqueWrap(int sub, int room)
     *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
 }
 
+#define DEQUE_BUFFER \
+    int sub = *deargCmdInt(1); \
+    struct Buffer *buffer = arrayBuffer(sub,1); \
+    int todo = *deargCmdInt(1); \
+    int done = *deargCmdInt(1); \
+    char *data = deargCmdByte(todo); \
+    Command cmd = *deargVoid(1);
+
 enum Action dequeBuffer(int state)
 {
-    int sub = *deargCmdInt(1);
-    struct Buffer *buffer = arrayBuffer(sub,1);
-    int todo = *deargCmdInt(1);
-    int done = *deargCmdInt(1);
-    char *data = deargCmdByte(todo);
+    DEQUE_BUFFER
     if (state-- == 0) {
         return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
     if (state-- == 0) {
@@ -132,10 +137,11 @@ enum Action dequeBuffer(int state)
     glBindBuffer(GL_ARRAY_BUFFER,0);
     if (buffer->done < done+todo) buffer->done = done+todo;
     buffer->write--;
+    enqueCommand(cmd);
     return Advance;
 }
 
-void enqueBuffer(int sub, int todo, int done, void *data)
+void enqueBuffer(int sub, int todo, int done, void *data, Command cmd)
 {
     if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
     *enlocCmdInt(1) = sub;
@@ -144,6 +150,7 @@ void enqueBuffer(int sub, int todo, int done, void *data)
     struct Buffer *buffer = arrayBuffer(sub,1);
     int size = buffer->dimn*bufferType(buffer->type);
     memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
+    *enlocVoid(1) = cmd;
     enqueMachine(dequeBuffer);
 }
 

@@ -49,11 +49,10 @@ extern int layer;
 void displayClick(GLFWwindow *window, int button, int action, int mods);
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
 struct File *setupFile(int file);
-void enqueBuffer(int sub, int todo, int done, void *data);
+void enqueBuffer(int sub, int todo, int done, void *data, Command cmd);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
-void followCommand(Command cmd);
 void enqueShader(enum Shader shader, int file, Machine follow, enum Lock lock);
 
 void inject()
@@ -102,11 +101,11 @@ void configureForce()
     SWITCH(buffer->type,GL_UNSIGNED_INT) {
         GLuint buf[bufsiz];
         for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        enqueBuffer(file->buffer[data],todo,done,buf);}
+        enqueBuffer(file->buffer[data],todo,done,buf,0);}
     CASE(GL_FLOAT) {
         GLfloat buf[bufsiz];
         for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        enqueBuffer(file->buffer[data],todo,done,buf);}
+        enqueBuffer(file->buffer[data],todo,done,buf,0);}
     DEFAULT(exitErrstr("invalid buffer type\n");)
 }
 
@@ -167,8 +166,7 @@ enum Action displayRequest(int state)
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     ptr->write -= 1;
     int size = sizeReint(layer);
-    enqueBuffer(file,size,0,arrayReint(layer,0,size));
-    followCommand(enqueDishader);
+    enqueBuffer(file,size,0,arrayReint(layer,0,size),enqueDishader);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     return Advance;
 }
@@ -310,34 +308,7 @@ void hollowClick()
 #define NUM_SIDES 3
 
 double sqrt(double x);
-
-enum Action dequeBuffer(int state);
-size_t bufferType(int size);
-void enqueMachine(Machine machine);
-void followMachine(Machine machine);
-
-enum Action bringupEmpty(int state)
-{
-    return Advance;
-}
-
-void bringupBuffer(int sub, int todo, int done, void *data)
-{
-    if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
-    *enlocCmdInt(1) = sub;
-    *enlocCmdInt(1) = todo;
-    *enlocCmdInt(1) = done;
-    struct Buffer *buffer = arrayBuffer(sub,1);
-    int size = buffer->dimn*bufferType(buffer->type);
-    memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
-    followMachine(dequeBuffer);
-}
-
-enum Action bringupShader(int state)
-{
-    enqueDishader();
-    return Advance;
-}
+void glueMachine();
 
 void bringupBuiltin()
 {
@@ -402,12 +373,10 @@ void bringupBuiltin()
     };
 
     struct File *file = setupFile(0);
-    enqueMachine(bringupEmpty);
-    bringupBuffer(file->buffer[PlaneBuf],NUM_PLANES,0,plane);
-    bringupBuffer(file->buffer[VersorBuf],NUM_PLANES,0,versor);
-    bringupBuffer(file->buffer[FaceSub],NUM_FACES,0,face);
-    bringupBuffer(file->buffer[PointSub],NUM_POINTS,0,vertex);
-    bringupBuffer(file->buffer[SideSub],NUM_SIDES,0,wrt);
-    followMachine(bringupShader);
+    enqueBuffer(file->buffer[PlaneBuf],NUM_PLANES,0,plane,0);
+    enqueBuffer(file->buffer[VersorBuf],NUM_PLANES,0,versor,0); glueMachine();
+    enqueBuffer(file->buffer[FaceSub],NUM_FACES,0,face,0); glueMachine();
+    enqueBuffer(file->buffer[PointSub],NUM_POINTS,0,vertex,0); glueMachine();
+    enqueBuffer(file->buffer[SideSub],NUM_SIDES,0,wrt,enqueDishader); glueMachine();
 }
 #endif

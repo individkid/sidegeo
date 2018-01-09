@@ -50,6 +50,13 @@ void followMachine(Machine machine)
     *enlocMachine(1) = machine;
 }
 
+void glueMachine()
+{
+    unlocArgument(1);
+    *arrayCluster(sizeCluster()-1,1) += 1;
+    unlocLayer(1);
+}
+
 enum Action command(int state)
 {
     Command cmd = *delocVoid(1);
@@ -62,12 +69,6 @@ void enqueCommand(Command cmd)
 {
     *enlocVoid(1) = cmd;
     enqueMachine(command);
-}
-
-void followCommand(Command cmd)
-{
-    *enlocVoid(1) = cmd;
-    followMachine(command);
 }
 
 void deferCommand(Command cmd)
@@ -96,13 +97,11 @@ void commandDedo()
 
 void commandBefore()
 {
-    *enlocRedo(1) = ptrBuffer();
-    *enlocRedo(1) = ptrFile();
-    *enlocRedo(1) = ptrVoid();
-    *enlocRedo(1) = ptrRender();
     *enlocRedo(1) = ptrCmdInt();
     *enlocRedo(1) = ptrCmdFloat();
     *enlocRedo(1) = ptrCmdByte();
+    *enlocRedo(1) = ptrVoid();
+    *enlocRedo(1) = ptrRender();
 }
 
 void commandAfter()
