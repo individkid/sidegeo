@@ -314,7 +314,12 @@ DEFINE_EXTRA(Render,struct Render,Void)
 DEFINE_SOURCE(CmdOutputs,CmnOutputs,Commands)
 DEFINE_STAGE(CmdOutput,char,CmdOutputs)
 
-DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdOutputs)
+DEFINE_SOURCE(CmdProcesses,CmnProcesses,CmdOutputs)
+DEFINE_STAGE(CmdOption,char,CmdProcesses)
+DEFINE_STAGE(CmdConfigure,char,CmdOption)
+DEFINE_STAGE(CmdConfigurer,int,CmdConfigure)
+
+DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdProcesses)
 DEFINE_STAGE(CmdEvent,enum Event,CmdHaskells)
 DEFINE_STAGE(CmdHsCmd,Command,CmdEvent)
 DEFINE_STAGE(CmdHsInt,int,CmdHsCmd)

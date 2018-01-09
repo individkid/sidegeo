@@ -326,6 +326,11 @@ DECLARE_LOCAL(Render,struct Render)
 DECLARE_SOURCE(CmdOutputs)
 DECLARE_STAGE(CmdOutput,char)
 
+DECLARE_SOURCE(CmdProcesses)
+DECLARE_STAGE(CmdOption,char)
+DECLARE_STAGE(CmdConfigure,char)
+DECLARE_STAGE(CmdConfigurer,int)
+
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,enum Event)
 DECLARE_STAGE(CmdHsCmd,Command)

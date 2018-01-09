@@ -263,6 +263,8 @@ enum Action sculptFollow(int state)
     int len = *deargCmdInt(1); \
     char str[len]; memcpy(str,deargCmdByte(len),len);
 
+DEFINE_MSGSTR(CmdConfigure)
+
 enum Action sculptRegion(int state)
 {
     SCULPT_DELOC
@@ -284,7 +286,15 @@ enum Action sculptRegion(int state)
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     arrayFile(file,1)->read -= 1;
-    // append configuration and polyant to file
+    *enlocCmdConfigurer(1) = file;
+    memcpy(enlocCmdConfigure(len),str,len);
+    msgstrCmdConfigure(" %d,",plane);
+    int inlen = *delocReint(layer,1);
+    for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",*delocReint(layer,1));
+    msgstrCmdConfigure(",");
+    int outlen = *delocReint(layer,1);
+    for (int i = 0; i < outlen; i++) msgstrCmdConfigure(" %d",*delocReint(layer,1));
+    msgstrCmdConfigure("\n");
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     return Advance;
 }
