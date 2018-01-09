@@ -113,7 +113,8 @@ void enqueWrap(int sub, int room)
 
 enum Action dequeBuffer(int state)
 {
-    struct Buffer *buffer = arrayBuffer(*deargCmdInt(1),1);
+    int sub = *deargCmdInt(1);
+    struct Buffer *buffer = arrayBuffer(sub,1);
     int todo = *deargCmdInt(1);
     int done = *deargCmdInt(1);
     char *data = deargCmdByte(todo);
@@ -121,7 +122,7 @@ enum Action dequeBuffer(int state)
         return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
     if (state-- == 0) {
         buffer->write++;
-        if (buffer->room < done+todo) enqueWrap(*arrayCmdInt(0,1),done+todo);
+        if (buffer->room < done+todo) enqueWrap(sub,done+todo);
         return Continue;}
     if (state-- == 0) {
         return (buffer->room < done+todo ? Defer : Continue);}
