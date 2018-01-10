@@ -46,6 +46,7 @@ extern float slope;
 extern float aspect;
 extern int layer;
 extern enum Shader dishader;
+extern float basisMat[27];
 
 void displayClick(GLFWwindow *window, int button, int action, int mods);
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
@@ -54,7 +55,9 @@ void enqueBuffer(int sub, int todo, int done, void *data, Command cmd);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
-void enqueShader(enum Shader shader, int file, Machine follow, enum Lock lock);
+void enqueShader(enum Shader shader, int file, Machine follow, enum Share share);
+
+DEFINE_MSGSTR(CmdConfigure)
 
 void inject()
 {
@@ -129,7 +132,7 @@ void displayResponse()
     relocCmdInt(*relocCmdInt(1));} /*outside planes*/ \
     enqueMachine(displayRequest);
 
-#define DISPLAY_DELOC \
+#define DISPLAY_DEARG \
     int wait = *deargCmdInt(1); \
     int event = *deargCmdInt(1); \
     int file = *deargCmdInt(1); \
@@ -145,9 +148,9 @@ void displayResponse()
 
 enum Action displayRequest(int state)
 {
-    DISPLAY_DELOC
+    DISPLAY_DEARG
     struct File *ptr = arrayFile(file,1);
-    LOCK(wait,ptr,ptr->read > 0 || ptr->write > 0,write)
+    LOCK(wait,ptr->lock,Write)
     if (state-- == 0) {
     layer = tagReint();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
@@ -175,7 +178,7 @@ enum Action displayRequest(int state)
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
-    ptr->write -= 1;
+    ptr->lock.write -= 1;
     enum Data data = (dishader == Diplane ? FaceSub : FrameSub);
     int size = sizeReint(layer);
     enqueBuffer(ptr->buffer[data],size,0,arrayReint(layer,0,size),enqueDishader);
@@ -198,6 +201,9 @@ void configureHollow()
     DISPLAY_RELOC(Hollow)
 }
 
+#define APPEND_DEARG \
+
+
 enum Action appendPlane(int state)
 {
     // do wsw to add plane to file's buffer
@@ -206,10 +212,16 @@ enum Action appendPlane(int state)
     return Advance;
 }
 
-void refineClick()
+void refineClick(int file, float xPos, float yPos, float zPos)
 {
-    // refine click finds random plane through tweak of pierce point
-    // and kicks off appendPlane
+    struct File *ptr = arrayFile(file,1);
+    float u[3]; u[0] = xPos; u[1] = yPos; u[2] = zPos;
+    tweakvec(u,0,ptr->tweak,3);
+    float v[3] = {0};
+    tweakvec(v,1.0,1.0,3);
+    int versor;
+    basearrow(u,v,&versor,basisMat,3);
+    msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
 }
 
 void configurePlane()
@@ -219,7 +231,8 @@ void configurePlane()
 
 enum Action collectPoint(int state)
 {
-    // point configuration saves up three points to construct plane to append
+    // point configuration saves up three points to construct plane
+    // and kicks off appendPlane
     return Advance;
 }
 
@@ -243,18 +256,19 @@ enum Action sculptFollow(int state)
 }
 
 #define SCULPT_ENLOC(STR) \
-    relocCmdInt(2); /*pierce file, pierce plane*/ \
-    relocCmdFloat(3); /*pierce point*/ \
+    *enlocCmdInt(1) = file; \
+    *enlocCmdInt(1) = plane; \
+    *enlocCmdFloat(1) = xPos;  \
+    *enlocCmdFloat(1) = yPos;  \
+    *enlocCmdFloat(1) = zPos;  \
     *enlocCmdInt(1) = 0; /*wait sequence number*/ \
-    layer = tagReint(); \
-    if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
     const char *str = #STR; \
     int len = strlen(str); \
     *enlocCmdInt(1) = len; \
     memcpy(enlocCmdByte(len),str,len); \
     enqueMachine(sculptRegion);
 
-#define SCULPT_DELOC \
+#define SCULPT_DEARG \
     int file = *deargCmdInt(1); \
     int plane = *deargCmdInt(1); \
     int wait = *deargCmdInt(1); \
@@ -263,12 +277,12 @@ enum Action sculptFollow(int state)
     int len = *deargCmdInt(1); \
     char str[len]; memcpy(str,deargCmdByte(len),len);
 
-DEFINE_MSGSTR(CmdConfigure)
-
 enum Action sculptRegion(int state)
 {
-    SCULPT_DELOC
+    SCULPT_DEARG
     if (state-- == 0) {
+    layer = tagReint(); \
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
     enqueShader(Adplane,file,sculptFollow,Read);
     return Continue;}
     if (state-- == 0) {
@@ -285,7 +299,7 @@ enum Action sculptRegion(int state)
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
-    arrayFile(file,1)->read -= 1;
+    arrayFile(file,1)->lock.read -= 1;
     *enlocCmdConfigurer(1) = file;
     memcpy(enlocCmdConfigure(len),str,len);
     msgstrCmdConfigure(" %d,",plane);
@@ -299,12 +313,12 @@ enum Action sculptRegion(int state)
     return Advance;
 }
 
-void fillClick()
+void fillClick(int file, int plane, float xPos, float yPos, float zPos)
 {
     SCULPT_ENLOC(fill)
 }
 
-void hollowClick()
+void hollowClick(int file, int plane, float xPos, float yPos, float zPos)
 {
     SCULPT_ENLOC(hollow)
 }

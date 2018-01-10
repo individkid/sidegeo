@@ -105,28 +105,27 @@ enum Action dequeWrap(int state)
 void enqueWrap(int sub, int room)
 {
     struct Buffer *buffer = arrayBuffer(sub,1);
-    if (buffer->write == 0) exitErrstr("wrap not locked\n");
+    if (buffer->lock.write == 0) exitErrstr("wrap not locked\n");
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
     *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
 }
 
-#define DEQUE_BUFFER \
+#define BUFFER_DEARG \
     int sub = *deargCmdInt(1); \
     struct Buffer *buffer = arrayBuffer(sub,1); \
     int todo = *deargCmdInt(1); \
     int done = *deargCmdInt(1); \
+    int wait = *deargCmdInt(1); \
     char *data = deargCmdByte(todo); \
     Command cmd = *deargVoid(1);
 
 enum Action dequeBuffer(int state)
 {
-    DEQUE_BUFFER
+    BUFFER_DEARG
+    LOCK(wait,buffer->lock,Write)
     if (state-- == 0) {
-        return (buffer->read > 0 || buffer->write > 0 ? Defer : Continue);}
-    if (state-- == 0) {
-        buffer->write++;
         if (buffer->room < done+todo) enqueWrap(sub,done+todo);
         return Continue;}
     if (state-- == 0) {
@@ -136,7 +135,7 @@ enum Action dequeBuffer(int state)
     glBufferSubData(GL_ARRAY_BUFFER,done*size,todo*size,data);
     glBindBuffer(GL_ARRAY_BUFFER,0);
     if (buffer->done < done+todo) buffer->done = done+todo;
-    buffer->write--;
+    buffer->lock.write--;
     enqueCommand(cmd);
     return Advance;
 }
@@ -147,6 +146,7 @@ void enqueBuffer(int sub, int todo, int done, void *data, Command cmd)
     *enlocCmdInt(1) = sub;
     *enlocCmdInt(1) = todo;
     *enlocCmdInt(1) = done;
+    *enlocCmdInt(1) = 0; // wait sequence number
     struct Buffer *buffer = arrayBuffer(sub,1);
     int size = buffer->dimn*bufferType(buffer->type);
     memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
@@ -159,7 +159,7 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
-#define RENDER_DEQUE \
+#define RENDER_DEARG \
     struct Render *arg = deargRender(1); \
     int size = arg->vertex+arg->element+arg->feedback; \
     int *buf = deargCmdInt(size); \
@@ -172,20 +172,21 @@ void exitErrbuf(struct Buffer *buf, const char *str)
 
 enum Action renderLock(int state)
 {
-    RENDER_DEQUE
+    RENDER_DEARG
     struct File *file = arrayFile(arg->file,1);
-    if (arg->lock == Read) {LOCK(arg->wait,file,file->read > 0,read)}
-    if (arg->lock == Write) {LOCK(arg->wait,file,file->read > 0 || file->write > 0,write)}
-    for (int i = 0; i < arg->vertex; i++) {LOCK(arg->wait,vertex[i],vertex[i]->write > 0,read)}
-    for (int i = 0; i < arg->element; i++) {LOCK(arg->wait,element[i],element[i]->write > 0,read)}
-    for (int i = 0; i < arg->feedback; i++) {LOCK(arg->wait,feedback[i],feedback[i]->write > 0 || feedback[i]->read > 0,write)}
+    if (arg->share == Read) {LOCK(arg->wait,file->lock,Read)}
+    if (arg->share == Write) {LOCK(arg->wait,file->lock,Write)}
+    LOCK(arg->wait,code[arg->shader].lock,Read)
+    for (int i = 0; i < arg->vertex; i++) {LOCK(arg->wait,vertex[i]->lock,Read)}
+    for (int i = 0; i < arg->element; i++) {LOCK(arg->wait,element[i]->lock,Read)}
+    for (int i = 0; i < arg->feedback; i++) {LOCK(arg->wait,feedback[i]->lock,Write)}
     for (int i = 0; i < arg->feedback; i++) feedback[i]->done = 0;
     return Advance;
 }
 
 enum Action renderWrap(int state)
 {
-    RENDER_DEQUE
+    RENDER_DEARG
     for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
     for (int i = 0; i < arg->element; i++) exitErrbuf(element[i],arg->name);
     for (int i = 0; i < arg->feedback; i++) exitErrbuf(feedback[i],arg->name);
@@ -204,7 +205,7 @@ enum Action renderWrap(int state)
 
 enum Action renderDraw(int state)
 {
-    RENDER_DEQUE
+    RENDER_DEARG
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
     msgstrCmdOutput("\rhello draw %d %d %d\n",arg->vertex,arg->element,arg->feedback);
@@ -252,7 +253,7 @@ enum Action renderDraw(int state)
 
 enum Action renderWait(int state)
 {
-    RENDER_DEQUE
+    RENDER_DEARG
     if (!arg->feedback) return Advance;
     if (arg->element && feedback[0]->done == element[0]->done) return Advance;
     if (!arg->element && feedback[0]->done == vertex[0]->done) return Advance;
@@ -268,7 +269,7 @@ enum Action renderWait(int state)
 
 enum Action renderPierce(int state)
 {
-    RENDER_DEQUE
+    RENDER_DEARG
     if (arg->feedback != 1) exitErrstr("pierce too feedback\n");
     int dimn = feedback[0]->dimn;
     int done = feedback[0]->done;
@@ -289,10 +290,11 @@ enum Action renderPierce(int state)
 
 enum Action renderUnlock(int state)
 {
-    RENDER_DEQUE
-    for (int i = 0; i < arg->vertex; i++) vertex[i]->read -= 1;
-    for (int i = 0; i < arg->element; i++) element[i]->read -= 1;
-    for (int i = 0; i < arg->feedback; i++) feedback[i]->write -= 1;
+    RENDER_DEARG
+    code[arg->shader].lock.read -= 1;
+    for (int i = 0; i < arg->vertex; i++) vertex[i]->lock.read -= 1;
+    for (int i = 0; i < arg->element; i++) element[i]->lock.read -= 1;
+    for (int i = 0; i < arg->feedback; i++) feedback[i]->lock.write -= 1;
     return Advance;
 }
 
@@ -332,14 +334,14 @@ struct File *setupFile(int file)
     return arrayFile(file,1);
 }
 
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow, int sub, enum Lock lock)
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow, int sub, enum Share share)
 {
     struct Render *arg = enlocRender(1);
     int *buf = enlocCmdInt(vertex+element+feedback);
     struct File *file = setupFile(sub);
     arg->name = name;
     arg->file = sub;
-    arg->lock = lock;
+    arg->share = share;
     arg->shader = shader;
     arg->vertex = vertex;
     arg->element = element;
@@ -353,16 +355,16 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     followMachine(&renderUnlock);
 }
 
-void enqueShader(enum Shader shader, int file, Machine follow, enum Lock lock)
+void enqueShader(enum Shader shader, int file, Machine follow, enum Share share)
 {
-    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,follow,file,lock);}
-    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,follow,file,lock);}
-    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,follow,file,lock);}
-    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,follow,file,lock);}
-    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,follow,file,lock);}
-    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,follow,file,lock);}
-    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,follow,file,lock);}
-    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,follow,file,lock);}
+    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,follow,file,share);}
+    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,follow,file,share);}
+    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,follow,file,share);}
+    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,follow,file,share);}
+    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,follow,file,share);}
+    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,follow,file,share);}
+    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,follow,file,share);}
+    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,follow,file,share);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 

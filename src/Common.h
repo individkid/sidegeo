@@ -101,10 +101,16 @@ enum Shader { // one value per shader; state for bringup
     Replane, // reconstruct to versor 0
     Repoint, // reconstruct from versor 0
     Shaders};
-enum Lock {Zero,Read,Write};
+enum Share {Zero,Read,Write}; // lock type
+struct Lock {
+    int read; // count of readers
+    int write; // count of writers
+    int wait; // count of lock requests
+    int take; // count of lock acquires
+};
 struct Render {
     int file; // file of planes to render
-    enum Lock lock; // whether to lock file
+    enum Share share; // whether to lock file
     int draw; // waiting for shader
     int wait; // buffer sequence number
     int vertex; // number of input buffers que
@@ -124,10 +130,7 @@ struct Buffer {
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
-    int read; // count of readers
-    int write; // count of writers
-    int wait; // count of lock requests
-    int take; // count of lock acquires
+    struct Lock lock; // lock on buffer
 }; // argument to render functions
 enum Data {
     PlaneBuf, // per boundary distances above base plane
@@ -143,10 +146,8 @@ enum Data {
     HalfSub, // per plane prior vertices
     Datas};
 struct File {
-    int read; // read lock on haskell state
-    int write; // write lock on haskell state
-    int wait; // sequence number for lock requests
-    int take; // sequence number for lock acquires
+    MyGLfloat tweak;
+    struct Lock lock; // lock on topology in haskell
     int buffer[Datas]; // subscripts into buffer queue
 };
 
@@ -161,6 +162,7 @@ enum Uniform { // one value per uniform; no associated state
     Aspect, // y over x ratio of frustrum intercepts
     Uniforms};
 struct Code {
+    struct Lock lock;
     MyGLuint uniform[Uniforms];
     MyGLuint program;
     int input;
@@ -237,10 +239,10 @@ void msgstr##NAME(const char *fmt, ...) \
 #define BRANCH(VAL) continue; case(VAL):
 #define DEFAULT(SMT) break; default: SMT break;} break;}
 
-#define LOCK(WAIT,BUF,COND,LOCK) \
-    if (state-- == 0) {WAIT = BUF->wait; BUF->wait += 1; return Continue;} \
-    if (state-- == 0) {return ((COND) || BUF->take != WAIT ? Defer : Continue);} \
-    if (state-- == 0) {BUF->take += 1; BUF->LOCK += 1; return Continue;}
+#define LOCK(WAIT,LOCK,SHARE) \
+    if (state-- == 0) {WAIT = LOCK.wait; LOCK.wait += 1; return Continue;} \
+    if (state-- == 0) {return ((SHARE == Write && LOCK.read > 0) || LOCK.write > 0 || LOCK.take != WAIT ? Defer : Continue);} \
+    if (state-- == 0) {LOCK.take += 1; if (SHARE == Write) LOCK.write += 1; else LOCK.read += 1; return Continue;}
 
 enum Motion motionof(char code);
 char alphaof(char code);
@@ -266,6 +268,8 @@ float *crossvec(float *u, float *v);
 float detmat(float *u, int n);
 float *adjmat(float *u, int n);
 float *invmat(float *u, int n);
+float *tweakvec(float *u, float a, float b, int n);
+float *basearrow(float *u, float *v, int *i, float *b, int n);
 
 EXTERNCEND
 

@@ -21,6 +21,7 @@
 EXTERNCBEGIN
 
 #include <termios.h>
+#include <math.h>
 
 extern float invalid[2];
 
@@ -215,6 +216,34 @@ float *invmat(float *u, int n)
     float lim = det*invalid[1];
     for (int i = 0; i < m; i++) if (det<1.0 && v[i]>lim) exitErrstr("cannot invert matrix\n");
     for (int i = 0; i < m; i++) u[i] = v[i]/det;
+    return u;
+}
+
+float *tweakvec(float *u, float a, float b, int n)
+{
+    // find n dimensional vector in random direction with length between a and b
+    float w[n-1]; tweakvec(w,1.0,1.0,n-1);
+    float twopi = acos(0.0);
+    float inter; tweakvec(&inter,0.0,1.0,1);
+    float angle = twopi-acos(expf(logf(inter)*(1.0/(n-2.0))));
+    // exitErrstr if n == 0
+    // if n == 1,  find uniform random between a and b or -a and -b
+    // if n > 1, recurse to find n-1 dimensional vector in random direction with length between a and b
+    // find normalized recurse result
+    // find random h between -1 and 1 weighted such that probability of h is cos(pi*h/2)/2.
+    // note that integral from -1 to 1 of cos(pi*h/2)/2 is 1.
+    // choose random c between 0 and 1.
+    // find h such that integral from -1 to h of cos(pi*h/2)/2 is c.
+    // in other words, find h such that c = cos(pi*h/2)/2.
+    // or, find h = 2*acos(c)/pi 
+    return u;
+}
+
+float *basearrow(float *u, float *v, int *i, float *b, int n)
+{
+    // given feather u, arrow v, base points b, dimension n
+    // return distances of plane above base points in u
+    // and return index of base points in i
     return u;
 }
 
