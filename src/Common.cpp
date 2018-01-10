@@ -224,7 +224,7 @@ float *tweakvec(float *u, float a, float b, int n)
     if (n == 0) exitErrstr("tweak too dimension\n");
     if (n == 1) {*u = rand()/(float)RAND_MAX; return u;}
     // find n dimensional vector in random direction with length between a and b
-    float w[n-1]; tweakvec(w,1.0,1.0,n-1);
+    float w[(unsigned)(n-1)]; tweakvec(w,1.0,1.0,n-1);
     float quarter = acos(0.0);
     float choice; tweakvec(&choice,0.0,1.0,1);
     float angle = quarter-acos(powf(choice,1.0/(n-2.0)));
@@ -240,6 +240,21 @@ float *basearrow(float *u, float *v, int *i, float *b, int n)
     // given feather u, arrow v, base points b, dimension n
     // return distances of plane above base points in u
     // and return index of base points in i
+    *i = 0;
+    for (int j = 1; j < n; j++)
+    if (fabs(v[j]) > fabs(v[*i])) *i = j;
+    int k[n];
+    for (int j = 0; j < n; j++) k[j] = (*i+j)%n;
+    float x[n];
+    for (int j = 0; j < n; j++) x[j] = u[k[j]];
+    float y[n];
+    for (int j = 0; j < n; j++) y[j] = -v[k[j]]*x[0]/v[k[0]];
+    // x+y is on the base plane
+    for (int h = 0; h < n; h++) {
+        float a[n];
+        for (int j = 0; j < n; j++) a[j] = b[*i*n*n+h*n+k[j]];
+        // looking down (ignoring a[0] and x[0]) 
+    }
     return u;
 }
 
