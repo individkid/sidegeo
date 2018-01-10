@@ -221,21 +221,17 @@ float *invmat(float *u, int n)
 
 float *tweakvec(float *u, float a, float b, int n)
 {
+    if (n == 0) exitErrstr("tweak too dimension\n");
+    if (n == 1) {*u = rand()/(float)RAND_MAX; return u;}
     // find n dimensional vector in random direction with length between a and b
     float w[n-1]; tweakvec(w,1.0,1.0,n-1);
-    float twopi = acos(0.0);
-    float inter; tweakvec(&inter,0.0,1.0,1);
-    float angle = twopi-acos(expf(logf(inter)*(1.0/(n-2.0))));
-    // exitErrstr if n == 0
-    // if n == 1,  find uniform random between a and b or -a and -b
-    // if n > 1, recurse to find n-1 dimensional vector in random direction with length between a and b
-    // find normalized recurse result
-    // find random h between -1 and 1 weighted such that probability of h is cos(pi*h/2)/2.
-    // note that integral from -1 to 1 of cos(pi*h/2)/2 is 1.
-    // choose random c between 0 and 1.
-    // find h such that integral from -1 to h of cos(pi*h/2)/2 is c.
-    // in other words, find h such that c = cos(pi*h/2)/2.
-    // or, find h = 2*acos(c)/pi 
+    float quarter = acos(0.0);
+    float choice; tweakvec(&choice,0.0,1.0,1);
+    float angle = quarter-acos(powf(choice,1.0/(n-2.0)));
+    float magnitude = a+(rand()/(b-a));
+    for (int i = 0; i < n-1; i++) u[i] = w[i];
+    u[n-1] = sin(angle);
+    for (int i = 0; i < n; i++) u[i] *= magnitude;
     return u;
 }
 
