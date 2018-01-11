@@ -102,6 +102,7 @@ void commandBefore()
     *enlocRedo(1) = ptrCmdByte();
     *enlocRedo(1) = ptrVoid();
     *enlocRedo(1) = ptrRender();
+    *enlocRedo(1) = ptrUniform();
 }
 
 void commandAfter()

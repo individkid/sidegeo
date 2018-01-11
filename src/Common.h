@@ -101,6 +101,30 @@ enum Shader { // one value per shader; state for bringup
     Replane, // reconstruct to versor 0
     Repoint, // reconstruct from versor 0
     Shaders};
+enum Data { // render buffers
+    PlaneBuf, // per boundary distances above base plane
+    VersorBuf, // per boundary base selector
+    PointBuf, // shared point per boundary triple
+    PierceBuf, // on line from focal point
+    SideBuf, // vertices wrt prior planes
+    FaceSub, // subscripts into planes
+    FrameSub, // subscripts into points
+    PointSub, // every triple of planes
+    PlaneSub, // per plane triple of points
+    SideSub, // per vertex prior planes
+    HalfSub, // per plane prior vertices
+    Datas};
+enum Uniform { // one value per uniform
+    Invalid, // scalar indicating divide by near-zero
+    Basis, // 3 points on each base plane through origin
+    Affine, // rotation and translation of polytope
+    Feather, // point on plane to classify
+    Arrow, // normal to plane to classify
+    Cutoff, // cutoff plane z coordinate
+    Slope, // x over z frustrum slope
+    Aspect, // y over x ratio of frustrum intercepts
+    Uniforms};
+enum Struct {Square,Array,Scalar}; // uniform type
 enum Share {Zero,Read,Write}; // lock type
 struct Lock {
     int read; // count of readers
@@ -108,11 +132,18 @@ struct Lock {
     int wait; // count of lock requests
     int take; // count of lock acquires
 };
+struct Form {
+    int size; // number of uniform floats
+    enum Uniform form;
+    enum Struct type;
+    struct Lock lock;
+};
 struct Render {
     int file; // file of planes to render
     enum Share share; // whether to lock file
     int draw; // waiting for shader
     int wait; // buffer sequence number
+    int uniform; // number of uniforms to setup
     int vertex; // number of input buffers que
     int element; // primitives per output buffer
     int feedback; // number of output buffers on que
@@ -132,35 +163,11 @@ struct Buffer {
     int dimn; // elements per vector
     struct Lock lock; // lock on buffer
 }; // argument to render functions
-enum Data {
-    PlaneBuf, // per boundary distances above base plane
-    VersorBuf, // per boundary base selector
-    PointBuf, // shared point per boundary triple
-    PierceBuf, // on line from focal point
-    SideBuf, // vertices wrt prior planes
-    FaceSub, // subscripts into planes
-    FrameSub, // subscripts into points
-    PointSub, // every triple of planes
-    PlaneSub, // per plane triple of points
-    SideSub, // per vertex prior planes
-    HalfSub, // per plane prior vertices
-    Datas};
 struct File {
     MyGLfloat tweak;
     struct Lock lock; // lock on topology in haskell
     int buffer[Datas]; // subscripts into buffer queue
 };
-
-enum Uniform { // one value per uniform; no associated state
-    Invalid, // scalar indicating divide by near-zero
-    Basis, // 3 points on each base plane through origin
-    Affine, // rotation and translation of polytope
-    Feather, // point on plane to classify
-    Arrow, // normal to plane to classify
-    Cutoff, // cutoff plane z coordinate
-    Slope, // x over z frustrum slope
-    Aspect, // y over x ratio of frustrum intercepts
-    Uniforms};
 struct Code {
     struct Lock lock;
     MyGLuint uniform[Uniforms];
@@ -324,8 +331,9 @@ DECLARE_STAGE(Command,Command)
 DECLARE_EXTRA(CmdInt,int)
 DECLARE_EXTRA(CmdFloat,MyGLfloat)
 DECLARE_EXTRA(CmdByte,char)
-DECLARE_LOCAL(Void,Command)
-DECLARE_LOCAL(Render,struct Render)
+DECLARE_EXTRA(Void,Command)
+DECLARE_EXTRA(Render,struct Render)
+DECLARE_EXTRA(Uniform,struct Form)
 
 DECLARE_SOURCE(CmdOutputs)
 DECLARE_STAGE(CmdOutput,char)

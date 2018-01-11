@@ -129,9 +129,9 @@ void leftTransform()
 
 void leftLeft()
 {
-    glUseProgram(code[pershader].program);
-    glUniformMatrix4fv(code[pershader].uniform[Affine],1,GL_FALSE,affineMata);
-    glUseProgram(0);
+    // glUseProgram(code[pershader].program);
+    // glUniformMatrix4fv(code[pershader].uniform[Affine],1,GL_FALSE,affineMata);
+    // glUseProgram(0);
 }
 
 void rightRight()
@@ -145,17 +145,17 @@ void rightRight()
 void rightLeft()
 {
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
-    glUseProgram(code[pershader].program);
-    glUniformMatrix4fv(code[pershader].uniform[Affine],1,GL_FALSE,affineMata);
-    glUseProgram(0);
+    // glUseProgram(code[pershader].program);
+    // glUniformMatrix4fv(code[pershader].uniform[Affine],1,GL_FALSE,affineMata);
+    // glUseProgram(0);
 }
 
 void transformRight()
 {
-    glUseProgram(code[pershader].program);
-    glUniform3f(code[pershader].uniform[Feather],xPos,yPos,zPos);
-    glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
-    glUseProgram(0);
+    // glUseProgram(code[pershader].program);
+    // glUniform3f(code[pershader].uniform[Feather],xPos,yPos,zPos);
+    // glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
+    // glUseProgram(0);
     enquePershader();
 }
 
@@ -198,9 +198,9 @@ void transformRotate()
     copymat(affineMata,affineMat,4);
     jumpmat(affineMata,affineMatb,4);
     matrixFixed(v); jumpmat(affineMata,v,4);
-    glUseProgram(code[dishader].program);
-    glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
-    glUseProgram(0);
+    // glUseProgram(code[dishader].program);
+    // glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
+    // glUseProgram(0);
     enqueDishader();
 }
 
@@ -212,9 +212,9 @@ void transformTranslate()
     copymat(affineMata,affineMat,4);
     jumpmat(affineMata,affineMatb,4);
     jumpmat(affineMata,u,4);
-    glUseProgram(code[dishader].program);
-    glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
-    glUseProgram(0);
+    // glUseProgram(code[dishader].program);
+    // glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
+    // glUseProgram(0);
     enqueDishader();
 }
 

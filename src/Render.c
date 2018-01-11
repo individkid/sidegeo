@@ -41,6 +41,8 @@ extern int qPos;
 extern float xPos;
 extern float yPos;
 extern float zPos;
+extern float affineMata[16];
+extern float slope;
 extern enum Shader dishader;
 extern enum Shader pershader;
 int renderSwap = 0;
@@ -68,6 +70,16 @@ int bufferPrimitive(int size)
     CASE(GL_TRIANGLES) retval = 3;
     CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
     DEFAULT(exitErrstr("unknown render primitive\n");)
+    return retval;
+}
+
+int uniformType(enum Struct type)
+{
+    int retval = 0;
+    SWITCH(type,Square) retval = 16;
+    CASE(Array) retval = 3;
+    CASE(Scalar) retval = 1;
+    DEFAULT(exitErrstr("unknown uniform type\n");)
     return retval;
 }
 
@@ -161,11 +173,15 @@ void exitErrbuf(struct Buffer *buf, const char *str)
 
 #define RENDER_DEARG \
     struct Render *arg = deargRender(1); \
-    int size = arg->vertex+arg->element+arg->feedback; \
-    int *buf = deargCmdInt(size); \
+    int siz = arg->vertex+arg->element+arg->feedback; \
+    int *buf = deargCmdInt(siz); \
     struct Buffer *vertex[arg->vertex]; \
     struct Buffer *element[arg->element]; \
     struct Buffer *feedback[arg->feedback]; \
+    struct Form *uniform = deargUniform(arg->uniform); \
+    siz = 0; for (int i = 0; i < arg->uniform; i++) \
+    siz += uniform[i].size*uniformType(uniform[i].type); \
+    MyGLfloat *floats = deargCmdFloat(siz); \
     for (int i = 0; i < arg->vertex; i++) vertex[i] = arrayBuffer(buf[i],1); \
     for (int i = 0; i < arg->element; i++) element[i] = arrayBuffer(buf[arg->vertex+i],1); \
     for (int i = 0; i < arg->feedback; i++) feedback[i] = arrayBuffer(buf[arg->vertex+arg->element+i],1);
@@ -177,6 +193,7 @@ enum Action renderLock(int state)
     if (arg->share == Read) {LOCK(arg->wait,file->lock,Read)}
     if (arg->share == Write) {LOCK(arg->wait,file->lock,Write)}
     LOCK(arg->wait,code[arg->shader].lock,Read)
+    for (int i = 0; i < arg->uniform; i++) {LOCK(arg->wait,uniform[i].lock,Write);}
     for (int i = 0; i < arg->vertex; i++) {LOCK(arg->wait,vertex[i]->lock,Read)}
     for (int i = 0; i < arg->element; i++) {LOCK(arg->wait,element[i]->lock,Read)}
     for (int i = 0; i < arg->feedback; i++) {LOCK(arg->wait,feedback[i]->lock,Write)}
@@ -216,6 +233,13 @@ enum Action renderDraw(int state)
     if (todo < 0) exitErrstr("%s too todo\n",arg->name);
     if (todo == 0) return Advance;
     glUseProgram(code[arg->shader].program);
+    for (int i = 0; i < arg->uniform; i++) {
+        int ident = code[arg->shader].uniform[uniform[i].form];
+        int size = uniform[i].size;
+        SWITCH(uniform[i].type,Square) glUniformMatrix4fv(ident,size,GL_FALSE,floats);
+        CASE(Array) glUniform3f(ident,floats[0],floats[1],floats[2]);
+        DEFAULT(exitErrstr("uniform too type\n");)
+        floats += uniform[i].size*uniformType(uniform[i].type);}
     for (int i = 0; i < arg->feedback; i++) {
         size_t size = feedback[i]->dimn*bufferType(feedback[i]->type);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle, done*size, todo*size);}
@@ -334,7 +358,7 @@ struct File *setupFile(int file)
     return arrayFile(file,1);
 }
 
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, enum Data *buffer, Machine follow, int sub, enum Share share)
+void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, int uniform, enum Data *buffer, Machine follow, int sub, enum Share share)
 {
     struct Render *arg = enlocRender(1);
     int *buf = enlocCmdInt(vertex+element+feedback);
@@ -346,6 +370,7 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     arg->vertex = vertex;
     arg->element = element;
     arg->feedback = feedback;
+    arg->uniform = uniform;
     for (int i = 0; i < vertex+element+feedback; i++) buf[i] = file->buffer[buffer[i]];
     enqueMachine(&renderLock);
     if (feedback > 0) followMachine(&renderWrap);
@@ -355,16 +380,43 @@ void setupShader(const char *name, enum Shader shader, int vertex, int element, 
     followMachine(&renderUnlock);
 }
 
+void setupUniform(int size, enum Uniform form, enum Struct type, MyGLfloat *floats)
+{
+
+}
+
 void enqueShader(enum Shader shader, int file, Machine follow, enum Share share)
 {
-    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,buf,follow,file,share);}
-    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,buf,follow,file,share);}
-    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,buf,follow,file,share);}
-    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,buf,follow,file,share);}
-    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,buf,follow,file,share);}
-    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,buf,follow,file,share);}
-    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,buf,follow,file,share);}
-    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,buf,follow,file,share);}
+    int uniform = 0;
+    SWITCH(shader,Diplane) {setupUniform(1,Affine,Square,affineMata); uniform = 1;}
+    CASE(Dipoint) {setupUniform(1,Affine,Square,affineMata); uniform = 1;}
+    CASE(Coplane) {}
+    CASE(Copoint) {}
+    CASE(Adplane) {}
+    CASE(Adpoint) {}
+    CASE(Perplane) {
+        MyGLfloat feather[3] = {xPos,yPos,zPos};
+        MyGLfloat arrow[3] = {xPos*slope,yPos*slope,1.0};
+        setupUniform(1,Affine,Square,affineMata);
+        setupUniform(1,Feather,Array,feather);
+        setupUniform(1,Arrow,Array,arrow);
+        uniform = 3;}
+    CASE(Perpoint) {
+        MyGLfloat feather[3] = {xPos,yPos,zPos};
+        MyGLfloat arrow[3] = {xPos*slope,yPos*slope,1.0};
+        setupUniform(1,Affine,Square,affineMata);
+        setupUniform(1,Feather,Array,feather);
+        setupUniform(1,Arrow,Array,arrow);
+        uniform = 3;}
+    DEFAULT(exitErrstr("invalid shader\n");)
+    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,0,buf,follow,file,share);}
+    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,0,buf,follow,file,share);}
+    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,0,buf,follow,file,share);}
+    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,0,buf,follow,file,share);}
+    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,0,buf,follow,file,share);}
+    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,0,buf,follow,file,share);}
+    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,0,buf,follow,file,share);}
+    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,0,buf,follow,file,share);}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
 }
 

@@ -807,9 +807,8 @@ template<class TYPE> struct QueueStruct : QueueBase {
     {
         if ((para == 0) != (keep == 0)) exitErrstr("enarg too para\n");
         if (para == 0) return 0;
-        int len = keep - para;
-        for (int i = 0; i < len; i++) head[i-1] = keep[i-1];
-        head -= len;
+        int len = 0;
+        while (keep > para) {len += 1; head -= 1; keep -= 1; *head = *keep;}
         para = keep = 0;
         return len;
     }

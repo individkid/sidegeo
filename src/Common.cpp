@@ -285,6 +285,7 @@ EXTERNCEND
 inline bool operator!=(const File &left, const File &right) {return false;}
 inline bool operator!=(const Buffer &left, const Buffer &right) {return false;}
 inline bool operator!=(const Render &left, const Render &right) {return false;}
+inline bool operator!=(const Form &left, const Form &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
 inline bool operator!=(const Signal &left, const Signal &right) {return false;}
@@ -344,6 +345,7 @@ DEFINE_EXTRA(CmdFloat,MyGLfloat,CmdInt)
 DEFINE_EXTRA(CmdByte,char,CmdFloat)
 DEFINE_EXTRA(Void,Command,CmdByte)
 DEFINE_EXTRA(Render,struct Render,Void)
+DEFINE_EXTRA(Uniform,struct Form,Render)
 
 DEFINE_SOURCE(CmdOutputs,CmnOutputs,Commands)
 DEFINE_STAGE(CmdOutput,char,CmdOutputs)
