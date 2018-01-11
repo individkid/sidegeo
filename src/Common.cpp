@@ -229,7 +229,7 @@ float *tweakvec(float *u, float a, float b, int n)
 float *basearrow(float *u, float *v, int *i, float *b, int n)
 {
     // given feather u, arrow v, base points b, dimension n
-    // return distances of plane above base points in u
+    // return distances of plane above base points in b
     // and return index of base points in i
     *i = 0;
     for (int j = 1; j < n; j++)
@@ -239,13 +239,16 @@ float *basearrow(float *u, float *v, int *i, float *b, int n)
     float x[n];
     for (int j = 0; j < n; j++) x[j] = u[k[j]];
     float y[n];
-    for (int j = 0; j < n; j++) y[j] = -v[k[j]]*x[0]/v[k[0]];
-    // x+y is on the base plane
+    for (int j = 0; j < n; j++) y[j] = v[k[j]];
+    // (x-x[0])*y[0]+(y-x[1])*y[1]+...=0
     for (int h = 0; h < n; h++) {
         float a[n];
         for (int j = 0; j < n; j++) a[j] = b[*i*n*n+h*n+k[j]];
-        // looking down (ignoring a[0] and x[0]) 
-    }
+        float w[n-1];
+        copyvec(w,x+1,n-1);
+        scalevec(w,-1.0,n-1);
+        plusvec(w,a+1,n-1);
+        u[h] = x[0]-(dotvec(w,y+1,n-1)/y[0])-a[0];}
     return u;
 }
 
