@@ -22,6 +22,7 @@ EXTERNCBEGIN
 
 #include <termios.h>
 #include <math.h>
+#include <stdlib.h>
 
 extern float invalid[2];
 
@@ -221,17 +222,7 @@ float *invmat(float *u, int n)
 
 float *tweakvec(float *u, float a, float b, int n)
 {
-    if (n == 0) exitErrstr("tweak too dimension\n");
-    if (n == 1) {*u = rand()/(float)RAND_MAX; return u;}
-    // find n dimensional vector in random direction with length between a and b
-    float w[(unsigned)(n-1)]; tweakvec(w,1.0,1.0,n-1);
-    float quarter = acos(0.0);
-    float choice; tweakvec(&choice,0.0,1.0,1);
-    float angle = quarter-acos(powf(choice,1.0/(n-2.0)));
-    float magnitude = a+(rand()/(b-a));
-    for (int i = 0; i < n-1; i++) u[i] = w[i];
-    u[n-1] = sin(angle);
-    for (int i = 0; i < n; i++) u[i] *= magnitude;
+    for (int i = 0; i < n; i++) u[i] = a+((b-a)*rand()/(float)RAND_MAX);
     return u;
 }
 
