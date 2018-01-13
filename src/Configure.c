@@ -28,7 +28,6 @@ void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
 int parseString(const char *str, int len);
 
-void configureForce();
 void configurePlane();
 void configurePoint();
 void configureFill();
@@ -166,14 +165,14 @@ void timeBackward(int key)
 	if (*arrayReady(ready,1) > 1) *arrayReady(ready,1) -= 1;}
 }
 
-int timeFloat(MyGLfloat *rslt, int *chrpos, int *intpos)
+int timeFloat(Myfloat *rslt, int *chrpos, int *intpos)
 {
 	if (*intpos >= sizePcsInt()) return -1;
 	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
 	if (siz == 0) {*intpos += 1; return 0;}
 	char *nptr = arrayPcsChar(*chrpos,siz);
 	char *endptr = nptr;
-	MyGLfloat val = strtof(nptr,&endptr);
+	Myfloat val = strtof(nptr,&endptr);
 	if (endptr != nptr+siz) return -1;
 	*rslt = val;
 	*chrpos += siz;
@@ -201,7 +200,7 @@ int timeName(int *key, int *chrpos, int *intpos)
 
 int timeCoef(int *chrpos, int *intpos)
 {
-	MyGLfloat val;
+	Myfloat val;
 	int siz = timeFloat(&val,chrpos,intpos);
 	if (siz < 0) return -1;
 	if (siz > 0) *enlocCoefficient(1) = val;
@@ -396,8 +395,8 @@ int processConfigure(int index, int len)
     		FORCE_UNIQUE(Divide,Event,Hs)
     		FORCE_UNIQUE(Vertex,Event,Hs)
     		FORCE_UNIQUE(Migrate,Event,Hs)
-			FORCE_SHARED(configureForce,CmdCmd,Cmd)
-			FORCE_SHARED(configureForce,HsCmd,Hs)
+			//FORCE_SHARED(configureForce,CmdCmd,Cmd)
+			//FORCE_SHARED(configureForce,HsCmd,Hs)
 			FORCE_INT(CmdInt,Cmd)
 			FORCE_INT(HsInt,Hs)
 			FORCE_CHAR(CmdByte,Cmd)

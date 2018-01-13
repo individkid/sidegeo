@@ -36,13 +36,16 @@
 extern GLFWwindow *windowHandle;
 extern struct Code code[Shaders];
 extern float invalid[2];
+extern float basisMat[27];
 extern int pPos;
 extern int qPos;
 extern float xPos;
 extern float yPos;
 extern float zPos;
 extern float affineMata[16];
+extern float cutoff;
 extern float slope;
+extern float aspect;
 extern enum Shader dishader;
 extern enum Shader pershader;
 int renderSwap = 0;
@@ -73,19 +76,11 @@ int bufferPrimitive(int size)
     return retval;
 }
 
-int uniformType(enum Struct type)
-{
-    int retval = 0;
-    SWITCH(type,Square) retval = 16;
-    CASE(Array) retval = 3;
-    CASE(Scalar) retval = 1;
-    DEFAULT(exitErrstr("unknown uniform type\n");)
-    return retval;
-}
-
 enum Action dequeWrap(int state)
 {
-    struct Buffer *buffer = arrayBuffer(*deargCmdInt(1),1);
+    int file = *deargCmdInt(1);
+    enum Data sub = *deargCmdInt(1);
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
         glGenBuffers(1,&buffer->copy);
@@ -114,31 +109,32 @@ enum Action dequeWrap(int state)
     return Advance;
 }
 
-void enqueWrap(int sub, int room)
+void enqueWrap(int file, enum Data sub, int room)
 {
-    struct Buffer *buffer = arrayBuffer(sub,1);
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     if (buffer->lock.write == 0) exitErrstr("wrap not locked\n");
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
+    *enlocCmdInt(1) = file; *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
 }
 
 #define BUFFER_DEARG \
-    int sub = *deargCmdInt(1); \
-    struct Buffer *buffer = arrayBuffer(sub,1); \
+    int file = *deargCmdInt(1); \
+    enum Data sub = *deargCmdInt(1); \
     int todo = *deargCmdInt(1); \
     int done = *deargCmdInt(1); \
-    int wait = *deargCmdInt(1); \
+    int *wait = deargCmdInt(1); \
     char *data = deargCmdByte(todo); \
-    Command cmd = *deargVoid(1);
+    Command cmd = *deargVoid(1); \
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
 
 enum Action dequeBuffer(int state)
 {
     BUFFER_DEARG
-    LOCK(wait,buffer->lock,Write)
+    LOCK(*wait,buffer->lock,Write)
     if (state-- == 0) {
-        if (buffer->room < done+todo) enqueWrap(sub,done+todo);
+        if (buffer->room < done+todo) enqueWrap(file,sub,done+todo);
         return Continue;}
     if (state-- == 0) {
         return (buffer->room < done+todo ? Defer : Continue);}
@@ -152,14 +148,15 @@ enum Action dequeBuffer(int state)
     return Advance;
 }
 
-void enqueBuffer(int sub, int todo, int done, void *data, Command cmd)
+void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Command cmd)
 {
     if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
+    *enlocCmdInt(1) = file;
     *enlocCmdInt(1) = sub;
     *enlocCmdInt(1) = todo;
     *enlocCmdInt(1) = done;
     *enlocCmdInt(1) = 0; // wait sequence number
-    struct Buffer *buffer = arrayBuffer(sub,1);
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     int size = buffer->dimn*bufferType(buffer->type);
     memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
     *enlocVoid(1) = cmd;
@@ -171,52 +168,61 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
+void enqueUniform(struct Uniform *uniform, enum Server serv)
+{
+    SWITCH(serv,Invalid) glUniform1fv(uniform->handle,2,invalid);
+    CASE(Basis) glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
+    CASE(Affine) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,affineMata);
+    CASE(Feather) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
+    CASE(Arrow) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
+    CASE(Cutoff) glUniform1f(uniform->handle,cutoff);
+    CASE(Slope) glUniform1f(uniform->handle,slope);
+    CASE(Aspect) glUniform1f(uniform->handle,aspect);
+    DEFAULT(exitErrstr("invalid server uniform\n");)
+}
+
 #define RENDER_DEARG \
-    struct Render *arg = deargRender(1); \
-    int siz = arg->vertex+arg->element+arg->feedback; \
-    int *buf = deargCmdInt(siz); \
-    struct Buffer *vertex[arg->vertex]; \
-    struct Buffer *element[arg->element]; \
-    struct Buffer *feedback[arg->feedback]; \
-    struct Form *uniform = deargUniform(arg->uniform); \
-    siz = 0; for (int i = 0; i < arg->uniform; i++) \
-    siz += uniform[i].size*uniformType(uniform[i].type); \
-    MyGLfloat *floats = deargCmdFloat(siz); \
-    for (int i = 0; i < arg->vertex; i++) vertex[i] = arrayBuffer(buf[i],1); \
-    for (int i = 0; i < arg->element; i++) element[i] = arrayBuffer(buf[arg->vertex+i],1); \
-    for (int i = 0; i < arg->feedback; i++) feedback[i] = arrayBuffer(buf[arg->vertex+arg->element+i],1);
+    struct Render *render = deargRender(1); \
+    struct File *file = arrayFile(render->file,1); \
+    struct Code *shader = code+render->shader; \
+    enum Data *vertex = shader->vertex; \
+    enum Data *element = shader->element; \
+    enum Data *feedback = shader->feedback; \
+    enum Server *server = shader->server; \
+    enum Server *config = shader->config; \
+    struct Buffer *buffer = file->buffer; \
+    struct Uniform *uniform = shader->uniform;
 
 enum Action renderLock(int state)
 {
     RENDER_DEARG
-    struct File *file = arrayFile(arg->file,1);
-    if (arg->share == Read) {LOCK(arg->wait,file->lock,Read)}
-    if (arg->share == Write) {LOCK(arg->wait,file->lock,Write)}
-    LOCK(arg->wait,code[arg->shader].lock,Read)
-    for (int i = 0; i < arg->uniform; i++) {LOCK(arg->wait,uniform[i].lock,Write);}
-    for (int i = 0; i < arg->vertex; i++) {LOCK(arg->wait,vertex[i]->lock,Read)}
-    for (int i = 0; i < arg->element; i++) {LOCK(arg->wait,element[i]->lock,Read)}
-    for (int i = 0; i < arg->feedback; i++) {LOCK(arg->wait,feedback[i]->lock,Write)}
-    for (int i = 0; i < arg->feedback; i++) feedback[i]->done = 0;
+    if (render->share == Read) {LOCK(render->wait,file->lock,Read)}
+    if (render->share == Write) {LOCK(render->wait,file->lock,Write)}
+    for (enum Data *i = vertex; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Read)}
+    for (enum Data *i = element; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Read)}
+    for (enum Data *i = feedback; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Write)}
+    for (enum Server *i = server; *i < Servers; i++) {LOCK(render->wait,uniform[*i].lock,Write);}
+    for (enum Server *i = config; *i < Servers; i++) {LOCK(render->wait,uniform[*i].lock,Read);}
     return Advance;
 }
 
 enum Action renderWrap(int state)
 {
     RENDER_DEARG
-    for (int i = 0; i < arg->vertex; i++) exitErrbuf(vertex[i],arg->name);
-    for (int i = 0; i < arg->element; i++) exitErrbuf(element[i],arg->name);
-    for (int i = 0; i < arg->feedback; i++) exitErrbuf(feedback[i],arg->name);
-    if (arg->element && element[0]->dimn != bufferPrimitive(code[arg->shader].input)) exitErrstr("%s too primitive\n",arg->name);
-    if (!arg->element && bufferPrimitive(code[arg->shader].input) != 1) exitErrstr("%s too primitive\n",arg->name);
-    if (arg->feedback && bufferPrimitive(code[arg->shader].output) != 1) exitErrstr("%s too primitive\n",arg->name);
+    for (enum Data *i = vertex; *i < Datas; i++) exitErrbuf(buffer+*i,shader->name);
+    for (enum Data *i = element; *i < Datas; i++) exitErrbuf(buffer+*i,shader->name);
+    for (enum Data *i = feedback; *i < Datas; i++) exitErrbuf(buffer+*i,shader->name);
+    if (*element < Datas && file->buffer[*element].dimn != bufferPrimitive(shader->input)) exitErrstr("%s too primitive\n",shader->name);
+    if (*element >= Datas && bufferPrimitive(shader->input) != 1) exitErrstr("%s too primitive\n",shader->name);
+    if (*feedback < Datas && bufferPrimitive(shader->output) != 1) exitErrstr("%s too primitive\n",shader->name);
+    for (enum Data *i = feedback; *i < Datas; i++) buffer[*i].done = 0;
     int reque = 0;
-    if (arg->element) for (int i = 0; i < arg->feedback; i++) {
-        if (feedback[i]->done > element[0]->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < element[0]->done) {enqueWrap(arg->vertex+arg->element+i,element[0]->done); reque = 1;}}
-    if (!arg->element && arg->vertex) for (int i = 0; i < arg->feedback; i++) {
-        if (feedback[i]->done > vertex[0]->done) exitErrstr("%s too done\n",arg->name);
-        if (feedback[i]->room < vertex[0]->done) {enqueWrap(arg->vertex+arg->element+i,vertex[0]->done); reque = 1;}}
+    if (*element < Datas) for (enum Data *i = feedback; *i < Datas; i++) {
+        if (file->buffer[*i].done > file->buffer[*element].done) exitErrstr("%s too done\n",shader->name);
+        if (file->buffer[*i].room < file->buffer[*element].done) {enqueWrap(render->file,*i,buffer[*element].done); reque = 1;}}
+    if (*element >= Datas && *vertex < Datas) for (enum Data *i = feedback; *i < Datas; i++) {
+        if (buffer[*i].done > buffer[*vertex].done) exitErrstr("%s too done\n",shader->name);
+        if (buffer[*i].done < buffer[*vertex].done) {enqueWrap(render->file,*i,buffer[*vertex].done); reque = 1;}}
     return (reque?Reque:Advance);
 }
 
@@ -225,50 +231,45 @@ enum Action renderDraw(int state)
     RENDER_DEARG
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
-    msgstrCmdOutput("\rhello draw %d %d %d\n",arg->vertex,arg->element,arg->feedback);
-    if (arg->feedback) done = feedback[0]->done;
-    if (arg->element) todo = element[0]->done - done;
-    else if (arg->vertex) todo = vertex[0]->done - done;
-    if (code[arg->shader].limit > 0 && code[arg->shader].limit - done < todo) todo = code[arg->shader].limit - done;
-    if (todo < 0) exitErrstr("%s too todo\n",arg->name);
+    if (*feedback < Datas) done = file->buffer[*feedback].done;
+    if (*element < Datas) todo = file->buffer[*element].done - done;
+    else if (*vertex < Datas) todo = file->buffer[*vertex].done - done;
+    if (shader->limit > 0 && shader->limit - done < todo) todo = shader->limit - done;
+    if (todo < 0) exitErrstr("%s too todo\n",shader->name);
     if (todo == 0) return Advance;
-    glUseProgram(code[arg->shader].program);
-    for (int i = 0; i < arg->uniform; i++) {
-        int ident = code[arg->shader].uniform[uniform[i].form];
-        int size = uniform[i].size;
-        SWITCH(uniform[i].type,Square) glUniformMatrix4fv(ident,size,GL_FALSE,floats);
-        CASE(Array) glUniform3f(ident,floats[0],floats[1],floats[2]);
-        DEFAULT(exitErrstr("uniform too type\n");)
-        floats += uniform[i].size*uniformType(uniform[i].type);}
-    for (int i = 0; i < arg->feedback; i++) {
-        size_t size = feedback[i]->dimn*bufferType(feedback[i]->type);
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, feedback[i]->handle, done*size, todo*size);}
-    if (arg->feedback) {
+    glUseProgram(shader->handle);
+    for (enum Server *i = server; *i < Servers; i++) {
+        enqueUniform(uniform+*i,*i);
+        uniform[*i].lock.read += 1; uniform[*i].lock.write -= 1;}
+    for (enum Data *i = feedback; *i < Datas; i++) {
+        size_t size = buffer[*i].dimn*bufferType(buffer[*i].type);
+        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i-feedback, buffer[*i].handle, done*size, todo*size);}
+    if (*feedback < Datas) {
         glEnable(GL_RASTERIZER_DISCARD);
-        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, feedback[0]->query);
-        glBeginTransformFeedback(code[arg->shader].output);}
-    for (int i = 0; i < arg->vertex; i++)
-        glEnableVertexAttribArray(vertex[i]->loc);
-    if (arg->element)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element[0]->handle);
+        glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, buffer[*feedback].query);
+        glBeginTransformFeedback(shader->output);}
+    for (enum Data *i = vertex; *i < Datas; i++)
+        glEnableVertexAttribArray(buffer[*i].loc);
+    if (*element < Datas)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer[*element].handle);
     if (renderClear == 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         renderClear = 0;}
-    if (arg->element) {
-        size_t size = element[0]->dimn*bufferType(element[0]->type);
-        glDrawElements(code[arg->shader].input, todo*element[0]->dimn, element[0]->type, (void *)(done*size));} else
-        glDrawArrays(code[arg->shader].input,done,todo);
-    arg->draw = done+todo;
-    if (arg->element)
+    if (*element < Datas) {
+        size_t size = buffer[*element].dimn*bufferType(buffer[*element].type);
+        glDrawElements(shader->input, todo*buffer[*element].dimn, buffer[*element].type, (void *)(done*size));} else
+        glDrawArrays(shader->input,done,todo);
+    render->draw = done+todo;
+    if (*element < Datas)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    for (int i = 0; i < arg->vertex; i++)
-        glDisableVertexAttribArray(vertex[i]->loc);
-    if (arg->feedback) {
+    for (enum Data *i = vertex; *i < Datas; i++)
+        glDisableVertexAttribArray(buffer[*i].loc);
+    if (*feedback < Datas) {
         glEndTransformFeedback();
         glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
         glDisable(GL_RASTERIZER_DISCARD);}
-    for (int i = 0; i < arg->feedback; i++)
-        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i, 0, 0, 0);
+    for (enum Data *i = feedback; *i < Datas; i++)
+        glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i-feedback, 0, 0, 0);
     glUseProgram(0);
     if (renderSwap == 1) glfwSwapBuffers(windowHandle);
     if (renderSwap > 0) renderSwap -= 1;
@@ -278,28 +279,28 @@ enum Action renderDraw(int state)
 enum Action renderWait(int state)
 {
     RENDER_DEARG
-    if (!arg->feedback) return Advance;
-    if (arg->element && feedback[0]->done == element[0]->done) return Advance;
-    if (!arg->element && feedback[0]->done == vertex[0]->done) return Advance;
+    if (*feedback >= Datas) return Advance;
+    if (*element < Datas && buffer[*feedback].done == buffer[*element].done) return Advance;
+    if (*element >= Datas && buffer[*feedback].done == buffer[*vertex].done) return Advance;
     GLuint count = 0;
-    glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT_AVAILABLE, &count);
+    glGetQueryObjectuiv(buffer[*feedback].query, GL_QUERY_RESULT_AVAILABLE, &count);
     if (count == GL_FALSE) count = 0;
-    else glGetQueryObjectuiv(feedback[0]->query, GL_QUERY_RESULT, &count);
-    if (feedback[0]->done+count < arg->draw) return Defer;
-    if (feedback[0]->done+count > arg->draw) exitErrstr("%s too count\n",arg->name);
-    for (int i = 0; i < arg->feedback; i++) feedback[i]->done = arg->draw;
+    else glGetQueryObjectuiv(buffer[*feedback].query, GL_QUERY_RESULT, &count);
+    if (buffer[*feedback].done+count < render->draw) return Defer;
+    if (buffer[*feedback].done+count > render->draw) exitErrstr("%s too count\n",shader->name);
+    for (enum Data *i = feedback; *i < Datas; i++) buffer[*i].done = render->draw;
     return Advance;
 }
 
 enum Action renderPierce(int state)
 {
     RENDER_DEARG
-    if (arg->feedback != 1) exitErrstr("pierce too feedback\n");
-    int dimn = feedback[0]->dimn;
-    int done = feedback[0]->done;
+    if (*feedback == Datas || feedback[1] != Datas) exitErrstr("pierce too feedback\n");
+    int dimn = buffer[*feedback].dimn;
+    int done = buffer[*feedback].done;
     GLfloat result[done*dimn];
-    glBindBuffer(GL_ARRAY_BUFFER, feedback[0]->handle);
-    glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(feedback[0]->type), result);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer[*feedback].handle);
+    glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(buffer[*feedback].type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     int pFound; float xFound, yFound, zFound;
     pFound = 0; xFound = 0; yFound = 0; zFound = invalid[0];
@@ -307,22 +308,23 @@ enum Action renderPierce(int state)
         int sub = i+dimn-1;
         if (result[sub]<invalid[1] && (zFound>invalid[1] || result[sub]<zFound)) {
             pFound = j; xFound = result[sub-2]; yFound = result[sub-1]; zFound = result[sub];}}
-    if (zFound<invalid[1] && (qPos == arg->file || zFound < zPos)) {
-        pPos = pFound; qPos = arg->file; xPos = xFound; yPos = yFound; zPos = zFound;}
+    if (zFound<invalid[1] && (qPos == render->file || zFound < zPos)) {
+        pPos = pFound; qPos = render->file; xPos = xFound; yPos = yFound; zPos = zFound;}
     return Advance;
 }
 
 enum Action renderUnlock(int state)
 {
     RENDER_DEARG
-    code[arg->shader].lock.read -= 1;
-    for (int i = 0; i < arg->vertex; i++) vertex[i]->lock.read -= 1;
-    for (int i = 0; i < arg->element; i++) element[i]->lock.read -= 1;
-    for (int i = 0; i < arg->feedback; i++) feedback[i]->lock.write -= 1;
+    file->lock.read -= 1;
+    for (enum Server *i = server; *i < Servers; i++) uniform[*i].lock.read -= 1;
+    for (enum Data *i = vertex; *i < Datas; i++) buffer[*i].lock.read -= 1;
+    for (enum Data *i = element; *i < Datas; i++) buffer[*i].lock.read -= 1;
+    for (enum Data *i = feedback; *i < Datas; i++) buffer[*i].lock.write -= 1;
     return Advance;
 }
 
-void setupBuffer(int *sub, char *name, GLuint loc, int type, int dimn)
+void setupBuffer(struct Buffer *ptr, char *name, GLuint loc, int type, int dimn)
 {
     struct Buffer buffer = {0};
     buffer.name = name;
@@ -335,89 +337,280 @@ void setupBuffer(int *sub, char *name, GLuint loc, int type, int dimn)
         glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
         glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    *sub = sizeBuffer();
-    *enlocBuffer(1) = buffer;
+    *ptr = buffer;
 }
 
-struct File *setupFile(int file)
+void setupFile(int sub)
 {
-    while (sizeFile() < file) {
-        struct File file = {0};
-        setupBuffer(file.buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
-        setupBuffer(file.buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
-        setupBuffer(file.buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-        setupBuffer(file.buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-        setupBuffer(file.buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
-        setupBuffer(file.buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
-        setupBuffer(file.buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
-        setupBuffer(file.buffer+PointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
-        setupBuffer(file.buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
-        setupBuffer(file.buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-        setupBuffer(file.buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-        *enlocFile(1) = file;}
-    return arrayFile(file,1);
+    while (sizeFile() <= sub) {struct File file = {0}; *enlocFile(1) = file;}
+    struct File *file = arrayFile(sub,1);
+    if (file->name != 0) return;
+    file->name = "file"; // TODO
+    setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
+    setupBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
+    setupBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    setupBuffer(file->buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    setupBuffer(file->buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
+    setupBuffer(file->buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
+    setupBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
+    setupBuffer(file->buffer+PointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
+    setupBuffer(file->buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
+    setupBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+    setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
 
-void setupShader(const char *name, enum Shader shader, int vertex, int element, int feedback, int uniform, enum Data *buffer, Machine follow, int sub, enum Share share)
+void setupUniform(struct Uniform *ptr, Myuint program, enum Server serv, enum Client func)
 {
-    struct Render *arg = enlocRender(1);
-    int *buf = enlocCmdInt(vertex+element+feedback);
-    struct File *file = setupFile(sub);
-    arg->name = name;
-    arg->file = sub;
-    arg->share = share;
-    arg->shader = shader;
-    arg->vertex = vertex;
-    arg->element = element;
-    arg->feedback = feedback;
-    arg->uniform = uniform;
-    for (int i = 0; i < vertex+element+feedback; i++) buf[i] = file->buffer[buffer[i]];
-    enqueMachine(&renderLock);
-    if (feedback > 0) followMachine(&renderWrap);
-    followMachine(&renderDraw);
-    if (feedback > 0) followMachine(&renderWait);
-    if (follow) followMachine(follow);
-    followMachine(&renderUnlock);
+    struct Uniform uniform = {0};
+    uniform.func = func;
+    SWITCH(serv,Invalid) uniform.handle = glGetUniformLocation(program, "invalid");
+    CASE(Basis) uniform.handle = glGetUniformLocation(program, "basis");
+    CASE(Affine) uniform.handle = glGetUniformLocation(program, "affine");
+    CASE(Feather) uniform.handle = glGetUniformLocation(program, "feather");
+    CASE(Arrow) uniform.handle = glGetUniformLocation(program, "arrow");
+    CASE(Cutoff) uniform.handle = glGetUniformLocation(program, "cutoff");
+    CASE(Slope) uniform.handle = glGetUniformLocation(program, "slope");
+    CASE(Aspect) uniform.handle = glGetUniformLocation(program, "aspect");
+    DEFAULT(exitErrstr("invalid server uniform\n");)
+    *ptr = uniform;
+    enqueUniform(ptr,serv);
 }
 
-void setupUniform(int size, enum Uniform form, enum Struct type, MyGLfloat *floats)
+int bufferVertex(enum Data data, enum Shader shader)
 {
+    /*
+    SWITCH(shader,Diplane) {enum Data buf[2] = {PointBuf,FrameSub}; enum Server serv[1] = {Affine}; setupRender("diplane",Zero,2,1,1,buf,serv);}
+    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupRender("dipoint",Zero,1,1,0,0,buf,0);}
+    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupRender("coplane",Zero,2,1,1,0,buf,0);}
+    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupRender("copoint",Zero,1,1,2,0,buf,0);}
+    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupRender("adplane",Zero,2,1,1,0,buf,0);}
+    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupRender("adpoint",Zero,1,1,1,0,buf,0);}
+    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; enum Server serv[3] = {Affine,Feather,Arrow}; setupRender("perplane",Zero,2,1,1,3,buf,serv);}
+    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupRender("perpoint",Zero,1,1,1,0,buf,0);}
+    DEFAULT(exitErrstr("invalid shader %d\n",shader);)
+    */
+    return -1; // TODO
+}
 
+int bufferElement(enum Data data, enum Shader shader)
+{
+    return -1; // TODO
+}
+
+int bufferFeedback(enum Data data, enum Shader shader)
+{
+    return -1; // TODO
+}
+
+int uniformServer(enum Server serv, enum Shader shader)
+{
+    return -1; // TODO
+}
+
+enum Client uniformClient(enum Server serv, enum Shader shader)
+{
+    SWITCH(serv,Invalid) return Clients;
+    CASE(Basis) return Clients;
+    CASE(Affine) return Clients;
+    CASE(Feather) return Clients; // TODO depends on shader
+    CASE(Arrow) return Clients; // TODO depends on shader
+    CASE(Cutoff) return Clients;
+    CASE(Slope) return Clients;
+    CASE(Aspect) return Clients;
+    DEFAULT(exitErrstr("invlid server\n");)
+    return Clients;
+}
+
+int uniformConstant(enum Server serv, enum Shader shader)
+{
+    SWITCH(serv,Invalid) return 1; // TODO some shaders dont use
+    CASE(Basis) return 1; // TODO some shaders dont use
+    CASE(Affine) return 0;
+    CASE(Feather) return 0;
+    CASE(Arrow) return 0;
+    CASE(Cutoff) return 1; // TODO some shaders dont use
+    CASE(Slope) return 1; // TODO some shaders dont use
+    CASE(Aspect) return 1; // TODO some shaders dont use
+    DEFAULT(exitErrstr("invlid server\n");)
+    return 0;
+}
+
+int uniformGlobal(enum Server serv, enum Shader shader)
+{
+    SWITCH(serv,Invalid) return 0;
+    CASE(Basis) return 0;
+    CASE(Affine) return 0;
+    CASE(Feather) return 0;
+    CASE(Arrow) return 0;
+    CASE(Cutoff) return 1; // TODO need read lock because changed globally
+    CASE(Slope) return 1; // TODO need read lock because changed globally
+    CASE(Aspect) return 1; // TODO need read lock because changed globally
+    DEFAULT(exitErrstr("invlid server\n");)
+    return 0;
+}
+
+const char *inputCode(enum Shader shader)
+{
+    SWITCH(code[shader].input,GL_POINTS) return "#define INPUT points\n";
+    CASE(GL_TRIANGLES) return "#define INPUT triangles\n";
+    CASE(GL_TRIANGLES_ADJACENCY) return "#define INPUT triangles_adjacency\n";
+    DEFAULT(exitErrstr("unknown input primitive");)
+    return "";
+}
+
+const char *outputCode(enum Shader shader)
+{
+    SWITCH(code[shader].output,GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
+    CASE(GL_TRIANGLES) return "#define OUTPUT triangle_strip, max_vertices = 3\n";
+    DEFAULT(exitErrstr("unknown output primitive");)
+    return "";
+}
+
+extern const GLchar *uniformCode;
+extern const GLchar *projectCode;
+extern const GLchar *pierceCode;
+extern const GLchar *sideCode;
+extern const GLchar *expandCode;
+extern const GLchar *constructCode;
+extern const GLchar *intersectCode;
+
+void compileProgram(
+    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, int inp, int outp,
+    const char *name, enum Shader shader, const char *feedback0, const char *feedback1)
+{
+    GLint success = 0;
+    GLchar infoLog[512];
+    const GLchar *source[10] = {0};
+    GLuint prog = glCreateProgram();
+    GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
+    code[shader].input = inp; code[shader].output = outp; code[shader].handle = prog;
+    source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
+    source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode;
+    source[7] = vertexCode;
+    glShaderSource(vertex, 8, source, NULL);
+    glCompileShader(vertex);
+    glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
+    if(!success) {
+        glGetShaderInfoLog(vertex, 512, NULL, infoLog);
+        exitErrstr("could not compile vertex shader for program %s: %s\n", name, infoLog);}
+    glAttachShader(prog, vertex);
+    GLuint geometry = 0;
+    if (geometryCode) {
+        geometry = glCreateShader(GL_GEOMETRY_SHADER);
+        source[7] = inputCode(shader);
+        source[8] = outputCode(shader);
+        source[9] = geometryCode;
+        glShaderSource(geometry, 10, source, NULL);
+        glCompileShader(geometry);
+        glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
+        if(!success) {
+            glGetShaderInfoLog(geometry, 512, NULL, infoLog);
+            exitErrstr("could not compile geometry shader for program %s: %s\n", name, infoLog);}
+        glAttachShader(prog, geometry);}
+    GLuint fragment = 0;
+    if (fragmentCode) {
+        fragment = glCreateShader(GL_FRAGMENT_SHADER);
+        source[7] = fragmentCode;
+        glShaderSource(fragment, 8, source, NULL);
+        glCompileShader(fragment);
+        glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
+        if(!success) {
+            glGetShaderInfoLog(fragment, 512, NULL, infoLog);
+            exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
+        glAttachShader(prog, fragment);}
+    if (feedback0 && feedback1) {
+        const char *feedback[2] = {feedback0,feedback1};
+        glTransformFeedbackVaryings(prog, 2, feedback, GL_SEPARATE_ATTRIBS);}
+    else if (feedback0) {
+        const char *feedback[1] = {feedback0};
+        glTransformFeedbackVaryings(prog, 1, feedback, GL_SEPARATE_ATTRIBS);}
+    glLinkProgram(prog);
+    glGetProgramiv(prog, GL_LINK_STATUS, &success);
+    if(!success) {
+        glGetProgramInfoLog(prog, 512, NULL, infoLog);
+        exitErrstr("could not link shaders for program %s: %s\n", name, infoLog);}
+    glDeleteShader(vertex);
+    if (geometryCode) glDeleteShader(geometry);
+    if (fragmentCode) glDeleteShader(fragment);
+}
+
+extern const GLchar *diplaneVertex;
+extern const GLchar *diplaneGeometry;
+extern const GLchar *diplaneFragment;
+extern const GLchar *dipointVertex;
+extern const GLchar *dipointGeometry;
+extern const GLchar *dipointFragment;
+extern const GLchar *coplaneVertex;
+extern const GLchar *coplaneGeometry;
+extern const GLchar *coplaneFragment;
+extern const GLchar *copointVertex;
+extern const GLchar *copointGeometry;
+extern const GLchar *copointFragment;
+extern const GLchar *adplaneVertex;
+extern const GLchar *adplaneGeometry;
+extern const GLchar *adplaneFragment;
+extern const GLchar *adpointVertex;
+extern const GLchar *adpointGeometry;
+extern const GLchar *adpointFragment;
+extern const GLchar *perplaneVertex;
+extern const GLchar *perplaneGeometry;
+extern const GLchar *perplaneFragment;
+extern const GLchar *perpointVertex;
+extern const GLchar *perpointGeometry;
+extern const GLchar *perpointFragment;
+extern const GLchar *replaneVertex;
+extern const GLchar *replaneGeometry;
+extern const GLchar *replaneFragment;
+extern const GLchar *repointVertex;
+extern const GLchar *repointGeometry;
+extern const GLchar *repointFragment;
+
+void setupCode(enum Shader shader)
+{
+    if (code[shader].name != 0) return;
+    code[shader].name = "code"; // TODO
+    SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane,0,0);
+    CASE(Dipoint) compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint,0,0);
+    CASE(Coplane) compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane,"vector",0);
+    CASE(Copoint) compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint,"vector","index");
+    CASE(Adplane) compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane,"scalar",0);
+    CASE(Adpoint) compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint,"scalar",0);
+    CASE(Perplane) compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane,"vector",0);
+    CASE(Perpoint) compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint,"vector",0);
+    CASE(Replane) compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane,"vector",0);
+    CASE(Repoint) compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint,"vector","index");
+    DEFAULT(exitErrstr("unknown shader type\n");)
+    enum Data vertex[3] = {Datas}; int count = 0; for (enum Data data = 0; data < Datas; data++) {if (bufferVertex(data,shader)) {vertex[count] = data; count += 1;}}
+    enum Data element[3] = {Datas}; count = 0; for (enum Data data = 0; data < Datas; data++) {if (bufferVertex(data,shader)) {element[count] = data; count += 1;}}
+    enum Data feedback[3] = {Datas}; count = 0; for (enum Data data = 0; data < Datas; data++) {if (bufferVertex(data,shader)) {feedback[count] = data; count += 1;}}
+    enum Server uniform[4] = {Servers}; count = 0; for (enum Server serv = 0; serv < Servers; serv++) {if (uniformServer(serv,shader)) {uniform[count] = serv; count += 1;}}
+    enum Server config[4] = {Servers}; count = 0; for (enum Server serv = 0; serv < Servers; serv++) {if (uniformGlobal(serv,shader)) {config[count] = serv; count += 1;}}
+    enum Server reader[4] = {Servers}; count = 0; for (enum Server serv = 0; serv < Servers; serv++) {if (uniformConstant(serv,shader)) {reader[count] = serv; count += 1;}}
+    for (int i = 0; i < 3; i++) code[shader].vertex[i] = vertex[i];
+    for (int i = 0; i < 3; i++) code[shader].element[i] = element[i];
+    for (int i = 0; i < 3; i++) code[shader].feedback[i] = feedback[i];
+    for (int i = 0; i < 4; i++) code[shader].server[i] = uniform[i];
+    for (int i = 0; i < 4; i++) code[shader].config[i] = config[i];
+    glUseProgram(code[shader].handle);
+    for (int i = 0; i < 4; i++) {enum Server serv = uniform[i]; if (serv >= Servers) break; setupUniform(code[shader].uniform+serv,code[shader].handle,serv,uniformClient(serv,shader));}
+    for (int i = 0; i < 4; i++) {enum Server serv = config[i]; if (serv >= Servers) break; setupUniform(code[shader].uniform+serv,code[shader].handle,serv,uniformClient(serv,shader));}
+    for (int i = 0; i < 4; i++) {enum Server serv = reader[i]; if (serv >= Servers) break; setupUniform(code[shader].uniform+serv,code[shader].handle,serv,uniformClient(serv,shader));}
+    glUseProgram(0);
 }
 
 void enqueShader(enum Shader shader, int file, Machine follow, enum Share share)
 {
-    int uniform = 0;
-    SWITCH(shader,Diplane) {setupUniform(1,Affine,Square,affineMata); uniform = 1;}
-    CASE(Dipoint) {setupUniform(1,Affine,Square,affineMata); uniform = 1;}
-    CASE(Coplane) {}
-    CASE(Copoint) {}
-    CASE(Adplane) {}
-    CASE(Adpoint) {}
-    CASE(Perplane) {
-        MyGLfloat feather[3] = {xPos,yPos,zPos};
-        MyGLfloat arrow[3] = {xPos*slope,yPos*slope,1.0};
-        setupUniform(1,Affine,Square,affineMata);
-        setupUniform(1,Feather,Array,feather);
-        setupUniform(1,Arrow,Array,arrow);
-        uniform = 3;}
-    CASE(Perpoint) {
-        MyGLfloat feather[3] = {xPos,yPos,zPos};
-        MyGLfloat arrow[3] = {xPos*slope,yPos*slope,1.0};
-        setupUniform(1,Affine,Square,affineMata);
-        setupUniform(1,Feather,Array,feather);
-        setupUniform(1,Arrow,Array,arrow);
-        uniform = 3;}
-    DEFAULT(exitErrstr("invalid shader\n");)
-    SWITCH(shader,Diplane) {enum Data buf[3] = {PlaneBuf,VersorBuf,FaceSub}; setupShader("diplane",Diplane,2,1,0,0,buf,follow,file,share);}
-    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupShader("dipoint",Dipoint,1,1,0,0,buf,follow,file,share);}
-    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupShader("coplane",Coplane,2,1,1,0,buf,follow,file,share);}
-    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupShader("copoint",Copoint,1,1,2,0,buf,follow,file,share);}
-    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupShader("adplane",Adplane,2,1,1,0,buf,follow,file,share);}
-    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupShader("adpoint",Adpoint,1,1,1,0,buf,follow,file,share);}
-    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; setupShader("perplane",Perplane,2,1,1,0,buf,follow,file,share);}
-    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupShader("perpoint",Perpoint,1,1,1,0,buf,follow,file,share);}
-    DEFAULT(exitErrstr("invalid shader %d\n",shader);)
+    struct Render render = {0};
+    render.shader = shader; setupCode(shader);
+    render.file = file; setupFile(file);
+    render.share = share;
+    *enlocRender(1) = render;
+    enqueMachine(&renderLock);
+    if (arrayCode(shader,1)->feedback > 0) followMachine(&renderWrap);
+    followMachine(&renderDraw);
+    if (arrayCode(shader,1)->feedback > 0) followMachine(&renderWait);
+    if (follow) followMachine(follow);
+    followMachine(&renderUnlock);
 }
 
 void enqueDishader()
@@ -425,10 +618,10 @@ void enqueDishader()
     if (renderSwap > 0 || renderClear > 0) {deferCommand(enqueDishader); return;}
     renderSwap = sizeFile();
     renderClear = 1;
-    for (int i = 0; i < sizeFile(); i++) enqueShader(dishader,i,0,0);
+    for (int i = 0; i < sizeFile(); i++) enqueShader(dishader,i,0,Zero);
 }
 
 void enquePershader()
 {
-    for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i,renderPierce,0);
+    for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i,renderPierce,Zero);
 }

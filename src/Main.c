@@ -59,122 +59,6 @@ void bringupBuiltin();
 void enqueCommand(Command cmd);
 #endif
 
-const char *inputCode(enum Shader shader)
-{
-    SWITCH(code[shader].input,GL_POINTS) return "#define INPUT points\n";
-    CASE(GL_TRIANGLES) return "#define INPUT triangles\n";
-    CASE(GL_TRIANGLES_ADJACENCY) return "#define INPUT triangles_adjacency\n";
-    DEFAULT(exitErrstr("unknown input primitive");)
-    return "";
-}
-
-const char *outputCode(enum Shader shader)
-{
-    SWITCH(code[shader].output,GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
-    CASE(GL_TRIANGLES) return "#define OUTPUT triangle_strip, max_vertices = 3\n";
-    DEFAULT(exitErrstr("unknown output primitive");)
-    return "";
-}
-
-extern const GLchar *uniformCode;
-extern const GLchar *projectCode;
-extern const GLchar *pierceCode;
-extern const GLchar *sideCode;
-extern const GLchar *expandCode;
-extern const GLchar *constructCode;
-extern const GLchar *intersectCode;
-
-void compileProgram(
-    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, int inp, int outp,
-    const char *name, enum Shader shader, const char *feedback0, const char *feedback1)
-{
-    GLint success = 0;
-    GLchar infoLog[512];
-    const GLchar *source[10] = {0};
-    GLuint prog = glCreateProgram();
-    GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[shader].input = inp; code[shader].output = outp; code[shader].program = prog;
-    source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
-    source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode;
-    source[7] = vertexCode;
-    glShaderSource(vertex, 8, source, NULL);
-    glCompileShader(vertex);
-    glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
-    if(!success) {
-        glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-        exitErrstr("could not compile vertex shader for program %s: %s\n", name, infoLog);}
-    glAttachShader(prog, vertex);
-    GLuint geometry = 0;
-    if (geometryCode) {
-        geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        source[7] = inputCode(shader);
-        source[8] = outputCode(shader);
-        source[9] = geometryCode;
-        glShaderSource(geometry, 10, source, NULL);
-        glCompileShader(geometry);
-        glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
-        if(!success) {
-            glGetShaderInfoLog(geometry, 512, NULL, infoLog);
-            exitErrstr("could not compile geometry shader for program %s: %s\n", name, infoLog);}
-        glAttachShader(prog, geometry);}
-    GLuint fragment = 0;
-    if (fragmentCode) {
-        fragment = glCreateShader(GL_FRAGMENT_SHADER);
-        source[7] = fragmentCode;
-        glShaderSource(fragment, 8, source, NULL);
-        glCompileShader(fragment);
-        glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
-        if(!success) {
-            glGetShaderInfoLog(fragment, 512, NULL, infoLog);
-            exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
-        glAttachShader(prog, fragment);}
-    if (feedback0 && feedback1) {
-        const char *feedback[2] = {feedback0,feedback1};
-        glTransformFeedbackVaryings(prog, 2, feedback, GL_SEPARATE_ATTRIBS);}
-    else if (feedback0) {
-        const char *feedback[1] = {feedback0};
-        glTransformFeedbackVaryings(prog, 1, feedback, GL_SEPARATE_ATTRIBS);}
-    glLinkProgram(prog);
-    glGetProgramiv(prog, GL_LINK_STATUS, &success);
-    if(!success) {
-        glGetProgramInfoLog(prog, 512, NULL, infoLog);
-        exitErrstr("could not link shaders for program %s: %s\n", name, infoLog);}
-    glDeleteShader(vertex);
-    if (geometryCode) glDeleteShader(geometry);
-    if (fragmentCode) glDeleteShader(fragment);
-}
-
-extern const GLchar *diplaneVertex;
-extern const GLchar *diplaneGeometry;
-extern const GLchar *diplaneFragment;
-extern const GLchar *dipointVertex;
-extern const GLchar *dipointGeometry;
-extern const GLchar *dipointFragment;
-extern const GLchar *coplaneVertex;
-extern const GLchar *coplaneGeometry;
-extern const GLchar *coplaneFragment;
-extern const GLchar *copointVertex;
-extern const GLchar *copointGeometry;
-extern const GLchar *copointFragment;
-extern const GLchar *adplaneVertex;
-extern const GLchar *adplaneGeometry;
-extern const GLchar *adplaneFragment;
-extern const GLchar *adpointVertex;
-extern const GLchar *adpointGeometry;
-extern const GLchar *adpointFragment;
-extern const GLchar *perplaneVertex;
-extern const GLchar *perplaneGeometry;
-extern const GLchar *perplaneFragment;
-extern const GLchar *perpointVertex;
-extern const GLchar *perpointGeometry;
-extern const GLchar *perpointFragment;
-extern const GLchar *replaneVertex;
-extern const GLchar *replaneGeometry;
-extern const GLchar *replaneFragment;
-extern const GLchar *repointVertex;
-extern const GLchar *repointGeometry;
-extern const GLchar *repointFragment;
-
 void displayError(int error, const char *description);
 void displayClose(GLFWwindow* window);
 void displayClick(GLFWwindow *window, int button, int action, int mods);;
@@ -191,8 +75,8 @@ void *timewheel(void *arg);
 
 int main(int argc, char **argv)
 {
-    if (sizeof(GLuint) != sizeof(MyGLuint)) exitErrstr("gluint too sizeof\n");
-    if (sizeof(GLfloat) != sizeof(MyGLfloat)) exitErrstr("glfloat too sizeof\n");
+    if (sizeof(GLuint) != sizeof(Myuint)) exitErrstr("gluint too sizeof\n");
+    if (sizeof(GLfloat) != sizeof(Myfloat)) exitErrstr("glfloat too sizeof\n");
 
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
@@ -236,17 +120,6 @@ int main(int argc, char **argv)
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane,0,0);
-    compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint,0,0);
-    compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane,"vector",0);
-    compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint,"vector","index");
-    compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane,"scalar",0);
-    compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint,"scalar",0);
-    compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane,"vector",0);
-    compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint,"vector",0);
-    compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane,"vector",0);
-    compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint,"vector","index");
-
     for (int i = 0; i < 27; i++) {
         int versor = i / 9;
         int column = (i % 9) / 3;
@@ -259,25 +132,6 @@ int main(int argc, char **argv)
     slope = 0.0;
     aspect = (float)ySiz/(1.0*(float)xSiz);
 
-    for (enum Shader i = 0; i < Shaders; i++) {
-        glUseProgram(code[i].program);
-        code[i].uniform[Invalid] = glGetUniformLocation(code[i].program, "invalid");
-        code[i].uniform[Basis] = glGetUniformLocation(code[i].program, "basis");
-        code[i].uniform[Affine] = glGetUniformLocation(code[i].program, "affine");
-        code[i].uniform[Feather] = glGetUniformLocation(code[i].program, "feather");
-        code[i].uniform[Arrow] = glGetUniformLocation(code[i].program, "arrow");
-        code[i].uniform[Cutoff] = glGetUniformLocation(code[i].program, "cutoff");
-        code[i].uniform[Slope] = glGetUniformLocation(code[i].program, "slope");
-        code[i].uniform[Aspect] = glGetUniformLocation(code[i].program, "aspect");
-        glUniform1fv(code[i].uniform[Invalid],2,invalid);
-        glUniformMatrix3fv(code[i].uniform[Basis],3,GL_FALSE,basisMat);
-        glUniformMatrix4fv(code[i].uniform[Affine],1,GL_FALSE,affineMata);
-        glUniform3f(code[i].uniform[Feather],0.0,0.0,0.0);
-        glUniform3f(code[i].uniform[Arrow],0.0,0.0,0.0);
-        glUniform1f(code[i].uniform[Cutoff],cutoff);
-        glUniform1f(code[i].uniform[Slope],slope);
-        glUniform1f(code[i].uniform[Aspect],aspect);}
-    glUseProgram(0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(windowHandle);
 

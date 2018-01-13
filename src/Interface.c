@@ -50,8 +50,7 @@ extern float basisMat[27];
 
 void displayClick(GLFWwindow *window, int button, int action, int mods);
 void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
-struct File *setupFile(int file);
-void enqueBuffer(int sub, int todo, int done, void *data, Command cmd);
+void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Command cmd);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
@@ -92,25 +91,6 @@ void metric()
     change.val = 0;
     change.vld = 0; // Map bit is clear because sub is from timewheel
     *enlocCmdChange(1) = change;
-}
-
-void configureForce()
-{
-    enum Data data = 0; // TODO
-    int done = *delocCmdInt(1);
-    int todo = *delocCmdInt(1);
-    struct File *file = setupFile(0);
-    struct Buffer *buffer = arrayBuffer(file->buffer[data],1);
-    int bufsiz = todo*buffer->dimn;
-    SWITCH(buffer->type,GL_UNSIGNED_INT) {
-        GLuint buf[bufsiz];
-        for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        enqueBuffer(file->buffer[data],todo,done,buf,0);}
-    CASE(GL_FLOAT) {
-        GLfloat buf[bufsiz];
-        for (int i = 0; i < bufsiz; i++) buf[i] = *delocCmdInt(1);
-        enqueBuffer(file->buffer[data],todo,done,buf,0);}
-    DEFAULT(exitErrstr("invalid buffer type\n");)
 }
 
 void displayResponse()
@@ -181,7 +161,7 @@ enum Action displayRequest(int state)
     ptr->lock.write -= 1;
     enum Data data = (dishader == Diplane ? FaceSub : FrameSub);
     int size = sizeReint(layer);
-    enqueBuffer(ptr->buffer[data],size,0,arrayReint(layer,0,size),enqueDishader);
+    enqueBuffer(file,data,size,0,arrayReint(layer,0,size),enqueDishader);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     return Advance;
 }
@@ -271,8 +251,8 @@ enum Action sculptFollow(int state)
 #define SCULPT_DEARG \
     int file = *deargCmdInt(1); \
     int plane = *deargCmdInt(1); \
-    int wait = *deargCmdInt(1); \
-    MyGLfloat vec[3]; \
+    int *wait = deargCmdInt(1); \
+    Myfloat vec[3]; \
     for (int i = 0; i < 3; i++) vec[i] = *deargCmdFloat(1); \
     int len = *deargCmdInt(1); \
     char str[len]; memcpy(str,deargCmdByte(len),len);
@@ -332,6 +312,7 @@ void hollowClick(int file, int plane, float xPos, float yPos, float zPos)
 
 double sqrt(double x);
 void glueMachine();
+void setupFile(int file);
 
 void bringupBuiltin()
 {
@@ -395,11 +376,11 @@ void bringupBuiltin()
         0,1,2,
     };
 
-    struct File *file = setupFile(0);
-    enqueBuffer(file->buffer[PlaneBuf],NUM_PLANES,0,plane,0);
-    enqueBuffer(file->buffer[VersorBuf],NUM_PLANES,0,versor,0); glueMachine();
-    enqueBuffer(file->buffer[FaceSub],NUM_FACES,0,face,0); glueMachine();
-    enqueBuffer(file->buffer[PointSub],NUM_POINTS,0,vertex,0); glueMachine();
-    enqueBuffer(file->buffer[SideSub],NUM_SIDES,0,wrt,enqueDishader); glueMachine();
+    setupFile(0);
+    enqueBuffer(0,PlaneBuf,NUM_PLANES,0,plane,0);
+    enqueBuffer(0,VersorBuf,NUM_PLANES,0,versor,0); glueMachine();
+    enqueBuffer(0,FaceSub,NUM_FACES,0,face,0); glueMachine();
+    enqueBuffer(0,PointSub,NUM_POINTS,0,vertex,0); glueMachine();
+    enqueBuffer(0,SideSub,NUM_SIDES,0,wrt,enqueDishader); glueMachine();
 }
 #endif

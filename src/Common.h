@@ -78,8 +78,8 @@ enum Event {
     Migrate, // wrt plane, boundary, place, embed: place, embed
     Events};
 
-typedef unsigned MyGLuint;
-typedef float MyGLfloat;
+typedef unsigned Myuint;
+typedef float Myfloat;
 typedef void (*Command)();
 enum Action {
     Reque, // be polite to other commands
@@ -114,7 +114,7 @@ enum Data { // render buffers
     SideSub, // per vertex prior planes
     HalfSub, // per plane prior vertices
     Datas};
-enum Uniform { // one value per uniform
+enum Server { // one value per uniform
     Invalid, // scalar indicating divide by near-zero
     Basis, // 3 points on each base plane through origin
     Affine, // rotation and translation of polytope
@@ -123,8 +123,14 @@ enum Uniform { // one value per uniform
     Cutoff, // cutoff plane z coordinate
     Slope, // x over z frustrum slope
     Aspect, // y over x ratio of frustrum intercepts
-    Uniforms};
-enum Struct {Square,Array,Scalar}; // uniform type
+    Servers};
+enum Client { // how to initialize uniform
+    AffineMat,
+    Clients};
+enum Format {
+    Array16,
+    Scalar3,
+    Formats};
 enum Share {Zero,Read,Write}; // lock type
 struct Lock {
     int read; // count of readers
@@ -132,49 +138,51 @@ struct Lock {
     int wait; // count of lock requests
     int take; // count of lock acquires
 };
-struct Form {
-    int size; // number of uniform floats
-    enum Uniform form;
-    enum Struct type;
-    struct Lock lock;
-};
-struct Render {
-    int file; // file of planes to render
-    enum Share share; // whether to lock file
-    int draw; // waiting for shader
-    int wait; // buffer sequence number
-    int uniform; // number of uniforms to setup
-    int vertex; // number of input buffers que
-    int element; // primitives per output buffer
-    int feedback; // number of output buffers on que
-    enum Shader shader;
-    const char *name;
-}; // argument to render functions
-struct Buffer {
-    const char *name;
-    MyGLuint handle; // source memory handle
-    MyGLuint copy; // target memory handle
-    MyGLuint query; // feedback completion test
-    MyGLuint loc; // vertex shader input
+struct Buffer { // information about server buffers
+    const char *name; // initialized as needed
+    Myuint handle; // source memory handle
+    Myuint copy; // target memory handle
+    Myuint query; // feedback completion test
+    Myuint loc; // vertex shader input
     int wrap; // desired vector count
     int room; // current vector count
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
     struct Lock lock; // lock on buffer
-}; // argument to render functions
-struct File {
-    MyGLfloat tweak;
-    struct Lock lock; // lock on topology in haskell
-    int buffer[Datas]; // subscripts into buffer queue
 };
-struct Code {
+struct File {
+    const char *name;
+    Myfloat tweak;
+    struct Lock lock; // lock on topology in haskell
+    struct Buffer buffer[Datas]; // only render buffer, and client uniforms are global
+};
+struct Uniform {
+    Myuint handle;
     struct Lock lock;
-    MyGLuint uniform[Uniforms];
-    MyGLuint program;
+    enum Client func; // which globals to use when setting
+};
+struct Code { // files use same shader code and server uniforms
+    struct Uniform uniform[Servers];
+    Myuint handle; // program handle
     int input;
     int output;
-    int limit;};
+    int limit;
+    enum Data vertex[3]; // index in arrayFile(file,1)->buffer
+    enum Data element[3]; // index in arrayFile(file,1)->buffer
+    enum Data feedback[3]; // index in arrayFile(file,1)->buffer
+    enum Server server[4]; // index into writelocked uniform
+    enum Server config[4]; // index into readlocked uniform
+    const char *name;
+};
+struct Render { // argument to render functions
+    enum Shader shader; // indicates which struct Code to use
+    int file; // arrayFile and Code enum Data subscript
+    int draw; // waiting for shader
+    int wait; // buffer sequence number
+    enum Share share; // whether to lock file
+};
+
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
@@ -283,7 +291,7 @@ EXTERNCEND
 DECLARE_FUNC(CmnCommands)
 DECLARE_STAGE(CmnCommand,Command)
 DECLARE_STAGE(CmnCmdInt,int)
-DECLARE_STAGE(CmnCmdFloat,MyGLfloat)
+DECLARE_STAGE(CmnCmdFloat,Myfloat)
 DECLARE_STAGE(CmnCmdByte,char)
 DECLARE_STAGE(CmnCmdCmd,Command)
 
@@ -319,21 +327,20 @@ DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(Machine,Machine)
 DECLARE_LOCAL(Redo,struct QueueBase *)
 
-DECLARE_LOCAL(Buffer,struct Buffer)
 DECLARE_LOCAL(File,struct File)
+DECLARE_LOCAL(Code,struct Code)
 
 DECLARE_TRUE(Reint,int,int)
-DECLARE_TRUE(Refloat,int,MyGLfloat)
+DECLARE_TRUE(Refloat,int,Myfloat)
 DECLARE_TRUE(Rebyte,int,char)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
 DECLARE_EXTRA(CmdInt,int)
-DECLARE_EXTRA(CmdFloat,MyGLfloat)
+DECLARE_EXTRA(CmdFloat,Myfloat)
 DECLARE_EXTRA(CmdByte,char)
 DECLARE_EXTRA(Void,Command)
 DECLARE_EXTRA(Render,struct Render)
-DECLARE_EXTRA(Uniform,struct Form)
 
 DECLARE_SOURCE(CmdOutputs)
 DECLARE_STAGE(CmdOutput,char)
@@ -419,7 +426,7 @@ DECLARE_STAGE(PcsOutput,char)
 DECLARE_SOURCE(PcsCommands)
 DECLARE_STAGE(PcsCommand,Command)
 DECLARE_STAGE(PcsCmdInt,int)
-DECLARE_STAGE(PcsCmdFloat,MyGLfloat)
+DECLARE_STAGE(PcsCmdFloat,Myfloat)
 DECLARE_STAGE(PcsCmdByte,char)
 DECLARE_STAGE(PcsCmdCmd,Command)
 

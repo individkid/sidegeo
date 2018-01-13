@@ -463,8 +463,8 @@ void displaySize(GLFWwindow *window, int width, int height)
 #endif
     aspect = (float)ySiz/(float)xSiz;
     for (enum Shader i = 0; i < Shaders; i++) {
-        glUseProgram(code[i].program);
-        glUniform1f(code[i].uniform[Aspect],aspect);}
+        glUseProgram(code[i].handle);
+        glUniform1f(code[i].uniform[Aspect].handle,aspect);}
     glUseProgram(0);
     enqueDishader();
 }

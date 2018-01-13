@@ -283,9 +283,8 @@ long long timewheelDelay();
 EXTERNCEND
 
 inline bool operator!=(const File &left, const File &right) {return false;}
-inline bool operator!=(const Buffer &left, const Buffer &right) {return false;}
+inline bool operator!=(const Code &left, const Code &right) {return false;}
 inline bool operator!=(const Render &left, const Render &right) {return false;}
-inline bool operator!=(const Form &left, const Form &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
 inline bool operator!=(const Signal &left, const Signal &right) {return false;}
@@ -295,7 +294,7 @@ inline bool operator!=(const Shape &left, const Shape &right) {return false;}
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdInt,int,CmnCommand)
-DEFINE_STAGE(CmnCmdFloat,MyGLfloat,CmnCmdInt)
+DEFINE_STAGE(CmnCmdFloat,Myfloat,CmnCmdInt)
 DEFINE_STAGE(CmnCmdByte,char,CmnCmdFloat)
 DEFINE_STAGE(CmnCmdCmd,Command,CmnCmdByte)
 
@@ -331,21 +330,20 @@ DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(Machine,Machine)
 DEFINE_LOCAL(Redo,struct QueueBase *)
 
-DEFINE_LOCAL(Buffer,struct Buffer)
 DEFINE_LOCAL(File,struct File)
+DEFINE_LOCAL(Code,struct Code)
 
 DEFINE_TRUE(Reint,int,int)
-DEFINE_TRUE(Refloat,int,MyGLfloat)
+DEFINE_TRUE(Refloat,int,Myfloat)
 DEFINE_TRUE(Rebyte,int,char)
 
 DEFINE_DEST(Commands,CmnCommands,CmnCommands)
 DEFINE_STAGE(Command,Command,Commands)
 DEFINE_EXTRA(CmdInt,int,Command)
-DEFINE_EXTRA(CmdFloat,MyGLfloat,CmdInt)
+DEFINE_EXTRA(CmdFloat,Myfloat,CmdInt)
 DEFINE_EXTRA(CmdByte,char,CmdFloat)
 DEFINE_EXTRA(Void,Command,CmdByte)
 DEFINE_EXTRA(Render,struct Render,Void)
-DEFINE_EXTRA(Uniform,struct Form,Render)
 
 DEFINE_SOURCE(CmdOutputs,CmnOutputs,Commands)
 DEFINE_STAGE(CmdOutput,char,CmdOutputs)
@@ -431,7 +429,7 @@ DEFINE_STAGE(PcsOutput,char,PcsOutputs)
 DEFINE_SOURCE(PcsCommands,CmnCommands,PcsOutputs)
 DEFINE_STAGE(PcsCommand,Command,PcsCommands)
 DEFINE_STAGE(PcsCmdInt,int,PcsCommand)
-DEFINE_STAGE(PcsCmdFloat,MyGLfloat,PcsCmdInt)
+DEFINE_STAGE(PcsCmdFloat,Myfloat,PcsCmdInt)
 DEFINE_STAGE(PcsCmdByte,char,PcsCmdFloat)
 DEFINE_STAGE(PcsCmdCmd,Command,PcsCmdByte)
 
