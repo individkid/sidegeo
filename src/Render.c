@@ -168,11 +168,25 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
-void enqueUniform(struct Uniform *uniform, enum Server serv)
+void enqueUniform(struct Uniform *uniform, enum Server serv, int file)
 {
     SWITCH(serv,Invalid) glUniform1fv(uniform->handle,2,invalid);
     CASE(Basis) glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
-    CASE(Affine) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,affineMata);
+    CASE(Affine) {
+        struct File *ptr = arrayFile(file,1);
+        Myfloat *Sp = ptr->posedge;
+        Myfloat *Rn = ptr->negedge;
+        Myfloat *Ri = affineMata;
+        Myfloat Si[16];
+        Myfloat inv[16];
+        int posedge = (ptr->fixed && !ptr->last);
+        int negedge = (!ptr->fixed && ptr->last);
+        ptr->last = ptr->fixed;
+        copymat(Si,Sp,4);
+        if (!ptr->fixed) timesmat(timesmat(Si,invmat(copymat(inv,Rn,4),4),4),Ri,4);
+        if (posedge) copymat(Sp,Si,4);
+        if (negedge) copymat(Rn,Ri,4);
+        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,Si);}
     CASE(Feather) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
     CASE(Arrow) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
     CASE(Cutoff) glUniform1f(uniform->handle,cutoff);
@@ -239,7 +253,7 @@ enum Action renderDraw(int state)
     if (todo == 0) return Advance;
     glUseProgram(shader->handle);
     for (enum Server *i = server; *i < Servers; i++) {
-        enqueUniform(uniform+*i,*i);
+        enqueUniform(uniform+*i,*i,render->file);
         uniform[*i].lock.read += 1; uniform[*i].lock.write -= 1;}
     for (enum Data *i = feedback; *i < Datas; i++) {
         size_t size = buffer[*i].dimn*bufferType(buffer[*i].type);
@@ -346,6 +360,8 @@ void setupFile(int sub)
     struct File *file = arrayFile(sub,1);
     if (file->name != 0) return;
     file->name = "file"; // TODO
+    identmat(file->posedge,4);
+    identmat(file->negedge,4);
     setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
     setupBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
     setupBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
@@ -359,7 +375,7 @@ void setupFile(int sub)
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
 
-void setupUniform(struct Uniform *ptr, Myuint program, enum Server serv, enum Client func)
+void setupUniform(struct Uniform *ptr, Myuint program, enum Server serv, enum Client func, int file)
 {
     struct Uniform uniform = {0};
     uniform.func = func;
@@ -373,38 +389,52 @@ void setupUniform(struct Uniform *ptr, Myuint program, enum Server serv, enum Cl
     CASE(Aspect) uniform.handle = glGetUniformLocation(program, "aspect");
     DEFAULT(exitErrstr("invalid server uniform\n");)
     *ptr = uniform;
-    enqueUniform(ptr,serv);
+    enqueUniform(ptr,serv,file);
 }
 
-int bufferVertex(enum Data data, enum Shader shader)
+enum Data bufferVertex(int i, enum Shader shader)
 {
-    /*
-    SWITCH(shader,Diplane) {enum Data buf[2] = {PointBuf,FrameSub}; enum Server serv[1] = {Affine}; setupRender("diplane",Zero,2,1,1,buf,serv);}
-    CASE(Dipoint) {enum Data buf[2] = {PointBuf,FrameSub}; setupRender("dipoint",Zero,1,1,0,0,buf,0);}
-    CASE(Coplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,PointSub,PointBuf}; setupRender("coplane",Zero,2,1,1,0,buf,0);}
-    CASE(Copoint) {enum Data buf[4] = {PointBuf,PlaneSub,VersorBuf,PlaneBuf}; setupRender("copoint",Zero,1,1,2,0,buf,0);}
-    CASE(Adplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,SideSub,SideBuf}; setupRender("adplane",Zero,2,1,1,0,buf,0);}
-    CASE(Adpoint) {enum Data buf[3] = {PointBuf,HalfSub,SideBuf}; setupRender("adpoint",Zero,1,1,1,0,buf,0);}
-    CASE(Perplane) {enum Data buf[4] = {PlaneBuf,VersorBuf,FaceSub,PierceBuf}; enum Server serv[3] = {Affine,Feather,Arrow}; setupRender("perplane",Zero,2,1,1,3,buf,serv);}
-    CASE(Perpoint) {enum Data buf[3] = {PointBuf,FrameSub,PierceBuf}; setupRender("perpoint",Zero,1,1,1,0,buf,0);}
+    if (i >= 3) exitErrstr("invalid data index\n");
+    SWITCH(shader,Diplane) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
+    CASE(Dipoint) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
+    CASE(Coplane) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
+    CASE(Copoint) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
+    CASE(Adplane) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
+    CASE(Adpoint) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
+    CASE(Perplane) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
+    CASE(Perpoint) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
-    */
-    return -1; // TODO
+    return Datas;
 }
 
-int bufferElement(enum Data data, enum Shader shader)
+enum Data bufferElement(int i, enum Shader shader)
 {
-    return -1; // TODO
+    if (i >= 3) exitErrstr("invalid data index\n");
+    SWITCH(shader,Diplane) {enum Data data[3] = {FaceSub,Datas}; return data[i];}
+    CASE(Dipoint) {enum Data data[3] = {FrameSub,Datas}; return data[i];}
+    CASE(Coplane) {enum Data data[3] = {PointSub,Datas}; return data[i];}
+    CASE(Copoint) {enum Data data[3] = {PlaneSub,Datas}; return data[i];}
+    CASE(Adplane) {enum Data data[3] = {SideSub,Datas}; return data[i];}
+    CASE(Adpoint) {enum Data data[3] = {HalfSub,Datas}; return data[i];}
+    CASE(Perplane) {enum Data data[3] = {FaceSub,Datas}; return data[i];}
+    CASE(Perpoint) {enum Data data[3] = {FrameSub,Datas}; return data[i];}
+    DEFAULT(exitErrstr("invalid shader %d\n",shader);)
+    return Datas;
 }
 
-int bufferFeedback(enum Data data, enum Shader shader)
+enum Data bufferFeedback(int i, enum Shader shader)
 {
-    return -1; // TODO
-}
-
-int uniformServer(enum Server serv, enum Shader shader)
-{
-    return -1; // TODO
+    if (i >= 3) exitErrstr("invalid data index\n");
+    SWITCH(shader,Diplane) {enum Data data[3] = {Datas}; return data[i];}
+    CASE(Dipoint) {enum Data data[3] = {Datas}; return data[i];}
+    CASE(Coplane) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
+    CASE(Copoint) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
+    CASE(Adplane) {enum Data data[3] = {SideBuf,Datas}; return data[i];}
+    CASE(Adpoint) {enum Data data[3] = {SideBuf,Datas}; return data[i];}
+    CASE(Perplane) {enum Data data[3] = {PierceBuf,Datas}; return data[i];}
+    CASE(Perpoint) {enum Data data[3] = {PierceBuf,Datas}; return data[i];}
+    DEFAULT(exitErrstr("invalid shader %d\n",shader);)
+    return Datas;
 }
 
 enum Client uniformClient(enum Server serv, enum Shader shader)
@@ -421,32 +451,33 @@ enum Client uniformClient(enum Server serv, enum Shader shader)
     return Clients;
 }
 
-int uniformConstant(enum Server serv, enum Shader shader)
+enum Server uniformServer(int i, enum Shader shader)
 {
-    SWITCH(serv,Invalid) return 1; // TODO some shaders dont use
-    CASE(Basis) return 1; // TODO some shaders dont use
-    CASE(Affine) return 0;
-    CASE(Feather) return 0;
-    CASE(Arrow) return 0;
-    CASE(Cutoff) return 1; // TODO some shaders dont use
-    CASE(Slope) return 1; // TODO some shaders dont use
-    CASE(Aspect) return 1; // TODO some shaders dont use
-    DEFAULT(exitErrstr("invlid server\n");)
-    return 0;
+    if (i >= 4) exitErrstr("uniform too server\n");
+    SWITCH(shader,Diplane) {enum Server server[4] = {Affine,Servers}; return server[i];}
+    CASE(Dipoint) {enum Server server[4] = {Affine,Servers}; return server[i];}
+    CASE(Coplane) {enum Server server[4] = {Servers}; return server[i];} // TODO
+    CASE(Copoint) {enum Server server[4] = {Servers}; return server[i];} // TODO
+    CASE(Adplane) {enum Server server[4] = {Servers}; return server[i];} // TODO
+    CASE(Adpoint) {enum Server server[4] = {Servers}; return server[i];} // TODO
+    CASE(Perplane) {enum Server server[4] = {Affine,Feather,Servers}; return server[i];}
+    CASE(Perpoint) {enum Server server[4] = {Affine,Feather,Servers}; return server[i];}
+    DEFAULT(exitErrstr("uniform too server\n");)
+    return Servers;
 }
 
-int uniformGlobal(enum Server serv, enum Shader shader)
+enum Server uniformGlobal(int i, enum Shader shader)
 {
-    SWITCH(serv,Invalid) return 0;
-    CASE(Basis) return 0;
-    CASE(Affine) return 0;
-    CASE(Feather) return 0;
-    CASE(Arrow) return 0;
-    CASE(Cutoff) return 1; // TODO need read lock because changed globally
-    CASE(Slope) return 1; // TODO need read lock because changed globally
-    CASE(Aspect) return 1; // TODO need read lock because changed globally
-    DEFAULT(exitErrstr("invlid server\n");)
-    return 0;
+    if (i >= 4) exitErrstr("uniform too global\n");
+    enum Server server[4] = {Cutoff,Slope,Aspect,Servers};
+    return server[i];
+}
+
+enum Server uniformConstant(int i, enum Shader shader)
+{
+    if (i >= 4) exitErrstr("uniform too global\n");
+    enum Server server[4] = {Invalid,Basis,Servers}; // TODO some shaders dont use
+    return server[i];
 }
 
 const char *inputCode(enum Shader shader)
@@ -565,7 +596,7 @@ extern const GLchar *repointVertex;
 extern const GLchar *repointGeometry;
 extern const GLchar *repointFragment;
 
-void setupCode(enum Shader shader)
+void setupCode(enum Shader shader, int file)
 {
     if (code[shader].name != 0) return;
     code[shader].name = "code"; // TODO
@@ -580,28 +611,25 @@ void setupCode(enum Shader shader)
     CASE(Replane) compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane,"vector",0);
     CASE(Repoint) compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint,"vector","index");
     DEFAULT(exitErrstr("unknown shader type\n");)
-    enum Data vertex[3] = {Datas}; int count = 0; for (enum Data data = 0; data < Datas; data++) {if (bufferVertex(data,shader)) {vertex[count] = data; count += 1;}}
-    enum Data element[3] = {Datas}; count = 0; for (enum Data data = 0; data < Datas; data++) {if (bufferVertex(data,shader)) {element[count] = data; count += 1;}}
-    enum Data feedback[3] = {Datas}; count = 0; for (enum Data data = 0; data < Datas; data++) {if (bufferVertex(data,shader)) {feedback[count] = data; count += 1;}}
-    enum Server uniform[4] = {Servers}; count = 0; for (enum Server serv = 0; serv < Servers; serv++) {if (uniformServer(serv,shader)) {uniform[count] = serv; count += 1;}}
-    enum Server config[4] = {Servers}; count = 0; for (enum Server serv = 0; serv < Servers; serv++) {if (uniformGlobal(serv,shader)) {config[count] = serv; count += 1;}}
-    enum Server reader[4] = {Servers}; count = 0; for (enum Server serv = 0; serv < Servers; serv++) {if (uniformConstant(serv,shader)) {reader[count] = serv; count += 1;}}
-    for (int i = 0; i < 3; i++) code[shader].vertex[i] = vertex[i];
-    for (int i = 0; i < 3; i++) code[shader].element[i] = element[i];
-    for (int i = 0; i < 3; i++) code[shader].feedback[i] = feedback[i];
-    for (int i = 0; i < 4; i++) code[shader].server[i] = uniform[i];
-    for (int i = 0; i < 4; i++) code[shader].config[i] = config[i];
+    for (int i = 0; i < 3; i++) code[shader].vertex[i] = bufferVertex(i,shader);
+    for (int i = 0; i < 3; i++) code[shader].element[i] = bufferElement(i,shader);
+    for (int i = 0; i < 3; i++) code[shader].feedback[i] = bufferFeedback(i,shader);
+    for (int i = 0; i < 4; i++) code[shader].server[i] = uniformServer(i,shader);
+    for (int i = 0; i < 4; i++) code[shader].config[i] = uniformGlobal(i,shader);
+    for (int i = 0; i < 4; i++) code[shader].reader[i] = uniformConstant(i,shader);
     glUseProgram(code[shader].handle);
-    for (int i = 0; i < 4; i++) {enum Server serv = uniform[i]; if (serv >= Servers) break; setupUniform(code[shader].uniform+serv,code[shader].handle,serv,uniformClient(serv,shader));}
-    for (int i = 0; i < 4; i++) {enum Server serv = config[i]; if (serv >= Servers) break; setupUniform(code[shader].uniform+serv,code[shader].handle,serv,uniformClient(serv,shader));}
-    for (int i = 0; i < 4; i++) {enum Server serv = reader[i]; if (serv >= Servers) break; setupUniform(code[shader].uniform+serv,code[shader].handle,serv,uniformClient(serv,shader));}
+    enum Server temp = Servers;
+    struct Uniform *uniform = code[shader].uniform;
+    for (int i = 0; (temp = code[shader].server[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,uniformClient(temp,shader),file);
+    for (int i = 0; (temp = code[shader].config[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,uniformClient(temp,shader),file);
+    for (int i = 0; (temp = code[shader].reader[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,uniformClient(temp,shader),file);
     glUseProgram(0);
 }
 
 void enqueShader(enum Shader shader, int file, Machine follow, enum Share share)
 {
     struct Render render = {0};
-    render.shader = shader; setupCode(shader);
+    render.shader = shader; setupCode(shader,file);
     render.file = file; setupFile(file);
     render.share = share;
     *enlocRender(1) = render;

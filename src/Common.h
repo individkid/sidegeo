@@ -153,7 +153,21 @@ struct Buffer { // information about server buffers
 };
 struct File {
     const char *name;
-    Myfloat tweak;
+    Myfloat tweak; // from --configure
+    int fixed; // whether object moves opposite to view
+    int last; // last value of fixed to detect change short of glitches
+    Myfloat posedge[16]; // Sp sent to uniform when fixed went to 1
+    Myfloat negedge[16]; // Rn manipulation of view when fixed went to 0
+    // sent S; requested R;
+    // fixed went to 1 at p; went to 0 at n
+    // i >= p; i >= n;
+    // S0 = R0
+    // if n = 0, then p = 0
+    // if i = 0, then n = p = 0
+    // if p >= n, then Si = Sp
+    // if n >= p, then as i -> n, Si -> Sp
+    // if n >= p, then Si = (Sp/Rn)Ri
+    // Si is continuous
     struct Lock lock; // lock on topology in haskell
     struct Buffer buffer[Datas]; // only render buffer, and client uniforms are global
 };
@@ -173,6 +187,7 @@ struct Code { // files use same shader code and server uniforms
     enum Data feedback[3]; // index in arrayFile(file,1)->buffer
     enum Server server[4]; // index into writelocked uniform
     enum Server config[4]; // index into readlocked uniform
+    enum Server reader[4]; // index into unmodified uniform
     const char *name;
 };
 struct Render { // argument to render functions
