@@ -432,6 +432,23 @@ enum Data bufferFeedback(int i, enum Shader shader)
     return Datas;
 }
 
+const char *feedbackCode(int i, enum Shader shader)
+{
+    if (i >= 3) exitErrstr("invalid feedback index\n");
+    SWITCH(shader,Diplane) {const char *feedback[3] = {0,0,0}; return feedback[i];}
+    CASE(Dipoint) {const char *feedback[3] = {0,0,0}; return feedback[i];}
+    CASE(Coplane) {const char *feedback[3] = {"vector",0,0}; return feedback[i];}
+    CASE(Copoint) {const char *feedback[3] = {"vector","index",0}; return feedback[i];}
+    CASE(Adplane) {const char *feedback[3] = {"scalar",0,0}; return feedback[i];}
+    CASE(Adpoint) {const char *feedback[3] = {"scalar",0,0}; return feedback[i];}
+    CASE(Perplane) {const char *feedback[3] = {"vector",0,0}; return feedback[i];}
+    CASE(Perpoint) {const char *feedback[3] = {"vector",0,0}; return feedback[i];}
+    CASE(Replane) {const char *feedback[3] = {"vector",0,0}; return feedback[i];}
+    CASE(Repoint) {const char *feedback[3] = {"vector","index",0}; return feedback[i];}
+    DEFAULT(exitErrstr("invalid shader\n");)
+    return 0;
+}
+
 enum Client uniformClient(enum Server serv, enum Shader shader)
 {
     SWITCH(serv,Invalid) return Clients;
@@ -502,14 +519,14 @@ extern const GLchar *intersectCode;
 
 void compileProgram(
     const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, int inp, int outp,
-    const char *name, enum Shader shader, const char *feedback0, const char *feedback1)
+    const char *name, enum Shader shader, const char *feedback[3])
 {
     GLint success = 0;
     GLchar infoLog[512];
     const GLchar *source[10] = {0};
     Myuint prog = glCreateProgram();
     Myuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[shader].input = inp; code[shader].output = outp; code[shader].handle = prog;
+    code[shader].input = inp; code[shader].output = outp; code[shader].handle = prog; code[shader].name = name;
     source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
     source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode;
     source[7] = vertexCode;
@@ -544,12 +561,8 @@ void compileProgram(
             glGetShaderInfoLog(fragment, 512, NULL, infoLog);
             exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
         glAttachShader(prog, fragment);}
-    if (feedback0 && feedback1) {
-        const char *feedback[2] = {feedback0,feedback1};
-        glTransformFeedbackVaryings(prog, 2, feedback, GL_SEPARATE_ATTRIBS);}
-    else if (feedback0) {
-        const char *feedback[1] = {feedback0};
-        glTransformFeedbackVaryings(prog, 1, feedback, GL_SEPARATE_ATTRIBS);}
+    int count = 0; for (int i = 0; feedback[i]; i++) count++;
+    if (count) glTransformFeedbackVaryings(prog, count, feedback, GL_SEPARATE_ATTRIBS);
     glLinkProgram(prog);
     glGetProgramiv(prog, GL_LINK_STATUS, &success);
     if(!success) {
@@ -594,17 +607,17 @@ extern const GLchar *repointFragment;
 void setupCode(enum Shader shader, int file)
 {
     if (code[shader].name != 0) return;
-    code[shader].name = "code"; // TODO
-    SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane,0,0);
-    CASE(Dipoint) compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint,0,0);
-    CASE(Coplane) compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane,"vector",0);
-    CASE(Copoint) compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint,"vector","index");
-    CASE(Adplane) compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane,"scalar",0);
-    CASE(Adpoint) compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint,"scalar",0);
-    CASE(Perplane) compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane,"vector",0);
-    CASE(Perpoint) compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint,"vector",0);
-    CASE(Replane) compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane,"vector",0);
-    CASE(Repoint) compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint,"vector","index");
+    const char *feedback[3]; for (int i = 0; i < 3; i++) feedback[i] = feedbackCode(i,shader);
+    SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane,feedback);
+    CASE(Dipoint) compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint,feedback);
+    CASE(Coplane) compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane,feedback);
+    CASE(Copoint) compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint,feedback);
+    CASE(Adplane) compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane,feedback);
+    CASE(Adpoint) compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint,feedback);
+    CASE(Perplane) compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane,feedback);
+    CASE(Perpoint) compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint,feedback);
+    CASE(Replane) compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane,feedback);
+    CASE(Repoint) compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint,feedback);
     DEFAULT(exitErrstr("unknown shader type\n");)
     for (int i = 0; i < 3; i++) code[shader].vertex[i] = bufferVertex(i,shader);
     for (int i = 0; i < 3; i++) code[shader].element[i] = bufferElement(i,shader);

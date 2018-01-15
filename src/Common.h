@@ -179,8 +179,8 @@ struct Uniform {
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers];
     Myuint handle; // program handle
-    int input;
-    int output;
+    int input; // organization and layout of input buffer items
+    int output; // organization and layout of output buffer items
     enum Data vertex[3]; // index in arrayFile(file,1)->buffer
     enum Data element[3]; // index in arrayFile(file,1)->buffer
     enum Data feedback[3]; // index in arrayFile(file,1)->buffer
