@@ -330,49 +330,49 @@ void bringupBuiltin()
     // p^2 = q^2 + a^2 = (i - p)^2 + a^2 = i^2 - 2ip + p^2 + a^2
     // 2ip = i^2 + a^2
     // p = (i^2 + a^2)/(2i) = 1/(2i)
-    GLfloat z = 0.0;
-    GLfloat f = 1.0; // length of edges
-    GLfloat g = 0.5; // midpoint on edge from corner
-    GLfloat fs = f * f;
-    GLfloat gs = g * g;
-    GLfloat hs = fs - gs;
-    GLfloat h = sqrt(hs); // height of triangle
-    GLfloat hd = h + h;
-    GLfloat a = fs / hd; // distance from corner to center of triangle
-    GLfloat b = h - a; // distance from base to center of triangle
-    GLfloat as = a * a;
-    GLfloat is = fs - as;
-    GLfloat i = sqrt(is); // height of tetrahedron
-    GLfloat id = i + i;
-    GLfloat p = fs / id; // distance from vertex to center of tetrahedron
-    GLfloat q = i - p; // distance from base to center of tetrahedron
-    GLfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
+    Myfloat z = 0.0;
+    Myfloat f = 1.0; // length of edges
+    Myfloat g = 0.5; // midpoint on edge from corner
+    Myfloat fs = f * f;
+    Myfloat gs = g * g;
+    Myfloat hs = fs - gs;
+    Myfloat h = sqrt(hs); // height of triangle
+    Myfloat hd = h + h;
+    Myfloat a = fs / hd; // distance from corner to center of triangle
+    Myfloat b = h - a; // distance from base to center of triangle
+    Myfloat as = a * a;
+    Myfloat is = fs - as;
+    Myfloat i = sqrt(is); // height of tetrahedron
+    Myfloat id = i + i;
+    Myfloat p = fs / id; // distance from vertex to center of tetrahedron
+    Myfloat q = i - p; // distance from base to center of tetrahedron
+    Myfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
         -g,-b, q,
          g,-b, q,
          z, a, q,
          z, z,-p,
     };
-    GLfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
+    Myfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
  0.204124, 0.204124, 0.204124,
  0.250000, -0.327350, 0.658248,
  -0.250000, 0.327350, -0.658248,
  -0.216506, -0.216506, -0.570060,
     };
-    GLuint versor[NUM_PLANES*SCALAR_DIMENSIONS] = {
+    Myuint versor[NUM_PLANES*SCALAR_DIMENSIONS] = {
         2,0,0,1,
     };
-    GLuint face[NUM_FACES*FACE_DIMENSIONS] = {
+    Myuint face[NUM_FACES*FACE_DIMENSIONS] = {
         0,1,2,3,2,3,
         1,2,3,0,3,0,
         2,3,0,1,0,1,
     };
-    GLuint vertex[NUM_POINTS*INCIDENCE_DIMENSIONS] = {
+    Myuint vertex[NUM_POINTS*INCIDENCE_DIMENSIONS] = {
         0,1,2,
         1,2,3,
         2,3,0,
         3,0,1,
     };
-    GLuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
+    Myuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
         0,1,2,
     };
 

@@ -116,7 +116,7 @@ int main(int argc, char **argv)
     glViewport(0, 0, xSiz, ySiz);
 #endif
 
-    GLuint VAO;
+    Myuint VAO;
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 

@@ -60,8 +60,8 @@ DEFINE_MSGSTR(CmdOutput)
 size_t bufferType(int size)
 {
     size_t retval = 0;
-    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(GLuint);
-    CASE(GL_FLOAT) retval = sizeof(GLfloat);
+    SWITCH(size,GL_UNSIGNED_INT) retval = sizeof(Myuint);
+    CASE(GL_FLOAT) retval = sizeof(Myfloat);
     DEFAULT(exitErrstr("unknown render type\n");)
     return retval;
 }
@@ -244,7 +244,7 @@ enum Action renderDraw(int state)
     if (*feedback < Datas) done = file->buffer[*feedback].done;
     if (*element < Datas) todo = file->buffer[*element].done - done;
     else if (*vertex < Datas) todo = file->buffer[*vertex].done - done;
-    if (shader->limit > 0 && shader->limit - done < todo) todo = shader->limit - done;
+    if (shader->limit > 0 && s`hader->limit - done < todo) todo = shader->limit - done;
     if (todo < 0) exitErrstr("%s too todo\n",shader->name);
     if (todo == 0) return Advance;
     glUseProgram(shader->handle);
@@ -292,7 +292,7 @@ enum Action renderWait(int state)
     if (*feedback >= Datas) return Advance;
     if (*element < Datas && buffer[*feedback].done == buffer[*element].done) return Advance;
     if (*element >= Datas && buffer[*feedback].done == buffer[*vertex].done) return Advance;
-    GLuint count = 0;
+    Myuint count = 0;
     glGetQueryObjectuiv(buffer[*feedback].query, GL_QUERY_RESULT_AVAILABLE, &count);
     if (count == GL_FALSE) count = 0;
     else glGetQueryObjectuiv(buffer[*feedback].query, GL_QUERY_RESULT, &count);
@@ -308,7 +308,7 @@ enum Action renderPierce(int state)
     if (*feedback == Datas || feedback[1] != Datas) exitErrstr("pierce too feedback\n");
     int dimn = buffer[*feedback].dimn;
     int done = buffer[*feedback].done;
-    GLfloat result[done*dimn];
+    Myfloat result[done*dimn];
     glBindBuffer(GL_ARRAY_BUFFER, buffer[*feedback].handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(buffer[*feedback].type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -334,7 +334,7 @@ enum Action renderUnlock(int state)
     return Advance;
 }
 
-void setupBuffer(struct Buffer *ptr, char *name, GLuint loc, int type, int dimn)
+void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
 {
     struct Buffer buffer = {0};
     buffer.name = name;
@@ -508,8 +508,8 @@ void compileProgram(
     GLint success = 0;
     GLchar infoLog[512];
     const GLchar *source[10] = {0};
-    GLuint prog = glCreateProgram();
-    GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
+    Myuint prog = glCreateProgram();
+    Myuint vertex = glCreateShader(GL_VERTEX_SHADER);
     code[shader].input = inp; code[shader].output = outp; code[shader].handle = prog;
     source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
     source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode;
@@ -521,7 +521,7 @@ void compileProgram(
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
         exitErrstr("could not compile vertex shader for program %s: %s\n", name, infoLog);}
     glAttachShader(prog, vertex);
-    GLuint geometry = 0;
+    Myuint geometry = 0;
     if (geometryCode) {
         geometry = glCreateShader(GL_GEOMETRY_SHADER);
         source[7] = inputCode(shader);
@@ -534,7 +534,7 @@ void compileProgram(
             glGetShaderInfoLog(geometry, 512, NULL, infoLog);
             exitErrstr("could not compile geometry shader for program %s: %s\n", name, infoLog);}
         glAttachShader(prog, geometry);}
-    GLuint fragment = 0;
+    Myuint fragment = 0;
     if (fragmentCode) {
         fragment = glCreateShader(GL_FRAGMENT_SHADER);
         source[7] = fragmentCode;
