@@ -127,13 +127,6 @@ void leftTransform()
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
-void leftLeft()
-{
-    // glUseProgram(code[pershader].program);
-    // glUniformMatrix4fv(code[pershader].uniform[Affine],1,GL_FALSE,affineMata);
-    // glUseProgram(0);
-}
-
 void rightRight()
 {
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
@@ -145,18 +138,6 @@ void rightRight()
 void rightLeft()
 {
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
-    // glUseProgram(code[pershader].program);
-    // glUniformMatrix4fv(code[pershader].uniform[Affine],1,GL_FALSE,affineMata);
-    // glUseProgram(0);
-}
-
-void transformRight()
-{
-    // glUseProgram(code[pershader].program);
-    // glUniform3f(code[pershader].uniform[Feather],xPos,yPos,zPos);
-    // glUniform3f(code[pershader].uniform[Arrow],xPos*slope,yPos*slope,1.0);
-    // glUseProgram(0);
-    enquePershader();
 }
 
 void matrixMatrix()
@@ -198,9 +179,6 @@ void transformRotate()
     copymat(affineMata,affineMat,4);
     jumpmat(affineMata,affineMatb,4);
     matrixFixed(v); jumpmat(affineMata,v,4);
-    // glUseProgram(code[dishader].program);
-    // glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
-    // glUseProgram(0);
     enqueDishader();
 }
 
@@ -212,15 +190,13 @@ void transformTranslate()
     copymat(affineMata,affineMat,4);
     jumpmat(affineMata,affineMatb,4);
     jumpmat(affineMata,u,4);
-    // glUseProgram(code[dishader].program);
-    // glUniformMatrix4fv(code[dishader].uniform[Affine],1,GL_FALSE,affineMata);
-    // glUseProgram(0);
     enqueDishader();
 }
 
 void transformLook()
 {
     // TODO
+    enqueDishader();
 }
 
 void transformMouse()
@@ -271,6 +247,15 @@ void transformDrive()
     float scale = wPos/ROLLER_GRANULARITY;
     identmat(affineMatb,4); affineMatb[14] += scale;
     transformMouse();
+}
+
+void transformScroll()
+{
+    SWITCH(mode[Roller],Clock) transformClock();
+    CASE(Cylinder) transformCylinder();
+    CASE(Scale) transformScale();
+    CASE(Drive) transformDrive();
+    DEFAULT(exitErrstr("invalid roller mode\n");)
 }
 
 void modifyRotate()
@@ -369,8 +354,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
             DEFAULT(exitErrstr("invalid click mode\n");)}
         CASE(Transform) {
             SWITCH(click,Init) FALL(Right) {leftTransform(); click = Left;}
-            CASE(Matrix) {matrixMatrix(); click = Left;}
-            FALL(Left) {leftLeft(); click = Init;}
+            CASE(Matrix) matrixMatrix(); FALL(Left) click = Init;
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
@@ -378,8 +362,7 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
         CASE(Transform) {
             SWITCH(click,Init)
             CASE(Right) {rightRight(); click = Left;}
-            CASE(Matrix) {matrixMatrix(); click = Left;}
-            FALL(Left) {rightLeft(); click = Right;}
+            CASE(Matrix) matrixMatrix(); FALL(Left) {rightLeft(); click = Right;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode\n");)}
     DEFAULT(exitErrstr("displayClick %d\n",button);)
@@ -392,14 +375,8 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
-        SWITCH(click,Init) FALL(Right) 
-            transformRight();
-        CASE(Matrix) {matrixMatrix(); click = Left;}
-        FALL(Left) {
-            SWITCH(mode[Mouse],Rotate) transformRotate();
-            CASE(Translate) transformTranslate();
-            CASE(Look) transformLook();
-            DEFAULT(exitErrstr("invalid mouse mode\n");)}
+        SWITCH(click,Init) FALL(Right) enquePershader();
+        CASE(Matrix) matrixMatrix(); FALL(Left) transformMouse();
         DEFAULT(exitErrstr("invalid click mode\n");)}
     DEFAULT(exitErrstr("invalid sculpt mode\n");)
 }
@@ -410,13 +387,7 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right)
-        CASE(Left) click = Matrix;
-        FALL(Matrix) {
-            SWITCH(mode[Roller],Clock) transformClock();
-            CASE(Cylinder) transformCylinder();
-            CASE(Scale) transformScale();
-            CASE(Drive) transformDrive();
-            DEFAULT(exitErrstr("invalid roller mode\n");)}
+        CASE(Left) click = Matrix; FALL(Matrix) transformScroll();
         DEFAULT(exitErrstr("invalid click mode\n");)}            
     DEFAULT(exitErrstr("invalid sculpt mode");)
 }

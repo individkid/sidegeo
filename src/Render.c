@@ -168,7 +168,7 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
-void enqueUniform(struct Uniform *uniform, enum Server serv, int file)
+void enqueUniform(struct Uniform *uniform, enum Server serv, int file, enum Shader shader)
 {
     SWITCH(serv,Invalid) glUniform1fv(uniform->handle,2,invalid);
     CASE(Basis) glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
@@ -183,8 +183,12 @@ void enqueUniform(struct Uniform *uniform, enum Server serv, int file)
         if (ptr->fixed) copymat(sent,ptr->saved,4);
         else timesmat(copymat(sent,ptr->ratio,4),affineMata,4);
         glUniformMatrix4fv(uniform->handle,1,GL_FALSE,sent);}
-    CASE(Feather) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
-    CASE(Arrow) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
+    CASE(Feather)
+        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos,yPos,zPos);
+        DEFAULT(exitErrstr("feather too shader\n");)
+    CASE(Arrow)
+        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
+        DEFAULT(exitErrstr("arrow too shader\n");)
     CASE(Cutoff) glUniform1f(uniform->handle,cutoff);
     CASE(Slope) glUniform1f(uniform->handle,slope);
     CASE(Aspect) glUniform1f(uniform->handle,aspect);
@@ -248,7 +252,7 @@ enum Action renderDraw(int state)
     if (todo == 0) return Advance;
     glUseProgram(shader->handle);
     for (enum Server *i = server; *i < Servers; i++) {
-        enqueUniform(uniform+*i,*i,render->file);
+        enqueUniform(uniform+*i,*i,render->file,render->shader);
         uniform[*i].lock.read += 1; uniform[*i].lock.write -= 1;}
     for (enum Data *i = feedback; *i < Datas; i++) {
         size_t size = buffer[*i].dimn*bufferType(buffer[*i].type);
@@ -370,10 +374,9 @@ void setupFile(int sub)
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
 
-void setupUniform(struct Uniform *ptr, Myuint program, enum Server serv, enum Client func, int file)
+void setupUniform(struct Uniform *ptr, Myuint program, enum Server serv, int file, enum Shader shader)
 {
     struct Uniform uniform = {0};
-    uniform.func = func;
     SWITCH(serv,Invalid) uniform.handle = glGetUniformLocation(program, "invalid");
     CASE(Basis) uniform.handle = glGetUniformLocation(program, "basis");
     CASE(Affine) uniform.handle = glGetUniformLocation(program, "affine");
@@ -384,7 +387,7 @@ void setupUniform(struct Uniform *ptr, Myuint program, enum Server serv, enum Cl
     CASE(Aspect) uniform.handle = glGetUniformLocation(program, "aspect");
     DEFAULT(exitErrstr("invalid server uniform\n");)
     *ptr = uniform;
-    enqueUniform(ptr,serv,file);
+    enqueUniform(ptr,serv,file,shader);
 }
 
 enum Data bufferVertex(int i, enum Shader shader)
@@ -447,20 +450,6 @@ const char *feedbackCode(int i, enum Shader shader)
     CASE(Repoint) {const char *feedback[3] = {"vector","index",0}; return feedback[i];}
     DEFAULT(exitErrstr("invalid shader\n");)
     return 0;
-}
-
-enum Client uniformClient(enum Server serv, enum Shader shader)
-{
-    SWITCH(serv,Invalid) return Clients;
-    CASE(Basis) return Clients;
-    CASE(Affine) return Clients;
-    CASE(Feather) return Clients; // TODO depends on shader
-    CASE(Arrow) return Clients; // TODO depends on shader
-    CASE(Cutoff) return Clients;
-    CASE(Slope) return Clients;
-    CASE(Aspect) return Clients;
-    DEFAULT(exitErrstr("invlid server\n");)
-    return Clients;
 }
 
 enum Server uniformServer(int i, enum Shader shader)
@@ -628,9 +617,9 @@ void setupCode(enum Shader shader, int file)
     glUseProgram(code[shader].handle);
     enum Server temp = Servers;
     struct Uniform *uniform = code[shader].uniform;
-    for (int i = 0; (temp = code[shader].server[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,uniformClient(temp,shader),file);
-    for (int i = 0; (temp = code[shader].config[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,uniformClient(temp,shader),file);
-    for (int i = 0; (temp = code[shader].reader[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,uniformClient(temp,shader),file);
+    for (int i = 0; (temp = code[shader].server[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,file,shader);
+    for (int i = 0; (temp = code[shader].config[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,file,shader);
+    for (int i = 0; (temp = code[shader].reader[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,file,shader);
     glUseProgram(0);
 }
 

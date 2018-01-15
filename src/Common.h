@@ -124,9 +124,6 @@ enum Server { // one value per uniform
     Slope, // x over z frustrum slope
     Aspect, // y over x ratio of frustrum intercepts
     Servers};
-enum Client { // how to initialize uniform
-    AffineMat,
-    Clients};
 enum Format {
     Array16,
     Scalar3,
@@ -174,7 +171,6 @@ struct File {
 struct Uniform {
     Myuint handle;
     struct Lock lock;
-    enum Client func; // which globals to use when setting
 };
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers];
