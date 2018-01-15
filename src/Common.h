@@ -156,8 +156,8 @@ struct File {
     Myfloat tweak; // from --configure
     int fixed; // whether object moves opposite to view
     int last; // last value of fixed to detect change short of glitches
-    Myfloat posedge[16]; // Sp sent to uniform when fixed went to 1
-    Myfloat negedge[16]; // Rn manipulation of view when fixed went to 0
+    Myfloat saved[16]; // Sp sent to uniform when fixed went to 1
+    Myfloat ratio[16]; // Sp/Rn where Rn is manipulation of view when fixed went to 0
     // sent S; requested R;
     // fixed went to 1 at p; went to 0 at n
     // i >= p; i >= n;

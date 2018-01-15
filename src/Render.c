@@ -174,19 +174,15 @@ void enqueUniform(struct Uniform *uniform, enum Server serv, int file)
     CASE(Basis) glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
     CASE(Affine) {
         struct File *ptr = arrayFile(file,1);
-        Myfloat *Sp = ptr->posedge;
-        Myfloat *Rn = ptr->negedge;
-        Myfloat *Ri = affineMata;
-        Myfloat Si[16];
-        Myfloat inv[16];
         int posedge = (ptr->fixed && !ptr->last);
         int negedge = (!ptr->fixed && ptr->last);
+        Myfloat sent[16];
         ptr->last = ptr->fixed;
-        copymat(Si,Sp,4);
-        if (!ptr->fixed) timesmat(timesmat(Si,invmat(copymat(inv,Rn,4),4),4),Ri,4);
-        if (posedge) copymat(Sp,Si,4);
-        if (negedge) copymat(Rn,Ri,4);
-        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,Si);}
+        if (posedge) copymat(ptr->saved,sent,4);
+        if (negedge) timesmat(invmat(copymat(ptr->ratio,affineMata,4),4),ptr->saved,4);
+        if (ptr->fixed) copymat(sent,ptr->saved,4);
+        else timesmat(copymat(sent,ptr->ratio,4),affineMata,4);
+        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,sent);}
     CASE(Feather) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
     CASE(Arrow) glUniform3f(uniform->handle,0.0,0.0,0.0); // TODO depends on uniform->func
     CASE(Cutoff) glUniform1f(uniform->handle,cutoff);
@@ -360,8 +356,8 @@ void setupFile(int sub)
     struct File *file = arrayFile(sub,1);
     if (file->name != 0) return;
     file->name = "file"; // TODO
-    identmat(file->posedge,4);
-    identmat(file->negedge,4);
+    identmat(file->saved,4);
+    identmat(file->ratio,4);
     setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
     setupBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
     setupBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
