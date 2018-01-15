@@ -244,7 +244,6 @@ enum Action renderDraw(int state)
     if (*feedback < Datas) done = file->buffer[*feedback].done;
     if (*element < Datas) todo = file->buffer[*element].done - done;
     else if (*vertex < Datas) todo = file->buffer[*vertex].done - done;
-    if (shader->limit > 0 && s`hader->limit - done < todo) todo = shader->limit - done;
     if (todo < 0) exitErrstr("%s too todo\n",shader->name);
     if (todo == 0) return Advance;
     glUseProgram(shader->handle);
