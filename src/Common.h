@@ -148,6 +148,19 @@ struct Buffer { // information about server buffers
     int dimn; // elements per vector
     struct Lock lock; // lock on buffer
 };
+struct Display {
+    int xSiz;
+    int ySiz;
+    int xLoc;
+    int yLoc;
+    Myuint VAO;
+    int swap;
+    int clear;
+    void *display;
+#ifdef __linux__
+    void *screen;
+#endif
+};
 struct File {
     const char *name;
     Myfloat tweak; // from --configure
@@ -173,8 +186,10 @@ struct Uniform {
     struct Lock lock;
 };
 struct Code { // files use same shader code and server uniforms
-    struct Uniform uniform[Servers];
+    struct Uniform uniform[Servers]; // uniforms used by program
+    enum Shader shader; // program type
     Myuint handle; // program handle
+    int disp; // which glfw display this runs on
     int input; // organization and layout of input buffer items
     int output; // organization and layout of output buffer items
     enum Data vertex[3]; // index in arrayFile(file,1)->buffer
@@ -188,6 +203,7 @@ struct Code { // files use same shader code and server uniforms
 struct Render { // argument to render functions
     enum Shader shader; // indicates which struct Code to use
     int file; // arrayFile and Code enum Data subscript
+    int display; // which display to render to
     int draw; // waiting for shader
     int wait; // buffer sequence number
     enum Share share; // whether to lock file
@@ -288,6 +304,7 @@ float *identmat(float *u, int n);
 float *copyary(float *u, float *v, int duty, int stride, int size);
 float *copyvec(float *u, float *v, int n);
 float *copymat(float *u, float *v, int n);
+float *compmat(float *u, float *v);
 float *crossmat(float *u);
 float *crossvec(float *u, float *v);
 float detmat(float *u, int n);
@@ -337,8 +354,11 @@ DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(Machine,Machine)
 DECLARE_LOCAL(Redo,struct QueueBase *)
 
-DECLARE_LOCAL(File,struct File)
-DECLARE_LOCAL(Code,struct Code)
+DECLARE_LOCAL(Display,struct Display)
+DECLARE_META(DisplayCode,struct Code)
+DECLARE_POINTER(Code,struct Code)
+DECLARE_META(DisplayFile,struct File)
+DECLARE_POINTER(File,struct File)
 
 DECLARE_TRUE(Reint,int,int)
 DECLARE_TRUE(Refloat,int,Myfloat)

@@ -173,6 +173,12 @@ float *copymat(float *u, float *v, int n)
     return copyvec(u,v,n*n);
 }
 
+float *compmat(float *u, float *v)
+{
+    for (int i = 0; i < 16; i++) if (u[i] != v[i]) return 0;
+    return u;
+}
+
 float *crossmat(float *u)
 {
     float x = u[0]; float y = u[1]; float z = u[2];
@@ -284,6 +290,7 @@ EXTERNCEND
 
 inline bool operator!=(const File &left, const File &right) {return false;}
 inline bool operator!=(const Code &left, const Code &right) {return false;}
+inline bool operator!=(const Display &left, const Display &right) {return false;}
 inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
@@ -330,8 +337,11 @@ DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(Machine,Machine)
 DEFINE_LOCAL(Redo,struct QueueBase *)
 
-DEFINE_LOCAL(File,struct File)
-DEFINE_LOCAL(Code,struct Code)
+DEFINE_LOCAL(Display,struct Display)
+DEFINE_META(DisplayCode,struct Code)
+DEFINE_POINTER(Code,struct Code)
+DEFINE_META(DisplayFile,struct File)
+DEFINE_POINTER(File,struct File)
 
 DEFINE_TRUE(Reint,int,int)
 DEFINE_TRUE(Refloat,int,Myfloat)

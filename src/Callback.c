@@ -35,14 +35,17 @@
 #include <math.h>
 
 #ifdef __linux__
-extern Display *displayHandle;
+Display *screenHandle = 0;
 #endif
-extern GLFWwindow *windowHandle;
-extern struct Code code[Shaders];
+GLFWwindow *displayHandle = 0;
+int contextHandle = 0;
+Myuint VAO = 0;
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 enum Click click = Init; // mode controlled by mouse buttons
 int escape = 0; // escape sequence from OpenGL
 int dash = 0; // inject sequence from OpenGL
+float invalid[2] = {0};
+float basisMat[16] = {0};
 float affineMat[16] = {0}; // transformation state at click time
 float affineMata[16] = {0}; // left transformation state
 float affineMatb[16] = {0}; // right transformation state
@@ -59,9 +62,9 @@ float wPos = 0; // roller activity since click
 float xPos = 0; // current mouse position
 float yPos = 0;
 float zPos = 0; // pierce point
-int xSiz = 0; // size of window
+int xSiz = 0; // size of display
 int ySiz = 0;
-int xLoc = 0; // window location
+int xLoc = 0; // display location
 int yLoc = 0;
 float cutoff = 0; // frustrum depth
 float slope = 0;
@@ -73,9 +76,11 @@ enum Shader pershader = Perplane;
 enum Shader dishader = Dipoint;
 enum Shader pershader = Perpoint;
 #endif
+int renderSwap = 0;
+int renderClear = 0;
 
-
-void displayCursor(GLFWwindow *window, double xpos, double ypos);
+void enqueDisplay(GLFWwindow *ptr);
+void displayCursor(GLFWwindow *display, double xpos, double ypos);
 void enqueCommand(Command cmd);
 void enqueDishader();
 void enquePershader();
@@ -84,12 +89,12 @@ void warp(double xwarp, double ywarp)
 {
 #ifdef __linux__
     double xpos, ypos;
-    glfwGetCursorPos(windowHandle,&xpos,&ypos);
-    XWarpPointer(displayHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
+    glfwGetCursorPos(displayHandle,&xpos,&ypos);
+    XWarpPointer(screenHandle,None,None,0,0,0,0,xwarp-xpos,ywarp-ypos);
 #endif
 #ifdef __APPLE__
     int xloc, yloc;
-    glfwGetWindowPos(windowHandle,&xloc,&yloc);
+    glfwGetWindowPos(displayHandle,&xloc,&yloc);
     struct CGPoint point; point.x = xloc+xwarp; point.y = yloc+ywarp;
     CGWarpMouseCursorPosition(point);
 #endif
@@ -102,7 +107,7 @@ void compass(double xdelta, double ydelta)
     xwarp += xdelta;
     ywarp += ydelta;
     warp(xwarp,ywarp);
-    displayCursor(windowHandle,xwarp,ywarp);
+    displayCursor(displayHandle,xwarp,ywarp);
 }
 
 void leftAdditive()
@@ -328,18 +333,14 @@ void manipulateDrive()
     // TODO
 }
 
-void displayError(int error, const char *description)
-{
-   printf("GLFW error %d %s\n", error, description);
-}
-
-void displayClose(GLFWwindow* window)
+void displayClose(GLFWwindow* display)
 {
     enqueCommand(0);
 }
 
-void displayClick(GLFWwindow *window, int button, int action, int mods)
+void displayClick(GLFWwindow *display, int button, int action, int mods)
 {
+    enqueDisplay(display);
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
@@ -368,8 +369,9 @@ void displayClick(GLFWwindow *window, int button, int action, int mods)
     DEFAULT(exitErrstr("displayClick %d\n",button);)
 }
 
-void displayCursor(GLFWwindow *window, double xpos, double ypos)
+void displayCursor(GLFWwindow *display, double xpos, double ypos)
 {
+    enqueDisplay(display);
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
@@ -381,8 +383,9 @@ void displayCursor(GLFWwindow *window, double xpos, double ypos)
     DEFAULT(exitErrstr("invalid sculpt mode\n");)
 }
 
-void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
+void displayScroll(GLFWwindow *display, double xoffset, double yoffset)
 {
+    enqueDisplay(display);
     wPos = wPos + yoffset;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
@@ -392,8 +395,9 @@ void displayScroll(GLFWwindow *window, double xoffset, double yoffset)
     DEFAULT(exitErrstr("invalid sculpt mode");)
 }
 
-void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
+void displayKey(GLFWwindow* display, int key, int scancode, int action, int mods)
 {
+    enqueDisplay(display);
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape && key == GLFW_KEY_ENTER) {escape = 0; enqueCommand(0);}
     else if (escape) *enlocCmdOutput(1) = ofmotion(Space);
@@ -409,22 +413,24 @@ void displayKey(GLFWwindow* window, int key, int scancode, int action, int mods)
     else if (key == GLFW_KEY_LEFT) compass(-COMPASS_DELTA,0.0);
     else if (key == GLFW_KEY_DOWN) compass(0.0,COMPASS_DELTA);
     else if (key == GLFW_KEY_UP) compass(0.0,-COMPASS_DELTA);
-    else if (key == GLFW_KEY_PAGE_UP) displayScroll(windowHandle,0.0,ROLLER_DELTA);
-    else if (key == GLFW_KEY_PAGE_DOWN) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
-    else if (key == GLFW_KEY_HOME) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
-    else if (key == GLFW_KEY_END) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
+    else if (key == GLFW_KEY_PAGE_UP) displayScroll(displayHandle,0.0,ROLLER_DELTA);
+    else if (key == GLFW_KEY_PAGE_DOWN) displayScroll(displayHandle,0.0,-ROLLER_DELTA);
+    else if (key == GLFW_KEY_HOME) displayClick(displayHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
+    else if (key == GLFW_KEY_END) displayClick(displayHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
     else if (key == GLFW_KEY_BACKSPACE) *enlocCmdOutput(1) = ofmotion(Back);
     else if (key == GLFW_KEY_SPACE) *enlocCmdOutput(1) = ofmotion(Space);
     else *enlocCmdOutput(1) = ofmotion(Space);
 }
 
-void displayLocation(GLFWwindow *window, int xloc, int yloc)
+void displayLocation(GLFWwindow *display, int xloc, int yloc)
 {
+    enqueDisplay(display);
     xLoc = xloc; yLoc = yloc;
 }
 
-void displaySize(GLFWwindow *window, int width, int height)
+void displaySize(GLFWwindow *display, int width, int height)
 {
+    enqueDisplay(display);
     xSiz = width; ySiz = height;
 #ifdef __APPLE__
     glViewport(0, 0, xSiz*2, ySiz*2);
@@ -434,13 +440,106 @@ void displaySize(GLFWwindow *window, int width, int height)
 #endif
     aspect = (float)ySiz/(float)xSiz;
     for (enum Shader i = 0; i < Shaders; i++) {
-        glUseProgram(code[i].handle);
-        glUniform1f(code[i].uniform[Aspect].handle,aspect);}
+        glUseProgram(arrayCode(i,1)->handle);
+        glUniform1f(arrayCode(i,1)->uniform[Aspect].handle,aspect);}
     glUseProgram(0);
     enqueDishader();
 }
 
-void displayRefresh(GLFWwindow *window)
+void displayRefresh(GLFWwindow *display)
 {
+    enqueDisplay(display);
     enqueDishader();
+}
+
+void enqueContext(int sub)
+{
+    if (sub < sizeDisplay() && sub != contextHandle) {
+        struct Display *info = arrayDisplay(contextHandle,1);
+        info->display = displayHandle;
+#ifdef __linux__
+        info->screen = screenHandle;
+#endif
+        info->VAO = VAO;
+        info->xSiz = xSiz;
+        info->ySiz = ySiz;
+        info->xLoc = xLoc;
+        info->yLoc = yLoc;
+        info->swap = renderSwap;
+        info->clear = renderClear;}
+    while (sub >= sizeDisplay()) enqueDisplay(0);
+    struct Display *display = arrayDisplay(sub,1);
+    if (display->display != displayHandle) {
+        if (sub == contextHandle) exitErrstr("display too context\n");
+        contextHandle = sub;
+        displayHandle = display->display;
+        glfwMakeContextCurrent(displayHandle);
+#ifdef __linux__
+        screenHandle = display->display;
+#endif
+        xSiz = display->xSiz;
+        ySiz = display->ySiz;
+        xLoc = display->xLoc;
+        yLoc = display->yLoc;
+        renderSwap = display->swap;
+        renderClear = display->clear;
+        useDisplayCode(sub); referCode();
+        useDisplayFile(sub); referFile();}
+    else if (sub != contextHandle) exitErrstr("display too context\n");
+}
+
+void enqueDisplay(GLFWwindow *ptr)
+{
+    if (sizeDisplay() == 0) {
+        invalid[0] = 1.0e38;
+        invalid[1] = 1.0e37;
+        for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+        for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+        for (int i = 0; i < 27; i++) {
+        int versor = i / 9;
+        int column = (i % 9) / 3;
+        int row = i % 3;
+        int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
+        basisMat[i] = (one ? 1.0 : 0.0);}
+        cutoff = 10.0;
+        slope = 0.0;
+        aspect = (float)ySiz/(1.0*(float)xSiz);}
+    int sub = 0; while (sub < sizeDisplay() && arrayDisplay(sub,1)->display != ptr) sub += 1;
+    if (sub == sizeDisplay()) {
+        struct Display info = {0};
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        displayHandle = glfwCreateWindow(800, 600, (sizeDisplay() == 0 ? "Sculpt" : "sculpt"), NULL, NULL);
+        if (!displayHandle) exitErrstr("could not create display\n");
+#ifdef __linux__
+        screenHandle = glfwGetX11Display();
+        if (!screenHandle) exitErrstr("could not get display pointer\n");
+#endif
+        glfwSetWindowCloseCallback(displayHandle, displayClose);
+        glfwSetKeyCallback(displayHandle, displayKey);
+        glfwSetMouseButtonCallback(displayHandle, displayClick);
+        glfwSetCursorPosCallback(displayHandle, displayCursor);
+        glfwSetScrollCallback(displayHandle, displayScroll);
+        glfwSetWindowPosCallback(displayHandle, displayLocation);
+        glfwSetWindowSizeCallback(displayHandle, displaySize);
+        glfwSetWindowRefreshCallback(displayHandle, displayRefresh);
+        glfwMakeContextCurrent(displayHandle);
+        glfwGetWindowSize(displayHandle,&xSiz,&ySiz);
+        glfwGetWindowPos(displayHandle,&xLoc,&yLoc);
+#ifdef __APPLE__
+        glViewport(0, 0, xSiz*2, ySiz*2);
+#endif
+#ifdef __linux__
+        glViewport(0, 0, xSiz, ySiz);
+#endif
+        glGenVertexArrays(1, &VAO);
+        glBindVertexArray(VAO);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glEnable(GL_DEPTH_TEST);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glfwSwapBuffers(displayHandle);
+        *enlocDisplay(1) = info;}
+    enqueContext(sub);
 }

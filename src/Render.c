@@ -33,24 +33,24 @@
 
 #include "Common.h"
 
-extern GLFWwindow *windowHandle;
-extern struct Code code[Shaders];
+extern GLFWwindow *displayHandle;
 extern float invalid[2];
 extern float basisMat[27];
+extern float affineMata[16];
 extern int pPos;
 extern int qPos;
 extern float xPos;
 extern float yPos;
 extern float zPos;
-extern float affineMata[16];
 extern float cutoff;
 extern float slope;
 extern float aspect;
 extern enum Shader dishader;
 extern enum Shader pershader;
-int renderSwap = 0;
-int renderClear = 0;
+extern int renderSwap;
+extern int renderClear;
 
+void enqueContext(int sub);
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
 void enqueCommand(Command cmd);
@@ -170,8 +170,10 @@ void exitErrbuf(struct Buffer *buf, const char *str)
 
 void enqueUniform(struct Uniform *uniform, enum Server serv, int file, enum Shader shader)
 {
-    SWITCH(serv,Invalid) glUniform1fv(uniform->handle,2,invalid);
-    CASE(Basis) glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
+    SWITCH(serv,Invalid) {
+        glUniform1fv(uniform->handle,2,invalid);}
+    CASE(Basis) {
+        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);}
     CASE(Affine) {
         struct File *ptr = arrayFile(file,1);
         int posedge = (ptr->fixed && !ptr->last);
@@ -189,16 +191,20 @@ void enqueUniform(struct Uniform *uniform, enum Server serv, int file, enum Shad
     CASE(Arrow)
         SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
         DEFAULT(exitErrstr("arrow too shader\n");)
-    CASE(Cutoff) glUniform1f(uniform->handle,cutoff);
-    CASE(Slope) glUniform1f(uniform->handle,slope);
-    CASE(Aspect) glUniform1f(uniform->handle,aspect);
+    CASE(Cutoff) {
+        glUniform1f(uniform->handle,cutoff);}
+    CASE(Slope) {
+        glUniform1f(uniform->handle,slope);}
+    CASE(Aspect) {
+        glUniform1f(uniform->handle,aspect);}
     DEFAULT(exitErrstr("invalid server uniform\n");)
 }
 
 #define RENDER_DEARG \
     struct Render *render = deargRender(1); \
     struct File *file = arrayFile(render->file,1); \
-    struct Code *shader = code+render->shader; \
+    struct Code *shader = arrayCode(render->shader,1); \
+    enqueContext(render->display); \
     enum Data *vertex = shader->vertex; \
     enum Data *element = shader->element; \
     enum Data *feedback = shader->feedback; \
@@ -284,7 +290,7 @@ enum Action renderDraw(int state)
     for (enum Data *i = feedback; *i < Datas; i++)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i-feedback, 0, 0, 0);
     glUseProgram(0);
-    if (renderSwap == 1) glfwSwapBuffers(windowHandle);
+    if (renderSwap == 1) glfwSwapBuffers(displayHandle);
     if (renderSwap > 0) renderSwap -= 1;
     return Advance;
 }
@@ -359,6 +365,7 @@ void setupFile(int sub)
     struct File *file = arrayFile(sub,1);
     if (file->name != 0) return;
     file->name = "file"; // TODO
+    // TODO set file->fixed file->last file->saved file->ratio depending on menu mode
     identmat(file->saved,4);
     identmat(file->ratio,4);
     setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
@@ -483,7 +490,7 @@ enum Server uniformConstant(int i, enum Shader shader)
 
 const char *inputCode(enum Shader shader)
 {
-    SWITCH(code[shader].input,GL_POINTS) return "#define INPUT points\n";
+    SWITCH(arrayCode(shader,1)->input,GL_POINTS) return "#define INPUT points\n";
     CASE(GL_TRIANGLES) return "#define INPUT triangles\n";
     CASE(GL_TRIANGLES_ADJACENCY) return "#define INPUT triangles_adjacency\n";
     DEFAULT(exitErrstr("unknown input primitive");)
@@ -492,7 +499,7 @@ const char *inputCode(enum Shader shader)
 
 const char *outputCode(enum Shader shader)
 {
-    SWITCH(code[shader].output,GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
+    SWITCH(arrayCode(shader,1)->output,GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
     CASE(GL_TRIANGLES) return "#define OUTPUT triangle_strip, max_vertices = 3\n";
     DEFAULT(exitErrstr("unknown output primitive");)
     return "";
@@ -507,15 +514,15 @@ extern const GLchar *constructCode;
 extern const GLchar *intersectCode;
 
 void compileProgram(
-    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode, int inp, int outp,
-    const char *name, enum Shader shader, const char *feedback[3])
+    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
+    int inp, int outp, const char *name, enum Shader shader)
 {
     GLint success = 0;
     GLchar infoLog[512];
     const GLchar *source[10] = {0};
     Myuint prog = glCreateProgram();
     Myuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    code[shader].input = inp; code[shader].output = outp; code[shader].handle = prog; code[shader].name = name;
+    arrayCode(shader,1)->input = inp; arrayCode(shader,1)->output = outp; arrayCode(shader,1)->handle = prog; arrayCode(shader,1)->name = name;
     source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
     source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode;
     source[7] = vertexCode;
@@ -550,7 +557,8 @@ void compileProgram(
             glGetShaderInfoLog(fragment, 512, NULL, infoLog);
             exitErrstr("could not compile fragment shader for program %s: %s\n", name, infoLog);}
         glAttachShader(prog, fragment);}
-    int count = 0; for (int i = 0; feedback[i]; i++) count++;
+    int count = 0; const char *feedback[3];
+    while (count < 3 && (feedback[count] = feedbackCode(count,shader)) != 0) count += 1;
     if (count) glTransformFeedbackVaryings(prog, count, feedback, GL_SEPARATE_ATTRIBS);
     glLinkProgram(prog);
     glGetProgramiv(prog, GL_LINK_STATUS, &success);
@@ -593,41 +601,41 @@ extern const GLchar *repointVertex;
 extern const GLchar *repointGeometry;
 extern const GLchar *repointFragment;
 
-void setupCode(enum Shader shader, int file)
+void setupCode(enum Shader shader, int file, int display)
 {
-    if (code[shader].name != 0) return;
-    const char *feedback[3]; for (int i = 0; i < 3; i++) feedback[i] = feedbackCode(i,shader);
-    SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane,feedback);
-    CASE(Dipoint) compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint,feedback);
-    CASE(Coplane) compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane,feedback);
-    CASE(Copoint) compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint,feedback);
-    CASE(Adplane) compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane,feedback);
-    CASE(Adpoint) compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint,feedback);
-    CASE(Perplane) compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane,feedback);
-    CASE(Perpoint) compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint,feedback);
-    CASE(Replane) compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane,feedback);
-    CASE(Repoint) compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint,feedback);
+    if (arrayCode(shader,1)->name != 0) return;
+    SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane);
+    CASE(Dipoint) compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint);
+    CASE(Coplane) compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane);
+    CASE(Copoint) compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint);
+    CASE(Adplane) compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane);
+    CASE(Adpoint) compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint);
+    CASE(Perplane) compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane);
+    CASE(Perpoint) compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint);
+    CASE(Replane) compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane);
+    CASE(Repoint) compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint);
     DEFAULT(exitErrstr("unknown shader type\n");)
-    for (int i = 0; i < 3; i++) code[shader].vertex[i] = bufferVertex(i,shader);
-    for (int i = 0; i < 3; i++) code[shader].element[i] = bufferElement(i,shader);
-    for (int i = 0; i < 3; i++) code[shader].feedback[i] = bufferFeedback(i,shader);
-    for (int i = 0; i < 4; i++) code[shader].server[i] = uniformServer(i,shader);
-    for (int i = 0; i < 4; i++) code[shader].config[i] = uniformGlobal(i,shader);
-    for (int i = 0; i < 4; i++) code[shader].reader[i] = uniformConstant(i,shader);
-    glUseProgram(code[shader].handle);
+    for (int i = 0; i < 3; i++) arrayCode(shader,1)->vertex[i] = bufferVertex(i,shader);
+    for (int i = 0; i < 3; i++) arrayCode(shader,1)->element[i] = bufferElement(i,shader);
+    for (int i = 0; i < 3; i++) arrayCode(shader,1)->feedback[i] = bufferFeedback(i,shader);
+    for (int i = 0; i < 4; i++) arrayCode(shader,1)->server[i] = uniformServer(i,shader);
+    for (int i = 0; i < 4; i++) arrayCode(shader,1)->config[i] = uniformGlobal(i,shader);
+    for (int i = 0; i < 4; i++) arrayCode(shader,1)->reader[i] = uniformConstant(i,shader);
+    glUseProgram(arrayCode(shader,1)->handle);
     enum Server temp = Servers;
-    struct Uniform *uniform = code[shader].uniform;
-    for (int i = 0; (temp = code[shader].server[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,file,shader);
-    for (int i = 0; (temp = code[shader].config[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,file,shader);
-    for (int i = 0; (temp = code[shader].reader[i]) < Servers; i++) setupUniform(uniform+temp,code[shader].handle,temp,file,shader);
+    struct Uniform *uniform = arrayCode(shader,1)->uniform;
+    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(uniform+temp,arrayCode(shader,1)->handle,temp,file,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(uniform+temp,arrayCode(shader,1)->handle,temp,file,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(uniform+temp,arrayCode(shader,1)->handle,temp,file,shader);
     glUseProgram(0);
 }
 
-void enqueShader(enum Shader shader, int file, Machine follow, enum Share share)
+void enqueShader(enum Shader shader, int file, int display, Machine follow, enum Share share)
 {
     struct Render render = {0};
-    render.shader = shader; setupCode(shader,file);
-    render.file = file; setupFile(file);
+    render.file = file; setupFile(file); // before setupCode so enqueUniform can refer to file for fixed
+    render.shader = shader; setupCode(shader,file,display);
+    render.display = display;
     render.share = share;
     *enlocRender(1) = render;
     enqueMachine(&renderLock);
@@ -638,15 +646,34 @@ void enqueShader(enum Shader shader, int file, Machine follow, enum Share share)
     followMachine(&renderUnlock);
 }
 
-void enqueDishader()
+int enqueCode(enum Shader shader, int display)
 {
-    if (renderSwap > 0 || renderClear > 0) {deferCommand(enqueDishader); return;}
+    if (shader >= Shaders) exitErrstr("shader too display\n");
+    if (display > 0 && shader != Diplane && shader != Dipoint) exitErrstr("shader too dipont\n");
+    if (display == 0) return shader;
+    // only dishader on alternate displays
+    return Shaders+(display*2)+(shader!=Diplane);
+}
+
+void enqueSwap()
+{
+    int sub = *delocCmdInt(1);
+    enqueContext(sub);
+    if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = sub; deferCommand(enqueSwap); return;}
     renderSwap = sizeFile();
     renderClear = 1;
-    for (int i = 0; i < sizeFile(); i++) enqueShader(dishader,i,0,Zero);
+    for (int i = 0; i < sizeFile(); i++)
+    enqueShader(dishader,i,sub,0,Zero);
+}
+
+void enqueDishader()
+{
+    for (int i = 0; i < sizeDisplay(); i++) {*enlocCmdInt(1) = i; enqueCommand(enqueSwap);}
 }
 
 void enquePershader()
 {
-    for (int i = 0; i < sizeFile(); i++) enqueShader(pershader,i,renderPierce,Zero);
+    enqueContext(0);
+    for (int i = 0; i < sizeFile(); i++)
+    enqueShader(pershader,i,0,renderPierce,Zero);
 }

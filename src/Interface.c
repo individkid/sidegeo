@@ -33,10 +33,11 @@
 
 #include "Common.h"
 
-extern GLFWwindow *windowHandle;
+extern GLFWwindow *displayHandle;
 extern enum Menu mode[Modes];
 extern struct Item item[Menus];
 extern enum Click click;
+extern float basisMat[27];
 extern float xPos;
 extern float yPos;
 extern float zPos;
@@ -46,15 +47,14 @@ extern float slope;
 extern float aspect;
 extern int layer;
 extern enum Shader dishader;
-extern float basisMat[27];
 
-void displayClick(GLFWwindow *window, int button, int action, int mods);
-void displayScroll(GLFWwindow *window, double xoffset, double yoffset);
+void displayClick(GLFWwindow *display, int button, int action, int mods);
+void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
 void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Command cmd);
 void enqueDishader();
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
-void enqueShader(enum Shader shader, int file, Machine follow, enum Share share);
+void enqueShader(enum Shader shader, int file, int display, Machine follow, enum Share share);
 
 DEFINE_MSGSTR(CmdConfigure)
 
@@ -65,10 +65,10 @@ void inject()
     CASE(South) compass(0.0,COMPASS_DELTA);
     CASE(West) compass(-COMPASS_DELTA,0.0);
     CASE(East) compass(COMPASS_DELTA,0.0);
-    CASE(Counter) displayScroll(windowHandle,0.0,ROLLER_DELTA);
-    CASE(Wise) displayScroll(windowHandle,0.0,-ROLLER_DELTA);
-    CASE(Click) displayClick(windowHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
-    CASE(Suspend) displayClick(windowHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
+    CASE(Counter) displayScroll(displayHandle,0.0,ROLLER_DELTA);
+    CASE(Wise) displayScroll(displayHandle,0.0,-ROLLER_DELTA);
+    CASE(Click) displayClick(displayHandle,GLFW_MOUSE_BUTTON_LEFT,GLFW_PRESS,0);
+    CASE(Suspend) displayClick(displayHandle,GLFW_MOUSE_BUTTON_RIGHT,GLFW_PRESS,0);
     DEFAULT(exitErrstr("invalid inject char\n");)
 }
 
@@ -263,7 +263,7 @@ enum Action sculptRegion(int state)
     if (state-- == 0) {
     layer = tagReint(); \
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
-    enqueShader(Adplane,file,sculptFollow,Read);
+    enqueShader(Adplane,file,0,sculptFollow,Read);
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}

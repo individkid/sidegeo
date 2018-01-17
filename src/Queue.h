@@ -865,7 +865,7 @@ template<class TYPE> struct QueueMeta {
     {
         return meta.size();
     }
-    void enloc(int idx)
+    void touch(int idx)
     {
         while (idx >= meta.size()) {
             QueueStruct<TYPE> inst = QueueStruct<TYPE>();
@@ -873,7 +873,7 @@ template<class TYPE> struct QueueMeta {
     }
     void use(int idx)
     {
-        enloc(idx);
+        touch(idx);
         if (QueueStruct<TYPE>::src) exitErrstr("src too use\n");
         QueueStruct<TYPE>::src = meta.array(idx,1);
     }
@@ -930,7 +930,7 @@ template<class TYPE> struct QueueMeta {
 #define DEFINE_META(NAME,TYPE) \
 QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \
 extern "C" int usage##NAME() {return NAME##Inst.size();} \
-extern "C" void used##NAME(int idx) {NAME##Inst.enloc(idx);} \
+extern "C" void used##NAME(int idx) {NAME##Inst.touch(idx);} \
 extern "C" void use##NAME(int idx) {NAME##Inst.use(idx);} \
 extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);} \
 extern "C" TYPE *enloc##NAME(int idx, int siz) {return NAME##Inst.enloc(idx,siz);} \
