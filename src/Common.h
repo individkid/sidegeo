@@ -149,17 +149,35 @@ struct Buffer { // information about server buffers
     struct Lock lock; // lock on buffer
 };
 struct Display {
-    int xSiz;
-    int ySiz;
-    int xLoc;
-    int yLoc;
+    void *screen;
+    void *handle;
+    int context;
     Myuint VAO;
+    float affineMat[16]; // transformation state at click time
+    float affineMata[16]; // left transformation state
+    float affineMatb[16]; // right transformation state
+    float xPoint;  // position of pierce point at click time
+    float yPoint;
+    float zPoint;
+    float wWarp; // saved mouse position wnen toggled inactive
+    float xWarp;
+    float yWarp;
+    float zWarp;
+    int pPos; // plane under mouse position
+    int qPos; // file of plane under mouse
+    float wPos; // roller activity since click
+    float xPos; // current mouse position
+    float yPos;
+    float zPos; // pierce point
+    int xSiz; // size of display
+    int ySiz;
+    int xLoc; // display location
+    int yLoc;
+    float cutoff; // frustrum depth
+    float slope;
+    float aspect;
     int swap;
     int clear;
-    void *display;
-#ifdef __linux__
-    void *screen;
-#endif
 };
 struct File {
     const char *name;

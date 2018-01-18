@@ -33,22 +33,23 @@
 
 #include "Common.h"
 
-extern GLFWwindow *displayHandle;
 extern float invalid[2];
 extern float basisMat[27];
-extern float affineMata[16];
-extern int pPos;
-extern int qPos;
-extern float xPos;
-extern float yPos;
-extern float zPos;
-extern float cutoff;
-extern float slope;
-extern float aspect;
 extern enum Shader dishader;
 extern enum Shader pershader;
-extern int renderSwap;
-extern int renderClear;
+extern struct Display *display;
+#define displayHandle display->handle
+#define affineMata display->affineMata
+#define pPos display->pPos
+#define qPos display->qPos
+#define xPos display->xPos
+#define yPos display->yPos
+#define zPos display->zPos
+#define cutoff display->cutoff
+#define slope display->slope
+#define aspect display->aspect
+#define renderSwap display->swap
+#define renderClear display->clear
 
 void enqueContext(int sub);
 void enqueMachine(Machine machine);

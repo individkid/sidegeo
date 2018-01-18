@@ -33,20 +33,21 @@
 
 #include "Common.h"
 
-extern GLFWwindow *displayHandle;
+extern int layer;
 extern enum Menu mode[Modes];
 extern struct Item item[Menus];
 extern enum Click click;
 extern float basisMat[27];
-extern float xPos;
-extern float yPos;
-extern float zPos;
-extern int xSiz;
-extern int ySiz;
-extern float slope;
-extern float aspect;
-extern int layer;
 extern enum Shader dishader;
+extern struct Display *display;
+#define displayHandle display->handle
+#define xPos display->xPos
+#define yPos display->yPos
+#define zPos display->zPos
+#define xSiz display->xSiz
+#define ySiz display->ySiz
+#define slope display->slope
+#define aspect display->aspect
 
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
@@ -192,10 +193,10 @@ enum Action appendPlane(int state)
     return Advance;
 }
 
-void refineClick(int file, float xPos, float yPos, float zPos)
+void refineClick(int file, float xpos, float ypos, float zpos)
 {
     struct File *ptr = arrayFile(file,1);
-    float u[3]; u[0] = xPos; u[1] = yPos; u[2] = zPos;
+    float u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
     tweakvec(u,0,ptr->tweak,3);
     float v[3] = {0};
     tweakvec(v,1.0,1.0,3);
@@ -238,9 +239,9 @@ enum Action sculptFollow(int state)
 #define SCULPT_ENLOC(STR) \
     *enlocCmdInt(1) = file; \
     *enlocCmdInt(1) = plane; \
-    *enlocCmdFloat(1) = xPos;  \
-    *enlocCmdFloat(1) = yPos;  \
-    *enlocCmdFloat(1) = zPos;  \
+    *enlocCmdFloat(1) = xpos;  \
+    *enlocCmdFloat(1) = ypos;  \
+    *enlocCmdFloat(1) = zpos;  \
     *enlocCmdInt(1) = 0; /*wait sequence number*/ \
     const char *str = #STR; \
     int len = strlen(str); \
@@ -293,12 +294,12 @@ enum Action sculptRegion(int state)
     return Advance;
 }
 
-void fillClick(int file, int plane, float xPos, float yPos, float zPos)
+void fillClick(int file, int plane, float xpos, float ypos, float zpos)
 {
     SCULPT_ENLOC(fill)
 }
 
-void hollowClick(int file, int plane, float xPos, float yPos, float zPos)
+void hollowClick(int file, int plane, float xpos, float ypos, float zpos)
 {
     SCULPT_ENLOC(hollow)
 }
