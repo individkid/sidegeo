@@ -464,7 +464,7 @@ void setupDisplay()
     int row = i % 3;
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}}
-    struct Display *display = enlocDisplay(1);
+    display = enlocDisplay(1);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -483,9 +483,9 @@ void setupDisplay()
     glfwSetWindowPosCallback(displayHandle, displayLocation);
     glfwSetWindowSizeCallback(displayHandle, displaySize);
     glfwSetWindowRefreshCallback(displayHandle, displayRefresh);
-    glfwMakeContextCurrent(displayHandle);
     glfwGetWindowSize(displayHandle,&xSiz,&ySiz);
     glfwGetWindowPos(displayHandle,&xLoc,&yLoc);
+    glfwMakeContextCurrent(displayHandle);
 #ifdef __APPLE__
     glViewport(0, 0, xSiz*2, ySiz*2);
 #endif
@@ -501,20 +501,27 @@ void setupDisplay()
     cutoff = 10.0;
     slope = 0.0;
     aspect = (float)ySiz/(1.0*(float)xSiz);
+    useDisplayCode(contextHandle); referCode();
+    useDisplayFile(contextHandle); referFile();
 }
 
 void enqueContext(int sub)
 {
-    while (sub >= sizeDisplay()) setupDisplay();
-    display = arrayDisplay(sub,1);
+    if (display != 0 && sub == contextHandle) return;
+    if (sub < sizeDisplay()) {
+        display = arrayDisplay(sub,1);
+        glfwMakeContextCurrent(displayHandle);
+        useDisplayCode(contextHandle); referCode();
+        useDisplayFile(contextHandle); referFile();}
+    else while (1) {
+        setupDisplay();
+        if (sub < sizeDisplay()) break;}
     if (sub != contextHandle) exitErrstr("display too context\n");
-    glfwMakeContextCurrent(displayHandle);
-    useDisplayCode(sub); referCode();
-    useDisplayFile(sub); referFile();
 }
 
 void enqueDisplay(GLFWwindow *ptr)
 {
+    if (display != 0 && ptr == displayHandle) return;
     int sub = 0;
     while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
     enqueContext(sub);
