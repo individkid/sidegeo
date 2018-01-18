@@ -72,6 +72,8 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -E \<file> change last file to indicated  
   * -a \<name> open alternate display  
   * -A \<name> use indicated alternate display  
+  * -c \<file> combine given polytope with current  
+  * -C \<file> drill given polytope with current  
   * -t run sanity check  
   * -T run thorough tests  
 
@@ -112,7 +114,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Hyperlink -- jump through facet to another space  
     * Execute -- call Haskell function attached to facet  
 
-Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
+Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. The names supplied in --time --start commands have file scope shared by --branch and --jump files.
 
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  
@@ -140,7 +142,8 @@ Configuration/history files consist of commands. User input appends to file. App
   * --configure pore, membrane, interpolate, texture, rate  
   * --inject specifies command line option to inject  
   * --menu changes to menu item to inject to console  
-  * --function binds Haskell function to function key in console  
+  * --bind binds Haskell function to function key in console  
+  * --media binds Haskell function to call when stock changes  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
   * --start goes to a new polytope with optional name for going back  
