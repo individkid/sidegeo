@@ -83,6 +83,8 @@ void displayCursor(GLFWwindow *display, double xpos, double ypos);
 void enqueCommand(Command cmd);
 void enqueDishader();
 void enquePershader();
+void enqueMachine(Machine machine);
+enum Action renderUniform(int state);
 
 void warp(double xwarp, double ywarp)
 {
@@ -431,17 +433,10 @@ void displaySize(GLFWwindow *ptr, int width, int height)
 {
     enqueDisplay(ptr);
     xSiz = width; ySiz = height;
-#ifdef __APPLE__
-    glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
-#ifdef __linux__
-    glViewport(0, 0, xSiz, ySiz);
-#endif
-    aspect = (float)ySiz/(float)xSiz;
-    for (enum Shader i = 0; i < Shaders; i++) {
-        glUseProgram(arrayCode(i,1)->handle);
-        glUniform1f(arrayCode(i,1)->uniform[Aspect].handle,aspect);}
-    glUseProgram(0);
+    *enlocCmdInt(1) = Aspect;
+    *enlocCmdInt(1) = contextHandle;
+    *enlocCmdInt(1) = 0; // wait count
+    enqueMachine(renderUniform);
     enqueDishader();
 }
 
