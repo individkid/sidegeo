@@ -36,10 +36,10 @@
 extern int layer;
 extern enum Menu mode[Modes];
 extern struct Item item[Menus];
-extern enum Click click;
 extern float basisMat[27];
 extern enum Shader dishader;
 extern struct Display *display;
+#define click display->click
 #define displayHandle display->handle
 #define xPos display->xPos
 #define yPos display->yPos

@@ -35,7 +35,6 @@
 #include <math.h>
 
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
-enum Click click = Init; // mode controlled by mouse buttons
 int escape = 0; // escape sequence from OpenGL
 int dash = 0; // inject sequence from OpenGL
 float invalid[2] = {0};
@@ -48,6 +47,7 @@ enum Shader dishader = Dipoint;
 enum Shader pershader = Perpoint;
 #endif
 struct Display *display = 0;
+#define click display->click
 #define screenHandle display->screen
 #define displayHandle display->handle
 #define contextHandle display->context
@@ -334,14 +334,15 @@ void manipulateDrive()
     // TODO
 }
 
-void displayClose(GLFWwindow* display)
+void displayClose(GLFWwindow* ptr)
 {
-    enqueCommand(0);
+    enqueDisplay(ptr);
+    if (contextHandle == 0) enqueCommand(0);
 }
 
-void displayClick(GLFWwindow *display, int button, int action, int mods)
+void displayClick(GLFWwindow *ptr, int button, int action, int mods)
 {
-    enqueDisplay(display);
+    enqueDisplay(ptr);
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
@@ -460,6 +461,7 @@ void setupDisplay()
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}}
     display = enlocDisplay(1);
+    click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -496,6 +498,8 @@ void setupDisplay()
     cutoff = 10.0;
     slope = 0.0;
     aspect = (float)ySiz/(1.0*(float)xSiz);
+    renderSwap = 0;
+    renderClear = 0;
     useDisplayCode(contextHandle); referCode();
     useDisplayFile(contextHandle); referFile();
 }

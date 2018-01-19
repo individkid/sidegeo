@@ -124,11 +124,16 @@ enum Server { // one value per uniform
     Slope, // x over z frustrum slope
     Aspect, // y over x ratio of frustrum intercepts
     Servers};
-enum Format {
-    Array16,
-    Scalar3,
-    Formats};
-enum Share {Zero,Read,Write}; // lock type
+enum Share { // lock type
+    Zero, // no lock
+    Read, // shared lock
+    Write}; // exclusive lock
+enum Click { // mode changed by mouse buttons
+    Init, // no pierce point; no saved position
+    Left, // pierce point calculated; no saved position
+    Matrix, // before matrix in play
+    Right, // pierce point calculated; position saved
+    Clicks};
 struct Lock {
     int read; // count of readers
     int write; // count of writers
@@ -178,6 +183,7 @@ struct Display {
     float aspect;
     int swap;
     int clear;
+    enum Click click; // mode controlled by mouse buttons
 };
 struct File {
     const char *name;
@@ -226,13 +232,6 @@ struct Render { // argument to render functions
     int wait; // buffer sequence number
     enum Share share; // whether to lock file
 };
-
-enum Click { // mode changed by mouse buttons
-    Init, // no pierce point; no saved position
-    Left, // pierce point calculated; no saved position
-    Matrix, // before matrix in play
-    Right, // pierce point calculated; position saved
-    Clicks};
 
 struct Nomial {
     int num0; // number of zero variable terms
