@@ -81,8 +81,8 @@ struct Display *display = 0;
 void enqueDisplay(GLFWwindow *ptr);
 void displayCursor(GLFWwindow *display, double xpos, double ypos);
 void enqueCommand(Command cmd);
-void enqueDishader();
-void enquePershader();
+void enqueDishader(void);
+void enquePershader(void);
 void enqueMachine(Machine machine);
 enum Action renderUniform(int state);
 
@@ -111,29 +111,29 @@ void compass(double xdelta, double ydelta)
     displayCursor(displayHandle,xwarp,ywarp);
 }
 
-void leftAdditive()
+void leftAdditive(void)
 {
     // TODO
 }
 
-void leftSubtractive()
+void leftSubtractive(void)
 {
     // TODO
 }
 
-void leftRefine()
+void leftRefine(void)
 {
     // TODO
 }
 
-void leftTransform()
+void leftTransform(void)
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
     for (int i = 0; i < 16; i++) affineMat[i] = affineMata[i];
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
-void rightRight()
+void rightRight(void)
 {
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
     double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
@@ -141,12 +141,12 @@ void rightRight()
     warp(xwarp,ywarp);
 }
 
-void rightLeft()
+void rightLeft(void)
 {
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
 }
 
-void matrixMatrix()
+void matrixMatrix(void)
 {
     jumpmat(affineMat,affineMatb,4);
     identmat(affineMatb,4);
@@ -178,7 +178,7 @@ void matrixFixed(float *u)
     jumpmat(u,v,4); timesmat(u,w,4);
 }
 
-void transformRotate()
+void transformRotate(void)
 {
     float u[16]; matrixRotate(u);
     float v[16]; copyary(identmat(v,4),u,3,4,9);
@@ -188,7 +188,7 @@ void transformRotate()
     enqueDishader();
 }
 
-void transformTranslate()
+void transformTranslate(void)
 {
     float u[16]; identmat(u,4);
     u[12] = xPos-xPoint;
@@ -199,13 +199,13 @@ void transformTranslate()
     enqueDishader();
 }
 
-void transformLook()
+void transformLook(void)
 {
     // TODO
     enqueDishader();
 }
 
-void transformMouse()
+void transformMouse(void)
 {
     SWITCH(mode[Mouse],Rotate) transformRotate();
     CASE(Translate) transformTranslate();
@@ -213,7 +213,7 @@ void transformMouse()
     DEFAULT(exitErrstr("invalid mouse mode\n");)
 }
 
-void transformCylinder()
+void transformCylinder(void)
 {
     float u[16];
     float angle = wPos/ROLLER_GRANULARITY;
@@ -222,7 +222,7 @@ void transformCylinder()
     transformMouse();
 }
 
-void transformClock()
+void transformClock(void)
 {
     float u[16]; float v[16]; float w[16];
     float angle = wPos/ROLLER_GRANULARITY;
@@ -238,7 +238,7 @@ void transformClock()
     transformMouse();
 }
 
-void transformScale()
+void transformScale(void)
 {
     float scale = 1.0+wPos/ROLLER_GRANULARITY;
     if (fabs(scale) < 1.0 && fabs(scale)*ROLLER_GRANULARITY < 1.0) {
@@ -248,14 +248,14 @@ void transformScale()
     transformMouse();
 }
 
-void transformDrive()
+void transformDrive(void)
 {
     float scale = wPos/ROLLER_GRANULARITY;
     identmat(affineMatb,4); affineMatb[14] += scale;
     transformMouse();
 }
 
-void transformScroll()
+void transformScroll(void)
 {
     SWITCH(mode[Roller],Clock) transformClock();
     CASE(Cylinder) transformCylinder();
@@ -264,72 +264,72 @@ void transformScroll()
     DEFAULT(exitErrstr("invalid roller mode\n");)
 }
 
-void modifyRotate()
+void modifyRotate(void)
 {
     // TODO
 }
 
-void modifyTranslate()
+void modifyTranslate(void)
 {
     // TODO
 }
 
-void modifyLook()
+void modifyLook(void)
 {
     // TODO
 }
 
-void modifyClock()
+void modifyClock(void)
 {
     // TODO
 }
 
-void modifyCylinder()
+void modifyCylinder(void)
 {
     // TODO
 }
 
-void modifyScale()
+void modifyScale(void)
 {
     // TODO
 }
 
-void modifyDrive()
+void modifyDrive(void)
 {
     // TODO
 }
 
-void manipulateRotate()
+void manipulateRotate(void)
 {
     // TODO
 }
 
-void manipulateTranslate()
+void manipulateTranslate(void)
 {
     // TODO
 }
 
-void manipulateLook()
+void manipulateLook(void)
 {
     // TODO
 }
 
-void manipulateClock()
+void manipulateClock(void)
 {
     // TODO
 }
 
-void manipulateCylinder()
+void manipulateCylinder(void)
 {
     // TODO
 }
 
-void manipulateScale()
+void manipulateScale(void)
 {
     // TODO
 }
 
-void manipulateDrive()
+void manipulateDrive(void)
 {
     // TODO
 }
@@ -447,7 +447,7 @@ void displayRefresh(GLFWwindow *ptr)
     enqueDishader();
 }
 
-void setupDisplay()
+void setupDisplay(void)
 {
     if (sizeDisplay() == 0) {
     invalid[0] = 1.0e38;

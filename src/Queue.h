@@ -50,7 +50,6 @@ EXTERNV int validTermios;
 EXTERNV int sigusr2;
 struct QueueBase;
 
-EXTERNC void exitQueue();
 EXTERNC void *int2void(int val);
 EXTERNC int void2int(const void *val);
 EXTERNC void exitErrstr(const char *fmt, ...);
@@ -64,12 +63,12 @@ EXTERNC void dedoQueueBase(struct QueueBase *ptr);
 #define DECLARE_MUTEX(NAME) \
 EXTERNC void *loop##NAME(void *arg); \
 EXTERNC void create##NAME(int arg); \
-EXTERNC void lock##NAME(); \
-EXTERNC void unlock##NAME(); \
-EXTERNC void done##NAME(); \
-EXTERNC void join##NAME(); \
-EXTERNC void signal##NAME(); \
-EXTERNC void exit##NAME();
+EXTERNC void lock##NAME(void); \
+EXTERNC void unlock##NAME(void); \
+EXTERNC void done##NAME(void); \
+EXTERNC void join##NAME(void); \
+EXTERNC void signal##NAME(void); \
+EXTERNC void exit##NAME(void);
 #define DECLARE_FUNC(NAME) DECLARE_MUTEX(NAME)
 // non-pselect
 #define DECLARE_STDIN(NAME) DECLARE_MUTEX(NAME)
@@ -89,8 +88,8 @@ EXTERNC int readable##NAME(ELEM val);
 EXTERNC void ack##NAME(int *siz);
 // xfer and signal corresponding dest to consume
 #define DECLARE_REDO(NAME) \
-EXTERNC void redo##NAME(); \
-EXTERNC void endo##NAME();
+EXTERNC void redo##NAME(void); \
+EXTERNC void endo##NAME(void);
 // produce until signalled to xfer and consume
 #define DECLARE_DEST(NAME)
 // produce until signalled to xfer and consume
@@ -98,8 +97,8 @@ EXTERNC void endo##NAME();
 // wait to xfer and consume
 
 #define DECLARE_LOCAL(NAME,TYPE) \
-EXTERNC int size##NAME(); \
-EXTERNC void use##NAME(); \
+EXTERNC int size##NAME(void); \
+EXTERNC void use##NAME(void); \
 EXTERNC void xfer##NAME(int siz); \
 EXTERNC TYPE *enloc##NAME(int siz); \
 EXTERNC TYPE *deloc##NAME(int siz); \
@@ -111,9 +110,9 @@ EXTERNC TYPE *array##NAME(int sub, int siz); \
 EXTERNC int strlen##NAME(int sub, TYPE val); \
 EXTERNC int enstr##NAME(TYPE val); \
 EXTERNC TYPE *dearg##NAME(int siz); \
-EXTERNC int enarg##NAME(); \
+EXTERNC int enarg##NAME(void); \
 EXTERNC void pack##NAME(int sub, int siz); \
-EXTERNC struct QueueBase *ptr##NAME();
+EXTERNC struct QueueBase *ptr##NAME(void);
 
 #define DECLARE_STAGE(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
 // consumed if appended to
@@ -121,7 +120,7 @@ EXTERNC struct QueueBase *ptr##NAME();
 // does not trigger consume
 
 #define DECLARE_META(NAME,TYPE) \
-EXTERNC int usage##NAME(); \
+EXTERNC int usage##NAME(void); \
 EXTERNC void used##NAME(int idx); \
 EXTERNC void use##NAME(int idx); \
 EXTERNC int size##NAME(int idx); \
@@ -140,7 +139,7 @@ EXTERNC int enarg##NAME(int idx); \
 EXTERNC void pack##NAME(int idx, int sub, int siz);
 
 #define DECLARE_POINTER(NAME,TYPE) \
-EXTERNC void refer##NAME(); \
+EXTERNC void refer##NAME(void); \
 DECLARE_LOCAL(NAME,TYPE)
 
 #define DECLARE_LINK(NAME) \
@@ -153,20 +152,20 @@ EXTERNC int next##NAME(int link); \
 EXTERNC int last##NAME(int link);
 
 #define DECLARE_POOL(NAME,TYPE) \
-EXTERNC int alloc##NAME(); \
+EXTERNC int alloc##NAME(void); \
 EXTERNC void free##NAME(int sub); \
 EXTERNC TYPE *cast##NAME(int sub); \
-EXTERNC int size##NAME();
+EXTERNC int size##NAME(void);
 
 #define DECLARE_PRIORITY(NAME,TYPE) \
 EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri); \
-EXTERNC TYPE *advance##NAME(); \
+EXTERNC TYPE *advance##NAME(void); \
 EXTERNC int ready##NAME(pqueue_pri_t pri); \
-EXTERNC pqueue_pri_t when##NAME();
+EXTERNC pqueue_pri_t when##NAME(void);
 
 #define DECLARE_TREE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
-EXTERNC int size##NAME(); \
+EXTERNC int size##NAME(void); \
 EXTERNC int test##NAME(KEY key); \
 EXTERNC int check##NAME(KEY key); \
 EXTERNC int find##NAME(KEY *key); \
@@ -176,7 +175,7 @@ EXTERNC int remove##NAME(KEY key); \
 EXTERNC VAL *cast##NAME(KEY key);
 
 #define DECLARE_TRUE(NAME,KEY,VAL) \
-EXTERNC int tag##NAME(); \
+EXTERNC int tag##NAME(void); \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int usage##NAME(); \
 EXTERNC int test##NAME(KEY key); \
@@ -211,7 +210,7 @@ struct QueueBase {
     virtual void redo() = 0;
     virtual void endo() = 0;
     virtual void dedo() = 0;
-    QueueBase *ptr() {return this;}
+    QueueBase *ptr(void) {return this;}
 };
 
 struct QueueXbase {
@@ -305,11 +304,11 @@ struct QueueFunc : QueueMutex {
         delayPtr = fnc8; nodelayPtr = fnc9;
     }
     virtual ~QueueFunc() {}
-    virtual void signal() {if (signalPtr) (*signalPtr)();}
-    virtual void before() {if (beforePtr) (*beforePtr)();}
-    virtual void after() {if (afterPtr) (*afterPtr)();}
-    virtual int delay() {return (delayPtr ? (*delayPtr)() : 0);}
-    virtual int nodelay() {return (nodelayPtr ? (*nodelayPtr)() : 0);}
+    virtual void signal(void) {if (signalPtr) (*signalPtr)();}
+    virtual void before(void) {if (beforePtr) (*beforePtr)();}
+    virtual void after(void) {if (afterPtr) (*afterPtr)();}
+    virtual int delay(void) {return (delayPtr ? (*delayPtr)() : 0);}
+    virtual int nodelay(void) {return (nodelayPtr ? (*nodelayPtr)() : 0);}
 };
 
 struct QueueStdin : QueueMutex {
@@ -512,12 +511,12 @@ struct QueueCond : QueueMutex {
 TYPE NAME##Inst = TYPE(FUNC); \
 extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
 extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
-extern "C" void lock##NAME() {NAME##Inst.lock();} \
-extern "C" void unlock##NAME() {NAME##Inst.unlock();} \
-extern "C" void done##NAME() {NAME##Inst.done = 1;} \
-extern "C" void join##NAME() {NAME##Inst.join();} \
-extern "C" void signal##NAME() {NAME##Inst.signal();} \
-extern "C" void exit##NAME() {NAME##Inst.exit(); NAME##Inst.signal(); NAME##Inst.join();}
+extern "C" void lock##NAME(void) {NAME##Inst.lock();} \
+extern "C" void unlock##NAME(void) {NAME##Inst.unlock();} \
+extern "C" void done##NAME(void) {NAME##Inst.done = 1;} \
+extern "C" void join##NAME(void) {NAME##Inst.join();} \
+extern "C" void signal##NAME(void) {NAME##Inst.signal();} \
+extern "C" void exit##NAME(void) {NAME##Inst.exit(); NAME##Inst.signal(); NAME##Inst.join();}
 
 #define DEFINE_FUNC(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueFunc,FUNC)
 
@@ -837,8 +836,8 @@ template<class TYPE> QueueStruct<TYPE> *QueueStruct<TYPE>::src = 0;
 
 #define DEFINE_LOCAL(NAME,TYPE,FUNC...) \
 QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(FUNC); \
-extern "C" int size##NAME() {return NAME##Inst.size();} \
-extern "C" void use##NAME() {NAME##Inst.use();} \
+extern "C" int size##NAME(void) {return NAME##Inst.size();} \
+extern "C" void use##NAME(void) {NAME##Inst.use();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.deloc(siz);} \
@@ -850,9 +849,9 @@ extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.array(sub,siz)
 extern "C" int strlen##NAME(int sub, TYPE val) {return NAME##Inst.strlen(sub,val);} \
 extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.enstr(val);} \
 extern "C" TYPE *dearg##NAME(int siz) {return NAME##Inst.dearg(siz);} \
-extern "C" int enarg##NAME() {return NAME##Inst.enarg();} \
+extern "C" int enarg##NAME(void) {return NAME##Inst.enarg();} \
 extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.pack(sub,siz);} \
-extern "C" QueueBase *ptr##NAME() {return NAME##Inst.ptr();}
+extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.ptr();}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)
 // consumed if appended to
@@ -929,7 +928,7 @@ template<class TYPE> struct QueueMeta {
 
 #define DEFINE_META(NAME,TYPE) \
 QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \
-extern "C" int usage##NAME() {return NAME##Inst.size();} \
+extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" void used##NAME(int idx) {NAME##Inst.touch(idx);} \
 extern "C" void use##NAME(int idx) {NAME##Inst.use(idx);} \
 extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);} \
@@ -951,7 +950,7 @@ template<class TYPE> struct QueuePointer {
     {
         ptr = 0;
     }
-    ~QueuePointer() {}
+    ~QueuePointer(void) {}
     void refer()
     {
         ptr = QueueStruct<TYPE>::src;
@@ -962,21 +961,21 @@ template<class TYPE> struct QueuePointer {
 
 #define DEFINE_POINTER(NAME,TYPE) \
 QueuePointer<TYPE> NAME##Inst = QueuePointer<TYPE>(); \
-extern "C" void refer##NAME() {NAME##Inst.refer();} \
+extern "C" void refer##NAME(void) {NAME##Inst.refer();} \
 extern "C" TYPE *enloc##NAME(int siz) {return NAME##Inst.ptr->enloc(siz);} \
 extern "C" TYPE *deloc##NAME(int siz) {return NAME##Inst.ptr->deloc(siz);} \
 extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.ptr->destr(val);} \
 extern "C" TYPE *unloc##NAME(int siz) {return NAME##Inst.ptr->unloc(siz);} \
 extern "C" TYPE *reloc##NAME(int siz) {return NAME##Inst.ptr->reloc(siz);} \
-extern "C" int size##NAME() {return NAME##Inst.ptr->size();} \
+extern "C" int size##NAME(void) {return NAME##Inst.ptr->size();} \
 extern "C" TYPE *array##NAME(int sub, int siz) {return NAME##Inst.ptr->array(sub,siz);} \
-extern "C" void use##NAME() {NAME##Inst.ptr->use();} \
+extern "C" void use##NAME(void) {NAME##Inst.ptr->use();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.ptr->xfer(siz);} \
 extern "C" int enstr##NAME(TYPE val) {return NAME##Inst.ptr->enstr(val);} \
 extern "C" TYPE *dearg##NAME(int siz) {return NAME##Inst.ptr->dearg(siz);} \
-extern "C" int enarg##NAME() {return NAME##Inst.ptr->enarg();} \
+extern "C" int enarg##NAME(void) {return NAME##Inst.ptr->enarg();} \
 extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.ptr->pack(sub,siz);} \
-extern "C" QueueBase *ptr##NAME() {return NAME##Inst.ptr->ptr();}
+extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.ptr->ptr();}
 
 struct Link {
     int next,last; // links if positive, index into head or tail if negative
@@ -1104,10 +1103,10 @@ template<class TYPE> struct QueuePool {
 
 #define DEFINE_POOL(NAME,TYPE) \
 QueuePool<TYPE> NAME##Inst = QueuePool<TYPE>(); \
-extern "C" int alloc##NAME() {return NAME##Inst.alloc();} \
+extern "C" int alloc##NAME(void) {return NAME##Inst.alloc();} \
 extern "C" void free##NAME(int sub) {NAME##Inst.free(sub);} \
 extern "C" TYPE *cast##NAME(int sub) {return NAME##Inst.cast(sub);} \
-extern "C" int size##NAME() {return NAME##Inst.size();}
+extern "C" int size##NAME(void) {return NAME##Inst.size();}
 
 template<class TYPE> struct Pqueue {
     TYPE val; // subscript into a buffer
@@ -1198,9 +1197,9 @@ extern "C" size_t get_pos_##NAME(void *sub) {return NAME##Inst.get_pos(sub);} \
 extern "C" void set_pos_##NAME(void *sub, size_t pos) {return NAME##Inst.set_pos(sub,pos);} \
 extern "C" void print_entry_##NAME(FILE *out, void *sub) {NAME##Inst.print_entry(out,sub);} \
 extern "C" TYPE *schedule##NAME(pqueue_pri_t pri) {return NAME##Inst.schedule(pri);} \
-extern "C" TYPE *advance##NAME() {return NAME##Inst.advance();} \
+extern "C" TYPE *advance##NAME(void) {return NAME##Inst.advance();} \
 extern "C" int ready##NAME(pqueue_pri_t pri) {return NAME##Inst.ready(pri);} \
-extern "C" pqueue_pri_t when##NAME() {return NAME##Inst.when();}
+extern "C" pqueue_pri_t when##NAME(void) {return NAME##Inst.when();}
 
 EXTERNCBEGIN
 #include "rbtree.h"
@@ -1317,7 +1316,7 @@ extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
-extern "C" int size##NAME() {return NAME##Inst.size();} \
+extern "C" int size##NAME(void) {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int check##NAME(KEY key) {return NAME##Inst.check(key);} \
 extern "C" int find##NAME(KEY *key) {return NAME##Inst.find(key);} \
@@ -1440,9 +1439,9 @@ template<class KEY, class VAL> struct QueueTrue {
 extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTrue<KEY,VAL> NAME##Inst = QueueTrue<KEY,VAL>(comp##NAME); \
 extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
-extern "C" int tag##NAME() {return NAME##Inst.tag();} \
+extern "C" int tag##NAME(void) {return NAME##Inst.tag();} \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
-extern "C" int usage##NAME() {return NAME##Inst.size();} \
+extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int check##NAME(KEY key) {return NAME##Inst.check(key);} \
 extern "C" int find##NAME(KEY *key) {return NAME##Inst.find(key);} \

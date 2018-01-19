@@ -35,7 +35,7 @@
 
 void enqueDisplay(GLFWwindow *ptr);
 #ifdef BRINGUP
-void bringupBuiltin();
+void bringupBuiltin(void);
 void enqueCommand(Command cmd);
 #endif
 

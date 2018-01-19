@@ -231,7 +231,7 @@ enum Action renderUniform(int state)
     struct Render *render = deargRender(1); \
     struct File *file = arrayFile(render->file,1); \
     struct Code *shader = arrayCode(render->shader,1); \
-    enqueContext(render->display); \
+    enqueContext(render->context); \
     enum Data *vertex = shader->vertex; \
     enum Data *element = shader->element; \
     enum Data *feedback = shader->feedback; \
@@ -391,7 +391,7 @@ void setupFile(int sub)
     while (sizeFile() <= sub) {struct File file = {0}; *enlocFile(1) = file;}
     struct File *file = arrayFile(sub,1);
     if (file->name != 0) return;
-    file->name = "file"; // TODO
+    file->name = "file"; // TODO use filename
     // TODO set file->fixed file->last file->saved file->ratio depending on menu mode
     identmat(file->saved,4);
     identmat(file->ratio,4);
@@ -628,7 +628,7 @@ extern const GLchar *repointVertex;
 extern const GLchar *repointGeometry;
 extern const GLchar *repointFragment;
 
-void setupCode(enum Shader shader, int file, int display)
+void setupCode(enum Shader shader, int file)
 {
     if (arrayCode(shader,1)->name != 0) return;
     SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane);
@@ -656,12 +656,12 @@ void setupCode(enum Shader shader, int file, int display)
     glUseProgram(0);
 }
 
-void enqueShader(enum Shader shader, int file, int display, Machine follow, enum Share share)
+void enqueShader(enum Shader shader, int file, int context, Machine follow, enum Share share)
 {
     struct Render render = {0};
     render.file = file; setupFile(file); // before setupCode so enqueUniform can refer to file for fixed
-    render.shader = shader; setupCode(shader,file,display);
-    render.display = display;
+    render.shader = shader; setupCode(shader,file);
+    render.context = context;
     render.share = share;
     *enlocRender(1) = render;
     enqueMachine(&renderLock);
@@ -681,23 +681,23 @@ int enqueCode(enum Shader shader, int display)
     return Shaders+(display*2)+(shader!=Diplane);
 }
 
-void enqueSwap()
+void enqueSwap(void)
 {
-    int sub = *delocCmdInt(1);
-    enqueContext(sub);
-    if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = sub; deferCommand(enqueSwap); return;}
+    int context = *delocCmdInt(1);
+    enqueContext(context);
+    if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
     renderSwap = sizeFile();
     renderClear = 1;
     for (int i = 0; i < sizeFile(); i++)
-    enqueShader(dishader,i,sub,0,Zero);
+    enqueShader(dishader,i,context,0,Zero);
 }
 
-void enqueDishader()
+void enqueDishader(void)
 {
     for (int i = 0; i < sizeDisplay(); i++) {*enlocCmdInt(1) = i; enqueCommand(enqueSwap);}
 }
 
-void enquePershader()
+void enquePershader(void)
 {
     enqueContext(0);
     for (int i = 0; i < sizeFile(); i++)

@@ -173,9 +173,9 @@ float *copymat(float *u, float *v, int n)
     return copyvec(u,v,n*n);
 }
 
-float *compmat(float *u, float *v)
+float *compmat(float *u, float *v, int n)
 {
-    for (int i = 0; i < 16; i++) if (u[i] != v[i]) return 0;
+    for (int i = 0; i < n*n; i++) if (u[i] != v[i]) return 0;
     return u;
 }
 
@@ -258,33 +258,33 @@ float *basearrow(float *u, float *v, int *i, float *b, int n)
     return u;
 }
 
-void commandBefore();
-void commandAfter();
-void commandSignal();
+void commandBefore(void);
+void commandAfter(void);
+void commandSignal(void);
 void commandConsume(void *arg);
-int commandDelay();
-int commandNodelay() ;
+int commandDelay(void);
+int commandNodelay(void);
 void commandProduce(void *arg);
 
-void beforeConsole();
+void beforeConsole(void);
 void consumeConsole(void *arg);
 void produceConsole(void *arg);
-void afterConsole();
+void afterConsole(void);
 
-void processBefore();
+void processBefore(void);
 void processConsume(void *arg);
 void processProduce(void *arg);
-void processAfter();
+void processAfter(void);
 
-void haskellBefore();
+void haskellBefore(void);
 void haskellConsume(void *arg);
-void haskellAfter();
+void haskellAfter(void);
 
-void timewheelBefore();
+void timewheelBefore(void);
 void timewheelConsume(void *arg);
 void timewheelProduce(void *arg);
-void timewheelAfter();
-long long timewheelDelay();
+void timewheelAfter(void);
+long long timewheelDelay(void);
 
 EXTERNCEND
 
@@ -374,6 +374,7 @@ DEFINE_STAGE(CmdChange,struct Change,CmdTimewheels)
 
 DEFINE_META(Place,int)
 DEFINE_META(Embed,int)
+DEFINE_META(Filter,int)
 DEFINE_LOCAL(Inout,int)
 DEFINE_TREE(Enum,enum Event,int)
 
@@ -410,7 +411,8 @@ DEFINE_DEST(Timewheels,CmnTimewheels,CmnTimewheels)
 DEFINE_STAGE(Change,struct Change,Timewheels)
 DEFINE_STAGE(Control,enum Control,Change)
 DEFINE_STAGE(TwInt,int,Control)
-DEFINE_EXTRA(Coefficient,float,TwInt)
+DEFINE_EXTRA(TwByte,char,TwInt)
+DEFINE_EXTRA(Coefficient,float,TwByte)
 DEFINE_EXTRA(Variable,int,Coefficient)
 DEFINE_EXTRA(State,struct State,Variable)
 DEFINE_EXTRA(Signal,struct Signal,State)

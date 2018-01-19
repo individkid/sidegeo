@@ -26,7 +26,8 @@ struct Item item[Menus] = {
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
     {Sculpts,Sculpt,1,"Perform","click switches to decoration file or opens equalizer panel"},
-    {Sculpts,Sculpt,1,"Alternate","click moves pierced target to alternate display"},
+    {Sculpts,Sculpt,1,"Move","click moves pierced target to alternate display"},
+    {Sculpts,Sculpt,1,"Copy","click copies pierced target to alternate display"},
     {Sculpts,Sculpt,1,"Transform","modify transform matrix for pierced target"},
     {Sculpts,Mouse,1,"Mouse","action of mouse motion in Transform mode"},
     {Mouses,Mouse,2,"Rotate","tilt polytope(s)/plane around pierce point"},
@@ -37,10 +38,11 @@ struct Item item[Menus] = {
     {Rollers,Roller,2,"Clock","rotate around perpendicular to pierce point"},
     {Rollers,Roller,2,"Scale","grow or shrink with pierce point fixed"},
     {Rollers,Roller,2,"Drive","move picture plane forward or back"},
-    {Sculpts,Level,1,"Level","target of Alternate/Transform click mode"},
-    {Levels,Level,2,"Plane","target is the pierced plane"},
-    {Levels,Level,2,"Polytope","target is the pierced polytope"},
-    {Levels,Level,2,"Session","target is all displayed polytopes"},
+    {Sculpts,Target,1,"Target","target of Alternate/Transform click mode"},
+    {Targets,Target,2,"Plane","target is the pierced plane"},
+    {Targets,Target,2,"Polytope","target is the pierced polytope"},
+    {Targets,Target,2,"Alternate","target is planes in focused display"},
+    {Targets,Target,2,"Session","target is all displayed polytopes"},
     {Sculpts,Classify,1,"Classify","type of thing displayed in Display mode"},
     {Classifies,Classify,2,"Vector","display pierce point and coplane"},
     {Classifies,Classify,2,"Graph","display relation of facets"},
@@ -60,20 +62,20 @@ int last[4] = {0};
 enum Menu mark[Modes] = INIT;
 int depth = 0;
 
-void inject();
-void menu();
+void inject(void);
+void menu(void);
 
-enum Menu tailline()
+enum Menu tailline(void)
 {
     return *arrayLine(sizeLine()-1,1);
 }
 
-int tailmatch()
+int tailmatch(void)
 {
     return *arrayMatch(sizeMatch()-1,1);
 }
 
-int readchr()
+int readchr(void)
 {
     char chr;
     while (1) {
@@ -116,7 +118,7 @@ void unwriteitem(enum Menu line)
     writechr('\r');
 }
 
-void writemenu()
+void writemenu(void)
 {
     for (enum Menu line = 0; line < Menus; line++) {
         struct Item *iptr = &item[line];
@@ -215,7 +217,7 @@ void backend(char chr)
     else writeitem(tailline(),tailmatch());
 }
 
-void beforeConsole()
+void beforeConsole(void)
 {
     writeitem(*enlocLine(1) = 0, *enlocMatch(1) = 0);
 }
@@ -230,7 +232,7 @@ void produceConsole(void *arg)
     frontend(readchr());
 }
 
-void afterConsole()
+void afterConsole(void)
 {
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeCslPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());

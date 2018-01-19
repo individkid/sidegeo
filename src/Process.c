@@ -161,7 +161,7 @@ struct Helper {
 #define SENDSIG(INDEX,PID) \
     if (kill(PID, SIGUSR2) < 0 && errno != ESRCH) {GIVEMORE(INDEX) return -1;}
 
-struct Helper helperInit()
+struct Helper helperInit(void)
 {
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     struct Helper retval = helper;
@@ -242,7 +242,7 @@ int processRead(int pipe, int size)
 	return len;
 }
 
-void processYield()
+void processYield(void)
 {
     current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;
 }
@@ -291,7 +291,7 @@ void processError(int index)
     processYield();
 }
 
-void processBefore()
+void processBefore(void)
 {
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
@@ -326,7 +326,7 @@ void processProduce(void *arg)
     else toggle = 1;
 }
 
-void processAfter()
+void processAfter(void)
 {
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));

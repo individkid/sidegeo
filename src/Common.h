@@ -46,18 +46,37 @@ EXTERNCBEGIN
 #define ROLLER_DELTA 1.0
 
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Alternate,Transform,
+    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Move,Copy,Transform,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
-    Levels,Plane,Polytope,Session,
+    Targets,Plane,Polytope,Alternate,Session,
     Classifies,Vector,Graph,Polyant,Place,
     Samples,Symbolic,Numeric,
     Performs,Configure,Hyperlink,Execute,
     Menus};
 enum Mode { // menu and menus; navigate and enter by keys
-    Sculpt,Mouse,Roller,Level,Classify,Sample,Action,Modes};
+    Sculpt, // top level
+    Mouse, // mouse motion action
+    Roller, // mouse roller action
+    Target, // target of action
+    Classify, // invariant select
+    Sample, // report specification
+    Action, // mouse click action
+    Modes};
 #define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Configure}
-enum Motion {Enter,Back,Space,North,South,West,East,Counter,Wise,Click,Suspend,Motions};
+enum Motion {
+    Enter, // enter key
+    Back, // backspace key
+    Space, // space bar
+    North, // up arrow
+    South, // down arrow
+    West, // left arrow
+    East, // right arrow
+    Counter, // roller up
+    Wise, // roller down
+    Click, // left mouse button
+    Suspend, // right mouse button
+    Motions};
 struct Item { // per-menu-line info
     enum Menu collect; // item[item[x].collect].mode == item[x].mode
     enum Mode mode; // item[mode[x]].mode == x
@@ -70,17 +89,17 @@ enum Event {
     Locate, // wrt point, place: polyant
     Fill, // polyant, place, embed: embed
     Hollow, // polyant, place, embed: embed
-    Face, // place, embed: face
-    Frame, // place, embed: frame
     Inflate, // place: embed
-    Divide, // wrt plane, boundary, place, embed: place, embed
+    Face, // filter, place, embed, tag: face
+    Frame, // filter, place, embed, tag: frame
+    Filter, // boundary, filter, tag: tag
+    Divide, // wrt plane, boundary, filter, place, embed, tag: place, embed, tag
     Vertex, // boundary, place: vertex
-    Migrate, // wrt plane, boundary, place, embed: place, embed
     Events};
 
 typedef unsigned Myuint;
 typedef float Myfloat;
-typedef void (*Command)();
+typedef void (*Command)(void);
 enum Action {
     Reque, // be polite to other commands
     Defer, // wait for other commands engines threads
@@ -158,29 +177,29 @@ struct Display {
     void *handle;
     int context;
     Myuint VAO;
-    float affineMat[16]; // transformation state at click time
-    float affineMata[16]; // left transformation state
-    float affineMatb[16]; // right transformation state
-    float xPoint;  // position of pierce point at click time
-    float yPoint;
-    float zPoint;
-    float wWarp; // saved mouse position wnen toggled inactive
-    float xWarp;
-    float yWarp;
-    float zWarp;
+    Myfloat affineMat[16]; // transformation state at click time
+    Myfloat affineMata[16]; // left transformation state
+    Myfloat affineMatb[16]; // right transformation state
+    Myfloat xPoint;  // position of pierce point at click time
+    Myfloat yPoint;
+    Myfloat zPoint;
+    Myfloat wWarp; // saved mouse position wnen toggled inactive
+    Myfloat xWarp;
+    Myfloat yWarp;
+    Myfloat zWarp;
     int pPos; // plane under mouse position
     int qPos; // file of plane under mouse
-    float wPos; // roller activity since click
-    float xPos; // current mouse position
-    float yPos;
-    float zPos; // pierce point
+    Myfloat wPos; // roller activity since click
+    Myfloat xPos; // current mouse position
+    Myfloat yPos;
+    Myfloat zPos; // pierce point
     int xSiz; // size of display
     int ySiz;
     int xLoc; // display location
     int yLoc;
-    float cutoff; // frustrum depth
-    float slope;
-    float aspect;
+    Myfloat cutoff; // frustrum depth
+    Myfloat slope;
+    Myfloat aspect;
     int swap;
     int clear;
     enum Click click; // mode controlled by mouse buttons
@@ -189,7 +208,7 @@ struct File {
     const char *name;
     Myfloat tweak; // from --configure
     int fixed; // whether object moves opposite to view
-    int last; // last value of fixed to detect change short of glitches
+    int last; // last value of fixed
     Myfloat saved[16]; // Sp sent to uniform when fixed went to 1
     Myfloat ratio[16]; // Sp/Rn where Rn is manipulation of view when fixed went to 0
     // sent S; requested R;
@@ -226,8 +245,8 @@ struct Code { // files use same shader code and server uniforms
 };
 struct Render { // argument to render functions
     enum Shader shader; // indicates which struct Code to use
-    int file; // arrayFile and Code enum Data subscript
-    int display; // which display to render to
+    int file; // arrayFile subscript
+    int context; // which display to render to
     int draw; // waiting for shader
     int wait; // buffer sequence number
     enum Share share; // whether to lock file
@@ -244,6 +263,7 @@ struct State {
     int idt; // how other states will refer to this one
     int vld; // enable for wav, met
     int wav; // index of waveform pipeline
+    int fun; // index into string buffer for haskell expression
     int met; // metric request argument
     float amt; // amout of stock
     float min,max; // saturation limits
@@ -261,7 +281,7 @@ struct Sound { // information for opening destination
 };
 struct Shape { // information for measuring shapes
     int idt; // how other states will refer to this one
-    void (*metric)();
+    Command metric;
     int index;
 };
 struct Change {
@@ -277,6 +297,7 @@ enum Control {
 enum Shift {
     Wav, // send new amount to waveform pipeline
     Met, // send metric command when read
+    Fun, // evaluate haskell expression when written
     Map, // indices are not packed
     Run, // state is to be scheduled
     Shifts};
@@ -321,7 +342,7 @@ float *identmat(float *u, int n);
 float *copyary(float *u, float *v, int duty, int stride, int size);
 float *copyvec(float *u, float *v, int n);
 float *copymat(float *u, float *v, int n);
-float *compmat(float *u, float *v);
+float *compmat(float *u, float *v, int n);
 float *crossmat(float *u);
 float *crossvec(float *u, float *v);
 float detmat(float *u, int n);
@@ -408,6 +429,7 @@ DECLARE_STAGE(CmdChange,struct Change)
 
 DECLARE_META(Place,int)
 DECLARE_META(Embed,int)
+DECLARE_META(Filter,int)
 DECLARE_LOCAL(Inout,int)
 DECLARE_TREE(Enum,enum Event,int)
 
@@ -444,6 +466,7 @@ DECLARE_DEST(Timewheels)
 DECLARE_STAGE(Change,struct Change)
 DECLARE_STAGE(Control,enum Control)
 DECLARE_STAGE(TwInt,int)
+DECLARE_EXTRA(TwByte,char)
 DECLARE_EXTRA(Coefficient,float)
 DECLARE_EXTRA(Variable,int)
 DECLARE_EXTRA(State,struct State)

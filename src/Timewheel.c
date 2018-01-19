@@ -35,7 +35,7 @@ double timeOf(pqueue_pri_t time)
     return 0; // TODO
 }
 
-double getTime()
+double getTime(void)
 {
     return 0; // TODO
 }
@@ -45,7 +45,7 @@ void setTime(struct timespec *delay, double time)
     // TODO
 }
 
-void startCount()
+void startCount(void)
 {
     while (listenCount < sizeSignal()) {
         int key = arraySignal(listenCount,1)->idt; 
@@ -69,19 +69,19 @@ void startCount()
         stateCount += 1;}
 }
 
-void startListen()
+void startListen(void)
 {
     startCount();
 	// TODO
 }
 
-void startSource()
+void startSource(void)
 {
     startCount();
 	// TODO
 }
 
-void startMetric()
+void startMetric(void)
 {
     startCount();
 }
@@ -108,7 +108,7 @@ void startRatio(int *sub, struct Ratio *rat)
     startNomial(sub,&rat->d);
 }
 
-void startState()
+void startState(void)
 {
     startCount();
     int sub = *castPack(*delocTwInt(1));
@@ -126,17 +126,17 @@ void startState()
     if ((state->vld>>Run)&1) *scheduleTime(ofTime(getTime())) = sub;
 }
 
-void finishListen()
+void finishListen(void)
 {
 	// TODO
 }
 
-void finishSource()
+void finishSource(void)
 {
 	// TODO
 }
 
-void finishMetric()
+void finishMetric(void)
 {
     // TODO
 }
@@ -203,7 +203,7 @@ double evaluate(int *csub, int *vsub, struct Ratio *ratio)
     return numer / denom;
 }
 
-void timewheelBefore()
+void timewheelBefore(void)
 {
     PaError err = Pa_Initialize();
     if (err != paNoError) exitErrstr("PortAudio error: %s\n",Pa_GetErrorText(err));
@@ -224,7 +224,7 @@ void timewheelConsume(void *arg)
         if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
 }
 
-long long timewheelDelay()
+long long timewheelDelay(void)
 {
     double current = getTime();
     double time = whenTime();
@@ -255,7 +255,7 @@ void timewheelProduce(void *arg)
         if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
 }
 
-void timewheelAfter()
+void timewheelAfter(void)
 {
     finishListen();
     finishSource();

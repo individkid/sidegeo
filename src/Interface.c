@@ -39,27 +39,19 @@ extern struct Item item[Menus];
 extern float basisMat[27];
 extern enum Shader dishader;
 extern struct Display *display;
-#define click display->click
 #define displayHandle display->handle
-#define xPos display->xPos
-#define yPos display->yPos
-#define zPos display->zPos
-#define xSiz display->xSiz
-#define ySiz display->ySiz
-#define slope display->slope
-#define aspect display->aspect
 
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
 void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Command cmd);
-void enqueDishader();
+void enqueDishader(void);
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
 void enqueShader(enum Shader shader, int file, int display, Machine follow, enum Share share);
 
 DEFINE_MSGSTR(CmdConfigure)
 
-void inject()
+void inject(void)
 {
     char chr = *delocCmdInt(1);
     SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
@@ -73,16 +65,17 @@ void inject()
     DEFAULT(exitErrstr("invalid inject char\n");)
 }
 
-void menu()
+void menu(void)
 {
     char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
         enum Menu line = indexof(chr);
-        click = Init; mode[item[line].mode] = line;}
+        for (int i = 0; i < sizeDisplay(); i++) arrayDisplay(i,1)->click = Init;
+        mode[item[line].mode] = line;}
     else exitErrstr("invalid menu char\n");
 }
 
-void metric()
+void metric(void)
 {
     int index = *delocCmdInt(1);
     int stock = *delocCmdInt(1);
@@ -94,7 +87,7 @@ void metric()
     *enlocCmdChange(1) = change;
 }
 
-void displayResponse()
+void displayResponse(void)
 {
     int tag = *delocCmdInt(1);
     if (sizeReint(tag) == 0) {
@@ -167,17 +160,17 @@ enum Action displayRequest(int state)
     return Advance;
 }
 
-void configureInflate()
+void configureInflate(void)
 {
     DISPLAY_RELOC(Inflate)
 }
 
-void configureFill()
+void configureFill(void)
 {
     DISPLAY_RELOC(Fill)
 }
 
-void configureHollow()
+void configureHollow(void)
 {
     DISPLAY_RELOC(Hollow)
 }
@@ -205,7 +198,7 @@ void refineClick(int file, float xpos, float ypos, float zpos)
     msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
 }
 
-void configurePlane()
+void configurePlane(void)
 {
     // plane configuration kicks off appendPlane
 }
@@ -217,13 +210,13 @@ enum Action collectPoint(int state)
     return Advance;
 }
 
-void configurePoint()
+void configurePoint(void)
 {
     // point configuration kicks off collectPoint followed by appendPlane
     // or allows collectPoint to proceed
 }
 
-void appendResponse()
+void appendResponse(void)
 {
     int tag = *delocCmdInt(1);
     int len = *delocCmdInt(1);
@@ -315,7 +308,7 @@ double sqrt(double x);
 void glueMachine();
 void setupFile(int file);
 
-void bringupBuiltin()
+void bringupBuiltin(void)
 {
     // f = 1
     // h^2 = f^2 - 0.5^2

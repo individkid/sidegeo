@@ -25,21 +25,21 @@
 
 int filenum = 0;
 
-void setupEnum()
+void setupEnum(void)
 {
     int val;
     val = handleEnum("Locate"); if (val < 0 || insertEnum(Locate) < 0) exitErrstr("enum too event\n"); else *castEnum(Locate) = val;
     val = handleEnum("Fill"); if (val < 0 || insertEnum(Fill) < 0) exitErrstr("enum too event\n"); else *castEnum(Fill) = val;
     val = handleEnum("Hollow"); if (val < 0 || insertEnum(Hollow) < 0) exitErrstr("enum too event\n"); else *castEnum(Hollow) = val;
+    val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate) < 0) exitErrstr("enum too event\n"); else *castEnum(Inflate) = val;
     val = handleEnum("Face"); if (val < 0 || insertEnum(Face) < 0) exitErrstr("enum too event\n"); else *castEnum(Face) = val;
     val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame) < 0) exitErrstr("enum too event\n"); else *castEnum(Frame) = val;
-    val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate) < 0) exitErrstr("enum too event\n"); else *castEnum(Inflate) = val;
+    val = handleEnum("Filter"); if (val < 0 || insertEnum(Filter) < 0) exitErrstr("enum too event\n"); else *castEnum(Filter) = val;
     val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
     val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
-    val = handleEnum("Migrate"); if (val < 0 || insertEnum(Migrate) < 0) exitErrstr("enum too event\n"); else *castEnum(Migrate) = val;
 }
 
-void haskellBefore()
+void haskellBefore(void)
 {
     hs_init(0,0);
     setupEnum();
@@ -60,7 +60,7 @@ void haskellConsume(void *arg)
         *enlocHsCommand(1) = *delocHsCmd(1);}
 }
 
-void haskellAfter()
+void haskellAfter(void)
 {
     hs_exit();
 }
@@ -80,7 +80,7 @@ int *place(int size)
     return accessInt(size);
 }
 
-int places()
+int places(void)
 {
     usePlace(filenum); referMeta();
     return sizeMeta();
@@ -92,20 +92,32 @@ int *embed(int size)
     return accessInt(size);
 }
 
-int embeds()
+int embeds(void)
 {
     useEmbed(filenum); referMeta();
     return sizeMeta();
 }
 
-int *inout(int size)
+int *filter(int size)
 {
-    useInout(filenum); referMeta();
+    useFilter(filenum); referMeta();
     return accessInt(size);
 }
 
-int inouts()
+int filters(void)
 {
-    useInout(filenum); referMeta();
+    useFilter(filenum); referMeta();
+    return sizeMeta();
+}
+
+int *inout(int size)
+{
+    useInout(); referMeta();
+    return accessInt(size);
+}
+
+int inouts(void)
+{
+    useInout(); referMeta();
     return sizeMeta();
 }

@@ -28,11 +28,11 @@ void parseGlobal(const char *fmt);
 int parse(const char *fmt, int len);
 int parseString(const char *str, int len);
 
-void configurePlane();
-void configurePoint();
-void configureFill();
-void configureHollow();
-void configureInflate();
+void configurePlane(void);
+void configurePoint(void);
+void configureFill(void);
+void configureHollow(void);
+void configureInflate(void);
 
 #define FORCE_THREAD(THREAD) { \
 	int siz = *arrayPcsInt(intpos,1)-chrpos; \
@@ -389,12 +389,12 @@ int processConfigure(int index, int len)
     		FORCE_UNIQUE(Locate,Event,Hs)
     		FORCE_UNIQUE(Fill,Event,Hs)
     		FORCE_UNIQUE(Hollow,Event,Hs)
+    		FORCE_UNIQUE(Inflate,Event,Hs)
     		FORCE_UNIQUE(Face,Event,Hs)
     		FORCE_UNIQUE(Frame,Event,Hs)
-    		FORCE_UNIQUE(Inflate,Event,Hs)
+    		FORCE_UNIQUE(Filter,Event,Hs)
     		FORCE_UNIQUE(Divide,Event,Hs)
     		FORCE_UNIQUE(Vertex,Event,Hs)
-    		FORCE_UNIQUE(Migrate,Event,Hs)
 			//FORCE_SHARED(configureForce,CmdCmd,Cmd)
 			//FORCE_SHARED(configureForce,HsCmd,Hs)
 			FORCE_INT(CmdInt,Cmd)

@@ -28,6 +28,8 @@ foreign import ccall "place" placeC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "places" placesC :: CInt -> IO CInt
 foreign import ccall "embed" embedC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "embeds" embedsC :: CInt -> IO CInt
+foreign import ccall "filter" filterC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "filters" filtersC :: CInt -> IO CInt
 foreign import ccall "inout" inoutC :: CInt -> IO (Ptr CInt)
 foreign import ccall "inouts" inoutsC :: IO CInt
 foreign export ccall handleEvent :: CInt -> IO Bool

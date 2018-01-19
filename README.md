@@ -85,7 +85,8 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Display -- click explains pierced plane facet polytope space  
   * Tweak -- click tweaks plane possibly holding space fixed  
   * Perform -- click replaces polytope, opens equalizer, or calls function  
-  * Alternate -- click moves pierced target to alternate display  
+  * Move -- click moves pierced target to alternate display  
+  * Copy -- click copies pierced target to alternate display  
   * Transform -- modify transform matrix for pierced target  
   * Mouse -- action of mouse motion in Transform mode  
     * Rotate -- tilt polytope(s)/plane around pierce point  
@@ -96,10 +97,10 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Clock -- rotate picture plane around perpendicular to pierce point  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
-  * Level -- target of Alternate/Transform click mode  
+  * Target -- target of Alternate/Transform click mode  
     * Plane -- target is the pierced plane  
     * Polytope -- target is the pierced polytope  
-    * File -- target is polytopes in the file of pierced  
+    * Alternate -- target is planes in focused display  
     * Session -- target is all displayed polytopes  
   * Classify -- type of thing displayed in Display mode  
     * Vector -- display pierce point and coplane  
