@@ -330,7 +330,7 @@ int parseIdent(struct Parse *parse)
 	int key = sizePcsBuf()-idtlen-1;
 	if (findMacro(&key) >= 0) {
 		int val = *castMacro(key);
-		int len = strlenPcsBuf(val,0);
+		int len = lengthPcsBuf(val,0);
 		memcpy(allocFormat(len),arrayPcsBuf(val,len),len);
   		parse->fmtpre += len;
 		unlocPcsBuf(idtlen+1);}
