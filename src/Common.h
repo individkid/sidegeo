@@ -173,6 +173,7 @@ struct Buffer { // information about server buffers
     struct Lock lock; // lock on buffer
 };
 struct Display {
+    int name;
     void *screen;
     void *handle;
     int context;
@@ -205,7 +206,7 @@ struct Display {
     enum Click click; // mode controlled by mouse buttons
 };
 struct File {
-    const char *name;
+    int name;
     Myfloat tweak; // from --configure
     int fixed; // whether object moves opposite to view
     int last; // last value of fixed
@@ -225,6 +226,7 @@ struct File {
     struct Buffer buffer[Datas]; // only render buffer, and client uniforms are global
 };
 struct Uniform {
+    const char *name;
     Myuint handle;
     struct Lock lock;
 };
@@ -391,16 +393,16 @@ DECLARE_LOCAL(Layer,int)
 DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(Machine,Machine)
 DECLARE_LOCAL(Redo,struct QueueBase *)
+DECLARE_TRUE(Reint,int,int)
+DECLARE_TRUE(Refloat,int,Myfloat)
+DECLARE_TRUE(Rebyte,int,char)
 
 DECLARE_LOCAL(Display,struct Display)
 DECLARE_META(DisplayCode,struct Code)
 DECLARE_POINTER(Code,struct Code)
 DECLARE_META(DisplayFile,struct File)
 DECLARE_POINTER(File,struct File)
-
-DECLARE_TRUE(Reint,int,int)
-DECLARE_TRUE(Refloat,int,Myfloat)
-DECLARE_TRUE(Rebyte,int,char)
+DECLARE_LOCAL(CmdBuf,char)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
@@ -432,6 +434,7 @@ DECLARE_META(Embed,int)
 DECLARE_META(Filter,int)
 DECLARE_LOCAL(Inout,int)
 DECLARE_TREE(Enum,enum Event,int)
+DECLARE_POINTER(Meta,int)
 
 DECLARE_SOURCE(HsCommands)
 DECLARE_STAGE(HsCommand,Command)
@@ -441,9 +444,6 @@ DECLARE_WAIT(Haskells)
 DECLARE_STAGE(Event,enum Event)
 DECLARE_STAGE(HsCmd,Command)
 DECLARE_STAGE(HsInt,int)
-
-DECLARE_POINTER(Meta,int)
-DECLARE_POINTER(Name,char *)
 
 
 DECLARE_SOURCE(CslCommands)

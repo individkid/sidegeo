@@ -336,16 +336,16 @@ DEFINE_LOCAL(Layer,int)
 DEFINE_LOCAL(Defer,int)
 DEFINE_LOCAL(Machine,Machine)
 DEFINE_LOCAL(Redo,struct QueueBase *)
+DEFINE_TRUE(Reint,int,int)
+DEFINE_TRUE(Refloat,int,Myfloat)
+DEFINE_TRUE(Rebyte,int,char)
 
 DEFINE_LOCAL(Display,struct Display)
 DEFINE_META(DisplayCode,struct Code)
 DEFINE_POINTER(Code,struct Code)
 DEFINE_META(DisplayFile,struct File)
 DEFINE_POINTER(File,struct File)
-
-DEFINE_TRUE(Reint,int,int)
-DEFINE_TRUE(Refloat,int,Myfloat)
-DEFINE_TRUE(Rebyte,int,char)
+DEFINE_LOCAL(CmdBuf,char)
 
 DEFINE_DEST(Commands,CmnCommands,CmnCommands)
 DEFINE_STAGE(Command,Command,Commands)
@@ -377,6 +377,7 @@ DEFINE_META(Embed,int)
 DEFINE_META(Filter,int)
 DEFINE_LOCAL(Inout,int)
 DEFINE_TREE(Enum,enum Event,int)
+DEFINE_POINTER(Meta,int)
 
 DEFINE_SOURCE(HsCommands,CmnCommands,CmnHaskells)
 DEFINE_STAGE(HsCommand,Command,HsCommands)
@@ -386,9 +387,6 @@ DEFINE_WAIT(Haskells,CmnHaskells,HsCommands) // wait after source
 DEFINE_STAGE(Event,enum Event,Haskells)
 DEFINE_STAGE(HsCmd,Command,Event)
 DEFINE_STAGE(HsInt,int,HsCmd)
-
-DEFINE_POINTER(Meta,int)
-DEFINE_POINTER(Name,char *)
 
 
 DEFINE_SOURCE(CslCommands,CmnCommands,CmnOutputs)

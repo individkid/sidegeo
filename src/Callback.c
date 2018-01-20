@@ -47,6 +47,7 @@ enum Shader dishader = Dipoint;
 enum Shader pershader = Perpoint;
 #endif
 struct Display *display = 0;
+#define displayName display->name
 #define click display->click
 #define screenHandle display->screen
 #define displayHandle display->handle
@@ -460,13 +461,15 @@ void setupDisplay(void)
     int row = i % 3;
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}}
+    const char *name = (sizeDisplay() == 1 ? "Sculpt" : "sculpt"); // TODO use display name from Option.c
     display = enlocDisplay(1);
+    displayName = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    displayHandle = glfwCreateWindow(800, 600, (sizeDisplay() == 0 ? "Sculpt" : "sculpt"), NULL, NULL);
+    displayHandle = glfwCreateWindow(800, 600, stringCmdBuf(displayName,0), NULL, NULL);
     if (!displayHandle) exitErrstr("could not create display\n");
 #ifdef __linux__
     screenHandle = glfwGetX11Display();

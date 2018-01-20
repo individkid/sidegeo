@@ -391,7 +391,9 @@ void setupFile(int sub)
     while (sizeFile() <= sub) {struct File file = {0}; *enlocFile(1) = file;}
     struct File *file = arrayFile(sub,1);
     if (file->name != 0) return;
-    file->name = "file"; // TODO use filename
+    const char *name = "file"; // TODO use filename from Configure.c
+    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
+    file->name = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
     // TODO set file->fixed file->last file->saved file->ratio depending on menu mode
     identmat(file->saved,4);
     identmat(file->ratio,4);
@@ -411,14 +413,14 @@ void setupFile(int sub)
 void setupUniform(Myuint program, enum Server server, int file, enum Shader shader)
 {
     struct Uniform uniform = {0};
-    SWITCH(server,Invalid) uniform.handle = glGetUniformLocation(program, "invalid");
-    CASE(Basis) uniform.handle = glGetUniformLocation(program, "basis");
-    CASE(Affine) uniform.handle = glGetUniformLocation(program, "affine");
-    CASE(Feather) uniform.handle = glGetUniformLocation(program, "feather");
-    CASE(Arrow) uniform.handle = glGetUniformLocation(program, "arrow");
-    CASE(Cutoff) uniform.handle = glGetUniformLocation(program, "cutoff");
-    CASE(Slope) uniform.handle = glGetUniformLocation(program, "slope");
-    CASE(Aspect) uniform.handle = glGetUniformLocation(program, "aspect");
+    SWITCH(server,Invalid) uniform.name = "invalid"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    CASE(Basis) uniform.name = "basis"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    CASE(Affine) uniform.name = "affine"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    CASE(Feather) uniform.name = "feather"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    CASE(Arrow) uniform.name = "arrow"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    CASE(Cutoff) uniform.name = "cutoff"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    CASE(Slope) uniform.name = "slope"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    CASE(Aspect) uniform.name = "aspect"; uniform.handle = glGetUniformLocation(program, uniform.name);
     DEFAULT(exitErrstr("invalid server uniform\n");)
     arrayCode(shader,1)->uniform[server] = uniform;
     enqueUniform(server,file,shader);

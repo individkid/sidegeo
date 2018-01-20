@@ -110,6 +110,7 @@ EXTERNC void pack##NAME(int sub, int siz); \
 EXTERNC TYPE *dearg##NAME(int siz); \
 EXTERNC int enarg##NAME(void); \
 EXTERNC int length##NAME(int sub, TYPE val); \
+EXTERNC TYPE *string##NAME(int sub, TYPE val); \
 EXTERNC TYPE *destr##NAME(TYPE val); \
 EXTERNC int xstr##NAME(TYPE val); \
 EXTERNC struct QueueBase *ptr##NAME(void);
@@ -128,6 +129,7 @@ EXTERNC void pack##NAME(INDEX idx,int sub, int siz); \
 EXTERNC TYPE *dearg##NAME(INDEX idx,int siz); \
 EXTERNC int enarg##NAME(INDEX idx); \
 EXTERNC int length##NAME(INDEX idx,int sub, TYPE val); \
+EXTERNC TYPE *string##NAME(INDEX idx,int sub, TYPE val); \
 EXTERNC TYPE *destr##NAME(INDEX idx,TYPE val); \
 EXTERNC int xstr##NAME(INDEX idx,TYPE val); \
 EXTERNC struct QueueBase *ptr##NAME(INDEX idx);
@@ -810,6 +812,10 @@ template<class TYPE> struct QueueStruct : QueueBase {
         if (sub+len >= size()) exitErrstr("no string end\n");
         return len;
     }
+    TYPE *string(int sub, TYPE val)
+    {
+        return array(sub,length(sub,val));
+    }
     TYPE *destr(TYPE val)
     {
         int siz = 0; while (siz < size() && *array(siz,1) != val) siz++;
@@ -843,6 +849,7 @@ extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.pack(sub,siz);} \
 extern "C" TYPE *dearg##NAME(int siz) {return NAME##Inst.dearg(siz);} \
 extern "C" int enarg##NAME(void) {return NAME##Inst.enarg();} \
 extern "C" int length##NAME(int sub, TYPE val) {return NAME##Inst.length(sub,val);} \
+extern "C" TYPE *string##NAME(int sub, TYPE val) {return NAME##Inst.string(sub,val);} \
 extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.destr(val);} \
 extern "C" int xstr##NAME(TYPE val) {return NAME##Inst.xstr(val);} \
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.ptr();}
@@ -861,6 +868,7 @@ extern "C" void pack##NAME(INDEX idx, int sub, int siz) {NAME##Inst.PTR->pack(su
 extern "C" TYPE *dearg##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->dearg(siz);} \
 extern "C" int enarg##NAME(INDEX idx) {return NAME##Inst.PTR->enarg();} \
 extern "C" int length##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->length(sub,val);} \
+extern "C" TYPE *string##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->string(sub,val);} \
 extern "C" TYPE *destr##NAME(INDEX idx, TYPE val) {return NAME##Inst.PTR->destr(val);} \
 extern "C" int xstr##NAME(INDEX idx, TYPE val) {return NAME##Inst.PTR->xstr(val);} \
 extern "C" QueueBase *ptr##NAME(INDEX idx) {return NAME##Inst.PTR->ptr();}
@@ -879,6 +887,7 @@ extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.PTR->pack(sub,siz);} \
 extern "C" TYPE *dearg##NAME(int siz) {return NAME##Inst.PTR->dearg(siz);} \
 extern "C" int enarg##NAME(void) {return NAME##Inst.PTR->enarg();} \
 extern "C" int length##NAME(int sub, TYPE val) {return NAME##Inst.PTR->length(sub,val);} \
+extern "C" TYPE *string##NAME(int sub, TYPE val) {return NAME##Inst.PTR->string(sub,val);} \
 extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.PTR->destr(val);} \
 extern "C" int xstr##NAME(TYPE val) {return NAME##Inst.PTR->xstr(val);} \
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.PTR->ptr();}
