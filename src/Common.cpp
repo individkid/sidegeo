@@ -469,6 +469,7 @@ DEFINE_TREE(Readier,int,int)
 DEFINE_TREE(Imager,int,int);
 DEFINE_LOCAL(Ready,int)
 DEFINE_META(Image,int)
+DEFINE_POINTER(ForceInt,int)
 
 DEFINE_LOCAL(Format,char)
 DEFINE_TREE(Macro,int,int)

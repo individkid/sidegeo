@@ -524,6 +524,7 @@ DECLARE_TREE(Readier,int,int) // name index to ready index
 DECLARE_TREE(Imager,int,int) // name index to image index
 DECLARE_LOCAL(Ready,int) // per state count of forward uses
 DECLARE_META(Image,int) // per state list of backward users
+DECLARE_POINTER(ForceInt,int) // pointer to int queue to force
 
 DECLARE_LOCAL(Format,char) // modifiable copy of format string
 DECLARE_TREE(Macro,int,int) // val to replace key in format

@@ -34,6 +34,32 @@ void configureFill(void);
 void configureHollow(void);
 void configureInflate(void);
 
+int forceInt(int *rslt, int *chrpos, int *intpos)
+{
+	if (*intpos >= sizePcsInt()) return -1;
+	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
+	if (siz == 0) {*intpos += 1; return 0;}
+	char *nptr = arrayPcsChar(*chrpos,siz);
+	char *endptr = nptr;
+	long int val = strtol(nptr,&endptr,10);
+	if (endptr != nptr+siz) return -1;
+	if (val > INT_MAX) return -1;
+	if (val < INT_MIN) return -1;
+	*rslt = val;
+	*chrpos += siz;
+	*intpos += 1;
+	return siz;
+}
+
+int forceArray(int *chrpos, int *intpos)
+{
+	int count = 0;
+	while (*intpos < sizePcsInt() && *arrayPcsInt(*intpos,1) > *chrpos) {
+	if (forceInt(enlocForceInt(1),chrpos,intpos) < 0) return -1;
+	count += 1;}
+	return count;
+}
+
 void timeForward(int key)
 {
 	int sub = sizeReady()-1;
@@ -66,23 +92,6 @@ void timeBackward(int key)
 	*enlocPcsControl(1) = Start;
 	*enlocPcsTwInt(1) = key;}
 	if (*arrayReady(ready,1) > 1) *arrayReady(ready,1) -= 1;}
-}
-
-int forceInt(int *rslt, int *chrpos, int *intpos)
-{
-	if (*intpos >= sizePcsInt()) return -1;
-	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
-	if (siz == 0) {*intpos += 1; return 0;}
-	char *nptr = arrayPcsChar(*chrpos,siz);
-	char *endptr = nptr;
-	long int val = strtol(nptr,&endptr,10);
-	if (endptr != nptr+siz) return -1;
-	if (val > INT_MAX) return -1;
-	if (val < INT_MIN) return -1;
-	*rslt = val;
-	*chrpos += siz;
-	*intpos += 1;
-	return siz;
 }
 
 int timeFloat(Myfloat *rslt, int *chrpos, int *intpos)
@@ -186,11 +195,10 @@ int configureVector(int *chrpos, int *intpos)
 
 int configureArray(int *chrpos, int *intpos)
 {
-	int count = sizePcsInt();
-	*enlocPcsInt(1) = 0;
-	while (*intpos < sizePcsInt() && *arrayPcsInt(*intpos,1) > *chrpos) {
-	if (forceInt(enlocPcsCmdInt(1),chrpos,intpos) < 0) return -1;
-	*arrayPcsInt(count,1) += 1;}
+	int count = sizePcsCmdInt(); enlocPcsCmdInt(1);
+	usePcsCmdInt(); referForceInt();
+	int temp; if ((temp = forceArray(chrpos,intpos)) < 0) return -1;
+	*arrayPcsCmdInt(count,1) = temp;
 	return 0;
 }
 
@@ -274,27 +282,56 @@ int processConfigure(int index, int len)
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureInflate;
 		return 1;}
-	if (parse("<?fill!> nm% {nm%}% {nm%}%",len) > 0) {
+	if (parse("<?fill!> nm% <?-!> {nm%}% <?-!> {nm%}%",len) > 0) {
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		*enlocPcsCmdInt(1) = index;
-		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdInt(1) = index/*file*/;
+		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos)/*plane*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos)/*inside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos)/*outside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = configureFill;
 		configurePass(chrsiz,intsiz);
 		return 1;}
-	if (parse("<?hollow!> nm% {nm%}% {nm%}%",len) > 0) {
+	if (parse("<?hollow!> nm% <?-!> {nm%}% <?-!> {nm%}%",len) > 0) {
 		int chrpos = chrsiz;
 		int intpos = intsiz;
-		*enlocPcsCmdInt(1) = index;
-		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdInt(1) = index/*file*/;
+		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos)/*plane*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos)/*inside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (configureArray(&chrpos,&intpos)/*outside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
 		*enlocPcsCmdCmd(1) = configureHollow;
 		configurePass(chrsiz,intsiz);
 		return 1;}
-	else if (parse(
+	if (parse("force CmdInt {nm%}%",len) > 0) {
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		usePcsCmdInt(); referForceInt();
+		if (forceArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		configurePass(chrsiz,intsiz);
+		return 1;}
+	if (parse("force CmdInts {nm%}%",len) > 0) {
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		configurePass(chrsiz,intsiz);
+		return 1;}
+	if (parse("force HsInt {nm%}%",len) > 0) {
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		usePcsHsInt(); referForceInt();
+		if (forceArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		configurePass(chrsiz,intsiz);
+		return 1;}
+	if (parse("force HsInts {nm%}%",len) > 0) {
+		int chrpos = chrsiz;
+		int intpos = intsiz;
+		int count = sizePcsHsInt(); enlocPcsCmdInt(1);
+		usePcsHsInt(); referForceInt();
+		int temp; if ((temp = forceArray(&chrpos,&intpos)) < 0) return -1;
+		*arrayPcsHsInt(count,1) = temp;
+		configurePass(chrsiz,intsiz);
+		return 1;}
+	if (parse(
 		"<?time!> id% <?,!> (id)% <?,!> (id)% <?,!>"
 		" (fl)% <?,!> (fl)% <?,!> (fl)% <?,!>"
 		TIME_RATIO
