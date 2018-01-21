@@ -86,15 +86,15 @@ struct Item { // per-menu-line info
 };
 
 enum Event {
-    Locate, // wrt point, place: polyant
-    Fill, // polyant, place, embed: embed
-    Hollow, // polyant, place, embed: embed
+    Locate, // wrt point, place: inout(polyant)
+    Fill, // inout(polyant), place, embed: embed
+    Hollow, // inout(polyant), place, embed: embed
     Inflate, // place: embed
-    Face, // filter, place, embed, tag: face
-    Frame, // filter, place, embed, tag: frame
-    Filter, // boundary, filter, tag: tag
-    Divide, // wrt plane, boundary, filter, place, embed, tag: place, embed, tag
-    Vertex, // boundary, place: vertex
+    Face, // inout(filter), place, embed, tag: inout(face)
+    Frame, // inout(filter), place, embed, tag: inout(frame)
+    Filter, // inout(boundary, filter), tag: tag
+    Divide, // inout(wrt plane, boundary, filter), place, embed, tag: place, embed, tag
+    Vertex, // place: inout(vertex)
     Events};
 
 typedef unsigned Myuint;
@@ -268,8 +268,8 @@ struct State {
     int wav; // index of waveform pipeline
     int fun; // index into string buffer for haskell expression
     int met; // metric request argument
-    float amt; // amout of stock
-    float min,max; // saturation limits
+    Myfloat amt; // amout of stock
+    Myfloat min,max; // saturation limits
     int csub; // subscript into coefficients
     int vsub; // subscript into variables
     struct Ratio upd; // formula for new value
@@ -288,7 +288,7 @@ struct Shape { // information for measuring shapes
     int index;
 };
 struct Change {
-    float val; // new value for stock
+    Myfloat val; // new value for stock
     int sub; // index of stock for value
     int vld; // whether sub is packed or not
 };
@@ -300,7 +300,7 @@ enum Control {
 enum Shift {
     Wav, // send new amount to waveform pipeline
     Met, // send metric command when read
-    Fun, // evaluate haskell expression when written
+    Exp, // evaluate haskell expression when written
     Map, // indices are not packed
     Run, // state is to be scheduled
     Shifts};
@@ -335,24 +335,24 @@ char ofmotion(enum Motion code);
 char ofalpha(char code);
 char ofindex(int code);
 
-float dotvec(float *u, float *v, int n);
-float *plusvec(float *u, float *v, int n);
-float *scalevec(float *u, float s, int n);
-float *jumpvec(float *u, float *v, int n);
-float *timesmat(float *u, float *v, int n);
-float *jumpmat(float *u, float *v, int n);
-float *identmat(float *u, int n);
-float *copyary(float *u, float *v, int duty, int stride, int size);
-float *copyvec(float *u, float *v, int n);
-float *copymat(float *u, float *v, int n);
-float *compmat(float *u, float *v, int n);
-float *crossmat(float *u);
-float *crossvec(float *u, float *v);
-float detmat(float *u, int n);
-float *adjmat(float *u, int n);
-float *invmat(float *u, int n);
-float *tweakvec(float *u, float a, float b, int n);
-float *basearrow(float *u, float *v, int *i, float *b, int n);
+Myfloat dotvec(Myfloat *u, Myfloat *v, int n);
+Myfloat *plusvec(Myfloat *u, Myfloat *v, int n);
+Myfloat *scalevec(Myfloat *u, Myfloat s, int n);
+Myfloat *jumpvec(Myfloat *u, Myfloat *v, int n);
+Myfloat *timesmat(Myfloat *u, Myfloat *v, int n);
+Myfloat *jumpmat(Myfloat *u, Myfloat *v, int n);
+Myfloat *identmat(Myfloat *u, int n);
+Myfloat *copyary(Myfloat *u, Myfloat *v, int duty, int stride, int size);
+Myfloat *copyvec(Myfloat *u, Myfloat *v, int n);
+Myfloat *copymat(Myfloat *u, Myfloat *v, int n);
+Myfloat *compmat(Myfloat *u, Myfloat *v, int n);
+Myfloat *crossmat(Myfloat *u);
+Myfloat *crossvec(Myfloat *u, Myfloat *v);
+Myfloat detmat(Myfloat *u, int n);
+Myfloat *adjmat(Myfloat *u, int n);
+Myfloat *invmat(Myfloat *u, int n);
+Myfloat *tweakvec(Myfloat *u, Myfloat a, Myfloat b, int n);
+Myfloat *basearrow(Myfloat *u, Myfloat *v, int *i, Myfloat *b, int n);
 
 EXTERNCEND
 
@@ -380,7 +380,7 @@ DECLARE_TIME(CmnTimewheels)
 DECLARE_STAGE(CmnChange,struct Change)
 DECLARE_STAGE(CmnControl,enum Control)
 DECLARE_STAGE(CmnTwInt,int)
-DECLARE_STAGE(CmnCoefficient,float)
+DECLARE_STAGE(CmnCoefficient,Myfloat)
 DECLARE_STAGE(CmnVariable,int)
 DECLARE_STAGE(CmnState,struct State)
 DECLARE_STAGE(CmnSignal,struct Signal)
@@ -395,7 +395,7 @@ DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(Machine,Machine)
 DECLARE_LOCAL(Redo,struct QueueBase *)
 DECLARE_TRUE(Reint,int,int)
-DECLARE_TRUE(Refloat,int,Myfloat)
+DECLARE_TRUE(ReMyfloat,int,Myfloat)
 DECLARE_TRUE(Rebyte,int,char)
 
 DECLARE_LOCAL(Display,struct Display)
@@ -468,7 +468,7 @@ DECLARE_STAGE(Change,struct Change)
 DECLARE_STAGE(Control,enum Control)
 DECLARE_STAGE(TwInt,int)
 DECLARE_EXTRA(TwByte,char)
-DECLARE_EXTRA(Coefficient,float)
+DECLARE_EXTRA(Coefficient,Myfloat)
 DECLARE_EXTRA(Variable,int)
 DECLARE_EXTRA(State,struct State)
 DECLARE_EXTRA(Signal,struct Signal)
@@ -510,7 +510,7 @@ DECLARE_SOURCE(PcsTimewheels)
 DECLARE_STAGE(PcsChange,struct Change)
 DECLARE_STAGE(PcsControl,enum Control)
 DECLARE_STAGE(PcsTwInt,int)
-DECLARE_STAGE(PcsCoefficient,float)
+DECLARE_STAGE(PcsCoefficient,Myfloat)
 DECLARE_STAGE(PcsVariable,int)
 DECLARE_STAGE(PcsState,struct State)
 DECLARE_STAGE(PcsSignal,struct Signal)

@@ -36,7 +36,7 @@
 extern int layer;
 extern enum Menu mode[Modes];
 extern struct Item item[Menus];
-extern float basisMat[27];
+extern Myfloat basisMat[27];
 extern enum Shader dishader;
 extern struct Display *display;
 #define displayHandle display->handle
@@ -202,12 +202,12 @@ enum Action appendPlane(int state)
     return Advance;
 }
 
-void refineClick(int file, float xpos, float ypos, float zpos)
+void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 {
     struct File *ptr = arrayFile(file,1);
-    float u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
+    Myfloat u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
     tweakvec(u,0,ptr->tweak,3);
-    float v[3] = {0};
+    Myfloat v[3] = {0};
     tweakvec(v,1.0,1.0,3);
     int versor;
     basearrow(u,v,&versor,basisMat,3);
@@ -303,12 +303,12 @@ enum Action sculptRegion(int state)
     return Advance;
 }
 
-void fillClick(int file, int plane, float xpos, float ypos, float zpos)
+void fillClick(int file, int plane, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 {
     SCULPT_ENLOC(fill)
 }
 
-void hollowClick(int file, int plane, float xpos, float ypos, float zpos)
+void hollowClick(int file, int plane, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 {
     SCULPT_ENLOC(hollow)
 }

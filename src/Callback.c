@@ -37,8 +37,8 @@
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 int escape = 0; // escape sequence from OpenGL
 int dash = 0; // inject sequence from OpenGL
-float invalid[2] = {0};
-float basisMat[27] = {0};
+Myfloat invalid[2] = {0};
+Myfloat basisMat[27] = {0};
 #ifdef BRINGUP
 enum Shader dishader = Diplane;
 enum Shader pershader = Perplane;
@@ -156,12 +156,12 @@ void matrixMatrix(void)
     wPos = 0.0;
 }
 
-void matrixRotate(float *u)
+void matrixRotate(Myfloat *u)
 {
-    float v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
-    float w[9]; w[0] = xPos-xPoint; w[1] = yPos-yPoint;
-    float s = w[0]*w[0]+w[1]*w[1];
-    float t = sqrtf(s);
+    Myfloat v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
+    Myfloat w[9]; w[0] = xPos-xPoint; w[1] = yPos-yPoint;
+    Myfloat s = w[0]*w[0]+w[1]*w[1];
+    Myfloat t = sqrtf(s);
     if (t > MAX_ROTATE) {
         w[0] *= MAX_ROTATE/t; w[1] *= MAX_ROTATE/t;
         s = w[0]*w[0]+w[1]*w[1];}
@@ -173,9 +173,9 @@ void matrixRotate(float *u)
     copymat(u,v,3);
 }
 
-void matrixFixed(float *u)
+void matrixFixed(Myfloat *u)
 {
-    float v[16]; float w[16];
+    Myfloat v[16]; Myfloat w[16];
     identmat(v,4); v[12] = xPoint; v[13] = yPoint; v[14] = zPoint;
     identmat(w,4); w[12] = -xPoint; w[13] = -yPoint; w[14] = -zPoint;
     jumpmat(u,v,4); timesmat(u,w,4);
@@ -183,8 +183,8 @@ void matrixFixed(float *u)
 
 void transformRotate(void)
 {
-    float u[16]; matrixRotate(u);
-    float v[16]; copyary(identmat(v,4),u,3,4,9);
+    Myfloat u[16]; matrixRotate(u);
+    Myfloat v[16]; copyary(identmat(v,4),u,3,4,9);
     matrixFixed(v);
     copymat(dispayMat,dispayMata,4);
     jumpmat(dispayMat,dispayMatb,4);
@@ -194,7 +194,7 @@ void transformRotate(void)
 
 void transformTranslate(void)
 {
-    float u[16]; identmat(u,4);
+    Myfloat u[16]; identmat(u,4);
     u[12] = xPos-xPoint;
     u[13] = yPos-yPoint;
     copymat(dispayMat,dispayMata,4);
@@ -219,8 +219,8 @@ void transformMouse(void)
 
 void transformCylinder(void)
 {
-    float u[16];
-    float angle = wPos/ROLLER_GRANULARITY;
+    Myfloat u[16];
+    Myfloat angle = wPos/ROLLER_GRANULARITY;
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     matrixFixed(u);
     identmat(dispayMatb,4);
@@ -230,8 +230,8 @@ void transformCylinder(void)
 
 void transformClock(void)
 {
-    float u[16]; float v[16]; float w[16];
-    float angle = wPos/ROLLER_GRANULARITY;
+    Myfloat u[16]; Myfloat v[16]; Myfloat w[16];
+    Myfloat angle = wPos/ROLLER_GRANULARITY;
     SWITCH(mode[Mouse],Rotate) matrixRotate(u);
     CASE(Translate) {identmat(u,3);}
     CASE(Look) {identmat(u,3);}
@@ -248,7 +248,7 @@ void transformClock(void)
 
 void transformScale(void)
 {
-    float scale = 1.0+wPos/ROLLER_GRANULARITY;
+    Myfloat scale = 1.0+wPos/ROLLER_GRANULARITY;
     if (fabs(scale) < 1.0 && fabs(scale)*ROLLER_GRANULARITY < 1.0) {
         if (scale < 0.0) scale = 1.0/ROLLER_GRANULARITY;
         else scale = -1.0/ROLLER_GRANULARITY;}
@@ -259,7 +259,7 @@ void transformScale(void)
 
 void transformDrive(void)
 {
-    float scale = wPos/ROLLER_GRANULARITY;
+    Myfloat scale = wPos/ROLLER_GRANULARITY;
     identmat(dispayMatb,4);
     dispayMatb[14] += scale;
     transformMouse();
@@ -502,7 +502,7 @@ void setupDisplay(void)
     glfwSwapBuffers(displayHandle);
     cutoff = 10.0;
     slope = 0.0;
-    aspect = (float)ySiz/(1.0*(float)xSiz);
+    aspect = (Myfloat)ySiz/(1.0*(Myfloat)xSiz);
     renderSwap = 0;
     renderClear = 0;
     if (save == 0) {

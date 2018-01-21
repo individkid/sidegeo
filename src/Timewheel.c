@@ -141,9 +141,14 @@ void finishMetric(void)
     // TODO
 }
 
-void pipeWave(int wave, int value)
+void pipeWave(int wave, Myfloat value)
 {
 	// TODO
+}
+
+void evalExp(Myfloat value)
+{
+    // TODO
 }
 
 void requestMetric(int index, int response)
@@ -154,14 +159,14 @@ void requestMetric(int index, int response)
 	*enlocTwCmdInt(1) = response;
 }
 
-float saturate(float val, struct State *ptr)
+Myfloat saturate(Myfloat val, struct State *ptr)
 {
 	if (val > ptr->max) return ptr->max;
 	else if (val < ptr->min) return ptr->min;
 	return val;
 }
 
-float amount(int sub)
+Myfloat amount(int sub)
 {
     struct State *state = arrayState(sub,1);
     if ((state->vld>>Met)&1) requestMetric(state->met,sub);
@@ -244,7 +249,7 @@ void timewheelProduce(void *arg)
         double update = evaluate(&csub,&vsub,&state->upd);
         double delay = evaluate(&csub,&vsub,&state->dly);
         double schedule = evaluate(&csub,&vsub,&state->sch);
-        float val = saturate(update,state);
+        Myfloat val = saturate(update,state);
         struct Change change; change.val = val; change.sub = sub;
         *scheduleTime(ofTime(current+schedule)) = sub;
         *scheduleWheel(ofTime(current+delay)) = change;}
@@ -252,7 +257,8 @@ void timewheelProduce(void *arg)
         struct Change change = *advanceWheel();
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
-        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
+        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);
+        if ((state->vld>>Exp)&1) evalExp(state->amt);}
 }
 
 void timewheelAfter(void)

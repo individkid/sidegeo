@@ -24,7 +24,7 @@ EXTERNCBEGIN
 #include <math.h>
 #include <stdlib.h>
 
-extern float invalid[2];
+extern Myfloat invalid[2];
 
 enum Motion motionof(char code)
 {
@@ -83,28 +83,28 @@ char ofindex(int code)
     return uchar;
 }
 
-float dotvec(float *u, float *v, int n)
+Myfloat dotvec(Myfloat *u, Myfloat *v, int n)
 {
-    float w = 0;
+    Myfloat w = 0;
     for (int i = 0; i < n; i++) w += u[i]*v[i];
     return w;
 }
 
-float *plusvec(float *u, float *v, int n)
+Myfloat *plusvec(Myfloat *u, Myfloat *v, int n)
 {
     for (int i = 0; i < n; i++) u[i] += v[i];
     return u;
 }
 
-float *scalevec(float *u, float s, int n)
+Myfloat *scalevec(Myfloat *u, Myfloat s, int n)
 {
     for (int i = 0; i < n; i++) u[i] *= s;
     return u;
 }
 
-float *jumpvec(float *u, float *v, int n)
+Myfloat *jumpvec(Myfloat *u, Myfloat *v, int n)
 {
-    float w[n];
+    Myfloat w[n];
     for (int i = 0; i < n; i++) w[i] = u[i];
     for (int i = 0; i < n; i++) {
         u[i] = 0.0;
@@ -113,9 +113,9 @@ float *jumpvec(float *u, float *v, int n)
     return u;
 }
 
-float *timesmat(float *u, float *v, int n)
+Myfloat *timesmat(Myfloat *u, Myfloat *v, int n)
 {
-    int m = n*n; float w[m];
+    int m = n*n; Myfloat w[m];
     for (int i = 0; i < m; i++) w[i] = u[i];
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -125,9 +125,9 @@ float *timesmat(float *u, float *v, int n)
     return u;
 }
 
-float *jumpmat(float *u, float *v, int n)
+Myfloat *jumpmat(Myfloat *u, Myfloat *v, int n)
 {
-    int m = n*n; float w[m];
+    int m = n*n; Myfloat w[m];
     for (int i = 0; i < m; i++) w[i] = u[i];
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -137,7 +137,7 @@ float *jumpmat(float *u, float *v, int n)
     return u;
 }
 
-float *identmat(float *u, int n)
+Myfloat *identmat(Myfloat *u, int n)
 {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -145,9 +145,9 @@ float *identmat(float *u, int n)
     return u;
 }
 
-float *copyary(float *u, float *v, int duty, int stride, int size)
+Myfloat *copyary(Myfloat *u, Myfloat *v, int duty, int stride, int size)
 {
-    float *w = u;
+    Myfloat *w = u;
     int i = 0;
     int j = 0;
     int k = 0;
@@ -162,77 +162,77 @@ float *copyary(float *u, float *v, int duty, int stride, int size)
     return u;
 }
 
-float *copyvec(float *u, float *v, int n)
+Myfloat *copyvec(Myfloat *u, Myfloat *v, int n)
 {
     for (int i = 0; i < n; i++) u[i] = v[i];
     return u;
 }
 
-float *copymat(float *u, float *v, int n)
+Myfloat *copymat(Myfloat *u, Myfloat *v, int n)
 {
     return copyvec(u,v,n*n);
 }
 
-float *compmat(float *u, float *v, int n)
+Myfloat *compmat(Myfloat *u, Myfloat *v, int n)
 {
     for (int i = 0; i < n*n; i++) if (u[i] != v[i]) return 0;
     return u;
 }
 
-float *crossmat(float *u)
+Myfloat *crossmat(Myfloat *u)
 {
-    float x = u[0]; float y = u[1]; float z = u[2];
+    Myfloat x = u[0]; Myfloat y = u[1]; Myfloat z = u[2];
     u[0] =  0; u[3] = -z; u[6] =  y;
     u[1] =  z; u[4] =  0; u[7] = -x;
     u[2] = -y; u[5] =  x; u[8] =  0;
     return u;
 }
 
-float *crossvec(float *u, float *v)
+Myfloat *crossvec(Myfloat *u, Myfloat *v)
 {
-    float w[9]; copyvec(w,u,3);
+    Myfloat w[9]; copyvec(w,u,3);
     return jumpvec(copyvec(u,v,3),crossmat(w),3);
 }
 
-float detmat(float *u, int n)
+Myfloat detmat(Myfloat *u, int n)
 {
     if (n == 1) return *u;
-    int m = n*n; float v[m];
+    int m = n*n; Myfloat v[m];
     adjmat(copymat(v,u,n),n);
-    float det = 0.0;
+    Myfloat det = 0.0;
     for (int i = 0; i < n; i++) det += v[i*n]*u[i];
     return det;
 }
 
-float *adjmat(float *u, int n)
+Myfloat *adjmat(Myfloat *u, int n)
 {
-    int m = n*n; int p = n-1; int q = p*p; float v[m];
+    int m = n*n; int p = n-1; int q = p*p; Myfloat v[m];
     for (int i = 0; i < m; i++) {
-        float w[q]; int j = 0;
+        Myfloat w[q]; int j = 0;
         for (int k = 0; k < m; k++) if (k/n!=i/n && k%n!=i%n) w[j++] = u[k];
-        float s = detmat(w,p);
+        Myfloat s = detmat(w,p);
         v[i%n*n+i/n] = ((i/n)%2!=(i%n)%2?-s:s);}
     return copymat(u,v,n);
 }
 
-float *invmat(float *u, int n)
+Myfloat *invmat(Myfloat *u, int n)
 {
-    int m = n*n; float v[m];
+    int m = n*n; Myfloat v[m];
     adjmat(copymat(v,u,n),n);
-    float det = detmat(u,n);
-    float lim = det*invalid[1];
+    Myfloat det = detmat(u,n);
+    Myfloat lim = det*invalid[1];
     for (int i = 0; i < m; i++) if (det<1.0 && v[i]>lim) exitErrstr("cannot invert matrix\n");
     for (int i = 0; i < m; i++) u[i] = v[i]/det;
     return u;
 }
 
-float *tweakvec(float *u, float a, float b, int n)
+Myfloat *tweakvec(Myfloat *u, Myfloat a, Myfloat b, int n)
 {
-    for (int i = 0; i < n; i++) u[i] = a+((b-a)*rand()/(float)RAND_MAX);
+    for (int i = 0; i < n; i++) u[i] = a+((b-a)*rand()/(Myfloat)RAND_MAX);
     return u;
 }
 
-float *basearrow(float *u, float *v, int *i, float *b, int n)
+Myfloat *basearrow(Myfloat *u, Myfloat *v, int *i, Myfloat *b, int n)
 {
     // given feather u, arrow v, base points b, dimension n
     // return distances of plane above base points in b
@@ -242,15 +242,15 @@ float *basearrow(float *u, float *v, int *i, float *b, int n)
     if (fabs(v[j]) > fabs(v[*i])) *i = j;
     int k[n];
     for (int j = 0; j < n; j++) k[j] = (*i+j)%n;
-    float x[n];
+    Myfloat x[n];
     for (int j = 0; j < n; j++) x[j] = u[k[j]];
-    float y[n];
+    Myfloat y[n];
     for (int j = 0; j < n; j++) y[j] = v[k[j]];
     // (x-x[0])*y[0]+(y-x[1])*y[1]+...=0
     for (int h = 0; h < n; h++) {
-        float a[n];
+        Myfloat a[n];
         for (int j = 0; j < n; j++) a[j] = b[*i*n*n+h*n+k[j]];
-        float w[n-1];
+        Myfloat w[n-1];
         copyvec(w,x+1,n-1);
         scalevec(w,-1.0,n-1);
         plusvec(w,a+1,n-1);
@@ -322,7 +322,7 @@ DEFINE_TIME(CmnTimewheels,timewheelBefore,timewheelAfter,timewheelConsume,timewh
 DEFINE_STAGE(CmnChange,struct Change,CmnTimewheels)
 DEFINE_STAGE(CmnControl,enum Control,CmnChange)
 DEFINE_STAGE(CmnTwInt,int,CmnControl)
-DEFINE_STAGE(CmnCoefficient,float,CmnTwInt)
+DEFINE_STAGE(CmnCoefficient,Myfloat,CmnTwInt)
 DEFINE_STAGE(CmnVariable,int,CmnCoefficient)
 DEFINE_STAGE(CmnState,struct State,CmnVariable)
 DEFINE_STAGE(CmnSignal,struct Signal,CmnState)
@@ -410,7 +410,7 @@ DEFINE_STAGE(Change,struct Change,Timewheels)
 DEFINE_STAGE(Control,enum Control,Change)
 DEFINE_STAGE(TwInt,int,Control)
 DEFINE_EXTRA(TwByte,char,TwInt)
-DEFINE_EXTRA(Coefficient,float,TwByte)
+DEFINE_EXTRA(Coefficient,Myfloat,TwByte)
 DEFINE_EXTRA(Variable,int,Coefficient)
 DEFINE_EXTRA(State,struct State,Variable)
 DEFINE_EXTRA(Signal,struct Signal,State)
@@ -452,7 +452,7 @@ DEFINE_SOURCE(PcsTimewheels,CmnTimewheels,PcsHaskells)
 DEFINE_STAGE(PcsChange,struct Change,PcsTimewheels)
 DEFINE_STAGE(PcsControl,enum Control,PcsChange)
 DEFINE_STAGE(PcsTwInt,int,PcsControl)
-DEFINE_STAGE(PcsCoefficient,float,PcsTwInt)
+DEFINE_STAGE(PcsCoefficient,Myfloat,PcsTwInt)
 DEFINE_STAGE(PcsVariable,int,PcsCoefficient)
 DEFINE_STAGE(PcsState,struct State,PcsVariable)
 DEFINE_STAGE(PcsSignal,struct Signal,PcsState)

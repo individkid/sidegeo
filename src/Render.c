@@ -33,8 +33,8 @@
 
 #include "Common.h"
 
-extern float invalid[2];
-extern float basisMat[27];
+extern Myfloat invalid[2];
+extern Myfloat basisMat[27];
 extern enum Shader dishader;
 extern enum Shader pershader;
 extern struct Display *display;
@@ -204,7 +204,7 @@ void enqueUniform(enum Server server, int file, enum Shader shader)
 #ifdef __linux__
         glViewport(0, 0, xSiz, ySiz);
 #endif
-        aspect = (float)ySiz/(float)xSiz;
+        aspect = (Myfloat)ySiz/(Myfloat)xSiz;
         glUniform1f(uniform->handle,aspect);}
     DEFAULT(exitErrstr("invalid server uniform\n");)
 }
@@ -346,7 +346,7 @@ enum Action renderPierce(int state)
     glBindBuffer(GL_ARRAY_BUFFER, buffer[*feedback].handle);
     glGetBufferSubData(GL_ARRAY_BUFFER, 0, done*dimn*bufferType(buffer[*feedback].type), result);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    int pFound; float xFound, yFound, zFound;
+    int pFound; Myfloat xFound, yFound, zFound;
     pFound = 0; xFound = 0; yFound = 0; zFound = invalid[0];
     for (int i = 0, j = 0; i < done*dimn; i += dimn, j += 1) {
         int sub = i+dimn-1;
