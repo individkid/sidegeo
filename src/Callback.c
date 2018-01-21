@@ -53,9 +53,9 @@ struct Display *display = 0;
 #define displayHandle display->handle
 #define contextHandle display->context
 #define VAO display->VAO
-#define affineMat display->affineMat
-#define affineMata display->affineMata
-#define affineMatb display->affineMatb
+#define dispayMat display->affineMat
+#define dispayMata display->affineMata
+#define dispayMatb display->affineMatb
 #define xPoint display->xPoint
 #define yPoint display->yPoint
 #define zPoint display->zPoint
@@ -132,8 +132,8 @@ void leftRefine(void)
 void leftTransform(void)
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    for (int i = 0; i < 16; i++) affineMata[i] = affineMat[i];
-    for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) dispayMata[i] = dispayMat[i];
+    for (int i = 0; i < 16; i++) dispayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
 void rightRight(void)
@@ -151,8 +151,8 @@ void rightLeft(void)
 
 void matrixMatrix(void)
 {
-    jumpmat(affineMata,affineMatb,4);
-    identmat(affineMatb,4);
+    jumpmat(dispayMata,dispayMatb,4);
+    identmat(dispayMatb,4);
     wPos = 0.0;
 }
 
@@ -186,9 +186,9 @@ void transformRotate(void)
     float u[16]; matrixRotate(u);
     float v[16]; copyary(identmat(v,4),u,3,4,9);
     matrixFixed(v);
-    copymat(affineMat,affineMata,4);
-    jumpmat(affineMat,affineMatb,4);
-    jumpmat(affineMat,v,4);
+    copymat(dispayMat,dispayMata,4);
+    jumpmat(dispayMat,dispayMatb,4);
+    jumpmat(dispayMat,v,4);
     enqueDishader();
 }
 
@@ -197,9 +197,9 @@ void transformTranslate(void)
     float u[16]; identmat(u,4);
     u[12] = xPos-xPoint;
     u[13] = yPos-yPoint;
-    copymat(affineMat,affineMata,4);
-    jumpmat(affineMat,affineMatb,4);
-    jumpmat(affineMat,u,4);
+    copymat(dispayMat,dispayMata,4);
+    jumpmat(dispayMat,dispayMatb,4);
+    jumpmat(dispayMat,u,4);
     enqueDishader();
 }
 
@@ -223,8 +223,8 @@ void transformCylinder(void)
     float angle = wPos/ROLLER_GRANULARITY;
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     matrixFixed(u);
-    identmat(affineMatb,4);
-    jumpmat(affineMatb,u,4);
+    identmat(dispayMatb,4);
+    jumpmat(dispayMatb,u,4);
     transformMouse();
 }
 
@@ -241,8 +241,8 @@ void transformClock(void)
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     jumpmat(u,v,4); timesmat(u,w,4);
     matrixFixed(u);
-    identmat(affineMatb,4);
-    jumpmat(affineMatb,u,4);
+    identmat(dispayMatb,4);
+    jumpmat(dispayMatb,u,4);
     transformMouse();
 }
 
@@ -252,16 +252,16 @@ void transformScale(void)
     if (fabs(scale) < 1.0 && fabs(scale)*ROLLER_GRANULARITY < 1.0) {
         if (scale < 0.0) scale = 1.0/ROLLER_GRANULARITY;
         else scale = -1.0/ROLLER_GRANULARITY;}
-    identmat(affineMatb,4);
-    scalevec(affineMatb,scale,16);
+    identmat(dispayMatb,4);
+    scalevec(dispayMatb,scale,16);
     transformMouse();
 }
 
 void transformDrive(void)
 {
     float scale = wPos/ROLLER_GRANULARITY;
-    identmat(affineMatb,4);
-    affineMatb[14] += scale;
+    identmat(dispayMatb,4);
+    dispayMatb[14] += scale;
     transformMouse();
 }
 
@@ -462,8 +462,9 @@ void setupDisplay(void)
     int row = i % 3;
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}}
-    const char *name = (sizeDisplay() == 1 ? "Sculpt" : "sculpt"); // TODO use display name from Option.c
+    struct Display *save = display;
     display = enlocDisplay(1);
+    const char *name = (save == 0 ? "Sculpt" : "sculpt"); // TODO use display name from Option.c
     displayName = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -504,10 +505,14 @@ void setupDisplay(void)
     aspect = (float)ySiz/(1.0*(float)xSiz);
     renderSwap = 0;
     renderClear = 0;
-    // TODO copy affine from current
-    for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    if (save == 0) {
+    for (int i = 0; i < 16; i++) dispayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) dispayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) dispayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);}
+    else {
+    for (int i = 0; i < 16; i++) dispayMat[i] = save->affineMat[i];
+    for (int i = 0; i < 16; i++) dispayMata[i] = save->affineMata[i];
+    for (int i = 0; i < 16; i++) dispayMatb[i] = save->affineMatb[i];}
     useDisplayCode(contextHandle); referCode();
     useDisplayFile(contextHandle); referFile();
 }

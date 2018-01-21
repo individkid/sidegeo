@@ -182,7 +182,6 @@ struct Display {
     Myfloat affineMat[16]; // transformation state sent to uniform
     Myfloat affineMata[16]; // transformation state at click time
     Myfloat affineMatb[16]; // transformation due to roller
-    Myfloat affineMatc[16]; // transformation at change target time
     Myfloat xPoint;  // position of pierce point at click time
     Myfloat yPoint;
     Myfloat zPoint;

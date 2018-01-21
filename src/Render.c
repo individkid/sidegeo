@@ -182,13 +182,11 @@ void enqueUniform(enum Server server, int file, enum Shader shader)
         struct File *ptr = arrayFile(file,1);
         int posedge = (ptr->fixed && !ptr->last);
         int negedge = (!ptr->fixed && ptr->last);
-        Myfloat sent[16];
         ptr->last = ptr->fixed;
-        if (posedge) copymat(ptr->saved,sent,4);
+        if (posedge) copymat(ptr->saved,affineMat,4);
         if (negedge) timesmat(invmat(copymat(ptr->ratio,affineMat,4),4),ptr->saved,4);
-        if (ptr->fixed) copymat(sent,ptr->saved,4);
-        else timesmat(copymat(sent,ptr->ratio,4),affineMat,4);
-        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,sent);}
+        if (ptr->fixed) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->saved);
+        else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),affineMat,4));}}
     CASE(Feather)
         SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos,yPos,zPos);
         DEFAULT(exitErrstr("feather too shader\n");)
@@ -394,7 +392,6 @@ void setupFile(int sub)
     const char *name = "file"; // TODO use filename from Configure.c
     if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
     file->name = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
-    // TODO set file->fixed file->last file->saved file->ratio depending on menu mode
     identmat(file->saved,4);
     identmat(file->ratio,4);
     setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
