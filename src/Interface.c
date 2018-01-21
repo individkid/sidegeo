@@ -194,8 +194,11 @@ void configureHollow(void)
 enum Action appendPlane(int state)
 {
     // do wsw to add plane to file's buffer
-    //  and get sidednesses with adpoint shader
-    //  and send divide event with display response
+    // get sidednesses with adpoint shader
+    // send divide event with proceed response
+    // send vertex event with proceed response
+    // enque Copoint shader
+    // enque dishader
     return Advance;
 }
 
@@ -213,13 +216,13 @@ void refineClick(int file, float xpos, float ypos, float zpos)
 
 void configurePlane(void)
 {
-    // plane configuration kicks off appendPlane
+    // plane configuration kicks off appendPlane for each context
 }
 
 enum Action collectPoint(int state)
 {
     // point configuration saves up three points to construct plane
-    // and kicks off appendPlane
+    // and kicks off appendPlane for each context
     return Advance;
 }
 
