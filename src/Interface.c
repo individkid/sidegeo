@@ -40,6 +40,8 @@ extern float basisMat[27];
 extern enum Shader dishader;
 extern struct Display *display;
 #define displayHandle display->handle
+#define contextHandle display->context
+#define qPos display->qPos
 
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
@@ -65,12 +67,24 @@ void inject(void)
     DEFAULT(exitErrstr("invalid inject char\n");)
 }
 
+void target(void)
+{
+    for (int i = 0; i < sizeDisplay(); i++)
+    for (int j = 0; j < sizeDisplayFile(i); j++)
+    SWITCH(mode[Target],Plane) arrayDisplayFile(i,j,1)->fixed = 1;
+    CASE(Polytope) arrayDisplayFile(i,j,1)->fixed = (j==qPos);
+    CASE(Alternate) arrayDisplayFile(i,j,1)->fixed = (i==contextHandle);
+    CASE(Session) arrayDisplayFile(i,j,1)->fixed = 0;
+    DEFAULT(exitErrstr("target too line\n");)
+}
+
 void menu(void)
 {
     char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
         enum Menu line = indexof(chr);
-        mode[item[line].mode] = line;}
+        mode[item[line].mode] = line;
+        target();}
     else exitErrstr("invalid menu char\n");
 }
 

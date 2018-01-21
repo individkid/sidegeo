@@ -65,6 +65,7 @@ struct Display *display = 0;
 #define zWarp display->zWarp
 #define pPos display->pPos
 #define qPos display->qPos
+#define rPos display->rPos
 #define wPos display->wPos
 #define xPos display->xPos
 #define yPos display->yPos
@@ -86,6 +87,7 @@ void enqueDishader(void);
 void enquePershader(void);
 void enqueMachine(Machine machine);
 enum Action renderUniform(int state);
+void target(void);
 
 void warp(double xwarp, double ywarp)
 {
