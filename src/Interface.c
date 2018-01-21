@@ -188,10 +188,7 @@ void configureHollow(void)
     DISPLAY_RELOC(Hollow)
 }
 
-#define APPEND_DEARG \
-
-
-enum Action appendPlane(int state)
+enum Action enquePlane(int state)
 {
     // do wsw to add plane to file's buffer
     // get sidednesses with adpoint shader
@@ -216,19 +213,19 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 
 void configurePlane(void)
 {
-    // plane configuration kicks off appendPlane for each context
+    // plane configuration kicks off enquePlane for each context
 }
 
 enum Action collectPoint(int state)
 {
     // point configuration saves up three points to construct plane
-    // and kicks off appendPlane for each context
+    // and kicks off enquePlane for each context
     return Advance;
 }
 
 void configurePoint(void)
 {
-    // point configuration kicks off collectPoint followed by appendPlane
+    // point configuration kicks off collectPoint followed by enquePlane
     // or allows collectPoint to proceed
 }
 

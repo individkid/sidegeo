@@ -59,12 +59,12 @@ void startCount(void)
         sourceCount += 1;}
     while (metricCount < sizeShape()) {
         int key = arrayShape(metricCount,1)->idt;
-        if (insertPack(key) < 0) exitErrstr("source too pack\n");
+        if (insertPack(key) < 0) exitErrstr("metric too pack\n");
         *castPack(key) = metricCount;
         metricCount += 1;}
     while (stateCount < sizeState()) {
         int key = arrayState(stateCount,1)->idt;
-        if (insertPack(key) < 0) exitErrstr("source too pack\n");
+        if (insertPack(key) < 0) exitErrstr("state too pack\n");
         *castPack(key) = stateCount;
         stateCount += 1;}
 }
@@ -86,23 +86,23 @@ void startMetric(void)
     startCount();
 }
 
-void startVariable(int *sub, int num)
+void startVariable(int sub, int num)
 {
-    int *var = arrayVariable(*sub,1);
+    int *var = arrayVariable(sub,1);
     while (num) {
     *var = *castPack(*var);
     var += 1;
     num -= 1;}
 }
 
-void startNomial(int *sub, struct Nomial *nom)
+void startNomial(int sub, struct Nomial *nom)
 {
     startVariable(sub,nom->num1*1);
     startVariable(sub,nom->num2*2);
     startVariable(sub,nom->num3*3);
 }
 
-void startRatio(int *sub, struct Ratio *rat)
+void startRatio(int sub, struct Ratio *rat)
 {
     startNomial(sub,&rat->n);
     startNomial(sub,&rat->d);
@@ -118,9 +118,9 @@ void startState(void)
         if ((state->vld>>Wav)&1) state->wav = *castPack(state->wav);
         if ((state->vld>>Met)&1) state->met = *castPack(state->met);
         int var = state->vsub;
-        startRatio(&var,&state->upd);
-        startRatio(&var,&state->dly);
-        startRatio(&var,&state->sch);}
+        startRatio(var,&state->upd);
+        startRatio(var,&state->dly);
+        startRatio(var,&state->sch);}
     if ((state->vld>>Run)&1) state->vld &= ~(1<<Run);
     else state->vld |= 1<<Run;
     if ((state->vld>>Run)&1) *scheduleTime(ofTime(getTime())) = sub;
@@ -244,6 +244,7 @@ void timewheelProduce(void *arg)
     while (readyTime(ofTime(current))) {
         int sub = *advanceTime();
         struct State *state = arrayState(sub,1);
+        if (((state->vld>>Run)&1)==0) continue; 
         int csub = state->csub;
         int vsub = state->vsub;
         double update = evaluate(&csub,&vsub,&state->upd);

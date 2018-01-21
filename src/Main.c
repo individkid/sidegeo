@@ -57,9 +57,9 @@ int main(int argc, char **argv)
     if (GLEW_OK != err) {
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
 #endif
-    enqueDisplay(0);
 
 #ifdef BRINGUP
+    enqueDisplay(0);
     enqueCommand(&bringupBuiltin);
 #endif
 

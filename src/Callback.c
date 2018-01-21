@@ -136,6 +136,11 @@ void leftTransform(void)
     for (int i = 0; i < 16; i++) dispayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
+void leftManipulate(void)
+{
+    // TODO append --plane to configure
+}
+
 void rightRight(void)
 {
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
@@ -274,76 +279,6 @@ void transformScroll(void)
     DEFAULT(exitErrstr("invalid roller mode\n");)
 }
 
-void modifyRotate(void)
-{
-    // TODO
-}
-
-void modifyTranslate(void)
-{
-    // TODO
-}
-
-void modifyLook(void)
-{
-    // TODO
-}
-
-void modifyClock(void)
-{
-    // TODO
-}
-
-void modifyCylinder(void)
-{
-    // TODO
-}
-
-void modifyScale(void)
-{
-    // TODO
-}
-
-void modifyDrive(void)
-{
-    // TODO
-}
-
-void manipulateRotate(void)
-{
-    // TODO
-}
-
-void manipulateTranslate(void)
-{
-    // TODO
-}
-
-void manipulateLook(void)
-{
-    // TODO
-}
-
-void manipulateClock(void)
-{
-    // TODO
-}
-
-void manipulateCylinder(void)
-{
-    // TODO
-}
-
-void manipulateScale(void)
-{
-    // TODO
-}
-
-void manipulateDrive(void)
-{
-    // TODO
-}
-
 void displayClose(GLFWwindow* ptr)
 {
     enqueDisplay(ptr);
@@ -361,7 +296,7 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
         CASE(Refine) leftRefine();
         CASE(Transform) {
             SWITCH(click,Init) FALL(Right) {leftTransform(); click = Left;}
-            CASE(Matrix) matrixMatrix(); FALL(Left) click = Init;
+            CASE(Matrix) matrixMatrix(); FALL(Left) {leftManipulate(); click = Init;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {

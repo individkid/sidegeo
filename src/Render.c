@@ -33,6 +33,7 @@
 
 #include "Common.h"
 
+extern enum Menu mode[Modes];
 extern Myfloat invalid[2];
 extern Myfloat basisMat[27];
 extern enum Shader dishader;
@@ -237,6 +238,12 @@ enum Action renderUniform(int state)
     enum Server *config = shader->config; \
     struct Buffer *buffer = file->buffer; \
     struct Uniform *uniform = shader->uniform;
+
+enum Action renderSetup(int state)
+{
+    // TODO append planes and face, or points and frame
+    return Advance;
+}
 
 enum Action renderLock(int state)
 {
@@ -657,7 +664,7 @@ void setupCode(enum Shader shader, int file)
     glUseProgram(0);
 }
 
-void enqueShader(enum Shader shader, int file, int context, Machine follow, enum Share share)
+void enqueShader(enum Shader shader, int file, int context, Machine setup, Machine follow, enum Share share)
 {
     struct Render render = {0};
     render.file = file; setupFile(file); // before setupCode so enqueUniform can refer to file for fixed
@@ -665,7 +672,8 @@ void enqueShader(enum Shader shader, int file, int context, Machine follow, enum
     render.context = context;
     render.share = share;
     *enlocRender(1) = render;
-    enqueMachine(&renderLock);
+    if (setup) {enqueMachine(setup); followMachine(&renderLock);}
+    else enqueMachine(&renderLock);
     if (arrayCode(shader,1)->feedback > 0) followMachine(&renderWrap);
     followMachine(&renderDraw);
     if (arrayCode(shader,1)->feedback > 0) followMachine(&renderWait);
@@ -689,8 +697,10 @@ void enqueSwap(void)
     if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
     renderSwap = sizeFile();
     renderClear = 1;
+    Machine setup = 0;
+    if (mode[Sculpt] == Transform && mode[Target] == Plane) setup = renderSetup;
     for (int i = 0; i < sizeFile(); i++)
-    enqueShader(dishader,i,context,0,Zero);
+    enqueShader(dishader,i,context,setup,0,Zero);
 }
 
 void enqueDishader(void)
@@ -702,5 +712,5 @@ void enquePershader(void)
 {
     enqueContext(0);
     for (int i = 0; i < sizeFile(); i++)
-    enqueShader(pershader,i,0,renderPierce,Zero);
+    enqueShader(pershader,i,0,0,renderPierce,Zero);
 }
