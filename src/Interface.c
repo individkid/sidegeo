@@ -70,7 +70,6 @@ void menu(void)
     char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
         enum Menu line = indexof(chr);
-        for (int i = 0; i < sizeDisplay(); i++) arrayDisplay(i,1)->click = Init;
         mode[item[line].mode] = line;}
     else exitErrstr("invalid menu char\n");
 }

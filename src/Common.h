@@ -125,13 +125,14 @@ enum Data { // render buffers
     VersorBuf, // per boundary base selector
     PointBuf, // shared point per boundary triple
     PierceBuf, // on line from focal point
-    SideBuf, // vertices wrt prior planes
+    SideBuf, // vertices wrt planes
+    HalfBuf, // planes wrt vertices
     FaceSub, // subscripts into planes
     FrameSub, // subscripts into points
     PointSub, // every triple of planes
     PlaneSub, // per plane triple of points
-    SideSub, // per vertex prior planes
-    HalfSub, // per plane prior vertices
+    SideSub, // vertex wrt planes
+    HalfSub, // plane wrt vertices
     Datas};
 enum Server { // one value per uniform
     Invalid, // scalar indicating divide by near-zero
@@ -178,9 +179,10 @@ struct Display {
     void *handle;
     int context;
     Myuint VAO;
-    Myfloat affineMat[16]; // transformation state at click time
-    Myfloat affineMata[16]; // left transformation state
-    Myfloat affineMatb[16]; // right transformation state
+    Myfloat affineMat[16]; // transformation state sent to uniform
+    Myfloat affineMata[16]; // transformation state at click time
+    Myfloat affineMatb[16]; // transformation due to roller
+    Myfloat affineMatc[16]; // transformation at change target time
     Myfloat xPoint;  // position of pierce point at click time
     Myfloat yPoint;
     Myfloat zPoint;
@@ -203,7 +205,7 @@ struct Display {
     Myfloat aspect;
     int swap;
     int clear;
-    enum Click click; // mode controlled by mouse buttons
+    enum Click click; // transform submode controlled by mouse buttons
 };
 struct File {
     int name;

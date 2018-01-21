@@ -53,8 +53,8 @@ struct Display *display = 0;
 #define displayHandle display->handle
 #define contextHandle display->context
 #define VAO display->VAO
-#define affineMat display->affineMat
 #define affineMata display->affineMata
+#define affineMat display->affineMat
 #define affineMatb display->affineMatb
 #define xPoint display->xPoint
 #define yPoint display->yPoint
@@ -130,7 +130,7 @@ void leftRefine(void)
 void leftTransform(void)
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    for (int i = 0; i < 16; i++) affineMat[i] = affineMata[i];
+    for (int i = 0; i < 16; i++) affineMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
@@ -149,7 +149,7 @@ void rightLeft(void)
 
 void matrixMatrix(void)
 {
-    jumpmat(affineMat,affineMatb,4);
+    jumpmat(affineMata,affineMatb,4);
     identmat(affineMatb,4);
     wPos = 0.0;
 }
@@ -183,9 +183,10 @@ void transformRotate(void)
 {
     float u[16]; matrixRotate(u);
     float v[16]; copyary(identmat(v,4),u,3,4,9);
-    copymat(affineMata,affineMat,4);
-    jumpmat(affineMata,affineMatb,4);
-    matrixFixed(v); jumpmat(affineMata,v,4);
+    matrixFixed(v);
+    copymat(affineMat,affineMata,4);
+    jumpmat(affineMat,affineMatb,4);
+    jumpmat(affineMat,v,4);
     enqueDishader();
 }
 
@@ -194,9 +195,9 @@ void transformTranslate(void)
     float u[16]; identmat(u,4);
     u[12] = xPos-xPoint;
     u[13] = yPos-yPoint;
-    copymat(affineMata,affineMat,4);
-    jumpmat(affineMata,affineMatb,4);
-    jumpmat(affineMata,u,4);
+    copymat(affineMat,affineMata,4);
+    jumpmat(affineMat,affineMatb,4);
+    jumpmat(affineMat,u,4);
     enqueDishader();
 }
 
@@ -219,7 +220,9 @@ void transformCylinder(void)
     float u[16];
     float angle = wPos/ROLLER_GRANULARITY;
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
-    matrixFixed(u); identmat(affineMatb,4); jumpmat(affineMatb,u,4);
+    matrixFixed(u);
+    identmat(affineMatb,4);
+    jumpmat(affineMatb,u,4);
     transformMouse();
 }
 
@@ -235,7 +238,9 @@ void transformClock(void)
     copyary(identmat(w,4),u,3,4,9);
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     jumpmat(u,v,4); timesmat(u,w,4);
-    matrixFixed(u); identmat(affineMatb,4); jumpmat(affineMatb,u,4);
+    matrixFixed(u);
+    identmat(affineMatb,4);
+    jumpmat(affineMatb,u,4);
     transformMouse();
 }
 
@@ -245,14 +250,16 @@ void transformScale(void)
     if (fabs(scale) < 1.0 && fabs(scale)*ROLLER_GRANULARITY < 1.0) {
         if (scale < 0.0) scale = 1.0/ROLLER_GRANULARITY;
         else scale = -1.0/ROLLER_GRANULARITY;}
-    identmat(affineMatb,4); scalevec(affineMatb,scale,16);
+    identmat(affineMatb,4);
+    scalevec(affineMatb,scale,16);
     transformMouse();
 }
 
 void transformDrive(void)
 {
     float scale = wPos/ROLLER_GRANULARITY;
-    identmat(affineMatb,4); affineMatb[14] += scale;
+    identmat(affineMatb,4);
+    affineMatb[14] += scale;
     transformMouse();
 }
 
@@ -347,22 +354,16 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
-        SWITCH(mode[Sculpt],Additive) {
-            SWITCH(click,Init) leftAdditive();
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Subtractive) {
-            SWITCH(click,Init) leftSubtractive();
-            DEFAULT(exitErrstr("invalid click mode\n");)}
-        CASE(Refine) {
-            SWITCH(click,Init) leftRefine();
-            DEFAULT(exitErrstr("invalid click mode\n");)}
+        SWITCH(mode[Sculpt],Additive) leftAdditive();
+        CASE(Subtractive) leftSubtractive();
+        CASE(Refine) leftRefine();
         CASE(Transform) {
             SWITCH(click,Init) FALL(Right) {leftTransform(); click = Left;}
             CASE(Matrix) matrixMatrix(); FALL(Left) click = Init;
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
-        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
+        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) /*nop*/;
         CASE(Transform) {
             SWITCH(click,Init)
             CASE(Right) {rightRight(); click = Left;}
@@ -381,7 +382,7 @@ void displayCursor(GLFWwindow *ptr, double xpos, double ypos)
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) enquePershader();
-        CASE(Matrix) matrixMatrix(); FALL(Left) transformMouse();
+        CASE(Matrix) {matrixMatrix(); click = Left;} FALL(Left) transformMouse();
         DEFAULT(exitErrstr("invalid click mode\n");)}
     DEFAULT(exitErrstr("invalid sculpt mode\n");)
 }
@@ -453,7 +454,7 @@ void setupDisplay(void)
     if (sizeDisplay() == 0) {
     invalid[0] = 1.0e38;
     invalid[1] = 1.0e37;
-    for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 27; i++) {
     int versor = i / 9;

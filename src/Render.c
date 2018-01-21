@@ -39,7 +39,7 @@ extern enum Shader dishader;
 extern enum Shader pershader;
 extern struct Display *display;
 #define displayHandle display->handle
-#define affineMata display->affineMata
+#define affineMat display->affineMat
 #define pPos display->pPos
 #define qPos display->qPos
 #define xPos display->xPos
@@ -185,9 +185,9 @@ void enqueUniform(enum Server server, int file, enum Shader shader)
         Myfloat sent[16];
         ptr->last = ptr->fixed;
         if (posedge) copymat(ptr->saved,sent,4);
-        if (negedge) timesmat(invmat(copymat(ptr->ratio,affineMata,4),4),ptr->saved,4);
+        if (negedge) timesmat(invmat(copymat(ptr->ratio,affineMat,4),4),ptr->saved,4);
         if (ptr->fixed) copymat(sent,ptr->saved,4);
-        else timesmat(copymat(sent,ptr->ratio,4),affineMata,4);
+        else timesmat(copymat(sent,ptr->ratio,4),affineMat,4);
         glUniformMatrix4fv(uniform->handle,1,GL_FALSE,sent);}
     CASE(Feather)
         SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos,yPos,zPos);
@@ -402,6 +402,7 @@ void setupFile(int sub)
     setupBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
     setupBuffer(file->buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
     setupBuffer(file->buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
+    setupBuffer(file->buffer+HalfBuf,"half",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
     setupBuffer(file->buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
     setupBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
     setupBuffer(file->buffer+PointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
@@ -464,7 +465,7 @@ enum Data bufferFeedback(int i, enum Shader shader)
     CASE(Coplane) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
     CASE(Copoint) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
     CASE(Adplane) {enum Data data[3] = {SideBuf,Datas}; return data[i];}
-    CASE(Adpoint) {enum Data data[3] = {SideBuf,Datas}; return data[i];}
+    CASE(Adpoint) {enum Data data[3] = {HalfBuf,Datas}; return data[i];}
     CASE(Perplane) {enum Data data[3] = {PierceBuf,Datas}; return data[i];}
     CASE(Perpoint) {enum Data data[3] = {PierceBuf,Datas}; return data[i];}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
