@@ -409,6 +409,7 @@ void setupFile(int sub)
     setupBuffer(file->buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
     setupBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
+    // TODO copy planes and points from context 0
 }
 
 void setupUniform(Myuint program, enum Server server, int file, enum Shader shader)

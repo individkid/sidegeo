@@ -53,8 +53,8 @@ struct Display *display = 0;
 #define displayHandle display->handle
 #define contextHandle display->context
 #define VAO display->VAO
-#define affineMata display->affineMata
 #define affineMat display->affineMat
+#define affineMata display->affineMata
 #define affineMatb display->affineMatb
 #define xPoint display->xPoint
 #define yPoint display->yPoint
@@ -456,8 +456,6 @@ void setupDisplay(void)
     if (sizeDisplay() == 0) {
     invalid[0] = 1.0e38;
     invalid[1] = 1.0e37;
-    for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 27; i++) {
     int versor = i / 9;
     int column = (i % 9) / 3;
@@ -506,6 +504,10 @@ void setupDisplay(void)
     aspect = (float)ySiz/(1.0*(float)xSiz);
     renderSwap = 0;
     renderClear = 0;
+    // TODO copy affine from current
+    for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) affineMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) affineMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     useDisplayCode(contextHandle); referCode();
     useDisplayFile(contextHandle); referFile();
 }
@@ -522,6 +524,8 @@ void enqueContext(int sub)
         setupDisplay();
         if (sub < sizeDisplay()) break;}
     if (sub != contextHandle) exitErrstr("display too context\n");
+    target();
+    enquePershader();
 }
 
 void enqueDisplay(GLFWwindow *ptr)
