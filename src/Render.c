@@ -360,9 +360,10 @@ enum Action renderPierce(int state)
 
 enum Action renderPreview(int state)
 {
-    // send event for points for plane pPos from file qPos
+    // send event for corners of plane pPos from file qPos
     // transform points by ratio from file times affineMat
-    // draw triangle with glBegin glEnd
+    // draw triangles with glBegin glEnd
+    return Advance;
 }
 
 enum Action renderUnlock(int state)
