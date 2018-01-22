@@ -35,8 +35,8 @@
 #include <math.h>
 
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
-int escape = 0; // escape sequence from OpenGL
-int dash = 0; // inject sequence from OpenGL
+int escape = 0; // escape sequence from OpenGL key callback
+int dash = 0; // inject sequence from OpenGL key callback
 Myfloat invalid[2] = {0};
 Myfloat basisMat[27] = {0};
 #ifdef BRINGUP
@@ -138,7 +138,7 @@ void leftTransform(void)
 
 void leftManipulate(void)
 {
-    // TODO append --plane to configure
+    // TODO append --plane with same points as renderPreview
 }
 
 void rightRight(void)
