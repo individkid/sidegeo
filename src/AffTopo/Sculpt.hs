@@ -35,42 +35,56 @@ foreign import ccall "inouts" inoutsC :: IO CInt
 foreign export ccall handleEvent :: CInt -> IO Bool
 foreign export ccall handleEnum :: Ptr CChar -> IO CInt
 
-data Event = Locate | Fill | Hollow | Face | Frame | Inflate | Divide | Vertex | Migrate | Error
+data Event =
+    Locate | -- inout(wrt), place: inout(polyant)
+    Fill | -- inout(polyant), place, embed: embed
+    Hollow | -- inout(polyant), place, embed: embed
+    Inflate | -- place: embed
+    Face | -- inout(filter), place, embed, tag: inout(face)
+    Frame | -- inout(filter), place, embed, tag: inout(frame)
+    Filter | -- inout(boundary, filter), tag: tag
+    Divide | -- inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
+    Vertex | -- place: inout(vertex)
+    Corner | -- inout(boundary), place: inout(corner)
+    Error
 
 eventOf :: Int -> Event
 eventOf 0 = Locate
 eventOf 1 = Fill
 eventOf 2 = Hollow
-eventOf 3 = Face
-eventOf 4 = Frame
-eventOf 5 = Inflate
-eventOf 6 = Divide
-eventOf 7 = Vertex
-eventOf 8 = Migrate
+eventOf 3 = Inflate
+eventOf 4 = Face
+eventOf 5 = Frame
+eventOf 6 = Filter
+eventOf 7 = Divide
+eventOf 8 = Vertex
+eventOf 9 = Corner
 eventOf _ = Error
 
 ofEvent :: Event -> Int
 ofEvent Locate = 0
 ofEvent Fill = 1
 ofEvent Hollow = 2
-ofEvent Face = 3
-ofEvent Frame = 4
-ofEvent Inflate = 5
-ofEvent Divide = 6
-ofEvent Vertex = 7
-ofEvent Migrate = 8
+ofEvent Inflate = 3
+ofEvent Face = 4
+ofEvent Frame = 5
+ofEvent Filter = 6
+ofEvent Divide = 7
+ofEvent Vertex = 8
+ofEvent Corner = 9
 ofEvent _ = (-1)
 
 ofString :: [Char] -> Event
 ofString "Locate" = Locate
 ofString "Fill" = Fill
 ofString "Hollow" = Hollow
+ofString "Inflate" = Inflate
 ofString "Face" = Face
 ofString "Frame" = Frame
-ofString "Inflate" = Inflate
+ofString "Filter" = Filter
 ofString "Divide" = Divide
 ofString "Vertex" = Vertex
-ofString "Migrate" = Migrate
+ofString "Corner" = Corner
 ofString _ = Error
 
 handleEnum :: Ptr CChar -> IO CInt
@@ -107,10 +121,11 @@ handleEvent event = case (eventOf (fromIntegral event)) of
  Locate -> return False
  Fill -> return False
  Hollow -> return False
+ Inflate -> return False
  Face -> return False
  Frame -> return False
- Inflate -> return False
+ Filter -> return False
  Divide -> return False
  Vertex -> return False
- Migrate -> return False
+ Corner -> return False
  _ -> return True

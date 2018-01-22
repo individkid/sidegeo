@@ -37,6 +37,7 @@ void setupEnum(void)
     val = handleEnum("Filter"); if (val < 0 || insertEnum(Filter) < 0) exitErrstr("enum too event\n"); else *castEnum(Filter) = val;
     val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
     val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
+    val = handleEnum("Corner"); if (val < 0 || insertEnum(Corner) < 0) exitErrstr("enum too event\n"); else *castEnum(Corner) = val;
 }
 
 void haskellBefore(void)

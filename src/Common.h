@@ -86,27 +86,27 @@ struct Item { // per-menu-line info
 };
 
 enum Event {
-    Locate, // wrt point, place: inout(polyant)
+    Locate, // inout(wrt), place: inout(polyant)
     Fill, // inout(polyant), place, embed: embed
     Hollow, // inout(polyant), place, embed: embed
     Inflate, // place: embed
     Face, // inout(filter), place, embed, tag: inout(face)
     Frame, // inout(filter), place, embed, tag: inout(frame)
     Filter, // inout(boundary, filter), tag: tag
-    Divide, // inout(wrt plane, boundary, filter), place, embed, tag: place, embed, tag
+    Divide, // inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex, // place: inout(vertex)
+    Corner, // inout(boundary), place: inout(corner)
     Events};
 
 typedef unsigned Myuint;
 typedef float Myfloat;
 typedef void (*Command)(void);
-enum Action {
+enum Action { // multi command return value
     Reque, // be polite to other commands
     Defer, // wait for other commands engines threads
     Advance, // go to next command in chain if any
     Continue, // increment state and call again
-    Terminate // end program
-}; // multi command return value
+    Terminate}; // end program
 typedef enum Action (*Machine)(int state);
 enum Shader { // one value per shader; state for bringup
     Diplane, // display planes

@@ -697,9 +697,10 @@ void enqueSwap(void)
     if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
     renderSwap = sizeFile();
     renderClear = 1;
-    Machine setup = 0;
+    Machine follow = 0;
+    if (mode[Sculpt] == Transform && mode[Target] == Plane) follow = renderPreview;
     for (int i = 0; i < sizeFile(); i++)
-    enqueShader(dishader,i,context,0,Zero);
+    enqueShader(dishader,i,context,follow,Zero);
 }
 
 void enqueDishader(void)
