@@ -1366,6 +1366,11 @@ extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 DEFINE_INDEX(NAME,VAL,KEY,tree.cast(idx))
 
+// DEFINE_FREE is map and its inverse
+// DEFINE_FALSE is queue of QueueFree
+// DEFINE_TRUES is queue of QueueTrue
+// DEFINE_FALSES is queue of QueueFalse 
+
 #endif // __cplusplus
 
 #endif

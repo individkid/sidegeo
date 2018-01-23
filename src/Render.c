@@ -82,8 +82,10 @@ int bufferPrimitive(int size)
 
 enum Action dequeWrap(int state)
 {
+    int context = *deargCmdInt(1);
     int file = *deargCmdInt(1);
     enum Data sub = *deargCmdInt(1);
+    enqueContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
@@ -113,14 +115,15 @@ enum Action dequeWrap(int state)
     return Advance;
 }
 
-void enqueWrap(int file, enum Data sub, int room)
+void enqueWrap(int context, int file, enum Data sub, int room)
 {
+    enqueContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     if (buffer->lock.write == 0) exitErrstr("wrap not locked\n");
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
-    *enlocCmdInt(1) = file; *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
+    *enlocCmdInt(1) = context; *enlocCmdInt(1) = file; *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
 }
 
 enum Action dequeBuffer(int state)
@@ -131,16 +134,17 @@ enum Action dequeBuffer(int state)
     int todo = *deargCmdInt(1);
     int done = *deargCmdInt(1);
     int *wait = deargCmdInt(1);
+    // TODO get data from client
     char *data = deargCmdByte(todo);
     Command cmd = *deargVoid(1);
-    struct Buffer *buffer = &arrayDisplayFile(context,file,1)->buffer[sub];
+    enqueContext(context);
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     LOCK(*wait,buffer->lock,Write)
     if (state-- == 0) {
-        if (buffer->room < done+todo) enqueWrap(file,sub,done+todo);
+        if (buffer->room < done+todo) enqueWrap(context,file,sub,done+todo);
         return Continue;}
     if (state-- == 0) {
         return (buffer->room < done+todo ? Defer : Continue);}
-    glfwMakeContextCurrent(arrayDisplay(context,1)->handle);
     int size = buffer->dimn*bufferType(buffer->type);
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
     glBufferSubData(GL_ARRAY_BUFFER,done*size,todo*size,data);
@@ -151,21 +155,22 @@ enum Action dequeBuffer(int state)
     return Advance;
 }
 
-void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Command cmd)
+void enqueBuffer(int context, int file, enum Data sub, int todo, int done, void *data, Command cmd)
 {
     if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
-    for (int i = 0; i < sizeDisplay(); i++) {
-    *enlocCmdInt(1) = i;
+    *enlocCmdInt(1) = context;
     *enlocCmdInt(1) = file;
     *enlocCmdInt(1) = sub;
     *enlocCmdInt(1) = todo;
+    // TODO copy data to client
     *enlocCmdInt(1) = done;
     *enlocCmdInt(1) = 0; // wait sequence number
+    enqueContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     int size = buffer->dimn*bufferType(buffer->type);
     memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
     *enlocVoid(1) = cmd;
-    enqueMachine(dequeBuffer);}
+    enqueMachine(dequeBuffer);
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
@@ -240,6 +245,18 @@ enum Action renderUniform(int state)
     struct Buffer *buffer = file->buffer; \
     struct Uniform *uniform = shader->uniform;
 
+enum Action renderUpdate(int state)
+{
+    RENDER_DEARG
+    // for each vertex and element buffer
+    // if seqnum equal to client seqnum advance
+    // writelock
+    // while seqnum less than client seqnum
+    // update buffer from client at seqnum
+    // unlock
+    return Advance;
+}
+
 enum Action renderLock(int state)
 {
     RENDER_DEARG
@@ -264,10 +281,10 @@ enum Action renderWrap(int state)
     int reque = 0;
     if (*element < Datas) for (enum Data *i = feedback; *i < Datas; i++) {
         if (file->buffer[*i].done > file->buffer[*element].done) exitErrstr("%s too done\n",shader->name);
-        if (file->buffer[*i].room < file->buffer[*element].done) {enqueWrap(render->file,*i,buffer[*element].done); reque = 1;}}
+        if (file->buffer[*i].room < file->buffer[*element].done) {enqueWrap(render->context,render->file,*i,buffer[*element].done); reque = 1;}}
     if (*element >= Datas && *vertex < Datas) for (enum Data *i = feedback; *i < Datas; i++) {
         if (buffer[*i].done > buffer[*vertex].done) exitErrstr("%s too done\n",shader->name);
-        if (buffer[*i].done < buffer[*vertex].done) {enqueWrap(render->file,*i,buffer[*vertex].done); reque = 1;}}
+        if (buffer[*i].done < buffer[*vertex].done) {enqueWrap(render->context,render->file,*i,buffer[*vertex].done); reque = 1;}}
     return (reque?Reque:Advance);
 }
 
@@ -359,10 +376,18 @@ enum Action renderPierce(int state)
 
 enum Action renderPreview(int state)
 {
+    RENDER_DEARG
     // send event for corners of plane pPos from file qPos
     // transform points by ratio from file times affineMat
     // draw triangles with glBegin glEnd
     return Advance;
+}
+
+enum Action renderClient(int state)
+{
+    RENDER_DEARG
+    // update feedback to its client
+    return Advance;    
 }
 
 enum Action renderUnlock(int state)
