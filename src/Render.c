@@ -123,25 +123,24 @@ void enqueWrap(int file, enum Data sub, int room)
     *enlocCmdInt(1) = file; *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
 }
 
-#define BUFFER_DEARG \
-    int file = *deargCmdInt(1); \
-    enum Data sub = *deargCmdInt(1); \
-    int todo = *deargCmdInt(1); \
-    int done = *deargCmdInt(1); \
-    int *wait = deargCmdInt(1); \
-    char *data = deargCmdByte(todo); \
-    Command cmd = *deargVoid(1); \
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
-
 enum Action dequeBuffer(int state)
 {
-    BUFFER_DEARG
+    int context = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
+    enum Data sub = *deargCmdInt(1);
+    int todo = *deargCmdInt(1);
+    int done = *deargCmdInt(1);
+    int *wait = deargCmdInt(1);
+    char *data = deargCmdByte(todo);
+    Command cmd = *deargVoid(1);
+    struct Buffer *buffer = &arrayDisplayFile(context,file,1)->buffer[sub];
     LOCK(*wait,buffer->lock,Write)
     if (state-- == 0) {
         if (buffer->room < done+todo) enqueWrap(file,sub,done+todo);
         return Continue;}
     if (state-- == 0) {
         return (buffer->room < done+todo ? Defer : Continue);}
+    glfwMakeContextCurrent(arrayDisplay(context,1)->handle);
     int size = buffer->dimn*bufferType(buffer->type);
     glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
     glBufferSubData(GL_ARRAY_BUFFER,done*size,todo*size,data);
@@ -155,6 +154,8 @@ enum Action dequeBuffer(int state)
 void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Command cmd)
 {
     if (todo < 0 || done < 0) exitErrstr("buffer too done\n");
+    for (int i = 0; i < sizeDisplay(); i++) {
+    *enlocCmdInt(1) = i;
     *enlocCmdInt(1) = file;
     *enlocCmdInt(1) = sub;
     *enlocCmdInt(1) = todo;
@@ -164,7 +165,7 @@ void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Comman
     int size = buffer->dimn*bufferType(buffer->type);
     memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
     *enlocVoid(1) = cmd;
-    enqueMachine(dequeBuffer);
+    enqueMachine(dequeBuffer);}
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
@@ -242,8 +243,6 @@ enum Action renderUniform(int state)
 enum Action renderLock(int state)
 {
     RENDER_DEARG
-    if (render->share == Read) {LOCK(render->wait,file->lock,Read)}
-    if (render->share == Write) {LOCK(render->wait,file->lock,Write)}
     for (enum Data *i = vertex; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Read)}
     for (enum Data *i = element; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Read)}
     for (enum Data *i = feedback; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Write)}
@@ -369,7 +368,6 @@ enum Action renderPreview(int state)
 enum Action renderUnlock(int state)
 {
     RENDER_DEARG
-    file->lock.read -= 1;
     for (enum Server *i = server; *i < Servers; i++) uniform[*i].lock.read -= 1;
     for (enum Data *i = vertex; *i < Datas; i++) buffer[*i].lock.read -= 1;
     for (enum Data *i = element; *i < Datas; i++) buffer[*i].lock.read -= 1;

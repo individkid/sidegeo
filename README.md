@@ -114,6 +114,17 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Configure -- open dialog to decorate plane's facets  
     * Hyperlink -- jump through facet to another space  
     * Execute -- call Haskell function attached to facet  
+    * Draw -- draw on facet with traditional stylus  
+  * Stylus -- what Draw motion does  
+    * Segment -- draw segment between two clicks  
+    * Path -- draw end to end segments between clicks  
+    * Polygon -- drag segment to triangle to polygon  
+    * Blur -- drag across curve to blur or sharpen  
+    * Smooth -- drag across curve to smooth or sharpen  
+    * Widen -- drag across curve to widen or narrow  
+    * Fill -- drag across curve to fill or hollow  
+    * Bright -- drag across curve to brighten or darken  
+    * Color -- drag across curve to rotate color wheel  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. The names supplied in --time --start commands have file scope shared by --branch and --jump files.
 
@@ -133,18 +144,19 @@ Configuration/history files consist of commands. User input appends to file. App
   * --metric funtion name, facet specifications for term values  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
+  * --media binds Haskell expression to evaluate when stock changes  
   * --color takes plane subscript and decoration  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
   * --action attaches Haskell function to boundary to be activated by click  
+  * --canvas captures drawings on facets of a boundary  
   * --matrix takes transformation of display, ignored if not -F file  
   * --project takes slope and cutoff, ignored if not -F file  
   * --configure pore, membrane, interpolate, texture, rate  
   * --inject specifies command line option to inject  
   * --menu changes to menu item to inject to console  
   * --bind binds Haskell function to function key in console  
-  * --media binds Haskell function to call when stock changes  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
   * --start goes to a new polytope with optional name for going back  
@@ -160,6 +172,8 @@ The constants set by --configure change behaviors by degree.
  * Interpolate specifies interpolation value for new vertices  
  * Texture specifies interpolation field for new planes  
  * Rate specifies when to record transformations into file  
+ * Tweak specifies how much refine points and refine planes change  
+ * Canvas specifies drawings captured as bitmaps fine or coarse actions   
 
 The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 

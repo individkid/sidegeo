@@ -110,7 +110,6 @@ void displayResponse(void)
 }
 
 #define DISPLAY_RELOC(EVENT) \
-    *enlocCmdInt(1) = 0; /*topo lock*/ \
     *enlocCmdInt(1) = (int)EVENT; \
     relocCmdInt(1); /*file*/ \
     if (EVENT != Inflate) { \
@@ -120,7 +119,6 @@ void displayResponse(void)
     enqueMachine(displayRequest);
 
 #define DISPLAY_DEARG \
-    int wait = *deargCmdInt(1); \
     int event = *deargCmdInt(1); \
     int file = *deargCmdInt(1); \
     int plane, inlen, outlen; \
@@ -137,7 +135,6 @@ enum Action displayRequest(int state)
 {
     DISPLAY_DEARG
     struct File *ptr = arrayFile(file,1);
-    LOCK(wait,ptr->lock,Write)
     if (state-- == 0) {
     layer = tagReint();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
@@ -165,7 +162,6 @@ enum Action displayRequest(int state)
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
-    ptr->lock.write -= 1;
     enum Data data = (dishader == Diplane ? FaceSub : FrameSub);
     int size = sizeReint(layer);
     enqueBuffer(file,data,size,0,arrayReint(layer,0,size),enqueDishader);
@@ -190,12 +186,11 @@ void configureHollow(void)
 
 enum Action enquePlane(int state)
 {
-    // do wsw to add plane to file's buffer
-    // get sidednesses with adpoint shader
+    // enque Adpoint shader for wrt with proceed follow
     // send divide event with proceed response
     // send vertex event with proceed response
-    // enque Copoint shader
-    // enque dishader
+    // in each display, add plane, copy vertex, enque Copoint shader
+    enqueDishader();
     return Advance;
 }
 
@@ -286,7 +281,6 @@ enum Action sculptRegion(int state)
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
-    arrayFile(file,1)->lock.read -= 1;
     *enlocCmdConfigurer(1) = file;
     memcpy(enlocCmdConfigure(len),str,len);
     msgstrCmdConfigure(" %d,",plane);

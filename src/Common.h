@@ -223,7 +223,6 @@ struct File {
     // if n >= p, then as i -> n, Si -> Sp
     // if n >= p, then Si = (Sp/Rn)Ri
     // Si is continuous
-    struct Lock lock; // lock on topology in haskell
     struct Buffer buffer[Datas]; // only render buffer, and client uniforms are global
 };
 struct Uniform {
