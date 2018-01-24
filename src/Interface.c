@@ -189,7 +189,8 @@ enum Action enquePlane(int state)
     // enque Adpoint shader for wrt with proceed follow
     // send divide event with proceed response
     // send vertex event with proceed response
-    // in each display, add plane, copy vertex, enque Copoint shader
+    // in each display, add plane, copy vertex,
+    // in each display, enque Copoint shader with renderClient follow
     enqueDishader();
     return Advance;
 }
@@ -208,13 +209,13 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 
 void configurePlane(void)
 {
-    // plane configuration kicks off enquePlane for each context
+    // plane configuration kicks off enquePlane
 }
 
 enum Action collectPoint(int state)
 {
     // point configuration saves up three points to construct plane
-    // and kicks off enquePlane for each context
+    // and kicks off enquePlane
     return Advance;
 }
 
