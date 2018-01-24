@@ -171,7 +171,9 @@ struct Buffer { // information about server buffers
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
-    int client; // index into client true bimap meta
+    int seqmin; // to know if seqmax wrapped
+    int seqmax; // seqnum to compare to client
+    int client; // per display plane enum
     struct Lock lock; // lock on buffer
 };
 struct Uniform {
@@ -404,12 +406,10 @@ DECLARE_POINTER(Code,struct Code)
 DECLARE_META(DisplayFile,struct File)
 DECLARE_POINTER(File,struct File)
 DECLARE_LOCAL(CmdBuf,char)
-// per struct Buffer true of location mapped to list of bytes at that location
-// DECLARE_TRUES(Trues,int,char) // queue of tree of queue
-// per struct Buffer map from location to seqnum and from seqnum to location
-// DECLARE_FALSE(False,int,int) // queue of maps and their inverses
-// per struct Buffer minimum and maximum wrapping sequence numbers
-// DECLARE_LOCAL(Client,struct Client)
+DECLARE_LOCAL(Seqmin,int)
+DECLARE_LOCAL(Seqmax,int)
+DECLARE_META(Range,int)
+DECLARE_META(Client,char)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
