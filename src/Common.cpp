@@ -348,6 +348,7 @@ DEFINE_POINTER(File,struct File)
 DEFINE_LOCAL(CmdBuf,char)
 DEFINE_LOCAL(Seqmin,int)
 DEFINE_LOCAL(Seqmax,int)
+DEFINE_META(Seqnum,int)
 DEFINE_META(Range,int)
 DEFINE_META(Client,char)
 

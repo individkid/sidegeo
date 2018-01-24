@@ -171,8 +171,7 @@ struct Buffer { // information about server buffers
     int done; // initialized vectors
     int type; // type of data elements
     int dimn; // elements per vector
-    int seqmin; // to know if seqmax wrapped
-    int seqmax; // seqnum to compare to client
+    int seqnum; // sever behind client
     int client; // per display plane enum
     struct Lock lock; // lock on buffer
 };
@@ -408,6 +407,7 @@ DECLARE_POINTER(File,struct File)
 DECLARE_LOCAL(CmdBuf,char)
 DECLARE_LOCAL(Seqmin,int)
 DECLARE_LOCAL(Seqmax,int)
+DECLARE_META(Seqnum,int)
 DECLARE_META(Range,int)
 DECLARE_META(Client,char)
 

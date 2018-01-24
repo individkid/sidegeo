@@ -54,7 +54,7 @@ extern struct Display *display;
 #define renderSwap display->swap
 #define renderClear display->clear
 
-void enqueContext(int sub);
+void updateContext(int sub);
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
 void enqueCommand(Command cmd);
@@ -85,7 +85,7 @@ enum Action dequeWrap(int state)
     int context = *deargCmdInt(1);
     int file = *deargCmdInt(1);
     enum Data sub = *deargCmdInt(1);
-    enqueContext(context);
+    updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
@@ -117,13 +117,84 @@ enum Action dequeWrap(int state)
 
 void enqueWrap(int context, int file, enum Data sub, int room)
 {
-    enqueContext(context);
+    updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     if (buffer->lock.write == 0) exitErrstr("wrap not locked\n");
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
     *enlocCmdInt(1) = context; *enlocCmdInt(1) = file; *enlocCmdInt(1) = sub; enqueMachine(dequeWrap);
+}
+
+void updateClient(int context, int file, enum Data sub, int todo, int done, void *data)
+{
+    updateContext(context);
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    int client = buffer->client;
+    int size = sizeRange(client);
+    int min = *arraySeqmin(client,1);
+    int max = *arraySeqmax(client,1) + 1;
+    int next = max;
+    for (int i = 0; i < size; i++) {
+        int num = *arraySeqnum(client,i,1);
+        if (num < next && num > min) next = num;}
+    int loc = 0;
+    for (int i = 0; i < size; i++) {
+        int len = *delocRange(client,1);
+        int num = *delocSeqnum(client,1);
+        if (loc+len <= done) {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        else if (loc < done && loc+len <= done+todo) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,len-(done-loc));
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc < done) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,todo);
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);
+            int post = len-pre-todo; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else if (loc == done && loc+len <= done+todo) {
+            delocClient(client,len); if (num == min) min = next;
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc+len <= done+todo) {
+            delocClient(client,len); if (num == min) min = next;}
+        else if (loc < done+todo) {
+            int pre = done+todo-loc; delocClient(client,pre);
+            int post = len-pre; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        loc += len;}
+    if (loc < done) {
+        int pre = done-loc;
+        *enlocRange(client,1) = pre+todo; *enlocSeqnum(client,1) = max;
+        for (int i = 0; i < pre; i++) *enlocRange(client,1) = 0;
+        memcpy(enlocClient(client,todo),data,todo);}
+    else if (loc == done) {
+        *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
+        memcpy(enlocClient(client,todo),data,todo);}
+    *arraySeqmin(client,1) = min;
+    *arraySeqmax(client,1) = max;
+}
+
+void updateBuffer(int context, int file, enum Data sub)
+{
+    updateContext(context);
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    int client = buffer->client;
+    int seq = buffer->seqnum;
+    int size = sizeRange(client);
+    int min = *arraySeqmin(client,1);
+    int max = min;
+    int loc = 0;
+    for (int i = 0; i < size; i++) {
+        int len = *delocRange(client,1);
+        int num = *arraySeqnum(client,i,1);
+        if (num > seq || seq > max) {
+            if (max < num) max = num;
+            glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
+            glBufferSubData(GL_ARRAY_BUFFER,loc,len,arrayClient(context,loc,len));
+            glBindBuffer(GL_ARRAY_BUFFER,0);}
+        loc += len;}
+    if (max != *arraySeqmax(client,1)) exitErrstr("seqnum too max\n");
+    buffer->seqnum = max;
 }
 
 enum Action dequeBuffer(int state)
@@ -134,10 +205,8 @@ enum Action dequeBuffer(int state)
     int todo = *deargCmdInt(1);
     int done = *deargCmdInt(1);
     int *wait = deargCmdInt(1);
-    // TODO get data from client
-    char *data = deargCmdByte(todo);
     Command cmd = *deargVoid(1);
-    enqueContext(context);
+    updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     LOCK(*wait,buffer->lock,Write)
     if (state-- == 0) {
@@ -145,10 +214,7 @@ enum Action dequeBuffer(int state)
         return Continue;}
     if (state-- == 0) {
         return (buffer->room < done+todo ? Defer : Continue);}
-    int size = buffer->dimn*bufferType(buffer->type);
-    glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-    glBufferSubData(GL_ARRAY_BUFFER,done*size,todo*size,data);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
+    updateBuffer(context,file,sub);
     if (buffer->done < done+todo) buffer->done = done+todo;
     buffer->lock.write--;
     enqueCommand(cmd);
@@ -162,14 +228,13 @@ void enqueBuffer(int context, int file, enum Data sub, int todo, int done, void 
     *enlocCmdInt(1) = file;
     *enlocCmdInt(1) = sub;
     *enlocCmdInt(1) = todo;
-    // TODO copy data to client
     *enlocCmdInt(1) = done;
     *enlocCmdInt(1) = 0; // wait sequence number
-    enqueContext(context);
+    *enlocVoid(1) = cmd;
+    updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     int size = buffer->dimn*bufferType(buffer->type);
-    memcpy(enlocCmdByte(todo*size),(char *)data,todo*size);
-    *enlocVoid(1) = cmd;
+    updateClient(context,file,sub,todo*size,done*size,data);
     enqueMachine(dequeBuffer);
 }
 
@@ -178,8 +243,9 @@ void exitErrbuf(struct Buffer *buf, const char *str)
     if (buf->done > buf->room) exitErrstr("%s in %s not room %d enough for done %d\n",buf->name,str,buf->room,buf->done);
 }
 
-void enqueUniform(enum Server server, int file, enum Shader shader)
+void updateUniform(int context, enum Server server, int file, enum Shader shader)
 {
+    updateContext(context);
     struct Uniform *uniform = arrayCode(shader,1)->uniform+server;
     SWITCH(server,Invalid) {
         glUniform1fv(uniform->handle,2,invalid);}
@@ -225,8 +291,7 @@ enum Action renderUniform(int state)
     struct Uniform *uniform = arrayCode(i,1)->uniform+server;
     LOCK(*wait,uniform->lock,Write);
     if (--state == 0) {
-    enqueContext(context);
-    enqueUniform(server,0/*not for use with dishader affine*/,i);
+    updateUniform(context,server,0/*not for use with dishader affine*/,i);
     uniform->lock.write -= 1;
     return Continue;}}
     return Advance;
@@ -236,7 +301,7 @@ enum Action renderUniform(int state)
     struct Render *render = deargRender(1); \
     struct File *file = arrayFile(render->file,1); \
     struct Code *shader = arrayCode(render->shader,1); \
-    enqueContext(render->context); \
+    updateContext(render->context); \
     enum Data *vertex = shader->vertex; \
     enum Data *element = shader->element; \
     enum Data *feedback = shader->feedback; \
@@ -300,7 +365,7 @@ enum Action renderDraw(int state)
     if (todo == 0) return Advance;
     glUseProgram(shader->handle);
     for (enum Server *i = server; *i < Servers; i++) {
-        enqueUniform(*i,render->file,render->shader);
+        updateUniform(render->context,*i,render->file,render->shader);
         uniform[*i].lock.read += 1; uniform[*i].lock.write -= 1;}
     for (enum Data *i = feedback; *i < Datas; i++) {
         size_t size = buffer[*i].dimn*bufferType(buffer[*i].type);
@@ -441,7 +506,7 @@ void setupFile(int sub)
     // TODO copy planes and points from context 0
 }
 
-void setupUniform(Myuint program, enum Server server, int file, enum Shader shader)
+void setupUniform(Myuint program, int context, enum Server server, int file, enum Shader shader)
 {
     struct Uniform uniform = {0};
     SWITCH(server,Invalid) uniform.name = "invalid"; uniform.handle = glGetUniformLocation(program, uniform.name);
@@ -454,7 +519,7 @@ void setupUniform(Myuint program, enum Server server, int file, enum Shader shad
     CASE(Aspect) uniform.name = "aspect"; uniform.handle = glGetUniformLocation(program, uniform.name);
     DEFAULT(exitErrstr("invalid server uniform\n");)
     arrayCode(shader,1)->uniform[server] = uniform;
-    enqueUniform(server,file,shader);
+    updateUniform(context,server,file,shader);
 }
 
 enum Data bufferVertex(int i, enum Shader shader)
@@ -661,7 +726,7 @@ extern const GLchar *repointVertex;
 extern const GLchar *repointGeometry;
 extern const GLchar *repointFragment;
 
-void setupCode(enum Shader shader, int file)
+void setupCode(int context, enum Shader shader, int file)
 {
     if (arrayCode(shader,1)->name != 0) return;
     SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane);
@@ -683,17 +748,17 @@ void setupCode(enum Shader shader, int file)
     for (int i = 0; i < 4; i++) arrayCode(shader,1)->reader[i] = uniformConstant(i,shader);
     glUseProgram(arrayCode(shader,1)->handle);
     enum Server temp = Servers;
-    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,temp,file,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,temp,file,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,temp,file,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,context,temp,file,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,context,temp,file,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,context,temp,file,shader);
     glUseProgram(0);
 }
 
 void enqueShader(enum Shader shader, int file, int context, Machine follow, enum Share share)
 {
     struct Render render = {0};
-    render.file = file; setupFile(file); // before setupCode so enqueUniform can refer to file for fixed
-    render.shader = shader; setupCode(shader,file);
+    render.file = file; setupFile(file); // before setupCode so updateUniform can refer to file for fixed
+    render.shader = shader; setupCode(context,shader,file);
     render.context = context;
     render.share = share;
     *enlocRender(1) = render;
@@ -705,19 +770,10 @@ void enqueShader(enum Shader shader, int file, int context, Machine follow, enum
     followMachine(&renderUnlock);
 }
 
-int enqueCode(enum Shader shader, int display)
-{
-    if (shader >= Shaders) exitErrstr("shader too display\n");
-    if (display > 0 && shader != Diplane && shader != Dipoint) exitErrstr("shader too dipont\n");
-    if (display == 0) return shader;
-    // only dishader on alternate displays
-    return Shaders+(display*2)+(shader!=Diplane);
-}
-
 void enqueSwap(void)
 {
     int context = *delocCmdInt(1);
-    enqueContext(context);
+    updateContext(context);
     if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
     renderSwap = sizeFile();
     renderClear = 1;
@@ -734,7 +790,7 @@ void enqueDishader(void)
 
 void enquePershader(void)
 {
-    enqueContext(0);
+    updateContext(0);
     for (int i = 0; i < sizeFile(); i++)
     enqueShader(pershader,i,0,renderPierce,Zero);
 }

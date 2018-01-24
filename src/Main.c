@@ -33,7 +33,7 @@
 
 #include "Common.h"
 
-void enqueDisplay(GLFWwindow *ptr);
+void updateDisplay(GLFWwindow *ptr);
 #ifdef BRINGUP
 void bringupBuiltin(void);
 void enqueCommand(Command cmd);
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef BRINGUP
-    enqueDisplay(0);
+    updateDisplay(0);
     enqueCommand(&bringupBuiltin);
 #endif
 

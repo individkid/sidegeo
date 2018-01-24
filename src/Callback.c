@@ -80,7 +80,7 @@ struct Display *display = 0;
 #define renderSwap display->swap
 #define renderClear display->clear
 
-void enqueDisplay(GLFWwindow *ptr);
+void updateDisplay(GLFWwindow *ptr);
 void displayCursor(GLFWwindow *display, double xpos, double ypos);
 void enqueCommand(Command cmd);
 void enqueDishader(void);
@@ -281,13 +281,13 @@ void transformScroll(void)
 
 void displayClose(GLFWwindow* ptr)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     if (contextHandle == 0) enqueCommand(0);
 }
 
 void displayClick(GLFWwindow *ptr, int button, int action, int mods)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
@@ -312,7 +312,7 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
 
 void displayCursor(GLFWwindow *ptr, double xpos, double ypos)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
@@ -326,7 +326,7 @@ void displayCursor(GLFWwindow *ptr, double xpos, double ypos)
 
 void displayScroll(GLFWwindow *ptr, double xoffset, double yoffset)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     wPos = wPos + yoffset;
     SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
@@ -338,7 +338,7 @@ void displayScroll(GLFWwindow *ptr, double xoffset, double yoffset)
 
 void displayKey(GLFWwindow* ptr, int key, int scancode, int action, int mods)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     if (action == GLFW_RELEASE || key >= GLFW_KEY_LEFT_SHIFT) return;
     if (escape && key == GLFW_KEY_ENTER) {escape = 0; enqueCommand(0);}
     else if (escape) *enlocCmdOutput(1) = ofmotion(Space);
@@ -365,13 +365,13 @@ void displayKey(GLFWwindow* ptr, int key, int scancode, int action, int mods)
 
 void displayLocation(GLFWwindow *ptr, int xloc, int yloc)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     xLoc = xloc; yLoc = yloc;
 }
 
 void displaySize(GLFWwindow *ptr, int width, int height)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     xSiz = width; ySiz = height;
     *enlocCmdInt(1) = Aspect;
     *enlocCmdInt(1) = contextHandle;
@@ -382,7 +382,7 @@ void displaySize(GLFWwindow *ptr, int width, int height)
 
 void displayRefresh(GLFWwindow *ptr)
 {
-    enqueDisplay(ptr);
+    updateDisplay(ptr);
     enqueDishader();
 }
 
@@ -452,7 +452,7 @@ void setupDisplay(void)
     useDisplayFile(contextHandle); referFile();
 }
 
-void enqueContext(int sub)
+void updateContext(int sub)
 {
     if (display != 0 && sub == contextHandle) return;
     if (sub < sizeDisplay()) {
@@ -468,10 +468,10 @@ void enqueContext(int sub)
     enquePershader();
 }
 
-void enqueDisplay(GLFWwindow *ptr)
+void updateDisplay(GLFWwindow *ptr)
 {
     if (display != 0 && ptr == displayHandle) return;
     int sub = 0;
     while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
-    enqueContext(sub);
+    updateContext(sub);
 }
