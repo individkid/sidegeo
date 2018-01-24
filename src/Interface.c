@@ -45,11 +45,11 @@ extern struct Display *display;
 
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
-void enqueBuffer(int file, enum Data sub, int todo, int done, void *data, Command cmd);
+void updateClient(int context, int file, enum Data sub, int todo, int done, void *data);
 void enqueDishader(void);
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
-void enqueShader(enum Shader shader, int file, int display, Machine follow, enum Share share);
+void enqueShader(enum Shader shader, int file, int display, Machine follow);
 
 DEFINE_MSGSTR(CmdConfigure)
 
@@ -100,17 +100,27 @@ void metric(void)
     *enlocCmdChange(1) = change;
 }
 
+void alternate(void)
+{
+    // add display
+}
+
+void file(void)
+{
+    // add file
+}
+
 enum Action configureRefine(int state)
 {
-    // writelock file's planebuf in each display
-    // assert planebufs are all the same length
+    // increment file's pending count
+    // wait for file's complete count
     // append plane to file's planebuf in each display
-    // unlock file's planebuf in each display
     // send vertex event with proceed response
     // update pointsub client for each display
-    // in each display, enque Copoint shader with renderClient follow
+    // in each display, enque Coplane shader with renderClient follow
     // enque Adpoint shader for wrt with proceed follow
     // send divide event with proceed response
+    // increment file's complete count
     enqueDishader();
     return Advance;
 }
@@ -120,17 +130,10 @@ void configurePlane(void)
     // plane configuration kicks off configureRefine
 }
 
-enum Action collectPoint(int state)
+void configurePoint(void)
 {
     // point configuration saves up three points to construct plane
     // and kicks off configureRefine
-    return Advance;
-}
-
-void configurePoint(void)
-{
-    // point configuration kicks off collectPoint followed by configureRefine
-    // or allows collectPoint to proceed
 }
 
 void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
@@ -185,7 +188,7 @@ enum Action configureSculpt(int state)
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsInt(1) = file;
-    if (file != Inflate) {
+    if (event != Inflate) {
     *enlocCmdHsInt(1) = plane;
     *enlocCmdHsInt(1) = inlen;
     memcpy(enlocCmdHsInt(inlen),inbuf,inlen);
@@ -197,20 +200,25 @@ enum Action configureSculpt(int state)
     return Continue;}
     if (state-- == 0) {
     return (arrayReint(layer,0,1) == 0 ? Defer : Continue);}
+    for (int context = 0; context < sizeDisplay(); context++) {
     if (state-- == 0) {
     if (sizeReint(layer) != 1) exitErrstr("layer too size\n");
     delocReint(layer,1);
     *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsInt(1) = context;
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsCmd(1) = configureResponse;
     *enlocCmdEvent(1) = (dishader == Diplane ? Face : Frame);
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
+    if (state-- == 0) {
     enum Data data = (dishader == Diplane ? FaceSub : FrameSub);
     int size = sizeReint(layer);
-    enqueBuffer(file,data,size,0,arrayReint(layer,0,size),enqueDishader);
+    updateClient(context,file,data,size,0,arrayReint(layer,0,size));
+    delocReint(layer,size);}}
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
+    enqueDishader();
     return Advance;
 }
 
@@ -270,7 +278,7 @@ enum Action sculptClick(int state)
     if (state-- == 0) {
     layer = tagReint(); \
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
-    enqueShader(Adplane,file,0,sculptFollow,Read);
+    enqueShader(Adplane,file,0,sculptFollow);
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
@@ -317,8 +325,8 @@ void hollowClick(int file, int plane, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 #define NUM_SIDES 3
 
 double sqrt(double x);
-void glueMachine();
 void setupFile(int file);
+void updateDisplay(GLFWwindow *ptr);
 
 void bringupBuiltin(void)
 {
@@ -382,11 +390,13 @@ void bringupBuiltin(void)
         0,1,2,
     };
 
+    updateDisplay(0);
     setupFile(0);
-    enqueBuffer(0,PlaneBuf,NUM_PLANES,0,plane,0);
-    enqueBuffer(0,VersorBuf,NUM_PLANES,0,versor,0); glueMachine();
-    enqueBuffer(0,FaceSub,NUM_FACES,0,face,0); glueMachine();
-    enqueBuffer(0,PointSub,NUM_POINTS,0,vertex,0); glueMachine();
-    enqueBuffer(0,SideSub,NUM_SIDES,0,wrt,enqueDishader); glueMachine();
+    updateClient(0,0,PlaneBuf,NUM_PLANES,0,plane);
+    updateClient(0,0,VersorBuf,NUM_PLANES,0,versor);
+    updateClient(0,0,FaceSub,NUM_FACES,0,face);
+    updateClient(0,0,PointSub,NUM_POINTS,0,vertex);
+    updateClient(0,0,SideSub,NUM_SIDES,0,wrt);
+    enqueDishader();
 }
 #endif

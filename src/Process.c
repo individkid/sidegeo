@@ -293,7 +293,7 @@ void processError(int index)
 
 void processBefore(void)
 {
-    if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("mutex init failed: %s\n",strerror(errno));
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }
 
@@ -310,8 +310,7 @@ void processConsume(void *arg)
 void processProduce(void *arg)
 {
     if (toggle && *arrayRead(current,1) < 0) processYield();
-    else if (toggle && *arrayRead(current,1) >= 0 &&
-    	*arrayYield(current,1) && !readableCmnProcesses(*arrayRead(current,1))) processYield();
+    else if (toggle && *arrayYield(current,1) && !readableCmnProcesses(*arrayRead(current,1))) processYield();
     else if (toggle) {
         int len = processRead(*arrayRead(current,1),*arraySize(current,1));
         if (len > 0) len = processConfigure(current,len);
@@ -328,7 +327,7 @@ void processProduce(void *arg)
 
 void processAfter(void)
 {
-    if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+    if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("mutex destroy failed: %s\n",strerror(errno));
     if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
     for (int i = 0; i < sizeHelper(); i++) {
         int retval = pthread_cancel(*arrayHelper(i,1));

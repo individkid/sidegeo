@@ -37,25 +37,14 @@
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 int escape = 0; // escape sequence from OpenGL key callback
 int dash = 0; // inject sequence from OpenGL key callback
-Myfloat invalid[2] = {0};
-Myfloat basisMat[27] = {0};
-#ifdef BRINGUP
-enum Shader dishader = Diplane;
-enum Shader pershader = Perplane;
-#else
-enum Shader dishader = Dipoint;
-enum Shader pershader = Perpoint;
-#endif
-struct Display *display = 0;
-#define displayName display->name
+extern struct Display *display;
 #define click display->click
 #define screenHandle display->screen
 #define displayHandle display->handle
 #define contextHandle display->context
-#define VAO display->VAO
-#define dispayMat display->affineMat
-#define dispayMata display->affineMata
-#define dispayMatb display->affineMatb
+#define displayMat display->affineMat
+#define displayMata display->affineMata
+#define displayMatb display->affineMatb
 #define xPoint display->xPoint
 #define yPoint display->yPoint
 #define zPoint display->zPoint
@@ -77,8 +66,6 @@ struct Display *display = 0;
 #define cutoff display->cutoff
 #define slope display->slope
 #define aspect display->aspect
-#define renderSwap display->swap
-#define renderClear display->clear
 
 void updateDisplay(GLFWwindow *ptr);
 void displayCursor(GLFWwindow *display, double xpos, double ypos);
@@ -132,8 +119,8 @@ void leftRefine(void)
 void leftTransform(void)
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    for (int i = 0; i < 16; i++) dispayMata[i] = dispayMat[i];
-    for (int i = 0; i < 16; i++) dispayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) displayMata[i] = displayMat[i];
+    for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
 void leftManipulate(void)
@@ -156,8 +143,8 @@ void rightLeft(void)
 
 void matrixMatrix(void)
 {
-    jumpmat(dispayMata,dispayMatb,4);
-    identmat(dispayMatb,4);
+    jumpmat(displayMata,displayMatb,4);
+    identmat(displayMatb,4);
     wPos = 0.0;
 }
 
@@ -191,9 +178,9 @@ void transformRotate(void)
     Myfloat u[16]; matrixRotate(u);
     Myfloat v[16]; copyary(identmat(v,4),u,3,4,9);
     matrixFixed(v);
-    copymat(dispayMat,dispayMata,4);
-    jumpmat(dispayMat,dispayMatb,4);
-    jumpmat(dispayMat,v,4);
+    copymat(displayMat,displayMata,4);
+    jumpmat(displayMat,displayMatb,4);
+    jumpmat(displayMat,v,4);
     enqueDishader();
 }
 
@@ -202,9 +189,9 @@ void transformTranslate(void)
     Myfloat u[16]; identmat(u,4);
     u[12] = xPos-xPoint;
     u[13] = yPos-yPoint;
-    copymat(dispayMat,dispayMata,4);
-    jumpmat(dispayMat,dispayMatb,4);
-    jumpmat(dispayMat,u,4);
+    copymat(displayMat,displayMata,4);
+    jumpmat(displayMat,displayMatb,4);
+    jumpmat(displayMat,u,4);
     enqueDishader();
 }
 
@@ -228,8 +215,8 @@ void transformCylinder(void)
     Myfloat angle = wPos/ROLLER_GRANULARITY;
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     matrixFixed(u);
-    identmat(dispayMatb,4);
-    jumpmat(dispayMatb,u,4);
+    identmat(displayMatb,4);
+    jumpmat(displayMatb,u,4);
     transformMouse();
 }
 
@@ -246,8 +233,8 @@ void transformClock(void)
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     jumpmat(u,v,4); timesmat(u,w,4);
     matrixFixed(u);
-    identmat(dispayMatb,4);
-    jumpmat(dispayMatb,u,4);
+    identmat(displayMatb,4);
+    jumpmat(displayMatb,u,4);
     transformMouse();
 }
 
@@ -257,16 +244,16 @@ void transformScale(void)
     if (fabs(scale) < 1.0 && fabs(scale)*ROLLER_GRANULARITY < 1.0) {
         if (scale < 0.0) scale = 1.0/ROLLER_GRANULARITY;
         else scale = -1.0/ROLLER_GRANULARITY;}
-    identmat(dispayMatb,4);
-    scalevec(dispayMatb,scale,16);
+    identmat(displayMatb,4);
+    scalevec(displayMatb,scale,16);
     transformMouse();
 }
 
 void transformDrive(void)
 {
     Myfloat scale = wPos/ROLLER_GRANULARITY;
-    identmat(dispayMatb,4);
-    dispayMatb[14] += scale;
+    identmat(displayMatb,4);
+    displayMatb[14] += scale;
     transformMouse();
 }
 
@@ -384,94 +371,4 @@ void displayRefresh(GLFWwindow *ptr)
 {
     updateDisplay(ptr);
     enqueDishader();
-}
-
-void setupDisplay(void)
-{
-    if (sizeDisplay() == 0) {
-    invalid[0] = 1.0e38;
-    invalid[1] = 1.0e37;
-    for (int i = 0; i < 27; i++) {
-    int versor = i / 9;
-    int column = (i % 9) / 3;
-    int row = i % 3;
-    int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
-    basisMat[i] = (one ? 1.0 : 0.0);}}
-    struct Display *save = display;
-    display = enlocDisplay(1);
-    const char *name = (save == 0 ? "Sculpt" : "sculpt"); // TODO use display name from Option.c
-    displayName = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
-    click = Init;
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    displayHandle = glfwCreateWindow(800, 600, stringCmdBuf(displayName,0), NULL, NULL);
-    if (!displayHandle) exitErrstr("could not create display\n");
-#ifdef __linux__
-    screenHandle = glfwGetX11Display();
-    if (!screenHandle) exitErrstr("could not get display pointer\n");
-#endif
-    glfwSetWindowCloseCallback(displayHandle, displayClose);
-    glfwSetKeyCallback(displayHandle, displayKey);
-    glfwSetMouseButtonCallback(displayHandle, displayClick);
-    glfwSetCursorPosCallback(displayHandle, displayCursor);
-    glfwSetScrollCallback(displayHandle, displayScroll);
-    glfwSetWindowPosCallback(displayHandle, displayLocation);
-    glfwSetWindowSizeCallback(displayHandle, displaySize);
-    glfwSetWindowRefreshCallback(displayHandle, displayRefresh);
-    glfwGetWindowSize(displayHandle,&xSiz,&ySiz);
-    glfwGetWindowPos(displayHandle,&xLoc,&yLoc);
-    glfwMakeContextCurrent(displayHandle);
-#ifdef __APPLE__
-    glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
-#ifdef __linux__
-    glViewport(0, 0, xSiz, ySiz);
-#endif
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glfwSwapBuffers(displayHandle);
-    cutoff = 10.0;
-    slope = 0.0;
-    aspect = (Myfloat)ySiz/(1.0*(Myfloat)xSiz);
-    renderSwap = 0;
-    renderClear = 0;
-    if (save == 0) {
-    for (int i = 0; i < 16; i++) dispayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) dispayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) dispayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);}
-    else {
-    for (int i = 0; i < 16; i++) dispayMat[i] = save->affineMat[i];
-    for (int i = 0; i < 16; i++) dispayMata[i] = save->affineMata[i];
-    for (int i = 0; i < 16; i++) dispayMatb[i] = save->affineMatb[i];}
-    useDisplayCode(contextHandle); referCode();
-    useDisplayFile(contextHandle); referFile();
-}
-
-void updateContext(int sub)
-{
-    if (display != 0 && sub == contextHandle) return;
-    if (sub < sizeDisplay()) {
-        display = arrayDisplay(sub,1);
-        glfwMakeContextCurrent(displayHandle);
-        useDisplayCode(contextHandle); referCode();
-        useDisplayFile(contextHandle); referFile();}
-    else while (1) {
-        setupDisplay();
-        if (sub < sizeDisplay()) break;}
-    if (sub != contextHandle) exitErrstr("display too context\n");
-    target();
-    enquePershader();
-}
-
-void updateDisplay(GLFWwindow *ptr)
-{
-    if (display != 0 && ptr == displayHandle) return;
-    int sub = 0;
-    while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
-    updateContext(sub);
 }

@@ -144,16 +144,16 @@ enum Server { // one value per uniform
     Slope, // x over z frustrum slope
     Aspect, // y over x ratio of frustrum intercepts
     Servers};
-enum Share { // lock type
-    Zero, // no lock
-    Read, // shared lock
-    Write}; // exclusive lock
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
     Matrix, // before matrix in play
     Right, // pierce point calculated; position saved
     Clicks};
+enum Type {
+    Read,
+    Write,
+    Types};
 struct Lock {
     int read; // count of readers
     int write; // count of writers
@@ -232,6 +232,12 @@ struct File {
     // Si is continuous
     struct Buffer buffer[Datas]; // only render buffer, and client uniforms are global
 };
+struct Share { // per file state shared across displays
+    int pending; // number of planes to be added
+    int complete; // number of planes added
+    Myfloat point[9]; // points collected for construct plane
+    int collect; // number of points collected for construct plane
+};
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers]; // uniforms used by program
     enum Shader shader; // program type
@@ -253,7 +259,6 @@ struct Render { // argument to render functions
     int context; // which display to render to
     int draw; // waiting for shader
     int wait; // buffer sequence number
-    enum Share share; // whether to lock file
 };
 
 struct Nomial {
@@ -400,6 +405,7 @@ DECLARE_TRUE(ReMyfloat,int,Myfloat)
 DECLARE_TRUE(Rebyte,int,char)
 
 DECLARE_LOCAL(Display,struct Display)
+DECLARE_LOCAL(Share,struct Share)
 DECLARE_META(DisplayCode,struct Code)
 DECLARE_POINTER(Code,struct Code)
 DECLARE_META(DisplayFile,struct File)

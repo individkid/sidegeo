@@ -341,6 +341,8 @@ DEFINE_TRUE(Refloat,int,Myfloat)
 DEFINE_TRUE(Rebyte,int,char)
 
 DEFINE_LOCAL(Display,struct Display)
+DEFINE_LOCAL(Pending,int)
+DEFINE_LOCAL(Complete,int)
 DEFINE_META(DisplayCode,struct Code)
 DEFINE_POINTER(Code,struct Code)
 DEFINE_META(DisplayFile,struct File)
