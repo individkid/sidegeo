@@ -100,6 +100,51 @@ void metric(void)
     *enlocCmdChange(1) = change;
 }
 
+enum Action configureRefine(int state)
+{
+    // writelock file's planebuf in each display
+    // assert planebufs are all the same length
+    // append plane to file's planebuf in each display
+    // unlock file's planebuf in each display
+    // send vertex event with proceed response
+    // update pointsub client for each display
+    // in each display, enque Copoint shader with renderClient follow
+    // enque Adpoint shader for wrt with proceed follow
+    // send divide event with proceed response
+    enqueDishader();
+    return Advance;
+}
+
+void configurePlane(void)
+{
+    // plane configuration kicks off configureRefine
+}
+
+enum Action collectPoint(int state)
+{
+    // point configuration saves up three points to construct plane
+    // and kicks off configureRefine
+    return Advance;
+}
+
+void configurePoint(void)
+{
+    // point configuration kicks off collectPoint followed by configureRefine
+    // or allows collectPoint to proceed
+}
+
+void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
+{
+    struct File *ptr = arrayFile(file,1);
+    Myfloat u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
+    tweakvec(u,0,ptr->tweak,3);
+    Myfloat v[3] = {0};
+    tweakvec(v,1.0,1.0,3);
+    int versor;
+    basearrow(u,v,&versor,basisMat,3);
+    msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
+}
+
 void configureResponse(void)
 {
     int tag = *delocCmdInt(1);
@@ -182,51 +227,6 @@ void configureFill(void)
 void configureHollow(void)
 {
     CONFIGURE_RELOC(Hollow)
-}
-
-enum Action configureRefine(int state)
-{
-    // writelock file's planebuf in each display
-    // assert planebufs are all the same length
-    // append plane to file's planebuf in each display
-    // unlock file's planebuf in each display
-    // send vertex event with proceed response
-    // update pointsub client for each display
-    // in each display, enque Copoint shader with renderClient follow
-    // enque Adpoint shader for wrt with proceed follow
-    // send divide event with proceed response
-    enqueDishader();
-    return Advance;
-}
-
-void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
-{
-    struct File *ptr = arrayFile(file,1);
-    Myfloat u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
-    tweakvec(u,0,ptr->tweak,3);
-    Myfloat v[3] = {0};
-    tweakvec(v,1.0,1.0,3);
-    int versor;
-    basearrow(u,v,&versor,basisMat,3);
-    msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
-}
-
-void configurePlane(void)
-{
-    // plane configuration kicks off configureRefine
-}
-
-enum Action collectPoint(int state)
-{
-    // point configuration saves up three points to construct plane
-    // and kicks off configureRefine
-    return Advance;
-}
-
-void configurePoint(void)
-{
-    // point configuration kicks off collectPoint followed by configureRefine
-    // or allows collectPoint to proceed
 }
 
 void sculptResponse(void)
