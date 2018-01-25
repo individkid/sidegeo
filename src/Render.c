@@ -33,6 +33,7 @@
 
 #include "Common.h"
 
+extern int layer;
 extern enum Menu mode[Modes];
 extern Myfloat invalid[2];
 extern Myfloat basisMat[27];
@@ -131,15 +132,10 @@ void updateClient(int context, int file, enum Data sub, int todo, int done, void
     updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     int client = buffer->client;
-    int size = sizeRange(client);
-    int min = *arraySeqmin(client,1);
-    int max = *arraySeqmax(client,1) + 1;
-    int next = max;
-    for (int i = 0; i < size; i++) {
-        int num = *arraySeqnum(client,i,1);
-        if (num < next && num > min) next = num;}
+    int lim = sizeRange(client);
+    int max = (*arraySeqmax(client,1) += 1);
     int loc = 0;
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < lim; i++) {
         int len = *delocRange(client,1);
         int num = *delocSeqnum(client,1);
         if (loc+len <= done) {
@@ -152,10 +148,10 @@ void updateClient(int context, int file, enum Data sub, int todo, int done, void
             *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);
             int post = len-pre-todo; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
         else if (loc == done && loc+len <= done+todo) {
-            delocClient(client,len); if (num == min) min = next;
+            delocClient(client,len);
             *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
         else if (loc+len <= done+todo) {
-            delocClient(client,len); if (num == min) min = next;}
+            delocClient(client,len);}
         else if (loc < done+todo) {
             int pre = done+todo-loc; delocClient(client,pre);
             int post = len-pre; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
@@ -170,8 +166,15 @@ void updateClient(int context, int file, enum Data sub, int todo, int done, void
     else if (loc == done) {
         *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
         memcpy(enlocClient(client,todo),data,todo);}
-    *arraySeqmin(client,1) = min;
-    *arraySeqmax(client,1) = max;
+}
+
+int compareSeqnum(int lft, int rgt, int max)
+{
+    if (max >= lft && max < rgt) return 1;
+    if (max < lft && max >= rgt) return -1;
+    if (lft > rgt) return 1;
+    if (lft < rgt) return -1;
+    return 0;
 }
 
 enum Action dequeBuffer(int state)
@@ -189,20 +192,17 @@ enum Action dequeBuffer(int state)
     if (buffer->room < room) return Defer;
     int seq = buffer->seqnum;
     int lim = sizeRange(client);
-    int min = *arraySeqmin(client,1);
-    int max = min;
+    int max = *arraySeqmax(client,1);
+    buffer->seqnum = max;
     int loc = 0;
     for (int i = 0; i < lim; i++) {
         int len = *delocRange(client,1);
         int num = *arraySeqnum(client,i,1);
-        if (num > seq || seq > max) {
-            if (max < num) max = num;
+        if (compareSeqnum(num,seq,max) > 0) {
             glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
             glBufferSubData(GL_ARRAY_BUFFER,loc,len,arrayClient(client,loc,len));
             glBindBuffer(GL_ARRAY_BUFFER,0);}
         loc += len;}
-    if (max != *arraySeqmax(client,1)) exitErrstr("seqnum too max\n");
-    buffer->seqnum = max;
     return Advance;
 }
 
@@ -439,10 +439,28 @@ enum Action renderPierce(int state)
     return Advance;
 }
 
+void renderResponse(void)
+{
+    // transfer int to reint
+}
+
 enum Action renderPreview(int state)
 {
     RENDER_DEARG
-    // send event for corners of plane pPos from file qPos
+    if (state-- == 0) {
+        layer = tagReint();
+        *enlocCmdHsInt(1) = qPos;
+        *enlocCmdHsInt(1) = pPos;
+        *enlocCmdHsInt(1) = layer;
+        *enlocCmdHsCmd(1) = renderResponse;
+        return Continue;}
+    if (sizeReint(layer) == 0) return Defer;
+    int len = *delocReint(layer,1);
+    Myfloat point[len][3];
+    int client = file->buffer[PointBuf].client;
+    for (int i = 0; i < len; i++) {
+    int index = *delocReint(layer,1);
+    for (int j = 0; j < 3; j++) {point[i][j] = *(Myfloat*)arrayClient(client,index*3+j*sizeof*point,sizeof*point);}}
     // transform points by ratio from file times affineMat
     // draw triangles with glBegin glEnd
     return Advance;
