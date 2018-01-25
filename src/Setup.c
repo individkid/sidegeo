@@ -42,25 +42,7 @@ enum Shader pershader = Perplane;
 enum Shader dishader = Dipoint;
 enum Shader pershader = Perpoint;
 #endif
-struct Display *display = 0;
-#define displayName display->name
-#define click display->click
-#define screenHandle display->screen
-#define displayHandle display->handle
-#define contextHandle display->context
-#define VAO display->VAO
-#define dispayMat display->affineMat
-#define dispayMata display->affineMata
-#define dispayMatb display->affineMatb
-#define xSiz display->xSiz
-#define ySiz display->ySiz
-#define xLoc display->xLoc
-#define yLoc display->yLoc
-#define cutoff display->cutoff
-#define slope display->slope
-#define aspect display->aspect
-#define renderSwap display->swap
-#define renderClear display->clear
+struct Display *current = 0;
 
 void updateUniform(int context, enum Server server, int file, enum Shader shader);
 void enquePershader(void);
@@ -104,7 +86,6 @@ void setupFile(int sub)
     setupBuffer(file->buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
     setupBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-    // TODO copy client data from context 0
 }
 
 void setupUniform(Myuint program, int context, enum Server server, int file, enum Shader shader)
@@ -376,8 +357,8 @@ void setupDisplay(void)
     int row = i % 3;
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}}
-    struct Display *save = display;
-    display = enlocDisplay(1);
+    struct Display *save = current;
+    struct Display *current = enlocDisplay(1);
     const char *name = (save == 0 ? "Sculpt" : "sculpt"); // TODO use display name from Option.c
     displayName = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
     click = Init;
@@ -420,37 +401,112 @@ void setupDisplay(void)
     renderSwap = 0;
     renderClear = 0;
     if (save == 0) {
-    for (int i = 0; i < 16; i++) dispayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) dispayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) dispayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);}
+    for (int i = 0; i < 16; i++) displayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);}
     else {
-    for (int i = 0; i < 16; i++) dispayMat[i] = save->affineMat[i];
-    for (int i = 0; i < 16; i++) dispayMata[i] = save->affineMata[i];
-    for (int i = 0; i < 16; i++) dispayMatb[i] = save->affineMatb[i];}
-    useDisplayCode(contextHandle); referCode();
-    useDisplayFile(contextHandle); referFile();
+    for (int i = 0; i < 16; i++) displayMat[i] = save->affineMat[i];
+    for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
+    for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];}
 }
 
 void updateContext(int sub)
 {
-    if (display != 0 && sub == contextHandle) return;
-    if (sub < sizeDisplay()) {
-        display = arrayDisplay(sub,1);
-        glfwMakeContextCurrent(displayHandle);
-        useDisplayCode(contextHandle); referCode();
-        useDisplayFile(contextHandle); referFile();}
-    else while (1) {
-        setupDisplay();
-        if (sub < sizeDisplay()) break;}
+    if (current == 0) exitErrstr("display too current\n");
+    if (sub == contextHandle) return;
+    current = arrayDisplay(sub,1);
     if (sub != contextHandle) exitErrstr("display too context\n");
+    glfwMakeContextCurrent(displayHandle);
+    useDisplayCode(contextHandle); referCode();
+    useDisplayFile(contextHandle); referFile();
     target();
     enquePershader();
 }
 
 void updateDisplay(GLFWwindow *ptr)
 {
-    if (display != 0 && ptr == displayHandle) return;
+    if (ptr == displayHandle) return;
     int sub = 0;
     while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
     updateContext(sub);
+}
+
+void updateClient(int context, int file, enum Data sub, int todo, int done, void *data)
+{
+    updateContext(context);
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    int client = buffer->client;
+    int lim = sizeRange(client);
+    int max = (*arraySeqmax(client,1) += 1);
+    int loc = 0;
+    for (int i = 0; i < lim; i++) {
+        int len = *delocRange(client,1);
+        int num = *delocSeqnum(client,1);
+        if (loc+len <= done) {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        else if (loc < done && loc+len <= done+todo) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,len-(done-loc));
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc < done) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,todo);
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);
+            int post = len-pre-todo; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else if (loc == done && loc+len <= done+todo) {
+            delocClient(client,len);
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc+len <= done+todo) {
+            delocClient(client,len);}
+        else if (loc < done+todo) {
+            int pre = done+todo-loc; delocClient(client,pre);
+            int post = len-pre; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        loc += len;}
+    if (loc < done) {
+        int pre = done-loc;
+        *enlocRange(client,1) = pre+todo; *enlocSeqnum(client,1) = max;
+        for (int i = 0; i < pre; i++) *enlocRange(client,1) = 0;
+        memcpy(enlocClient(client,todo),data,todo);}
+    else if (loc == done) {
+        *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
+        memcpy(enlocClient(client,todo),data,todo);}
+}
+
+void updateUniform(int context, enum Server server, int file, enum Shader shader)
+{
+    updateContext(context);
+    struct Uniform *uniform = arrayCode(shader,1)->uniform+server;
+    SWITCH(server,Invalid) {
+        glUniform1fv(uniform->handle,2,invalid);}
+    CASE(Basis) {
+        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);}
+    CASE(Affine) {
+        struct File *ptr = arrayFile(file,1);
+        int posedge = (ptr->fixed && !ptr->last);
+        int negedge = (!ptr->fixed && ptr->last);
+        ptr->last = ptr->fixed;
+        if (posedge) copymat(ptr->saved,displayMat,4);
+        if (negedge) timesmat(invmat(copymat(ptr->ratio,displayMat,4),4),ptr->saved,4);
+        if (ptr->fixed) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->saved);
+        else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}}
+    CASE(Feather)
+        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos,yPos,zPos);
+        DEFAULT(exitErrstr("feather too shader\n");)
+    CASE(Arrow)
+        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
+        DEFAULT(exitErrstr("arrow too shader\n");)
+    CASE(Cutoff) {
+        glUniform1f(uniform->handle,cutoff);}
+    CASE(Slope) {
+        glUniform1f(uniform->handle,slope);}
+    CASE(Aspect) {
+#ifdef __APPLE__
+        glViewport(0, 0, xSiz*2, ySiz*2);
+#endif
+#ifdef __linux__
+        glViewport(0, 0, xSiz, ySiz);
+#endif
+        aspect = (Myfloat)ySiz/(Myfloat)xSiz;
+        glUniform1f(uniform->handle,aspect);}
+    DEFAULT(exitErrstr("invalid server uniform\n");)
 }

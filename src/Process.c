@@ -25,7 +25,7 @@ int processConfigure(int index, int len);
 int processOption(int len);
 
 int toggle = 0;
-int current = 0;
+int thread = 0;
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 struct Helper {
@@ -244,7 +244,7 @@ int processRead(int pipe, int size)
 
 void processYield(void)
 {
-    current = (current+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;
+    thread = (thread+1) % sizeRead(); if (sizeOption() > 0) toggle = 0;
 }
 
 int processInit(int len)
@@ -252,7 +252,7 @@ int processInit(int len)
 	toggle = 1;
 	if (len < 0) exitErrstr("init too len\n");
     *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
-    helper.index = current = sizeRead();
+    helper.index = thread = sizeRead();
     *enlocYield(1) = 0; *enlocIgnore(1) = 0; *enlocLess(1) = 0; *enlocMore(1) = INT_MAX;
     *enlocWrite(1) = open(filename,O_RDWR);
     helper.file = open(filename,O_RDWR);;
@@ -265,7 +265,7 @@ int processInit(int len)
     if (pthread_create(enlocHelper(1),0,helperRead,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-    if (*arrayRead(current,1) < 0 || *arraySize(current,1) < 0 || *arrayWrite(current,1) < 0) return -1;
+    if (*arrayRead(thread,1) < 0 || *arraySize(thread,1) < 0 || *arrayWrite(thread,1) < 0) return -1;
     return 0;
 }
 
@@ -309,19 +309,19 @@ void processConsume(void *arg)
 
 void processProduce(void *arg)
 {
-    if (toggle && *arrayRead(current,1) < 0) processYield();
-    else if (toggle && *arrayYield(current,1) && !readableCmnProcesses(*arrayRead(current,1))) processYield();
+    if (toggle && *arrayRead(thread,1) < 0) processYield();
+    else if (toggle && *arrayYield(thread,1) && !readableCmnProcesses(*arrayRead(thread,1))) processYield();
     else if (toggle) {
-        int len = processRead(*arrayRead(current,1),*arraySize(current,1));
-        if (len > 0) len = processConfigure(current,len);
-        if (len < 0) processError(current);
-        if (len == 0) *arrayYield(current,1) = 1;}
+        int len = processRead(*arrayRead(thread,1),*arraySize(thread,1));
+        if (len > 0) len = processConfigure(thread,len);
+        if (len < 0) processError(thread);
+        if (len == 0) *arrayYield(thread,1) = 1;}
     else if (sizeStage() > 0) {
         int len = (useStage(),xstrPcsChar('\n'));
         len = processOption(len);
         if (len < 0) processComplain(-len);
         if (len > 0) len = processInit(len);
-        if (len < 0) processError(current);}
+        if (len < 0) processError(thread);}
     else toggle = 1;
 }
 

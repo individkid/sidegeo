@@ -37,35 +37,7 @@
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 int escape = 0; // escape sequence from OpenGL key callback
 int dash = 0; // inject sequence from OpenGL key callback
-extern struct Display *display;
-#define click display->click
-#define screenHandle display->screen
-#define displayHandle display->handle
-#define contextHandle display->context
-#define displayMat display->affineMat
-#define displayMata display->affineMata
-#define displayMatb display->affineMatb
-#define xPoint display->xPoint
-#define yPoint display->yPoint
-#define zPoint display->zPoint
-#define wWarp display->wWarp
-#define xWarp display->xWarp
-#define yWarp display->yWarp
-#define zWarp display->zWarp
-#define pPos display->pPos
-#define qPos display->qPos
-#define rPos display->rPos
-#define wPos display->wPos
-#define xPos display->xPos
-#define yPos display->yPos
-#define zPos display->zPos
-#define xSiz display->xSiz
-#define ySiz display->ySiz
-#define xLoc display->xLoc
-#define yLoc display->yLoc
-#define cutoff display->cutoff
-#define slope display->slope
-#define aspect display->aspect
+extern struct Display *current;
 
 void updateDisplay(GLFWwindow *ptr);
 void displayCursor(GLFWwindow *display, double xpos, double ypos);

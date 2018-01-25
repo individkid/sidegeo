@@ -47,7 +47,7 @@ executable sculpt
   hs-source-dirs:      src
   c-sources:           src/Command.c,
                        src/Interface.c,
-                       src/Display.c,
+                       src/Setup.c,
                        src/Callback.c,
                        src/Render.c,
                        src/Microcode.c,

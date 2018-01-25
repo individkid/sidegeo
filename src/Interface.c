@@ -38,10 +38,7 @@ extern enum Menu mode[Modes];
 extern struct Item item[Menus];
 extern Myfloat basisMat[27];
 extern enum Shader dishader;
-extern struct Display *display;
-#define displayHandle display->handle
-#define contextHandle display->context
-#define qPos display->qPos
+extern struct Display *current;
 
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
@@ -50,6 +47,8 @@ void enqueDishader(void);
 void compass(double xdelta, double ydelta);
 void enqueMachine(Machine machine);
 void enqueShader(enum Shader shader, int file, int display, Machine follow);
+enum Action renderLayer(int state);
+void setupDisplay(void);
 
 DEFINE_MSGSTR(CmdConfigure)
 
@@ -100,25 +99,36 @@ void metric(void)
     *enlocCmdChange(1) = change;
 }
 
-void alternate(void)
+void display(void)
 {
-    // add display
+    setupDisplay();
+    // setupCode setupFile seupClient
 }
 
 void file(void)
 {
-    // add file
+    // setup one Share
+    // setup a File per display
+}
+
+void responseLayer(void)
+{
+    int tag = *delocCmdInt(1);
+    if (sizeReint(tag) == 0) {
+    int len = *delocCmdInt(1);
+    memcpy(enlocReint(tag,len),delocCmdInt(len),len);}
+    else *arrayReint(tag,0,1) = 1;
 }
 
 enum Action configureRefine(int state)
 {
-    // increment file's pending count
     // wait for file's complete count
     // append plane to file's planebuf in each display
-    // send vertex event with proceed response
+    // send vertex event with layer response
     // update pointsub client for each display
     // in each display, enque Coplane shader with renderClient follow
-    // enque Adpoint shader for wrt with proceed follow
+    // wait for point client size to equal vertex size in layer
+    // enque Adpoint shader for wrt with layer follow
     // send divide event with proceed response
     // increment file's complete count
     enqueDishader();
@@ -127,13 +137,14 @@ enum Action configureRefine(int state)
 
 void configurePlane(void)
 {
-    // plane configuration kicks off configureRefine
+    // increment file's pending count
+    // kick off configureRefine
 }
 
 void configurePoint(void)
 {
-    // point configuration saves up three points to construct plane
-    // and kicks off configureRefine
+    // save up three points to construct plane
+    // call configurePlane
 }
 
 void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
@@ -146,15 +157,6 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
     int versor;
     basearrow(u,v,&versor,basisMat,3);
     msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
-}
-
-void configureResponse(void)
-{
-    int tag = *delocCmdInt(1);
-    if (sizeReint(tag) == 0) {
-    int len = *delocCmdInt(1);
-    memcpy(enlocReint(tag,len),delocCmdInt(len),len);}
-    else *arrayReint(tag,0,1) = 1;
 }
 
 #define CONFIGURE_RELOC(EVENT) \
@@ -194,7 +196,7 @@ enum Action configureSculpt(int state)
     memcpy(enlocCmdHsInt(inlen),inbuf,inlen);
     *enlocCmdHsInt(1) = outlen;
     memcpy(enlocCmdHsInt(outlen),outbuf,outlen);}
-    *enlocCmdHsCmd(1) = configureResponse;
+    *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = event; // Fill Hollow or Inflate
     *enlocReint(layer,1) = 0;
     return Continue;}
@@ -207,7 +209,7 @@ enum Action configureSculpt(int state)
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsInt(1) = context;
     *enlocCmdHsInt(1) = file;
-    *enlocCmdHsCmd(1) = configureResponse;
+    *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = (dishader == Diplane ? Face : Frame);
     return Continue;}
     if (state-- == 0) {
@@ -235,19 +237,6 @@ void configureFill(void)
 void configureHollow(void)
 {
     CONFIGURE_RELOC(Hollow)
-}
-
-void sculptResponse(void)
-{
-    int tag = *delocCmdInt(1);
-    int len = *delocCmdInt(1);
-    memcpy(enlocReint(tag,len),delocCmdInt(len),len);
-}
-
-enum Action sculptFollow(int state)
-{
-    // copy adplane feedback to enlocReint(layer)
-    return Advance;
 }
 
 #define CLICK_ENLOC(STR) \
@@ -278,7 +267,7 @@ enum Action sculptClick(int state)
     if (state-- == 0) {
     layer = tagReint(); \
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
-    enqueShader(Adplane,file,0,sculptFollow);
+    enqueShader(Adplane,file,0,renderLayer);
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
@@ -289,7 +278,7 @@ enum Action sculptClick(int state)
     int relen = sizeReint(layer);
     *enlocCmdHsInt(1) = relen;
     memcpy(enlocCmdHsInt(relen),delocReint(layer,relen),relen);
-    *enlocCmdHsCmd(1) = sculptResponse;
+    *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Locate;
     return Continue;}
     if (state-- == 0) {
@@ -390,7 +379,7 @@ void bringupBuiltin(void)
         0,1,2,
     };
 
-    updateDisplay(0);
+    display();
     setupFile(0);
     updateClient(0,0,PlaneBuf,NUM_PLANES,0,plane);
     updateClient(0,0,VersorBuf,NUM_PLANES,0,versor);
