@@ -73,7 +73,7 @@ void enqueCommand(Command cmd);
 void enqueDishader(void);
 void enquePershader(void);
 void enqueMachine(Machine machine);
-enum Action renderUniform(int state);
+void enqueUniform(int context, enum Server server);
 void target(void);
 
 void warp(double xwarp, double ywarp)
@@ -360,10 +360,7 @@ void displaySize(GLFWwindow *ptr, int width, int height)
 {
     updateDisplay(ptr);
     xSiz = width; ySiz = height;
-    *enlocCmdInt(1) = Aspect;
-    *enlocCmdInt(1) = contextHandle;
-    *enlocCmdInt(1) = 0; // wait count
-    enqueMachine(renderUniform);
+    enqueUniform(contextHandle,Aspect);
     enqueDishader();
 }
 

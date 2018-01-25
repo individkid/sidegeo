@@ -87,6 +87,7 @@ enum Action dequeWrap(int state)
     enum Data sub = *deargCmdInt(1);
     updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    if (buffer->lock.write == 0) exitErrstr("wrap not locked\n");
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
         glGenBuffers(1,&buffer->copy);
@@ -119,7 +120,6 @@ void enqueWrap(int context, int file, enum Data sub, int room)
 {
     updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
-    if (buffer->lock.write == 0) exitErrstr("wrap not locked\n");
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
@@ -174,27 +174,52 @@ void updateClient(int context, int file, enum Data sub, int todo, int done, void
     *arraySeqmax(client,1) = max;
 }
 
-void updateBuffer(int context, int file, enum Data sub)
+enum Action dequeBuffer(int state)
 {
+    int context = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
+    enum Data sub = *deargCmdInt(1);
     updateContext(context);
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    if (buffer->lock.write == 0) exitErrstr("buffer not locked\n");
     int client = buffer->client;
+    int size = buffer->dimn*bufferType(buffer->type);
+    int room = (sizeClient(client)/size)+(sizeClient(client)%size>0);
+    if (state-- == 0 && buffer->room < room) enqueWrap(context,file,sub,room);
+    if (buffer->room < room) return Defer;
     int seq = buffer->seqnum;
-    int size = sizeRange(client);
+    int lim = sizeRange(client);
     int min = *arraySeqmin(client,1);
     int max = min;
     int loc = 0;
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < lim; i++) {
         int len = *delocRange(client,1);
         int num = *arraySeqnum(client,i,1);
         if (num > seq || seq > max) {
             if (max < num) max = num;
             glBindBuffer(GL_ARRAY_BUFFER,buffer->handle);
-            glBufferSubData(GL_ARRAY_BUFFER,loc,len,arrayClient(context,loc,len));
+            glBufferSubData(GL_ARRAY_BUFFER,loc,len,arrayClient(client,loc,len));
             glBindBuffer(GL_ARRAY_BUFFER,0);}
         loc += len;}
     if (max != *arraySeqmax(client,1)) exitErrstr("seqnum too max\n");
     buffer->seqnum = max;
+    return Advance;
+}
+
+void enqueBuffer(int context, int file, enum Data sub)
+{
+    *enlocCmdInt(1) = context;
+    *enlocCmdInt(1) = file;
+    *enlocCmdInt(1) = sub;
+    enqueMachine(dequeBuffer);
+}
+
+enum Type typeBuffer(struct Buffer *buffer)
+{
+    int client = buffer->client;
+    int seqnum = buffer->seqnum;
+    int seqmax = *arraySeqmax(client,1);
+    return (seqnum==seqmax?Read:Write);
 }
 
 void exitErrbuf(struct Buffer *buf, const char *str)
@@ -241,10 +266,10 @@ void updateUniform(int context, enum Server server, int file, enum Shader shader
     DEFAULT(exitErrstr("invalid server uniform\n");)
 }
 
-enum Action renderUniform(int state)
+enum Action dequeUniform(int state)
 {
-    enum Server server = *deargCmdInt(1);
     int context = *deargCmdInt(1);
+    enum Server server = *deargCmdInt(1);
     int *wait = deargCmdInt(1);
     for (enum Shader i = 0; i < Shaders; i++) {
     struct Uniform *uniform = arrayCode(i,1)->uniform+server;
@@ -254,6 +279,14 @@ enum Action renderUniform(int state)
     uniform->lock.write -= 1;
     return Continue;}}
     return Advance;
+}
+
+void enqueUniform(int context, enum Server server)
+{
+    *enlocCmdInt(1) = context;
+    *enlocCmdInt(1) = server;
+    *enlocCmdInt(1) = 0;
+    enqueMachine(dequeUniform);
 }
 
 #define RENDER_DEARG \
@@ -269,23 +302,11 @@ enum Action renderUniform(int state)
     struct Buffer *buffer = file->buffer; \
     struct Uniform *uniform = shader->uniform;
 
-enum Action renderUpdate(int state)
-{
-    RENDER_DEARG
-    // for each vertex and element buffer
-    // if seqnum equal to client seqnum advance
-    // writelock
-    // while seqnum less than client seqnum
-    // update buffer from client at seqnum
-    // unlock
-    return Advance;
-}
-
 enum Action renderLock(int state)
 {
     RENDER_DEARG
-    for (enum Data *i = vertex; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Read)}
-    for (enum Data *i = element; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Read)}
+    for (enum Data *i = vertex; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,typeBuffer(buffer+*i))}
+    for (enum Data *i = element; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,typeBuffer(buffer+*i))}
     for (enum Data *i = feedback; *i < Datas; i++) {LOCK(render->wait,buffer[*i].lock,Write)}
     for (enum Server *i = server; *i < Servers; i++) {LOCK(render->wait,uniform[*i].lock,Write);}
     for (enum Server *i = config; *i < Servers; i++) {LOCK(render->wait,uniform[*i].lock,Read);}
@@ -295,21 +316,43 @@ enum Action renderLock(int state)
 enum Action renderWrap(int state)
 {
     RENDER_DEARG
+    if (state-- == 0) {
     for (enum Data *i = vertex; *i < Datas; i++) exitErrbuf(buffer+*i,shader->name);
     for (enum Data *i = element; *i < Datas; i++) exitErrbuf(buffer+*i,shader->name);
     for (enum Data *i = feedback; *i < Datas; i++) exitErrbuf(buffer+*i,shader->name);
-    if (*element < Datas && file->buffer[*element].dimn != bufferPrimitive(shader->input)) exitErrstr("%s too primitive\n",shader->name);
+    if (*element < Datas && buffer[*element].dimn != bufferPrimitive(shader->input)) exitErrstr("%s too primitive\n",shader->name);
     if (*element >= Datas && bufferPrimitive(shader->input) != 1) exitErrstr("%s too primitive\n",shader->name);
     if (*feedback < Datas && bufferPrimitive(shader->output) != 1) exitErrstr("%s too primitive\n",shader->name);
     for (enum Data *i = feedback; *i < Datas; i++) buffer[*i].done = 0;
-    int reque = 0;
-    if (*element < Datas) for (enum Data *i = feedback; *i < Datas; i++) {
-        if (file->buffer[*i].done > file->buffer[*element].done) exitErrstr("%s too done\n",shader->name);
-        if (file->buffer[*i].room < file->buffer[*element].done) {enqueWrap(render->context,render->file,*i,buffer[*element].done); reque = 1;}}
-    if (*element >= Datas && *vertex < Datas) for (enum Data *i = feedback; *i < Datas; i++) {
-        if (buffer[*i].done > buffer[*vertex].done) exitErrstr("%s too done\n",shader->name);
-        if (buffer[*i].done < buffer[*vertex].done) {enqueWrap(render->context,render->file,*i,buffer[*vertex].done); reque = 1;}}
-    return (reque?Reque:Advance);
+    if (*element < Datas) {
+        for (enum Data *i = feedback; *i < Datas; i++) {
+        if (buffer[*i].room < buffer[*element].done)
+        enqueWrap(render->context,render->file,*i,buffer[*element].done);}}
+    else if (*vertex < Datas) {
+        for (enum Data *i = feedback; *i < Datas; i++) {
+        if (buffer[*i].room < buffer[*vertex].done)
+        enqueWrap(render->context,render->file,*i,buffer[*vertex].done);}}
+    for (enum Data *i = vertex; *i < Datas; i++) {
+        if (typeBuffer(buffer+*i) == Write)
+        enqueBuffer(render->context,render->file,*i);}
+    for (enum Data *i = element; *i < Datas; i++) {
+        if (typeBuffer(buffer+*i) == Write)
+        enqueBuffer(render->context,render->file,*i);}}
+    if (*element < Datas) {
+        for (enum Data *i = feedback; *i < Datas; i++) {
+        if (buffer[*i].room < buffer[*element].done) return Defer;}}
+    else if (*vertex < Datas) {
+        for (enum Data *i = feedback; *i < Datas; i++) {
+        if (buffer[*i].room < buffer[*vertex].done) return Defer;}}
+    for (enum Data *i = vertex; *i < Datas; i++) {
+        if (typeBuffer(buffer+*i) == Write) return Defer;
+        if (buffer[*i].lock.write > 0) {
+        buffer[*i].lock.read += 1; buffer[*i].lock.write -= 1;}}
+    for (enum Data *i = element; *i < Datas; i++) {
+        if (typeBuffer(buffer+*i) == Write) return Defer;
+        if (buffer[*i].lock.write > 0) {
+        buffer[*i].lock.read += 1; buffer[*i].lock.write -= 1;}}
+    return Advance;
 }
 
 enum Action renderDraw(int state)
@@ -317,9 +360,9 @@ enum Action renderDraw(int state)
     RENDER_DEARG
     int done = 0; // in units of number of primitives
     int todo = 0; // in units of number of primitives
-    if (*feedback < Datas) done = file->buffer[*feedback].done;
-    if (*element < Datas) todo = file->buffer[*element].done - done;
-    else if (*vertex < Datas) todo = file->buffer[*vertex].done - done;
+    if (*feedback < Datas) done = buffer[*feedback].done;
+    if (*element < Datas) todo = buffer[*element].done - done;
+    else if (*vertex < Datas) todo = buffer[*vertex].done - done;
     if (todo < 0) exitErrstr("%s too todo\n",shader->name);
     if (todo == 0) return Advance;
     glUseProgram(shader->handle);
@@ -356,8 +399,6 @@ enum Action renderDraw(int state)
     for (enum Data *i = feedback; *i < Datas; i++)
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i-feedback, 0, 0, 0);
     glUseProgram(0);
-    if (renderSwap == 1) glfwSwapBuffers(displayHandle);
-    if (renderSwap > 0) renderSwap -= 1;
     return Advance;
 }
 
@@ -417,6 +458,8 @@ enum Action renderClient(int state)
 enum Action renderUnlock(int state)
 {
     RENDER_DEARG
+    if (renderSwap == 1) glfwSwapBuffers(displayHandle);
+    if (renderSwap > 0) renderSwap -= 1;
     for (enum Server *i = server; *i < Servers; i++) uniform[*i].lock.read -= 1;
     for (enum Data *i = vertex; *i < Datas; i++) buffer[*i].lock.read -= 1;
     for (enum Data *i = element; *i < Datas; i++) buffer[*i].lock.read -= 1;
