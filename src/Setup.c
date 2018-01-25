@@ -35,13 +35,6 @@
 
 Myfloat invalid[2] = {0};
 Myfloat basisMat[27] = {0};
-#ifdef BRINGUP
-enum Shader dishader = Diplane;
-enum Shader pershader = Perplane;
-#else
-enum Shader dishader = Dipoint;
-enum Shader pershader = Perpoint;
-#endif
 struct Display *current = 0;
 
 void updateUniform(int context, enum Server server, int file, enum Shader shader);

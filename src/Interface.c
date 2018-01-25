@@ -37,8 +37,14 @@ extern int layer;
 extern enum Menu mode[Modes];
 extern struct Item item[Menus];
 extern Myfloat basisMat[27];
-extern enum Shader dishader;
 extern struct Display *current;
+#ifdef BRINGUP
+const enum Event event = Face;
+const enum Data data = FaceSub;
+#else
+const enum Event event = Frame;
+const enum Data data = FrameSub;
+#endif
 
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
@@ -210,12 +216,11 @@ enum Action configureSculpt(int state)
     *enlocCmdHsInt(1) = context;
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = (dishader == Diplane ? Face : Frame);
+    *enlocCmdEvent(1) = event;
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     if (state-- == 0) {
-    enum Data data = (dishader == Diplane ? FaceSub : FrameSub);
     int size = sizeReint(layer);
     updateClient(context,file,data,size,0,arrayReint(layer,0,size));
     delocReint(layer,size);}}

@@ -37,9 +37,14 @@ extern int layer;
 extern enum Menu mode[Modes];
 extern Myfloat invalid[2];
 extern Myfloat basisMat[27];
-extern enum Shader dishader;
-extern enum Shader pershader;
 extern struct Display *current;
+#ifdef BRINGUP
+const enum Shader dishader = Diplane;
+const enum Shader pershader = Perplane;
+#else
+const enum Shader dishader = Dipoint;
+const enum Shader pershader = Perpoint;
+#endif
 
 void updateContext(int sub);
 void enqueMachine(Machine machine);
