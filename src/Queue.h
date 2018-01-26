@@ -32,6 +32,7 @@
 #endif
 
 EXTERNCBEGIN
+#include "rbtree.h"
 #include <stdio.h>
 #include "pqueue.h"
 #include <pthread.h>
@@ -46,6 +47,7 @@ EXTERNCBEGIN
 #include <sys/types.h>
 #endif
 EXTERNCEND
+
 
 EXTERNV struct termios savedTermios;
 EXTERNV int validTermios;
@@ -1168,10 +1170,6 @@ extern "C" TYPE *schedule##NAME(pqueue_pri_t pri) {return NAME##Inst.schedule(pr
 extern "C" TYPE *advance##NAME(void) {return NAME##Inst.advance();} \
 extern "C" int ready##NAME(pqueue_pri_t pri) {return NAME##Inst.ready(pri);} \
 extern "C" pqueue_pri_t when##NAME(void) {return NAME##Inst.when();}
-
-EXTERNCBEGIN
-#include "rbtree.h"
-EXTERNCEND
 
 template<class KEY, class VAL> struct Rbtree {
     void *left;
