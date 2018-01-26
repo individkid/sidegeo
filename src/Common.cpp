@@ -20,12 +20,6 @@
 
 EXTERNCBEGIN
 
-#include <termios.h>
-#include <math.h>
-#include <stdlib.h>
-
-extern Myfloat invalid[2];
-
 enum Motion motionof(char code)
 {
     int uchar = code; if (uchar < 0) uchar += 256;
@@ -220,7 +214,7 @@ Myfloat *invmat(Myfloat *u, int n)
     int m = n*n; Myfloat v[m];
     adjmat(copymat(v,u,n),n);
     Myfloat det = detmat(u,n);
-    Myfloat lim = det*invalid[1];
+    Myfloat lim = det*INVALID1;
     for (int i = 0; i < m; i++) if (det<1.0 && v[i]>lim) exitErrstr("cannot invert matrix\n");
     for (int i = 0; i < m; i++) u[i] = v[i]/det;
     return u;

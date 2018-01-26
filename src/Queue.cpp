@@ -20,9 +20,6 @@
 
 EXTERNCBEGIN
 
-#include <stdarg.h>
-#include <stdlib.h>
-
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
 int sigusr2 = 0;

@@ -17,9 +17,6 @@
 */
 
 #include "Common.h"
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
 
 int processConfigure(int index, int len);
 int processOption(int len);

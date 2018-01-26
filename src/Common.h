@@ -22,7 +22,13 @@
 #include "Queue.h"
 
 EXTERNCBEGIN
+
+#include <math.h>
+#include <stdlib.h>
 #include <stdarg.h>
+#include <limits.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #define BRINGUP
 #define PLANE_DIMENSIONS 3
@@ -44,6 +50,8 @@ EXTERNCBEGIN
 #define NUM_FEEDBACK 3
 #define COMPASS_DELTA 10.0
 #define ROLLER_DELTA 1.0
+#define INVALID0 1.0e38
+#define INVALID1 1.0e37
 
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Move,Copy,Transform,
@@ -186,6 +194,8 @@ struct Display {
     void *handle;
     int context;
     Myuint VAO;
+    Myfloat invalid[2];
+    Myfloat basisMat[27];
     Myfloat affineMat[16]; // transformation state sent to uniform
     Myfloat affineMata[16]; // transformation state at click time
     Myfloat affineMatb[16]; // transformation due to roller
@@ -331,39 +341,6 @@ void msgstr##NAME(const char *fmt, ...) \
     if (state-- == 0) {WAIT = LOCK.wait; LOCK.wait += 1; return Continue;} \
     if (state-- == 0) {return ((SHARE == Write && LOCK.read > 0) || LOCK.write > 0 || LOCK.take != WAIT ? Defer : Continue);} \
     if (state-- == 0) {LOCK.take += 1; if (SHARE == Write) LOCK.write += 1; else LOCK.read += 1; return Continue;}
-
-#define displayName current->name
-#define screenHandle current->screen
-#define displayHandle current->handle
-#define contextHandle current->context
-#define VAO current->VAO
-#define displayMat current->affineMat
-#define displayMata current->affineMata
-#define displayMatb current->affineMatb
-#define xPoint current->xPoint
-#define yPoint current->yPoint
-#define zPoint current->zPoint
-#define wWarp current->wWarp
-#define xWarp current->xWarp
-#define yWarp current->yWarp
-#define zWarp current->zWarp
-#define pPos current->pPos
-#define qPos current->qPos
-#define rPos current->rPos
-#define wPos current->wPos
-#define xPos current->xPos
-#define yPos current->yPos
-#define zPos current->zPos
-#define xSiz current->xSiz
-#define ySiz current->ySiz
-#define xLoc current->xLoc
-#define yLoc current->yLoc
-#define cutoff current->cutoff
-#define slope current->slope
-#define aspect current->aspect
-#define renderSwap current->swap
-#define renderClear current->clear
-#define click current->click
 
 enum Motion motionof(char code);
 char alphaof(char code);

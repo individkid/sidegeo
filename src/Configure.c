@@ -17,8 +17,6 @@
 */
 
 #include "Common.h"
-#include "stdlib.h"
-#include <limits.h>
 
 // only this thread sends new state to timewheel
 int cofsiz = 0;

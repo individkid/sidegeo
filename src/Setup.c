@@ -16,30 +16,7 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef __linux__
-#include <GL/glew.h>
-#endif
-#ifdef __APPLE__
-#define GLFW_INCLUDE_GLCOREARB
-#endif
-#include <GLFW/glfw3.h>
-#ifdef __linux__
-#define GLFW_EXPOSE_NATIVE_X11
-#include <GLFW/glfw3native.h>
-#endif
-#ifdef __APPLE__
-#include <CoreGraphics/CoreGraphics.h>
-#endif
-
-#include "Common.h"
-
-Myfloat invalid[2] = {0};
-Myfloat basisMat[27] = {0};
-struct Display *current = 0;
-
-void updateUniform(int context, enum Server server, int file, enum Shader shader);
-void enquePershader(void);
-void target(void);
+#include "Main.h"
 
 void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
 {
@@ -341,15 +318,6 @@ void displayRefresh(GLFWwindow *ptr);
 
 void setupDisplay(void)
 {
-    if (sizeDisplay() == 0) {
-    invalid[0] = 1.0e38;
-    invalid[1] = 1.0e37;
-    for (int i = 0; i < 27; i++) {
-    int versor = i / 9;
-    int column = (i % 9) / 3;
-    int row = i % 3;
-    int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
-    basisMat[i] = (one ? 1.0 : 0.0);}}
     struct Display *save = current;
     struct Display *current = enlocDisplay(1);
     const char *name = (save == 0 ? "Sculpt" : "sculpt"); // TODO use display name from Option.c
@@ -393,6 +361,14 @@ void setupDisplay(void)
     aspect = (Myfloat)ySiz/(1.0*(Myfloat)xSiz);
     renderSwap = 0;
     renderClear = 0;
+    invalid[0] = INVALID0;
+    invalid[1] = INVALID1;
+    for (int i = 0; i < 27; i++) {
+    int versor = i / 9;
+    int column = (i % 9) / 3;
+    int row = i % 3;
+    int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
+    basisMat[i] = (one ? 1.0 : 0.0);}
     if (save == 0) {
     for (int i = 0; i < 16; i++) displayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);

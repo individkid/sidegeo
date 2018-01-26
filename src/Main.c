@@ -16,28 +16,11 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef __linux__
-#include <GL/glew.h>
-#endif
-#ifdef __APPLE__
-#define GLFW_INCLUDE_GLCOREARB
-#endif
-#include <GLFW/glfw3.h>
-#ifdef __linux__
-#define GLFW_EXPOSE_NATIVE_X11
-#include <GLFW/glfw3native.h>
-#endif
-#ifdef __APPLE__
-#include <CoreGraphics/CoreGraphics.h>
-#endif
+#include "Main.h"
 
-#include "Common.h"
-
-void updateDisplay(GLFWwindow *ptr);
-#ifdef BRINGUP
-void bringupBuiltin(void);
-void enqueCommand(Command cmd);
-#endif
+int layer = 0;
+enum Menu mode[Modes] = INIT; // sync to mark in Console.c
+struct Display *current = 0;
 
 void displayError(int error, const char *description)
 {
@@ -59,7 +42,6 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef BRINGUP
-    updateDisplay(0);
     enqueCommand(&bringupBuiltin);
 #endif
 

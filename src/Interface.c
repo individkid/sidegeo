@@ -16,28 +16,8 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef __linux__
-#include <GL/glew.h>
-#endif
-#ifdef __APPLE__
-#define GLFW_INCLUDE_GLCOREARB
-#endif
-#include <GLFW/glfw3.h>
-#ifdef __linux__
-#define GLFW_EXPOSE_NATIVE_X11
-#include <GLFW/glfw3native.h>
-#endif
-#ifdef __APPLE__
-#include <CoreGraphics/CoreGraphics.h>
-#endif
+#include "Main.h"
 
-#include "Common.h"
-
-extern int layer;
-extern enum Menu mode[Modes];
-extern struct Item item[Menus];
-extern Myfloat basisMat[27];
-extern struct Display *current;
 #ifdef BRINGUP
 const enum Event event = Face;
 const enum Data data = FaceSub;
@@ -45,6 +25,8 @@ const enum Data data = FaceSub;
 const enum Event event = Frame;
 const enum Data data = FrameSub;
 #endif
+
+extern struct Item item[Menus];
 
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
