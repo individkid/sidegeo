@@ -22,6 +22,9 @@ int layer = 0;
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 struct Display *current = 0;
 
+enum Cnd {Mid,Lst,Was,Not,Cmd,Arg,One,Sgl,Mlt};
+enum Act {Aft,Suf,Str,Inj,End,Uni,Wil,Wnt};
+
 void displayError(int error, const char *description)
 {
    printf("GLFW error %d %s\n", error, description);
@@ -45,7 +48,48 @@ int main(int argc, char **argv)
     enqueCommand(&bringupBuiltin);
 #endif
 
-    // TODO combine argv int lines to enque to enlocOption
+    int condition = 1<<Not;
+    for (int i = 1; i < argc; i++) {
+        int len = strlen(argv[i]);
+        const char *set = "hHotT";
+        char spn[2] = {0};
+        if (len > 1) spn[0] = argv[i][1];
+        if (len > 1 && argv[i][0] == '-' && strspn(spn,set)) condition |= 1<<One;
+        else if (len > 1 && argv[i][0] == '-') condition |= 1<<Cmd;
+        else condition |= 1<<Arg;
+        if (len == 2 && argv[i][0] == '-') condition |= 1<<Sgl;
+        else condition |= 1<<Mlt;
+        if (i < argc-1) condition |= 1<<Mid;
+        else condition |= 1<<Lst;
+        int action = 0;
+        switch (condition) {
+        case ((1<<Mid)|(1<<Was)|(1<<Cmd)|(1<<Sgl)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Wil); break;
+        case ((1<<Mid)|(1<<Was)|(1<<Cmd)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Was)|(1<<Arg)|(1<<Sgl)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Was)|(1<<Arg)|(1<<Mlt)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Was)|(1<<One)|(1<<Sgl)): action = (1<<Uni)|(1<<Aft)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Was)|(1<<One)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Inj)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Not)|(1<<Cmd)|(1<<Sgl)): action = (1<<Aft)|(1<<Wil); break;
+        case ((1<<Mid)|(1<<Not)|(1<<Cmd)|(1<<Mlt)): action = (1<<Aft)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Not)|(1<<Arg)|(1<<Sgl)): action = (1<<Inj)|(1<<Str)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Not)|(1<<Arg)|(1<<Mlt)): action = (1<<Inj)|(1<<Str)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Not)|(1<<One)|(1<<Sgl)): action = (1<<Aft)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Mid)|(1<<Not)|(1<<One)|(1<<Mlt)): action = (1<<Aft)|(1<<End)|(1<<Inj)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Lst)|(1<<Was)|(1<<Cmd)|(1<<Sgl)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Uni)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Lst)|(1<<Was)|(1<<Cmd)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Lst)|(1<<Was)|(1<<Arg)|(1<<Sgl)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Lst)|(1<<Was)|(1<<Arg)|(1<<Mlt)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Lst)|(1<<Was)|(1<<One)|(1<<Sgl)): action = (1<<Uni)|(1<<Aft)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Lst)|(1<<Was)|(1<<One)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Inj)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
+        default: exitErrstr("impossible condition\n");}
+        if (action & (1<<Aft)) *enlocOption(1) = argv[i][1];
+        if (action & (1<<Suf)) memcpy(enlocOption(len-2),argv[i]+2,len-2);
+        if (action & (1<<Str)) memcpy(enlocOption(len),argv[i],len);
+        if (action & (1<<Inj)) *enlocOption(1) = 'f';
+        if (action & (1<<End)) *enlocOption(1) = '\n';
+        if (action & (1<<Uni)) memcpy(enlocOption(4),"oops",4);
+        if (action & (1<<Wil)) condition = 1<<Was;
+        if (action & (1<<Wnt)) condition = 1<<Not;}
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
