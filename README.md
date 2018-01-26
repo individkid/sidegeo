@@ -173,7 +173,9 @@ The constants set by --configure change behaviors by degree.
  * Texture specifies interpolation field for new planes  
  * Rate specifies when to record transformations into file  
  * Tweak specifies how much refine points and refine planes change  
- * Canvas specifies drawings captured as bitmaps fine or coarse actions   
+ * Canvas specifies drawings captured as bitmaps fine or coarse actions  
+ * Close specifies how close cursor must be to curve to drag over it  
+ * Snap specifies grid size and rotation to snap endpoints to  
 
 The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 
