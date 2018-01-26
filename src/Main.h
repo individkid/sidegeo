@@ -92,6 +92,8 @@ void displayCursor(GLFWwindow *display, double xpos, double ypos);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
 
 void setupDisplay(void);
+void setupCode(enum Shader shader);
+void setupFile(int sub);
 void updateContext(int sub);
 void updateDisplay(GLFWwindow *ptr);
 void updateClient(int context, int file, enum Data sub, int todo, int done, void *data);

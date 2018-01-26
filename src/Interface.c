@@ -77,8 +77,18 @@ void metric(void)
 
 void display(void)
 {
+    struct Display *ptr = displayHandle;
+    int save = contextHandle;
     setupDisplay();
-    // setupCode setupFile seupClient
+    for (enum Shader i = 0; i < Shaders; i++) setupCode(i);
+    if (ptr) {
+    for (int i = 0; i < sizeDisplayFile(save); i++) {
+    for (enum Data j = 0; j < Datas; j++) {
+    setupFile(i);
+    int client = arrayDisplayFile(save,i,1)->buffer[j].client;
+    int len = sizeClient(client);
+    updateClient(contextHandle,i,j,len,0,arrayClient(client,0,len));}}}
+    target();
 }
 
 void file(void)

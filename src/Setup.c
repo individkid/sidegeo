@@ -31,6 +31,7 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
         glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
         glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    buffer.client = usageClient(); usedClient(buffer.client);
     *ptr = buffer;
 }
 
@@ -281,7 +282,7 @@ extern const GLchar *repointVertex;
 extern const GLchar *repointGeometry;
 extern const GLchar *repointFragment;
 
-void setupCode(int context, enum Shader shader, int file)
+void setupCode(enum Shader shader)
 {
     if (arrayCode(shader,1)->name != 0) return;
     SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane);
@@ -303,9 +304,9 @@ void setupCode(int context, enum Shader shader, int file)
     for (int i = 0; i < 4; i++) arrayCode(shader,1)->reader[i] = uniformConstant(i,shader);
     glUseProgram(arrayCode(shader,1)->handle);
     enum Server temp = Servers;
-    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,context,temp,file,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,context,temp,file,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,context,temp,file,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,-1,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,-1,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,-1,shader);
     glUseProgram(0);
 }
 
@@ -452,7 +453,7 @@ void updateUniform(int context, enum Server server, int file, enum Shader shader
         glUniform1fv(uniform->handle,2,invalid);}
     CASE(Basis) {
         glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);}
-    CASE(Affine) {
+    CASE(Affine) if (file >= 0) {
         struct File *ptr = arrayFile(file,1);
         int posedge = (ptr->fixed && !ptr->last);
         int negedge = (!ptr->fixed && ptr->last);
