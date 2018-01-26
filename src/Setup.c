@@ -48,12 +48,15 @@ void setupFile(int sub)
     setupBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
     setupBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
     setupBuffer(file->buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    setupBuffer(file->buffer+VertBuf,"vertex",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
+    setupBuffer(file->buffer+CnstrBuf,"construct",INVALID_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
+    setupBuffer(file->buffer+DimnBuf,"dimension",INVALID_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
     setupBuffer(file->buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
     setupBuffer(file->buffer+HalfBuf,"half",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
     setupBuffer(file->buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
     setupBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
-    setupBuffer(file->buffer+PointSub,"point",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
-    setupBuffer(file->buffer+PlaneSub,"plane",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
+    setupBuffer(file->buffer+VertSub,"vertex",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
+    setupBuffer(file->buffer+CnstrSub,"construct",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
     setupBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
@@ -94,8 +97,8 @@ enum Data bufferElement(int i, enum Shader shader)
     if (i >= 3) exitErrstr("invalid data index\n");
     SWITCH(shader,Diplane) {enum Data data[3] = {FaceSub,Datas}; return data[i];}
     CASE(Dipoint) {enum Data data[3] = {FrameSub,Datas}; return data[i];}
-    CASE(Coplane) {enum Data data[3] = {PointSub,Datas}; return data[i];}
-    CASE(Copoint) {enum Data data[3] = {PlaneSub,Datas}; return data[i];}
+    CASE(Coplane) {enum Data data[3] = {VertSub,Datas}; return data[i];}
+    CASE(Copoint) {enum Data data[3] = {CnstrSub,Datas}; return data[i];}
     CASE(Adplane) {enum Data data[3] = {SideSub,Datas}; return data[i];}
     CASE(Adpoint) {enum Data data[3] = {HalfSub,Datas}; return data[i];}
     CASE(Perplane) {enum Data data[3] = {FaceSub,Datas}; return data[i];}
@@ -109,8 +112,8 @@ enum Data bufferFeedback(int i, enum Shader shader)
     if (i >= 3) exitErrstr("invalid data index\n");
     SWITCH(shader,Diplane) {enum Data data[3] = {Datas}; return data[i];}
     CASE(Dipoint) {enum Data data[3] = {Datas}; return data[i];}
-    CASE(Coplane) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
-    CASE(Copoint) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
+    CASE(Coplane) {enum Data data[3] = {VertBuf,Datas}; return data[i];}
+    CASE(Copoint) {enum Data data[3] = {CnstrBuf,DimnBuf,Datas}; return data[i];}
     CASE(Adplane) {enum Data data[3] = {SideBuf,Datas}; return data[i];}
     CASE(Adpoint) {enum Data data[3] = {HalfBuf,Datas}; return data[i];}
     CASE(Perplane) {enum Data data[3] = {PierceBuf,Datas}; return data[i];}

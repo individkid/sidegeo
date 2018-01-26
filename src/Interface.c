@@ -359,7 +359,7 @@ void bringupBuiltin(void)
     updateClient(0,0,PlaneBuf,NUM_PLANES,0,plane);
     updateClient(0,0,VersorBuf,NUM_PLANES,0,versor);
     updateClient(0,0,FaceSub,NUM_FACES,0,face);
-    updateClient(0,0,PointSub,NUM_POINTS,0,vertex);
+    updateClient(0,0,VertSub,NUM_POINTS,0,vertex);
     updateClient(0,0,SideSub,NUM_SIDES,0,wrt);
     enqueDishader();
 }

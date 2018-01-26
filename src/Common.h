@@ -133,12 +133,15 @@ enum Data { // render buffers
     VersorBuf, // per boundary base selector
     PointBuf, // shared point per boundary triple
     PierceBuf, // on line from focal point
+    VertBuf, // changed or new points
+    CnstrBuf, // constructed planes
+    DimnBuf, // constructed plane versors
     SideBuf, // vertices wrt planes
     HalfBuf, // planes wrt vertices
     FaceSub, // subscripts into planes
     FrameSub, // subscripts into points
-    PointSub, // every triple of planes
-    PlaneSub, // per plane triple of points
+    VertSub, // triples of planes
+    CnstrSub, // triples of points
     SideSub, // vertex wrt planes
     HalfSub, // plane wrt vertices
     Datas};
