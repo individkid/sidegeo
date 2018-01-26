@@ -75,17 +75,32 @@ void metric(void)
     *enlocCmdChange(1) = change;
 }
 
+int name(const char *str)
+{
+    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
+    int name = sizeCmdBuf();
+    int len = strlen(str);
+    memcpy(enlocCmdBuf(len),str,len);
+    *enlocCmdBuf(1) = 0;
+    return name;
+}
+
 void display(void)
 {
+    int size = sizeDisplay();
+    setupDisplay(name(size == 0 ? "Sculpt" : "sculpt")); // TODO use display name from Option.c
     struct Display *ptr = displayHandle;
-    int save = contextHandle;
-    setupDisplay();
+    int sub = contextHandle;
+    updateContext(size);
     for (enum Shader i = 0; i < Shaders; i++) setupCode(i);
     if (ptr) {
-    for (int i = 0; i < sizeDisplayFile(save); i++) {
+    for (int i = 0; i < 16; i++) displayMat[i] = ptr->affineMat[i];
+    for (int i = 0; i < 16; i++) displayMata[i] = ptr->affineMata[i];
+    for (int i = 0; i < 16; i++) displayMatb[i] = ptr->affineMatb[i];
+    for (int i = 0; i < sizeDisplayFile(sub); i++) {
+    setupFile(i,arrayDisplayFile(sub,i,1)->name);
     for (enum Data j = 0; j < Datas; j++) {
-    setupFile(i);
-    int client = arrayDisplayFile(save,i,1)->buffer[j].client;
+    int client = arrayDisplayFile(sub,i,1)->buffer[j].client;
     int len = sizeClient(client);
     updateClient(contextHandle,i,j,len,0,arrayClient(client,0,len));}}}
     target();
@@ -93,8 +108,13 @@ void display(void)
 
 void file(void)
 {
-    // setup one Share
-    // setup a File per display
+    struct Share share = {0};
+    *enlocShare(1) = share;
+    int sub = sizeFile();
+    for (int i = 0; i < sizeDisplay(); i++) {
+    updateContext(i);
+    setupFile(sub,name("file"));} // TODO use filename from Configure.c
+    target();
 }
 
 void responseLayer(void)
@@ -299,8 +319,6 @@ void hollowClick(int file, int plane, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 #define NUM_SIDES 3
 
 double sqrt(double x);
-void setupFile(int file);
-void updateDisplay(GLFWwindow *ptr);
 
 void bringupBuiltin(void)
 {
@@ -365,7 +383,7 @@ void bringupBuiltin(void)
     };
 
     display();
-    setupFile(0);
+    file();
     updateClient(0,0,PlaneBuf,NUM_PLANES,0,plane);
     updateClient(0,0,VersorBuf,NUM_PLANES,0,versor);
     updateClient(0,0,FaceSub,NUM_FACES,0,face);

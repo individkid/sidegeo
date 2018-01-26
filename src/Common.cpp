@@ -282,6 +282,7 @@ long long timewheelDelay(void);
 
 EXTERNCEND
 
+inline bool operator!=(const Share &left, const Share &right) {return false;}
 inline bool operator!=(const File &left, const File &right) {return false;}
 inline bool operator!=(const Code &left, const Code &right) {return false;}
 inline bool operator!=(const Display &left, const Display &right) {return false;}
@@ -335,8 +336,7 @@ DEFINE_TRUE(Refloat,int,Myfloat)
 DEFINE_TRUE(Rebyte,int,char)
 
 DEFINE_LOCAL(Display,struct Display)
-DEFINE_LOCAL(Pending,int)
-DEFINE_LOCAL(Complete,int)
+DEFINE_LOCAL(Share,struct Share)
 DEFINE_META(DisplayCode,struct Code)
 DEFINE_POINTER(Code,struct Code)
 DEFINE_META(DisplayFile,struct File)

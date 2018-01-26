@@ -278,7 +278,8 @@ struct Nomial {
     int num2; // number of two variable terms
     int num3; // number of three variable terms
 };
-struct Ratio {struct Nomial n,d;};
+struct Ratio {
+    struct Nomial n,d;};
 struct State {
     int idt; // how other states will refer to this one
     int vld; // enable for wav, met

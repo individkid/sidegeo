@@ -35,14 +35,12 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
     *ptr = buffer;
 }
 
-void setupFile(int sub)
+void setupFile(int sub, int name)
 {
     while (sizeFile() <= sub) {struct File file = {0}; *enlocFile(1) = file;}
     struct File *file = arrayFile(sub,1);
     if (file->name != 0) return;
-    const char *name = "file"; // TODO use filename from Configure.c
-    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
-    file->name = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
+    file->name = name;
     identmat(file->saved,4);
     identmat(file->ratio,4);
     setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
@@ -62,20 +60,20 @@ void setupFile(int sub)
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
 
-void setupUniform(Myuint program, int context, enum Server server, int file, enum Shader shader)
+void setupUniform(Myuint program, int context, enum Server server, enum Shader shader)
 {
     struct Uniform uniform = {0};
-    SWITCH(server,Invalid) uniform.name = "invalid"; uniform.handle = glGetUniformLocation(program, uniform.name);
-    CASE(Basis) uniform.name = "basis"; uniform.handle = glGetUniformLocation(program, uniform.name);
-    CASE(Affine) uniform.name = "affine"; uniform.handle = glGetUniformLocation(program, uniform.name);
-    CASE(Feather) uniform.name = "feather"; uniform.handle = glGetUniformLocation(program, uniform.name);
-    CASE(Arrow) uniform.name = "arrow"; uniform.handle = glGetUniformLocation(program, uniform.name);
-    CASE(Cutoff) uniform.name = "cutoff"; uniform.handle = glGetUniformLocation(program, uniform.name);
-    CASE(Slope) uniform.name = "slope"; uniform.handle = glGetUniformLocation(program, uniform.name);
-    CASE(Aspect) uniform.name = "aspect"; uniform.handle = glGetUniformLocation(program, uniform.name);
+    SWITCH(server,Invalid) uniform.name = "invalid";
+    CASE(Basis) uniform.name = "basis";
+    CASE(Affine) uniform.name = "affine";
+    CASE(Feather) uniform.name = "feather";
+    CASE(Arrow) uniform.name = "arrow";
+    CASE(Cutoff) uniform.name = "cutoff";
+    CASE(Slope) uniform.name = "slope";
+    CASE(Aspect) uniform.name = "aspect";
     DEFAULT(exitErrstr("invalid server uniform\n");)
-    arrayCode(shader,1)->uniform[server] = uniform;
-    updateUniform(context,server,file,shader);
+    uniform.handle = glGetUniformLocation(program, uniform.name);
+    updateUniform(context,server,-1,shader);
 }
 
 enum Data bufferVertex(int i, enum Shader shader)
@@ -304,9 +302,9 @@ void setupCode(enum Shader shader)
     for (int i = 0; i < 4; i++) arrayCode(shader,1)->reader[i] = uniformConstant(i,shader);
     glUseProgram(arrayCode(shader,1)->handle);
     enum Server temp = Servers;
-    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,-1,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,-1,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,-1,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,shader);
+    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,shader);
     glUseProgram(0);
 }
 
@@ -320,12 +318,10 @@ void displayLocation(GLFWwindow *ptr, int xloc, int yloc);
 void displaySize(GLFWwindow *ptr, int width, int height);
 void displayRefresh(GLFWwindow *ptr);
 
-void setupDisplay(void)
+void setupDisplay(int name)
 {
-    struct Display *save = current;
     struct Display *current = enlocDisplay(1);
-    const char *name = (save == 0 ? "Sculpt" : "sculpt"); // TODO use display name from Option.c
-    displayName = sizeCmdBuf(); strcpy(enlocCmdBuf(strlen(name)),name); *enlocCmdBuf(1) = 0;
+    displayName = name;
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -373,14 +369,9 @@ void setupDisplay(void)
     int row = i % 3;
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}
-    if (save == 0) {
     for (int i = 0; i < 16; i++) displayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);}
-    else {
-    for (int i = 0; i < 16; i++) displayMat[i] = save->affineMat[i];
-    for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
-    for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];}
+    for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
 void updateContext(int sub)
