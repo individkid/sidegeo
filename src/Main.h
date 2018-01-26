@@ -75,22 +75,32 @@ extern int layer;
 extern enum Menu mode[Modes];
 extern struct Display *current;
 
+void enqueCommand(Command cmd);
+void deferCommand(Command cmd);
+void enqueMachine(Machine machine);
+void followMachine(Machine machine);
+
+void target(void);
+void responseLayer(void);
 #ifdef BRINGUP
 void bringupBuiltin(void);
 #endif
-void enqueCommand(Command cmd);
-void updateDisplay(GLFWwindow *ptr);
+
+void compass(double xdelta, double ydelta);
+void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayCursor(GLFWwindow *display, double xpos, double ypos);
+void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
+
+void setupDisplay(void);
+void updateContext(int sub);
+void updateDisplay(GLFWwindow *ptr);
+void updateClient(int context, int file, enum Data sub, int todo, int done, void *data);
+void updateUniform(int context, enum Server server, int file, enum Shader shader);
+
+void enqueUniform(int context, enum Server server);
+enum Action renderLayer(int state);
+void enqueShader(enum Shader shader, int file, int display, Machine follow);
 void enqueDishader(void);
 void enquePershader(void);
-void enqueMachine(Machine machine);
-void enqueUniform(int context, enum Server server);
-void target(void);
-void updateContext(int sub);
-void enqueMachine(Machine machine);
-void followMachine(Machine machine);
-void deferCommand(Command cmd);
-void updateUniform(int context, enum Server server, int file, enum Shader shader);
-void responseLayer(void);
 
 #endif

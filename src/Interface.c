@@ -26,18 +26,6 @@ const enum Event event = Frame;
 const enum Data data = FrameSub;
 #endif
 
-extern struct Item item[Menus];
-
-void displayClick(GLFWwindow *display, int button, int action, int mods);
-void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
-void updateClient(int context, int file, enum Data sub, int todo, int done, void *data);
-void enqueDishader(void);
-void compass(double xdelta, double ydelta);
-void enqueMachine(Machine machine);
-void enqueShader(enum Shader shader, int file, int display, Machine follow);
-enum Action renderLayer(int state);
-void setupDisplay(void);
-
 DEFINE_MSGSTR(CmdConfigure)
 
 void inject(void)

@@ -342,6 +342,8 @@ void msgstr##NAME(const char *fmt, ...) \
     if (state-- == 0) {return ((SHARE == Write && LOCK.read > 0) || LOCK.write > 0 || LOCK.take != WAIT ? Defer : Continue);} \
     if (state-- == 0) {LOCK.take += 1; if (SHARE == Write) LOCK.write += 1; else LOCK.read += 1; return Continue;}
 
+extern struct Item item[Menus];
+
 enum Motion motionof(char code);
 char alphaof(char code);
 int indexof(char code);
