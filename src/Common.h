@@ -24,8 +24,6 @@
 EXTERNCBEGIN
 
 #include <math.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include <limits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
