@@ -25,12 +25,12 @@ int listenCount = 0;
 int sourceCount = 0;
 int metricCount = 0;
 
-pqueue_pri_t ofTime(double time)
+Mypri ofTime(double time)
 {
     return 0; // TODO
 }
 
-double timeOf(pqueue_pri_t time)
+double timeOf(Mypri time)
 {
     return 0; // TODO
 }

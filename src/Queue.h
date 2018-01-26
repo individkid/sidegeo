@@ -32,27 +32,27 @@
 #endif
 
 EXTERNCBEGIN
-#include "rbtree.h"
 #include <stdio.h>
-#include "pqueue.h"
-#include <pthread.h>
-#include <signal.h>
-#include <errno.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <errno.h>
 #include <unistd.h>
+#include <signal.h>
+#ifdef __cplusplus
+#include "rbtree.h"
+#include "pqueue.h"
 #include <termios.h>
-#ifdef __linux__
 #include <sys/types.h>
 #endif
 EXTERNCEND
-
 
 EXTERNV struct termios savedTermios;
 EXTERNV int validTermios;
 EXTERNV int sigusr2;
 struct QueueBase;
+typedef unsigned long long Mypri;
 
 EXTERNC void *int2void(int val);
 EXTERNC int void2int(const void *val);
@@ -168,10 +168,10 @@ EXTERNC TYPE *cast##NAME(int sub); \
 EXTERNC int size##NAME(void);
 
 #define DECLARE_PRIORITY(NAME,TYPE) \
-EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri); \
+EXTERNC TYPE *schedule##NAME(Mypri pri); \
 EXTERNC TYPE *advance##NAME(void); \
-EXTERNC int ready##NAME(pqueue_pri_t pri); \
-EXTERNC pqueue_pri_t when##NAME(void);
+EXTERNC int ready##NAME(Mypri pri); \
+EXTERNC Mypri when##NAME(void);
 
 #define DECLARE_TREE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
@@ -1166,10 +1166,10 @@ extern "C" int cmp_pri_##NAME(pqueue_pri_t next, pqueue_pri_t curr) {return NAME
 extern "C" size_t get_pos_##NAME(void *sub) {return NAME##Inst.get_pos(sub);} \
 extern "C" void set_pos_##NAME(void *sub, size_t pos) {return NAME##Inst.set_pos(sub,pos);} \
 extern "C" void print_entry_##NAME(FILE *out, void *sub) {NAME##Inst.print_entry(out,sub);} \
-extern "C" TYPE *schedule##NAME(pqueue_pri_t pri) {return NAME##Inst.schedule(pri);} \
+extern "C" TYPE *schedule##NAME(Mypri pri) {return NAME##Inst.schedule(pri);} \
 extern "C" TYPE *advance##NAME(void) {return NAME##Inst.advance();} \
-extern "C" int ready##NAME(pqueue_pri_t pri) {return NAME##Inst.ready(pri);} \
-extern "C" pqueue_pri_t when##NAME(void) {return NAME##Inst.when();}
+extern "C" int ready##NAME(Mypri pri) {return NAME##Inst.ready(pri);} \
+extern "C" Mypri when##NAME(void) {return NAME##Inst.when();}
 
 template<class KEY, class VAL> struct Rbtree {
     void *left;
