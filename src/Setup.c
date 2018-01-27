@@ -60,7 +60,7 @@ void setupFile(int sub, int name)
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
 
-void setupUniform(Myuint program, int context, enum Server server, enum Shader shader)
+void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
 {
     struct Uniform uniform = {0};
     SWITCH(server,Invalid) uniform.name = "invalid";
@@ -73,7 +73,7 @@ void setupUniform(Myuint program, int context, enum Server server, enum Shader s
     CASE(Aspect) uniform.name = "aspect";
     DEFAULT(exitErrstr("invalid server uniform\n");)
     uniform.handle = glGetUniformLocation(program, uniform.name);
-    updateUniform(context,server,-1,shader);
+    *ptr = uniform;
 }
 
 enum Data bufferVertex(int i, enum Shader shader)
@@ -192,7 +192,7 @@ extern const GLchar *expandCode;
 extern const GLchar *constructCode;
 extern const GLchar *intersectCode;
 
-void compileProgram(
+Myuint compileProgram(
     const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
     int inp, int outp, const char *name, enum Shader shader)
 {
@@ -247,6 +247,7 @@ void compileProgram(
     glDeleteShader(vertex);
     if (geometryCode) glDeleteShader(geometry);
     if (fragmentCode) glDeleteShader(fragment);
+    return prog;
 }
 
 extern const GLchar *diplaneVertex;
@@ -282,29 +283,36 @@ extern const GLchar *repointFragment;
 
 void setupCode(enum Shader shader)
 {
-    if (arrayCode(shader,1)->name != 0) return;
-    SWITCH(shader,Diplane) compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane);
-    CASE(Dipoint) compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint);
-    CASE(Coplane) compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane);
-    CASE(Copoint) compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint);
-    CASE(Adplane) compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane);
-    CASE(Adpoint) compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint);
-    CASE(Perplane) compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane);
-    CASE(Perpoint) compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint);
-    CASE(Replane) compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane);
-    CASE(Repoint) compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint);
+    while (sizeCode() < shader) {struct Code code = {0}; *enlocCode(1) = code;}
+    struct Code *code = arrayCode(shader,1);
+    if (code->name != 0) return;
+    Myuint prog = 0;
+    SWITCH(shader,Diplane) prog = compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane);
+    CASE(Dipoint) prog = compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint);
+    CASE(Coplane) prog = compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane);
+    CASE(Copoint) prog = compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint);
+    CASE(Adplane) prog = compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane);
+    CASE(Adpoint) prog = compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint);
+    CASE(Perplane) prog = compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane);
+    CASE(Perpoint) prog = compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint);
+    CASE(Replane) prog = compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane);
+    CASE(Repoint) prog = compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint);
     DEFAULT(exitErrstr("unknown shader type\n");)
-    for (int i = 0; i < 3; i++) arrayCode(shader,1)->vertex[i] = bufferVertex(i,shader);
-    for (int i = 0; i < 3; i++) arrayCode(shader,1)->element[i] = bufferElement(i,shader);
-    for (int i = 0; i < 3; i++) arrayCode(shader,1)->feedback[i] = bufferFeedback(i,shader);
-    for (int i = 0; i < 4; i++) arrayCode(shader,1)->server[i] = uniformServer(i,shader);
-    for (int i = 0; i < 4; i++) arrayCode(shader,1)->config[i] = uniformGlobal(i,shader);
-    for (int i = 0; i < 4; i++) arrayCode(shader,1)->reader[i] = uniformConstant(i,shader);
-    glUseProgram(arrayCode(shader,1)->handle);
+    code->handle = prog;
+    for (int i = 0; i < 3; i++) code->vertex[i] = bufferVertex(i,shader);
+    for (int i = 0; i < 3; i++) code->element[i] = bufferElement(i,shader);
+    for (int i = 0; i < 3; i++) code->feedback[i] = bufferFeedback(i,shader);
+    for (int i = 0; i < 4; i++) code->server[i] = uniformServer(i,shader);
+    for (int i = 0; i < 4; i++) code->config[i] = uniformGlobal(i,shader);
+    for (int i = 0; i < 4; i++) code->reader[i] = uniformConstant(i,shader);
+    glUseProgram(code->handle);
     enum Server temp = Servers;
-    for (int i = 0; (temp = arrayCode(shader,1)->server[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->config[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,shader);
-    for (int i = 0; (temp = arrayCode(shader,1)->reader[i]) < Servers; i++) setupUniform(arrayCode(shader,1)->handle,contextHandle,temp,shader);
+    for (int i = 0; (temp = code->server[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);
+    for (int i = 0; (temp = code->config[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);
+    for (int i = 0; (temp = code->reader[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);
+    for (int i = 0; (temp = code->server[i]) < Servers; i++) updateUniform(contextHandle,temp,-1,shader);
+    for (int i = 0; (temp = code->config[i]) < Servers; i++) updateUniform(contextHandle,temp,-1,shader);
+    for (int i = 0; (temp = code->reader[i]) < Servers; i++) updateUniform(contextHandle,temp,-1,shader);
     glUseProgram(0);
 }
 

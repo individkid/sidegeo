@@ -22,7 +22,7 @@ int layer = 0;
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 struct Display *current = 0;
 
-enum Cnd {Mid,Lst,Was,Not,Cmd,Arg,One,Sgl,Mlt};
+enum Cnd {Was,Not,Cmd,Arg,One,Sgl,Mlt};
 enum Act {Aft,Suf,Str,Inj,End,Uni,Wil,Wnt};
 
 void displayError(int error, const char *description)
@@ -59,37 +59,33 @@ int main(int argc, char **argv)
         else condition |= 1<<Arg;
         if (len == 2 && argv[i][0] == '-') condition |= 1<<Sgl;
         else condition |= 1<<Mlt;
-        if (i < argc-1) condition |= 1<<Mid;
-        else condition |= 1<<Lst;
-        int action = 0;
+        enum Act action[9] = {Wnt};
         switch (condition) {
-        case ((1<<Mid)|(1<<Was)|(1<<Cmd)|(1<<Sgl)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Wil); break;
-        case ((1<<Mid)|(1<<Was)|(1<<Cmd)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Was)|(1<<Arg)|(1<<Sgl)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Was)|(1<<Arg)|(1<<Mlt)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Was)|(1<<One)|(1<<Sgl)): action = (1<<Uni)|(1<<Aft)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Was)|(1<<One)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Inj)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Not)|(1<<Cmd)|(1<<Sgl)): action = (1<<Aft)|(1<<Wil); break;
-        case ((1<<Mid)|(1<<Not)|(1<<Cmd)|(1<<Mlt)): action = (1<<Aft)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Not)|(1<<Arg)|(1<<Sgl)): action = (1<<Inj)|(1<<Str)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Not)|(1<<Arg)|(1<<Mlt)): action = (1<<Inj)|(1<<Str)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Not)|(1<<One)|(1<<Sgl)): action = (1<<Aft)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Mid)|(1<<Not)|(1<<One)|(1<<Mlt)): action = (1<<Aft)|(1<<End)|(1<<Inj)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Lst)|(1<<Was)|(1<<Cmd)|(1<<Sgl)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Uni)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Lst)|(1<<Was)|(1<<Cmd)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Aft)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Lst)|(1<<Was)|(1<<Arg)|(1<<Sgl)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Lst)|(1<<Was)|(1<<Arg)|(1<<Mlt)): action = (1<<Str)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Lst)|(1<<Was)|(1<<One)|(1<<Sgl)): action = (1<<Uni)|(1<<Aft)|(1<<End)|(1<<Wnt); break;
-        case ((1<<Lst)|(1<<Was)|(1<<One)|(1<<Mlt)): action = (1<<Uni)|(1<<End)|(1<<Inj)|(1<<Suf)|(1<<End)|(1<<Wnt); break;
+        case ((1<<Was)|(1<<Cmd)|(1<<Sgl)): {enum Act temp[] = {Uni,End,Aft,Wil}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Was)|(1<<Cmd)|(1<<Mlt)): {enum Act temp[] = {Uni,End,Aft,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Was)|(1<<Arg)|(1<<Sgl)): {enum Act temp[] = {Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Was)|(1<<Arg)|(1<<Mlt)): {enum Act temp[] = {Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Was)|(1<<One)|(1<<Sgl)): {enum Act temp[] = {Uni,Aft,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Was)|(1<<One)|(1<<Mlt)): {enum Act temp[] = {Uni,End,Inj,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Not)|(1<<Cmd)|(1<<Sgl)): {enum Act temp[] = {Aft,Wil}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Not)|(1<<Cmd)|(1<<Mlt)): {enum Act temp[] = {Aft,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Not)|(1<<Arg)|(1<<Sgl)): {enum Act temp[] = {Inj,Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Not)|(1<<Arg)|(1<<Mlt)): {enum Act temp[] = {Inj,Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Not)|(1<<One)|(1<<Sgl)): {enum Act temp[] = {Aft,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Not)|(1<<One)|(1<<Mlt)): {enum Act temp[] = {Aft,End,Inj,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
         default: exitErrstr("impossible condition\n");}
-        if (action & (1<<Aft)) *enlocOption(1) = argv[i][1];
-        if (action & (1<<Suf)) memcpy(enlocOption(len-2),argv[i]+2,len-2);
-        if (action & (1<<Str)) memcpy(enlocOption(len),argv[i],len);
-        if (action & (1<<Inj)) *enlocOption(1) = 'f';
-        if (action & (1<<End)) *enlocOption(1) = '\n';
-        if (action & (1<<Uni)) memcpy(enlocOption(4),"oops",4);
-        if (action & (1<<Wil)) condition = 1<<Was;
-        if (action & (1<<Wnt)) condition = 1<<Not;}
+        condition = 0;
+        for (int j = 0; j < 9 && condition == 0; j++) {
+        switch (action[j]) {
+        case (Aft): *enlocOption(1) = argv[i][1]; break;
+        case (Suf): memcpy(enlocOption(len-2),argv[i]+2,len-2); break;
+        case (Str): memcpy(enlocOption(len),argv[i],len); break;
+        case (Inj): *enlocOption(1) = 'f'; break;
+        case (End): *enlocOption(1) = '\n'; break;
+        case (Uni): memcpy(enlocOption(4),"oops",4); break;
+        case (Wil): if (i == argc-1) {enum Act temp[] = {Uni,End,Wnt}; memcpy(action+j,temp,sizeof(temp)); j--;} else condition = 1<<Was; break;
+        case (Wnt): condition = 1<<Not; break;
+        default: exitErrstr("unknown action\n");}}}
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);

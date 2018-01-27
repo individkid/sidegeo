@@ -87,34 +87,12 @@ int name(const char *str)
 
 void display(void)
 {
-    int size = sizeDisplay();
-    setupDisplay(name(size == 0 ? "Sculpt" : "sculpt")); // TODO use display name from Option.c
-    struct Display *ptr = displayHandle;
-    int sub = contextHandle;
-    updateContext(size);
-    for (enum Shader i = 0; i < Shaders; i++) setupCode(i);
-    if (ptr) {
-    for (int i = 0; i < 16; i++) displayMat[i] = ptr->affineMat[i];
-    for (int i = 0; i < 16; i++) displayMata[i] = ptr->affineMata[i];
-    for (int i = 0; i < 16; i++) displayMatb[i] = ptr->affineMatb[i];
-    for (int i = 0; i < sizeDisplayFile(sub); i++) {
-    setupFile(i,arrayDisplayFile(sub,i,1)->name);
-    for (enum Data j = 0; j < Datas; j++) {
-    int client = arrayDisplayFile(sub,i,1)->buffer[j].client;
-    int len = sizeClient(client);
-    updateClient(contextHandle,i,j,len,0,arrayClient(client,0,len));}}}
-    target();
+    // TODO use display name from Option.c
 }
 
 void file(void)
 {
-    struct Share share = {0};
-    *enlocShare(1) = share;
-    int sub = sizeFile();
-    for (int i = 0; i < sizeDisplay(); i++) {
-    updateContext(i);
-    setupFile(sub,name("file"));} // TODO use filename from Configure.c
-    target();
+    // TODO use filename from Configure.c
 }
 
 void responseLayer(void)
