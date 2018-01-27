@@ -1,5 +1,5 @@
 /*
-*    Display.c glfw and client initialization to open displays
+*    Setup.c glfw and client initialization to open displays
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -28,9 +28,9 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
     buffer.type = type;
     buffer.dimn = dimn;
     if (loc != INVALID_LOCATION) {
-        glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
-        glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
+    glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer.client = usageClient();
     *enlocSeqmax(1) = 0;
     usedSeqnum(buffer.client);
@@ -39,11 +39,52 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
     *ptr = buffer;
 }
 
-void setupFile(int sub, int name)
+void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
 {
-    while (sizeFile() <= sub) {struct File file = {0}; *enlocFile(1) = file;}
-    struct File *file = arrayFile(sub,1);
-    if (file->name != 0) return;
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    int client = buffer->client;
+    int lim = sizeRange(client);
+    int max = (*arraySeqmax(client,1) += 1);
+    int loc = 0;
+    for (int i = 0; i < lim; i++) {
+        int len = *delocRange(client,1);
+        int num = *delocSeqnum(client,1);
+        if (loc+len <= done) {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        else if (loc < done && loc+len <= done+todo) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,len-(done-loc));
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc < done) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,todo);
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);
+            int post = len-pre-todo; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else if (loc == done && loc+len <= done+todo) {
+            delocClient(client,len);
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc+len <= done+todo) {
+            delocClient(client,len);}
+        else if (loc < done+todo) {
+            int pre = done+todo-loc; delocClient(client,pre);
+            int post = len-pre; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        loc += len;}
+    if (loc < done) {
+        int pre = done-loc;
+        *enlocRange(client,1) = pre+todo; *enlocSeqnum(client,1) = max;
+        for (int i = 0; i < pre; i++) *enlocRange(client,1) = 0;
+        memcpy(enlocClient(client,todo),data,todo);}
+    else if (loc == done) {
+        *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
+        memcpy(enlocClient(client,todo),data,todo);}
+}
+
+void setupFile(int name)
+{
+    int sub = sizeFile();
+    struct File *file = enlocFile(1);
+    struct File init = {0};
+    *file = init;
     file->name = name;
     identmat(file->saved,4);
     identmat(file->ratio,4);
@@ -88,6 +129,44 @@ void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
     DEFAULT(exitErrstr("invalid server uniform\n");)
     uniform.handle = glGetUniformLocation(program, uniform.name);
     *ptr = uniform;
+}
+
+void updateUniform(enum Server server, int file, enum Shader shader)
+{
+    struct Uniform *uniform = arrayCode(shader,1)->uniform+server;
+    SWITCH(server,Invalid) {
+        glUniform1fv(uniform->handle,2,invalid);}
+    CASE(Basis) {
+        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);}
+    CASE(Affine) if (file >= 0) {
+        struct File *ptr = arrayFile(file,1);
+        int posedge = (ptr->fixed && !ptr->last);
+        int negedge = (!ptr->fixed && ptr->last);
+        ptr->last = ptr->fixed;
+        if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),displayMat,4);
+        if (negedge) jumpmat(invmat(copymat(ptr->ratio,displayMat,4),4),ptr->saved,4);
+        if (ptr->fixed) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->saved);
+        else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}}
+    CASE(Feather)
+        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos,yPos,zPos);
+        DEFAULT(exitErrstr("feather too shader\n");)
+    CASE(Arrow)
+        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
+        DEFAULT(exitErrstr("arrow too shader\n");)
+    CASE(Cutoff) {
+        glUniform1f(uniform->handle,cutoff);}
+    CASE(Slope) {
+        glUniform1f(uniform->handle,slope);}
+    CASE(Aspect) {
+#ifdef __APPLE__
+        glViewport(0, 0, xSiz*2, ySiz*2);
+#endif
+#ifdef __linux__
+        glViewport(0, 0, xSiz, ySiz);
+#endif
+        aspect = (Myfloat)ySiz/(Myfloat)xSiz;
+        glUniform1f(uniform->handle,aspect);}
+    DEFAULT(exitErrstr("invalid server uniform\n");)
 }
 
 enum Data bufferVertex(int i, enum Shader shader)
@@ -324,9 +403,9 @@ void setupCode(enum Shader shader)
     for (int i = 0; (temp = code->server[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);
     for (int i = 0; (temp = code->config[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);
     for (int i = 0; (temp = code->reader[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);
-    for (int i = 0; (temp = code->server[i]) < Servers; i++) updateUniform(contextHandle,temp,-1,shader);
-    for (int i = 0; (temp = code->config[i]) < Servers; i++) updateUniform(contextHandle,temp,-1,shader);
-    for (int i = 0; (temp = code->reader[i]) < Servers; i++) updateUniform(contextHandle,temp,-1,shader);
+    for (int i = 0; (temp = code->server[i]) < Servers; i++) updateUniform(temp,-1,shader);
+    for (int i = 0; (temp = code->config[i]) < Servers; i++) updateUniform(temp,-1,shader);
+    for (int i = 0; (temp = code->reader[i]) < Servers; i++) updateUniform(temp,-1,shader);
     glUseProgram(0);
 }
 
@@ -415,84 +494,4 @@ void updateDisplay(GLFWwindow *ptr)
     int sub = 0;
     while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
     updateContext(sub);
-}
-
-void updateClient(int context, int file, enum Data sub, int todo, int done, void *data)
-{
-    updateContext(context);
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
-    int client = buffer->client;
-    int lim = sizeRange(client);
-    int max = (*arraySeqmax(client,1) += 1);
-    int loc = 0;
-    for (int i = 0; i < lim; i++) {
-        int len = *delocRange(client,1);
-        int num = *delocSeqnum(client,1);
-        if (loc+len <= done) {
-            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
-        else if (loc < done && loc+len <= done+todo) {
-            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,len-(done-loc));
-            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
-        else if (loc < done) {
-            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,todo);
-            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);
-            int post = len-pre-todo; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
-        else if (loc == done && loc+len <= done+todo) {
-            delocClient(client,len);
-            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
-        else if (loc+len <= done+todo) {
-            delocClient(client,len);}
-        else if (loc < done+todo) {
-            int pre = done+todo-loc; delocClient(client,pre);
-            int post = len-pre; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
-        else {
-            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
-        loc += len;}
-    if (loc < done) {
-        int pre = done-loc;
-        *enlocRange(client,1) = pre+todo; *enlocSeqnum(client,1) = max;
-        for (int i = 0; i < pre; i++) *enlocRange(client,1) = 0;
-        memcpy(enlocClient(client,todo),data,todo);}
-    else if (loc == done) {
-        *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
-        memcpy(enlocClient(client,todo),data,todo);}
-}
-
-void updateUniform(int context, enum Server server, int file, enum Shader shader)
-{
-    updateContext(context);
-    struct Uniform *uniform = arrayCode(shader,1)->uniform+server;
-    SWITCH(server,Invalid) {
-        glUniform1fv(uniform->handle,2,invalid);}
-    CASE(Basis) {
-        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);}
-    CASE(Affine) if (file >= 0) {
-        struct File *ptr = arrayFile(file,1);
-        int posedge = (ptr->fixed && !ptr->last);
-        int negedge = (!ptr->fixed && ptr->last);
-        ptr->last = ptr->fixed;
-        if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),displayMat,4);
-        if (negedge) jumpmat(invmat(copymat(ptr->ratio,displayMat,4),4),ptr->saved,4);
-        if (ptr->fixed) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->saved);
-        else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}}
-    CASE(Feather)
-        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos,yPos,zPos);
-        DEFAULT(exitErrstr("feather too shader\n");)
-    CASE(Arrow)
-        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
-        DEFAULT(exitErrstr("arrow too shader\n");)
-    CASE(Cutoff) {
-        glUniform1f(uniform->handle,cutoff);}
-    CASE(Slope) {
-        glUniform1f(uniform->handle,slope);}
-    CASE(Aspect) {
-#ifdef __APPLE__
-        glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
-#ifdef __linux__
-        glViewport(0, 0, xSiz, ySiz);
-#endif
-        aspect = (Myfloat)ySiz/(Myfloat)xSiz;
-        glUniform1f(uniform->handle,aspect);}
-    DEFAULT(exitErrstr("invalid server uniform\n");)
 }

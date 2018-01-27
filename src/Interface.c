@@ -67,11 +67,9 @@ void metric(void)
 {
     int index = *delocCmdInt(1);
     int stock = *delocCmdInt(1);
-    // TODO enque machines to calculate change val
-    struct Change change;
+    struct Change change = {0}; // Map bit is clear because sub is from timewheel
     change.sub = stock;
-    change.val = 0;
-    change.vld = 0; // Map bit is clear because sub is from timewheel
+    change.val = 0; // TODO enque machines to calculate change val
     *enlocCmdChange(1) = change;
 }
 
@@ -85,44 +83,43 @@ int xferName(void)
 
 void display(void)
 {
-    int sub = sizeDisplay();
+    int new = sizeDisplay();
     setupDisplay(xferName());
-    updateContext(sub);
-    for (enum Shader i = 0; i < Shaders; i++) {
-    setupCode(i);}
-    if (sub > 0) {
+    updateContext(new);
+    for (enum Shader shader = 0; shader < Shaders; shader++) {
+    setupCode(shader);}
+    if (new > 0) {
     struct Display *save = arrayDisplay(0,1);
     for (int i = 0; i < 16; i++) displayMat[i] = save->affineMat[i];
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
     for (int i = 0; i < sizeDisplayFile(0); i++) {
     int sub = sizeFile();
-    setupFile(i,arrayDisplayFile(0,i,1)->name);
+    setupFile(arrayDisplayFile(0,i,1)->name);
     updateFile(sub,arrayDisplayFile(0,i,1));}
-    for (int i = 0; i < sizeDisplayFile(0); i++) {
+    for (int file = 0; file < sizeDisplayFile(0); file++) {
     enum Data share[] = {PlaneBuf,VersorBuf,PointBuf};
     int lim = sizeof(share)/sizeof*share;
-    for (int j = 0; j < lim; j++) {
-    int client = arrayFile(i,1)->buffer[share[j]].client;
+    for (int i = 0; i < lim; i++) {
+    int client = arrayFile(file,1)->buffer[share[i]].client;
     int len = sizeClient(client);
-    updateClient(sub,i,share[j],len,0,arrayClient(client,0,len));}}}
+    updateBuffer(file,share[i],0,len,arrayClient(client,0,len));}}}
 }
 
 void file(void)
 {
     int save = contextHandle;
-    for (int i = 0; i < sizeDisplay(); i++) {
-    updateContext(i);
+    for (int context = 0; context < sizeDisplay(); context++) {
+    updateContext(context);
     int sub = sizeFile();
-    setupFile(sub,xferName());
+    setupFile(xferName());
     struct File *file = arrayFile(sub,1);
     SWITCH(mode[Target],Plane) file->fixed = 1;
     CASE(Polytope) file->fixed = 0;
-    CASE(Alternate) file->fixed = (i==save);
+    CASE(Alternate) file->fixed = (context==save);
     CASE(Session) file->fixed = 0;
     DEFAULT(exitErrstr("target too line\n");)
     invmat(copymat(file->ratio,displayMat,4),4);}
-    updateContext(save);
 }
 
 void responseLayer(void)
@@ -183,12 +180,12 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
     enqueMachine(configureSculpt);
 
 #define CONFIGURE_DEARG \
-    int event = *deargCmdInt(1); \
+    int embed = *deargCmdInt(1); \
     int file = *deargCmdInt(1); \
     int plane, inlen, outlen; \
     int inbuf[inlen]; \
     int outbuf[outlen]; \
-    if (event != Inflate) { \
+    if (embed != Inflate) { \
     plane = *deargCmdInt(1); \
     inlen = *deargCmdInt(1); \
     memcpy(inbuf,deargCmdInt(inlen),inlen); \
@@ -202,16 +199,16 @@ enum Action configureSculpt(int state)
     if (state-- == 0) {
     layer = tagReint();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
-    *enlocCmdHsInt(1) = layer;
     *enlocCmdHsInt(1) = file;
-    if (event != Inflate) {
+    if (embed != Inflate) {
     *enlocCmdHsInt(1) = plane;
     *enlocCmdHsInt(1) = inlen;
     memcpy(enlocCmdHsInt(inlen),inbuf,inlen);
     *enlocCmdHsInt(1) = outlen;
     memcpy(enlocCmdHsInt(outlen),outbuf,outlen);}
+    *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = event; // Fill Hollow or Inflate
+    *enlocCmdEvent(1) = embed; // Fill Hollow or Inflate
     *enlocReint(layer,1) = 0;
     return Continue;}
     if (state-- == 0) {
@@ -220,17 +217,18 @@ enum Action configureSculpt(int state)
     if (state-- == 0) {
     if (sizeReint(layer) != 1) exitErrstr("layer too size\n");
     delocReint(layer,1);
-    *enlocCmdHsInt(1) = layer;
     *enlocCmdHsInt(1) = context;
     *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = event;
+    *enlocCmdEvent(1) = event; // Face or Frame
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     if (state-- == 0) {
     int size = sizeReint(layer);
-    updateClient(context,file,data,size,0,arrayReint(layer,0,size));
+    updateContext(context);
+    updateBuffer(file,data,0,size,arrayReint(layer,0,size));
     delocReint(layer,size);}}
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     enqueDishader();
@@ -326,8 +324,6 @@ void hollowClick(int file, int plane, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 #define NUM_FRAMES 3
 #define NUM_SIDES 3
 
-double sqrt(double x);
-
 void bringupBuiltin(void)
 {
     // f = 1
@@ -390,13 +386,28 @@ void bringupBuiltin(void)
         0,1,2,
     };
 
-    display();
-    file();
-    updateClient(0,0,PlaneBuf,NUM_PLANES,0,plane);
-    updateClient(0,0,VersorBuf,NUM_PLANES,0,versor);
-    updateClient(0,0,FaceSub,NUM_FACES,0,face);
-    updateClient(0,0,VertSub,NUM_POINTS,0,vertex);
-    updateClient(0,0,SideSub,NUM_SIDES,0,wrt);
+    if (sizeDisplay() == 0) {
+        const char *str = "Sculpt";
+        int len = strlen(str);
+        memcpy(enlocCmdByte(len),str,len);
+        *enlocCmdByte(1) = 0;
+        enqueCommand(display);
+        enqueCommand(bringupBuiltin);
+        return;}
+    if (sizeFile() == 0) {
+        const char *str = "bringup";
+        int len = strlen(str);
+        memcpy(enlocCmdByte(len),str,len);
+        *enlocCmdByte(1) = 0;
+        enqueCommand(file);
+        enqueCommand(bringupBuiltin);
+        return;}
+    updateContext(0);
+    updateBuffer(0,PlaneBuf,0,NUM_PLANES,plane);
+    updateBuffer(0,VersorBuf,0,NUM_PLANES,versor);
+    updateBuffer(0,FaceSub,0,NUM_FACES,face);
+    updateBuffer(0,VertSub,0,NUM_POINTS,vertex);
+    updateBuffer(0,SideSub,0,NUM_SIDES,wrt);
     enqueDishader();
 }
 #endif

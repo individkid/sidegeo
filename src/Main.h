@@ -93,12 +93,12 @@ void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
 
 void setupDisplay(int name);
 void setupCode(enum Shader shader);
-void setupFile(int sub, int name);
+void setupFile(int name);
 void updateFile(int sub, struct File *copy);
 void updateContext(int sub);
 void updateDisplay(GLFWwindow *ptr);
-void updateClient(int context, int file, enum Data sub, int todo, int done, void *data);
-void updateUniform(int context, enum Server server, int file, enum Shader shader);
+void updateBuffer(int file, enum Data sub, int done, int todo, void *data);
+void updateUniform(enum Server server, int file, enum Shader shader);
 
 void enqueUniform(int context, enum Server server);
 enum Action renderLayer(int state);

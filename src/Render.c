@@ -161,7 +161,8 @@ enum Action dequeUniform(int state)
     struct Uniform *uniform = arrayCode(i,1)->uniform+server;
     LOCK(*wait,uniform->lock,Write);
     if (--state == 0) {
-    updateUniform(context,server,0/*not for use with dishader affine*/,i);
+    updateContext(context);
+    updateUniform(server,-1,i);
     uniform->lock.write -= 1;
     return Continue;}}
     return Advance;
@@ -169,7 +170,7 @@ enum Action dequeUniform(int state)
 
 void enqueUniform(int context, enum Server server)
 {
-    *enlocCmdInt(1) = context;
+    *enlocCmdInt(1) = contextHandle;
     *enlocCmdInt(1) = server;
     *enlocCmdInt(1) = 0;
     enqueMachine(dequeUniform);
@@ -253,7 +254,7 @@ enum Action renderDraw(int state)
     if (todo == 0) return Advance;
     glUseProgram(shader->handle);
     for (enum Server *i = server; *i < Servers; i++) {
-        updateUniform(render->context,*i,render->file,render->shader);
+        updateUniform(*i,render->file,render->shader);
         uniform[*i].lock.read += 1; uniform[*i].lock.write -= 1;}
     for (enum Data *i = feedback; *i < Datas; i++) {
         size_t size = buffer[*i].dimn*bufferType(buffer[*i].type);

@@ -65,8 +65,8 @@ int main(int argc, char **argv)
         case ((1<<Was)|(1<<Cmd)|(1<<Mlt)): {enum Act temp[] = {Uni,End,Aft,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
         case ((1<<Was)|(1<<Arg)|(1<<Sgl)): {enum Act temp[] = {Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
         case ((1<<Was)|(1<<Arg)|(1<<Mlt)): {enum Act temp[] = {Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Was)|(1<<One)|(1<<Sgl)): {enum Act temp[] = {Uni,Aft,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Was)|(1<<One)|(1<<Mlt)): {enum Act temp[] = {Uni,End,Inj,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Was)|(1<<One)|(1<<Sgl)): {enum Act temp[] = {Uni,End,Aft,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
+        case ((1<<Was)|(1<<One)|(1<<Mlt)): {enum Act temp[] = {Uni,End,Aft,End,Inj,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
         case ((1<<Not)|(1<<Cmd)|(1<<Sgl)): {enum Act temp[] = {Aft,Wil}; memcpy(action,temp,sizeof(temp)); break;}
         case ((1<<Not)|(1<<Cmd)|(1<<Mlt)): {enum Act temp[] = {Aft,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
         case ((1<<Not)|(1<<Arg)|(1<<Sgl)): {enum Act temp[] = {Inj,Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
@@ -83,7 +83,9 @@ int main(int argc, char **argv)
         case (Inj): *enlocOption(1) = 'f'; break;
         case (End): *enlocOption(1) = '\n'; break;
         case (Uni): memcpy(enlocOption(4),"oops",4); break;
-        case (Wil): if (i == argc-1) {enum Act temp[] = {Uni,End,Wnt}; memcpy(action+j,temp,sizeof(temp)); j--;} else condition = 1<<Was; break;
+        case (Wil): if (i == argc-1) {
+        enum Act temp[] = {Uni,End,Wnt}; memcpy(action+j,temp,sizeof(temp)); j--;}
+        else condition = 1<<Was; break;
         case (Wnt): condition = 1<<Not; break;
         default: exitErrstr("unknown action\n");}}}
 
