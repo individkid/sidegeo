@@ -31,7 +31,11 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
         glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
         glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    buffer.client = usageClient(); usedClient(buffer.client);
+    buffer.client = usageClient();
+    *enlocSeqmax(1) = 0;
+    usedSeqnum(buffer.client);
+    usedRange(buffer.client);
+    usedClient(buffer.client);
     *ptr = buffer;
 }
 

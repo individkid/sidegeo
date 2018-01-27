@@ -75,7 +75,7 @@ void metric(void)
     *enlocCmdChange(1) = change;
 }
 
-int name(const char *str)
+int strname(const char *str)
 {
     if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
     int name = sizeCmdBuf();
@@ -85,14 +85,35 @@ int name(const char *str)
     return name;
 }
 
+int bufname(void)
+{
+    int len = lengthCmdByte(0,0);
+    int name = sizeCmdBuf();
+    memcpy(enlocCmdBuf(len),delocCmdByte(len),len);
+    return name;
+}
+
 void display(void)
 {
-    // TODO use display name from Option.c
+    int sub = sizeDisplay();
+    setupDisplay(bufname());
+    updateContext(sub);
+    for (enum Shader i = 0; i < Shaders; i++) {
+    setupCode(i);}
+    if (sub > 0) for (int i = 0; i < sizeDisplayFile(0); i++) {
+    setupFile(i,arrayDisplayFile(0,i,1)->name);}
+    for (int i = 0; i < sizeDisplayFile(0); i++) for (enum Data j = 0; j < Datas; j++) {
+    int client = arrayFile(i,1)->buffer[j].client;
+    int len = sizeClient(client);
+    updateClient(sub,i,j,len,0,arrayClient(client,0,len));}
 }
 
 void file(void)
 {
-    // TODO use filename from Configure.c
+    for (int i = 0; i < sizeDisplay(); i++) {
+    updateContext(i);
+    int sub = sizeFile();
+    setupFile(sub,bufname());}
 }
 
 void responseLayer(void)
