@@ -64,6 +64,16 @@ void setupFile(int sub, int name)
     setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
 
+void updateFile(int sub, struct File *copy)
+{
+    struct File *file = arrayFile(sub,1);
+    file->tweak = copy->tweak;
+    file->fixed = copy->fixed;
+    file->last = copy->last;
+    copymat(file->saved,copy->saved,4);
+    copymat(file->ratio,copy->ratio,4);
+}
+
 void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
 {
     struct Uniform uniform = {0};
@@ -461,8 +471,8 @@ void updateUniform(int context, enum Server server, int file, enum Shader shader
         int posedge = (ptr->fixed && !ptr->last);
         int negedge = (!ptr->fixed && ptr->last);
         ptr->last = ptr->fixed;
-        if (posedge) copymat(ptr->saved,displayMat,4);
-        if (negedge) timesmat(invmat(copymat(ptr->ratio,displayMat,4),4),ptr->saved,4);
+        if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),displayMat,4);
+        if (negedge) jumpmat(invmat(copymat(ptr->ratio,displayMat,4),4),ptr->saved,4);
         if (ptr->fixed) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->saved);
         else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}}
     CASE(Feather)

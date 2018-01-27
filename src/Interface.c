@@ -75,45 +75,54 @@ void metric(void)
     *enlocCmdChange(1) = change;
 }
 
-int strname(const char *str)
+int xferName(void)
 {
     if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
     int name = sizeCmdBuf();
-    int len = strlen(str);
-    memcpy(enlocCmdBuf(len),str,len);
-    *enlocCmdBuf(1) = 0;
-    return name;
-}
-
-int bufname(void)
-{
-    int len = lengthCmdByte(0,0);
-    int name = sizeCmdBuf();
-    memcpy(enlocCmdBuf(len),delocCmdByte(len),len);
+    (useCmdBuf(), xstrCmdBuf(0));
     return name;
 }
 
 void display(void)
 {
     int sub = sizeDisplay();
-    setupDisplay(bufname());
+    setupDisplay(xferName());
     updateContext(sub);
     for (enum Shader i = 0; i < Shaders; i++) {
     setupCode(i);}
-    if (sub > 0) for (int i = 0; i < sizeDisplayFile(0); i++) {
-    setupFile(i,arrayDisplayFile(0,i,1)->name);}
-    for (int i = 0; i < sizeDisplayFile(0); i++) for (enum Data j = 0; j < Datas; j++) {
-    int client = arrayFile(i,1)->buffer[j].client;
+    if (sub > 0) {
+    struct Display *save = arrayDisplay(0,1);
+    for (int i = 0; i < 16; i++) displayMat[i] = save->affineMat[i];
+    for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
+    for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
+    for (int i = 0; i < sizeDisplayFile(0); i++) {
+    int sub = sizeFile();
+    setupFile(i,arrayDisplayFile(0,i,1)->name);
+    updateFile(sub,arrayDisplayFile(0,i,1));}
+    for (int i = 0; i < sizeDisplayFile(0); i++) {
+    enum Data share[] = {PlaneBuf,VersorBuf,PointBuf};
+    int lim = sizeof(share)/sizeof*share;
+    for (int j = 0; j < lim; j++) {
+    int client = arrayFile(i,1)->buffer[share[j]].client;
     int len = sizeClient(client);
-    updateClient(sub,i,j,len,0,arrayClient(client,0,len));}
+    updateClient(sub,i,share[j],len,0,arrayClient(client,0,len));}}}
 }
 
 void file(void)
 {
+    int save = contextHandle;
     for (int i = 0; i < sizeDisplay(); i++) {
     updateContext(i);
     int sub = sizeFile();
-    setupFile(sub,bufname());}
+    setupFile(sub,xferName());
+    struct File *file = arrayFile(sub,1);
+    SWITCH(mode[Target],Plane) file->fixed = 1;
+    CASE(Polytope) file->fixed = 0;
+    CASE(Alternate) file->fixed = (i==save);
+    CASE(Session) file->fixed = 0;
+    DEFAULT(exitErrstr("target too line\n");)
+    invmat(copymat(file->ratio,displayMat,4),4);}
+    updateContext(save);
 }
 
 void responseLayer(void)
