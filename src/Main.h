@@ -60,10 +60,6 @@
 #define xPos current->xPos
 #define yPos current->yPos
 #define zPos current->zPos
-#define xAux current->xAux
-#define yAux current->yAux
-#define zAux current->zAux
-#define vAux current->vAux
 #define xSiz current->xSiz
 #define ySiz current->ySiz
 #define xLoc current->xLoc

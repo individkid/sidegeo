@@ -211,10 +211,6 @@ struct Display {
     Myfloat xPos; // current mouse position
     Myfloat yPos;
     Myfloat zPos; // pierce point
-    Myfloat xAux; // point on new plane
-    Myfloat yAux;
-    Myfloat zAux;
-    int vAux; // versor for new plane
     int xSiz; // size of display
     int ySiz;
     int xLoc; // display location
@@ -250,6 +246,10 @@ struct Share { // per file state shared across displays
     int complete; // number of planes added
     Myfloat point[9]; // points collected for construct plane
     int collect; // number of points collected for construct plane
+    Myfloat xAux; // point on new plane
+    Myfloat yAux;
+    Myfloat zAux;
+    int vAux; // versor for new plane
 };
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers]; // uniforms used by program

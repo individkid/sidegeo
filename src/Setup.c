@@ -148,11 +148,27 @@ void updateUniform(enum Server server, int file, enum Shader shader)
         else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}
     CASE(Feather)
         SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xPos,yPos,zPos);
-        CASE(Adpoint) glUniform3f(uniform->handle,xAux,yAux,zAux);
+        CASE(Adpoint)
+            if (file < 0) exitErrstr("affine too file\n");
+            struct Share *ptr = arrayShare(file,1);
+            Myfloat *base = basisMat+ptr->vAux*9;
+            Myfloat xVec[3] = {base[0]+ptr->xAux,base[1]+ptr->xAux,base[2]+ptr->xAux};
+            glUniform3f(uniform->handle,xVec[0],xVec[1],xVec[2]);
         DEFAULT(exitErrstr("feather too shader\n");)
     CASE(Arrow)
         SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
-        CASE(Adpoint) {Myfloat temp[3]; unitvec(temp,3,vAux); glUniform3f(uniform->handle,temp[0],temp[1],temp[2]);}
+        CASE(Adpoint)
+            if (file < 0) exitErrstr("affine too file\n");
+            struct Share *ptr = arrayShare(file,1);
+            Myfloat *base = basisMat+ptr->vAux*9;
+            Myfloat xVec[3] = {base[0]+ptr->xAux,base[1]+ptr->xAux,base[2]+ptr->xAux};
+            Myfloat yVec[3] = {base[0]+ptr->yAux,base[1]+ptr->yAux,base[2]+ptr->yAux};
+            Myfloat zVec[3] = {base[0]+ptr->zAux,base[1]+ptr->zAux,base[2]+ptr->zAux};
+            Myfloat yDif[3]; plusvec(scalevec(copyvec(yDif,xVec,3),-1.0,3),yVec,3);
+            Myfloat zDif[3]; plusvec(scalevec(copyvec(zDif,xVec,3),-1.0,3),zVec,3);
+            Myfloat normal[3]; crossvec(copyvec(normal,yDif,3),zDif);
+            if (normal[ptr->vAux] < 0.0) scalevec(normal,-1.0,3);
+            glUniform3f(uniform->handle,normal[0],normal[1],normal[2]);
         DEFAULT(exitErrstr("arrow too shader\n");)
     CASE(Cutoff)
         glUniform1f(uniform->handle,cutoff);
