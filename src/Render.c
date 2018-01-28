@@ -328,7 +328,16 @@ enum Action renderPierce(int state)
 
 enum Action renderLayer(int state)
 {
-    // copy feedback to reint
+    RENDER_DEARG
+    for (enum Data *i = feedback; *i < Datas; i++) {
+    int dimn = buffer[*i].dimn;
+    int done = buffer[*i].done;
+    int size = done*dimn*bufferType(buffer[*i].type);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer[*i].handle);
+    SWITCH(buffer[*i].type,GL_UNSIGNED_INT) glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, enlocReint(layer,done*dimn));
+    CASE(GL_FLOAT) glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, enlocRefloat(layer,done*dimn));
+    DEFAULT(exitErrstr("unknown render type\n");)
+    glBindBuffer(GL_ARRAY_BUFFER, 0);}
     return Advance;
 }
 

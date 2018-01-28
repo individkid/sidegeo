@@ -155,7 +155,7 @@ void configurePlane(void)
 void configurePoint(void)
 {
     // save up three points to construct plane
-    // call configurePlane
+    // enque configurePlane
 }
 
 void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)

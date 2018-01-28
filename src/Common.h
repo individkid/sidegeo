@@ -417,7 +417,7 @@ DECLARE_LOCAL(Defer,int)
 DECLARE_LOCAL(Machine,Machine)
 DECLARE_LOCAL(Redo,struct QueueBase *)
 DECLARE_TRUE(Reint,int,int)
-DECLARE_TRUE(ReMyfloat,int,Myfloat)
+DECLARE_TRUE(Refloat,int,Myfloat)
 DECLARE_TRUE(Rebyte,int,char)
 
 DECLARE_LOCAL(Display,struct Display)
