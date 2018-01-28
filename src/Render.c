@@ -341,16 +341,22 @@ enum Action renderPreview(int state)
         *enlocCmdHsInt(1) = pPos;
         *enlocCmdHsInt(1) = layer;
         *enlocCmdHsCmd(1) = responseLayer;
+        *enlocCmdEvent(1) = Corner;
         return Continue;}
     if (sizeReint(layer) == 0) return Defer;
+    updateAffine(file);
     int len = *delocReint(layer,1);
-    Myfloat point[len][3];
     int client = file->buffer[PointBuf].client;
+    glBegin(GL_TRIANGLE_FAN);
     for (int i = 0; i < len; i++) {
+    Myfloat point[4];
     int index = *delocReint(layer,1);
-    for (int j = 0; j < 3; j++) {point[i][j] = *(Myfloat*)arrayClient(client,index*3+j*sizeof*point,sizeof*point);}}
-    // transform points by ratio from file times affineMat
-    // draw triangles with glBegin glEnd
+    for (int j = 0; j < 3; j++)
+    point[j] = *(Myfloat*)arrayClient(client,index*3+j*sizeof*point,sizeof*point);
+    point[3] = 1.0;
+    jumpvec(point,file->sent,4);
+    glVertex3f(point[0],point[1],point[2]);}
+    glEnd();
     return Advance;
 }
 
