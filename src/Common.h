@@ -211,6 +211,10 @@ struct Display {
     Myfloat xPos; // current mouse position
     Myfloat yPos;
     Myfloat zPos; // pierce point
+    Myfloat xAux; // point on new plane
+    Myfloat yAux;
+    Myfloat zAux;
+    int vAux; // versor for new plane
     int xSiz; // size of display
     int ySiz;
     int xLoc; // display location
@@ -357,6 +361,7 @@ Myfloat dotvec(Myfloat *u, Myfloat *v, int n);
 Myfloat *plusvec(Myfloat *u, Myfloat *v, int n);
 Myfloat *scalevec(Myfloat *u, Myfloat s, int n);
 Myfloat *jumpvec(Myfloat *u, Myfloat *v, int n);
+Myfloat *unitvec(Myfloat *u, int n, int m);
 Myfloat *timesmat(Myfloat *u, Myfloat *v, int n);
 Myfloat *jumpmat(Myfloat *u, Myfloat *v, int n);
 Myfloat *identmat(Myfloat *u, int n);

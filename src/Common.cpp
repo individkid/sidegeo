@@ -107,6 +107,12 @@ Myfloat *jumpvec(Myfloat *u, Myfloat *v, int n)
     return u;
 }
 
+Myfloat *unitvec(Myfloat *u, int n, int m)
+{
+    for (int i = 0; i < n; i++) u[i] = (i == m ? 1.0 : 0.0);
+    return u;
+}
+
 Myfloat *timesmat(Myfloat *u, Myfloat *v, int n)
 {
     int m = n*n; Myfloat w[m];

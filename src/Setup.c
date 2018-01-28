@@ -147,9 +147,13 @@ void updateUniform(enum Server server, int file, enum Shader shader)
         if (ptr->fixed) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->saved);
         else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}
     CASE(Feather)
-        glUniform3f(uniform->handle,xPos,yPos,zPos);
+        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xPos,yPos,zPos);
+        CASE(Adpoint) glUniform3f(uniform->handle,xAux,yAux,zAux);
+        DEFAULT(exitErrstr("feather too shader\n");)
     CASE(Arrow)
-        glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
+        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
+        CASE(Adpoint) {Myfloat temp[3]; unitvec(temp,3,vAux); glUniform3f(uniform->handle,temp[0],temp[1],temp[2]);}
+        DEFAULT(exitErrstr("arrow too shader\n");)
     CASE(Cutoff)
         glUniform1f(uniform->handle,cutoff);
     CASE(Slope)

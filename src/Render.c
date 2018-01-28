@@ -409,7 +409,6 @@ void enqueDishader(void)
 void enquePershader(void)
 {
     updateContext(0);
-    // TODO set feather and arrow for line of sight
     for (int i = 0; i < sizeFile(); i++)
     enqueShader(pershader,i,0,renderPierce);
 }
