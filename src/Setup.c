@@ -101,8 +101,6 @@ void setupFile(int name)
     setupBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
     setupBuffer(file->buffer+VertSub,"vertex",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
     setupBuffer(file->buffer+CnstrSub,"construct",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
-    setupBuffer(file->buffer+SideSub,"side",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
-    setupBuffer(file->buffer+HalfSub,"half",INVALID_LOCATION,GL_UNSIGNED_INT,ELEMENT_DIMENSIONS);
 }
 
 void updateFile(int sub, struct File *copy)
@@ -134,11 +132,12 @@ void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
 void updateUniform(enum Server server, int file, enum Shader shader)
 {
     struct Uniform *uniform = arrayCode(shader,1)->uniform+server;
-    SWITCH(server,Invalid) {
-        glUniform1fv(uniform->handle,2,invalid);}
-    CASE(Basis) {
-        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);}
-    CASE(Affine) if (file >= 0) {
+    SWITCH(server,Invalid)
+        glUniform1fv(uniform->handle,2,invalid);
+    CASE(Basis)
+        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
+    CASE(Affine)
+        if (file < 0) exitErrstr("affine too file\n");
         struct File *ptr = arrayFile(file,1);
         int posedge = (ptr->fixed && !ptr->last);
         int negedge = (!ptr->fixed && ptr->last);
@@ -146,17 +145,15 @@ void updateUniform(enum Server server, int file, enum Shader shader)
         if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),displayMat,4);
         if (negedge) jumpmat(invmat(copymat(ptr->ratio,displayMat,4),4),ptr->saved,4);
         if (ptr->fixed) glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->saved);
-        else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}}
+        else {Myfloat sent[16]; glUniformMatrix4fv(uniform->handle,1,GL_FALSE,timesmat(copymat(sent,ptr->ratio,4),displayMat,4));}
     CASE(Feather)
-        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos,yPos,zPos);
-        DEFAULT(exitErrstr("feather too shader\n");)
+        glUniform3f(uniform->handle,xPos,yPos,zPos);
     CASE(Arrow)
-        SWITCH(shader,Perplane) FALL(Perpoint) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
-        DEFAULT(exitErrstr("arrow too shader\n");)
-    CASE(Cutoff) {
-        glUniform1f(uniform->handle,cutoff);}
-    CASE(Slope) {
-        glUniform1f(uniform->handle,slope);}
+        glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
+    CASE(Cutoff)
+        glUniform1f(uniform->handle,cutoff);
+    CASE(Slope)
+        glUniform1f(uniform->handle,slope);
     CASE(Aspect) {
 #ifdef __APPLE__
         glViewport(0, 0, xSiz*2, ySiz*2);
@@ -180,6 +177,8 @@ enum Data bufferVertex(int i, enum Shader shader)
     CASE(Adpoint) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
     CASE(Perplane) {enum Data data[3] = {PlaneBuf,VersorBuf,Datas}; return data[i];}
     CASE(Perpoint) {enum Data data[3] = {PointBuf,Datas}; return data[i];}
+    CASE(Replane) {enum Data data[3] = {CnstrBuf,DimnBuf,Datas}; return data[i];}
+    CASE(Repoint) {enum Data data[3] = {VertBuf,Datas}; return data[i];}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
     return Datas;
 }
@@ -191,10 +190,12 @@ enum Data bufferElement(int i, enum Shader shader)
     CASE(Dipoint) {enum Data data[3] = {FrameSub,Datas}; return data[i];}
     CASE(Coplane) {enum Data data[3] = {VertSub,Datas}; return data[i];}
     CASE(Copoint) {enum Data data[3] = {CnstrSub,Datas}; return data[i];}
-    CASE(Adplane) {enum Data data[3] = {SideSub,Datas}; return data[i];}
-    CASE(Adpoint) {enum Data data[3] = {HalfSub,Datas}; return data[i];}
+    CASE(Adplane) {enum Data data[3] = {Datas}; return data[i];}
+    CASE(Adpoint) {enum Data data[3] = {Datas}; return data[i];}
     CASE(Perplane) {enum Data data[3] = {FaceSub,Datas}; return data[i];}
     CASE(Perpoint) {enum Data data[3] = {FrameSub,Datas}; return data[i];}
+    CASE(Replane) {enum Data data[3] = {Datas}; return data[i];}
+    CASE(Repoint) {enum Data data[3] = {Datas}; return data[i];}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
     return Datas;
 }
@@ -210,6 +211,8 @@ enum Data bufferFeedback(int i, enum Shader shader)
     CASE(Adpoint) {enum Data data[3] = {HalfBuf,Datas}; return data[i];}
     CASE(Perplane) {enum Data data[3] = {PierceBuf,Datas}; return data[i];}
     CASE(Perpoint) {enum Data data[3] = {PierceBuf,Datas}; return data[i];}
+    CASE(Replane) {enum Data data[3] = {VertBuf,Datas}; return data[i];}
+    CASE(Repoint) {enum Data data[3] = {CnstrBuf,DimnBuf,Datas}; return data[i];}
     DEFAULT(exitErrstr("invalid shader %d\n",shader);)
     return Datas;
 }
@@ -236,12 +239,14 @@ enum Server uniformServer(int i, enum Shader shader)
     if (i >= 4) exitErrstr("uniform too server\n");
     SWITCH(shader,Diplane) {enum Server server[4] = {Affine,Servers}; return server[i];}
     CASE(Dipoint) {enum Server server[4] = {Affine,Servers}; return server[i];}
-    CASE(Coplane) {enum Server server[4] = {Servers}; return server[i];} // TODO
-    CASE(Copoint) {enum Server server[4] = {Servers}; return server[i];} // TODO
-    CASE(Adplane) {enum Server server[4] = {Servers}; return server[i];} // TODO
-    CASE(Adpoint) {enum Server server[4] = {Servers}; return server[i];} // TODO
-    CASE(Perplane) {enum Server server[4] = {Affine,Feather,Servers}; return server[i];}
-    CASE(Perpoint) {enum Server server[4] = {Affine,Feather,Servers}; return server[i];}
+    CASE(Coplane) {enum Server server[4] = {Servers}; return server[i];}
+    CASE(Copoint) {enum Server server[4] = {Servers}; return server[i];}
+    CASE(Adplane) {enum Server server[4] = {Feather,Arrow,Servers}; return server[i];}
+    CASE(Adpoint) {enum Server server[4] = {Feather,Arrow,Servers}; return server[i];}
+    CASE(Perplane) {enum Server server[4] = {Affine,Feather,Arrow,Servers}; return server[i];}
+    CASE(Perpoint) {enum Server server[4] = {Affine,Feather,Arrow,Servers}; return server[i];}
+    CASE(Replane) {enum Server server[4] = {Servers}; return server[i];}
+    CASE(Repoint) {enum Server server[4] = {Servers}; return server[i];}
     DEFAULT(exitErrstr("uniform too server\n");)
     return Servers;
 }

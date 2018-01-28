@@ -382,9 +382,6 @@ void bringupBuiltin(void)
         2,3,0,
         3,0,1,
     };
-    Myuint wrt[NUM_SIDES*SCALAR_DIMENSIONS] = {
-        0,1,2,
-    };
 
     if (sizeDisplay() == 0) {
         const char *str = "Sculpt";
@@ -407,7 +404,6 @@ void bringupBuiltin(void)
     updateBuffer(0,VersorBuf,0,NUM_PLANES,versor);
     updateBuffer(0,FaceSub,0,NUM_FACES,face);
     updateBuffer(0,VertSub,0,NUM_POINTS,vertex);
-    updateBuffer(0,SideSub,0,NUM_SIDES,wrt);
     enqueDishader();
 }
 #endif

@@ -140,8 +140,6 @@ enum Data { // render buffers
     FrameSub, // subscripts into points
     VertSub, // triples of planes
     CnstrSub, // triples of points
-    SideSub, // vertex wrt planes
-    HalfSub, // plane wrt vertices
     Datas};
 enum Server { // one value per uniform
     Invalid, // scalar indicating divide by near-zero
