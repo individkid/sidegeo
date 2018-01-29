@@ -341,37 +341,24 @@ enum Action renderLayer(int state)
     return Advance;
 }
 
-enum Action renderPreview(int state)
-{
-    RENDER_DEARG
-    if (state-- == 0) {
-        layer = tagReint();
-        *enlocCmdHsInt(1) = qPos;
-        *enlocCmdHsInt(1) = pPos;
-        *enlocCmdHsInt(1) = layer;
-        *enlocCmdHsCmd(1) = responseLayer;
-        *enlocCmdEvent(1) = Corner;
-        return Continue;}
-    if (sizeReint(layer) == 0) return Defer;
-    updateAffine(file);
-    int len = *delocReint(layer,1);
-    int client = file->buffer[PointBuf].client;
-    glBegin(GL_TRIANGLE_FAN);
-    for (int i = 0; i < len; i++) {
-    Myfloat point[4];
-    int index = *delocReint(layer,1);
-    for (int j = 0; j < 3; j++)
-    point[j] = *(Myfloat*)arrayClient(client,index*3+j*sizeof*point,sizeof*point);
-    point[3] = 1.0;
-    jumpvec(point,file->sent,4);
-    glVertex3f(point[0],point[1],point[2]);}
-    glEnd();
-    return Advance;
-}
-
 enum Action renderClient(int state)
 {
     RENDER_DEARG
+    for (enum Data *i = feedback; *i < Datas; i++) {
+    int dimn = buffer[*i].dimn;
+    int done = buffer[*i].done;
+    int size = done*dimn*bufferType(buffer[*i].type);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer[*i].handle);
+    SWITCH(buffer[*i].type,GL_UNSIGNED_INT) {
+        int result[done*dimn];
+        glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, result);
+        updateBuffer(render->file,*i,0,size,result);}
+    CASE(GL_FLOAT) {
+        Myfloat result[done*dimn];
+        glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, result);
+        updateBuffer(render->file,*i,0,size,result);}
+    DEFAULT(exitErrstr("unknown render type\n");)
+    glBindBuffer(GL_ARRAY_BUFFER, 0);}
     // update feedback to its client
     return Advance;    
 }
@@ -410,10 +397,9 @@ void enqueSwap(void)
     if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
     renderSwap = sizeFile();
     renderClear = 1;
-    Machine follow = 0;
-    if (mode[Sculpt] == Transform && mode[Target] == Plane) follow = renderPreview;
     for (int i = 0; i < sizeFile(); i++)
-    enqueShader(dishader,i,context,follow);
+    enqueShader(dishader,i,context,0);
+    // if (mode[Sculpt] == Transform && mode[Target] == Plane) enqueShader(preshader,i,context,0);
 }
 
 void enqueDishader(void)
