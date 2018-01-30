@@ -180,7 +180,6 @@ void backend(char chr)
 {
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeCslPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
-    // TODO handle indexof with no echo to Cmd, and console echo only if mark changed
     if (motionof(chr) == Enter) {
         enum Menu line = tailline();
         int match = tailmatch();
@@ -214,6 +213,7 @@ void backend(char chr)
         useEcho(--depth); referCslPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocCslPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
+    else if (indexof(chr) > 0) ;// TODO handle indexof with no echo to Cmd, and console echo only if mark changed
     else if (motionof(chr) == Space) writemenu();
     if (depth > 0) writestr(arrayCslPtr(0,sizeCslPtr()));
     else writeitem(tailline(),tailmatch());

@@ -56,7 +56,7 @@ void target(void)
 void init(void)
 {
     SWITCH(click,Init) /*nop*/
-    CASE(Right) {rightRight(); leftManipulate(); click = Init;}
+    CASE(Right) {leftManipulate(); click = Init;}
     CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
     CASE(Left) {leftManipulate(); click = Init;}
     DEFAULT(exitErrstr("invalid click mode\n");)
@@ -65,8 +65,9 @@ void init(void)
 void only(void)
 {
     struct Display *save = current;
-    for (int i = 0; i < sizeDisplay(); i++)
-    if (i != contextHandle && mark[Sculpt] == Transform) init();
+    for (int i = 0; i < sizeDisplay(); i++) {
+    current = arrayDisplay(i,1);
+    if (i != contextHandle && mark[Sculpt] == Transform) init();}
     current = save;
 }
 
@@ -75,9 +76,11 @@ void menu(void)
     char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
     enum Menu line = indexof(chr);
-    if (mark[item[line].mode] == Transform && line != Transform) init();
+    enum Menu save = mark[item[line].mode];
     mark[item[line].mode] = line;
-    if (item[line].mode == Target) target();}
+    if (save == Transform && line != Transform) init();
+    if (save != Transform && line == Transform) {only(); target();}
+    if (save == Transform && line == Target) target();}
     else exitErrstr("invalid menu char\n");
 }
 

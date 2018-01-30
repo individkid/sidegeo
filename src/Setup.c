@@ -521,7 +521,7 @@ void updateContext(int sub)
     current = arrayDisplay(sub,1);
     if (sub != contextHandle) exitErrstr("display too context\n");
     for (int i = 0; i < Modes; i++) *enlocCmdOutput(1) = ofindex(mark[i]);
-    if (mark[Target] == Alternate) target();
+    if (mark[Action] == Transform) {only(); target();}
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();
     useDisplayFile(contextHandle); referFile();
