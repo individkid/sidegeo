@@ -19,7 +19,6 @@
 #include "Main.h"
 
 int layer = 0;
-enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 struct Display *current = 0;
 
 enum Cnd {Was,Not,Cmd,Arg,One,Sgl,Mlt};

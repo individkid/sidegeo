@@ -452,8 +452,11 @@ void displayRefresh(GLFWwindow *ptr);
 
 void setupDisplay(int name)
 {
-    struct Display *current = enlocDisplay(1);
+    struct Display *save = current;
+    current = enlocDisplay(1);
     displayName = name;
+    enum Menu init[Modes] = INIT;
+    memcpy(mark,init,sizeof(init));
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -504,6 +507,11 @@ void setupDisplay(int name)
     for (int i = 0; i < 16; i++) displayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    const char *str = "preview";
+    int len = strlen(str);
+    setupFile(sizeCmdBuf());
+    memcpy(enlocCmdBuf(len),str,len);
+    current = save;
 }
 
 void updateContext(int sub)
@@ -512,10 +520,11 @@ void updateContext(int sub)
     if (sub == contextHandle) return;
     current = arrayDisplay(sub,1);
     if (sub != contextHandle) exitErrstr("display too context\n");
+    // TODO send new mode to console
+    target();
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();
     useDisplayFile(contextHandle); referFile();
-    target();
     enquePershader();
 }
 

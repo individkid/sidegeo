@@ -70,9 +70,9 @@
 #define renderSwap current->swap
 #define renderClear current->clear
 #define click current->click
+#define mark current->mode
 
 extern int layer;
-extern enum Menu mode[Modes];
 extern struct Display *current;
 
 void enqueCommand(Command cmd);
@@ -87,6 +87,9 @@ void bringupBuiltin(void);
 #endif
 
 void compass(double xdelta, double ydelta);
+void rightRight(void);
+void matrixMatrix(void);
+void leftManipulate(void);
 void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayCursor(GLFWwindow *display, double xpos, double ypos);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);

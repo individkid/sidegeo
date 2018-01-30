@@ -221,6 +221,7 @@ struct Display {
     int swap;
     int clear;
     enum Click click; // transform submode controlled by mouse buttons
+    enum Menu mode[Modes]; // sync to mark in Console.c
 };
 struct File {
     int name;

@@ -46,9 +46,9 @@ void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
     for (int j = 0; j < sizeDisplayFile(i); j++)
-    SWITCH(mode[Target],Plane) arrayDisplayFile(i,j,1)->fixed = 1;
-    CASE(Polytope) arrayDisplayFile(i,j,1)->fixed = (j==qPos);
-    CASE(Alternate) arrayDisplayFile(i,j,1)->fixed = (i==contextHandle);
+    SWITCH(mark[Target],Plane) arrayDisplayFile(i,j,1)->fixed = (j>0);
+    CASE(Polytope) arrayDisplayFile(i,j,1)->fixed = (j!=qPos);
+    CASE(Alternate) arrayDisplayFile(i,j,1)->fixed = (i!=contextHandle);
     CASE(Session) arrayDisplayFile(i,j,1)->fixed = 0;
     DEFAULT(exitErrstr("target too line\n");)
 }
@@ -57,9 +57,15 @@ void menu(void)
 {
     char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
-        enum Menu line = indexof(chr);
-        mode[item[line].mode] = line;
-        target();}
+    enum Menu line = indexof(chr);
+    if (mark[item[line].mode] == Transform && line != Transform) {
+    SWITCH(click,Init) /*nop*/
+    CASE(Right) {rightRight(); leftManipulate(); click = Init;}
+    CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
+    CASE(Left) {leftManipulate(); click = Init;}
+    DEFAULT(exitErrstr("invalid click mode\n");)}
+    mark[item[line].mode] = line;
+    if (item[line].mode == Target) target();}
     else exitErrstr("invalid menu char\n");
 }
 
@@ -73,18 +79,12 @@ void metric(void)
     *enlocCmdChange(1) = change;
 }
 
-int xferName(void)
-{
-    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
-    int name = sizeCmdBuf();
-    (useCmdBuf(), xstrCmdBuf(0));
-    return name;
-}
-
 void display(void)
 {
     int new = sizeDisplay();
-    setupDisplay(xferName());
+    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
+    setupDisplay(sizeCmdBuf());
+    useCmdBuf(); xstrCmdBuf('\n'); *enlocCmdBuf(1) = 0;
     updateContext(new);
     for (enum Shader shader = 0; shader < Shaders; shader++) {
     setupCode(shader);}
@@ -112,9 +112,11 @@ void file(void)
     for (int context = 0; context < sizeDisplay(); context++) {
     updateContext(context);
     int sub = sizeFile();
-    setupFile(xferName());
+    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
+    setupFile(sizeCmdBuf());
+    useCmdBuf(); xstrCmdBuf('\n'); *enlocCmdBuf(1) = 0;
     struct File *file = arrayFile(sub,1);
-    SWITCH(mode[Target],Plane) file->fixed = 1;
+    SWITCH(mark[Target],Plane) file->fixed = 1;
     CASE(Polytope) file->fixed = 0;
     CASE(Alternate) file->fixed = (context==save);
     CASE(Session) file->fixed = 0;

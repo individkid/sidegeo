@@ -359,7 +359,6 @@ enum Action renderClient(int state)
         updateBuffer(render->file,*i,0,size,result);}
     DEFAULT(exitErrstr("unknown render type\n");)
     glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    // update feedback to its client
     return Advance;    
 }
 
@@ -399,7 +398,6 @@ void enqueSwap(void)
     renderClear = 1;
     for (int i = 0; i < sizeFile(); i++)
     enqueShader(dishader,i,context,0);
-    // if (mode[Sculpt] == Transform && mode[Target] == Plane) enqueShader(preshader,i,context,0);
 }
 
 void enqueDishader(void)

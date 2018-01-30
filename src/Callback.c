@@ -66,6 +66,7 @@ void leftTransform(void)
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
     for (int i = 0; i < 16; i++) displayMata[i] = displayMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    target();
 }
 
 void leftManipulate(void)
@@ -148,7 +149,7 @@ void transformLook(void)
 
 void transformMouse(void)
 {
-    SWITCH(mode[Mouse],Rotate) transformRotate();
+    SWITCH(mark[Mouse],Rotate) transformRotate();
     CASE(Translate) transformTranslate();
     CASE(Look) transformLook();
     DEFAULT(exitErrstr("invalid mouse mode\n");)
@@ -169,7 +170,7 @@ void transformClock(void)
 {
     Myfloat u[16]; Myfloat v[16]; Myfloat w[16];
     Myfloat angle = wPos/ROLLER_GRANULARITY;
-    SWITCH(mode[Mouse],Rotate) matrixRotate(u);
+    SWITCH(mark[Mouse],Rotate) matrixRotate(u);
     CASE(Translate) {identmat(u,3);}
     CASE(Look) {identmat(u,3);}
     DEFAULT(exitErrstr("invalid mouse mode\n");)
@@ -204,7 +205,7 @@ void transformDrive(void)
 
 void transformScroll(void)
 {
-    SWITCH(mode[Roller],Clock) transformClock();
+    SWITCH(mark[Roller],Clock) transformClock();
     CASE(Cylinder) transformCylinder();
     CASE(Scale) transformScale();
     CASE(Drive) transformDrive();
@@ -223,7 +224,7 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
-        SWITCH(mode[Sculpt],Additive) leftAdditive();
+        SWITCH(mark[Sculpt],Additive) leftAdditive();
         CASE(Subtractive) leftSubtractive();
         CASE(Refine) leftRefine();
         CASE(Transform) {
@@ -232,9 +233,9 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
-        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) /*nop*/;
+        SWITCH(mark[Sculpt],Additive) FALL(Subtractive) FALL(Refine) /*nop*/;
         CASE(Transform) {
-            SWITCH(click,Init)
+            SWITCH(click,Init) /*nop*/
             CASE(Right) {rightRight(); click = Left;}
             CASE(Matrix) matrixMatrix(); FALL(Left) {rightLeft(); click = Right;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
@@ -248,7 +249,7 @@ void displayCursor(GLFWwindow *ptr, double xpos, double ypos)
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
-    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
+    SWITCH(mark[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) enquePershader();
         CASE(Matrix) {matrixMatrix(); click = Left;} FALL(Left) transformMouse();
@@ -260,7 +261,7 @@ void displayScroll(GLFWwindow *ptr, double xoffset, double yoffset)
 {
     updateDisplay(ptr);
     wPos = wPos + yoffset;
-    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
+    SWITCH(mark[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right)
         CASE(Left) click = Matrix; FALL(Matrix) transformScroll();
