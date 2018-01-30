@@ -43,7 +43,6 @@
 #define VAO current->VAO
 #define invalid current->invalid
 #define basisMat current->basisMat
-#define displayMat current->affineMat
 #define displayMata current->affineMata
 #define displayMatb current->affineMatb
 #define xPoint current->xPoint
@@ -74,6 +73,7 @@
 
 extern int layer;
 extern struct Display *current;
+extern Myfloat affineMat[16];
 
 void enqueCommand(Command cmd);
 void deferCommand(Command cmd);

@@ -64,9 +64,12 @@ void leftRefine(void)
 void leftTransform(void)
 {
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
-    for (int i = 0; i < 16; i++) displayMata[i] = displayMat[i];
+    for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     target(); only();
+    // send Filter event
+    // send Face or Frame event with respondClient response
+    // copy pPos in FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from qPos to 0
 }
 
 void leftManipulate(void)
@@ -124,9 +127,9 @@ void transformRotate(void)
     Myfloat u[16]; matrixRotate(u);
     Myfloat v[16]; copyary(identmat(v,4),u,3,4,9);
     matrixFixed(v);
-    copymat(displayMat,displayMata,4);
-    jumpmat(displayMat,displayMatb,4);
-    jumpmat(displayMat,v,4);
+    copymat(affineMat,displayMata,4);
+    jumpmat(affineMat,displayMatb,4);
+    jumpmat(affineMat,v,4);
     enqueDishader();
 }
 
@@ -135,9 +138,9 @@ void transformTranslate(void)
     Myfloat u[16]; identmat(u,4);
     u[12] = xPos-xPoint;
     u[13] = yPos-yPoint;
-    copymat(displayMat,displayMata,4);
-    jumpmat(displayMat,displayMatb,4);
-    jumpmat(displayMat,u,4);
+    copymat(affineMat,displayMata,4);
+    jumpmat(affineMat,displayMatb,4);
+    jumpmat(affineMat,u,4);
     enqueDishader();
 }
 

@@ -102,7 +102,6 @@ void display(void)
     setupCode(shader);}
     if (new > 0) {
     struct Display *save = arrayDisplay(0,1);
-    for (int i = 0; i < 16; i++) displayMat[i] = save->affineMat[i];
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
     for (int i = 0; i < sizeDisplayFile(0); i++) {
@@ -133,7 +132,7 @@ void file(void)
     CASE(Alternate) file->fixed = (context==save);
     CASE(Session) file->fixed = 0;
     DEFAULT(exitErrstr("target too line\n");)
-    invmat(copymat(file->ratio,displayMat,4),4);}
+    invmat(copymat(file->ratio,affineMat,4),4);}
 }
 
 void responseLayer(void)

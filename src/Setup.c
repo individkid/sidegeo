@@ -134,10 +134,10 @@ void updateAffine(struct File *ptr)
     int posedge = (ptr->fixed && !ptr->last);
     int negedge = (!ptr->fixed && ptr->last);
     ptr->last = ptr->fixed;
-    if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),displayMat,4);
-    if (negedge) jumpmat(invmat(copymat(ptr->ratio,displayMat,4),4),ptr->saved,4);
+    if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),affineMat,4);
+    if (negedge) jumpmat(invmat(copymat(ptr->ratio,affineMat,4),4),ptr->saved,4);
     if (ptr->fixed) copymat(ptr->sent,ptr->saved,4);
-    else timesmat(copymat(ptr->sent,ptr->ratio,4),displayMat,4);
+    else timesmat(copymat(ptr->sent,ptr->ratio,4),affineMat,4);
 }
 
 void updateUniform(enum Server server, int file, enum Shader shader)
@@ -504,7 +504,7 @@ void setupDisplay(int name)
     int row = i % 3;
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}
-    for (int i = 0; i < 16; i++) displayMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     const char *str = "preview";

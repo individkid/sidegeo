@@ -195,7 +195,6 @@ struct Display {
     Myuint VAO;
     Myfloat invalid[2];
     Myfloat basisMat[27];
-    Myfloat affineMat[16]; // transformation state sent to uniform
     Myfloat affineMata[16]; // transformation state at click time
     Myfloat affineMatb[16]; // transformation due to roller
     Myfloat xPoint;  // position of pierce point at click time
