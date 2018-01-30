@@ -504,7 +504,6 @@ void setupDisplay(int name)
     int row = i % 3;
     int one = (column > 0 && ((row < versor && row == column-1) || (row > versor && row == column)));
     basisMat[i] = (one ? 1.0 : 0.0);}
-    for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     const char *str = "preview";
@@ -512,6 +511,7 @@ void setupDisplay(int name)
     setupFile(sizeCmdBuf());
     memcpy(enlocCmdBuf(len),str,len);
     current = save;
+    if (current == 0) for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
 void updateContext(int sub)

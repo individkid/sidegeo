@@ -20,6 +20,6 @@
 
 int processOption(int len)
 {
-    return 0; // given unlocProChar(len), return 0 or length of filename in enlocProChar
+    return 0; // TODO given unlocProChar(len), return 0 or length of filename in enlocProChar
 }
 

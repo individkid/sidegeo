@@ -20,7 +20,7 @@
 
 int layer = 0; // argument shared by command and commands it schedules
 struct Display *current = 0; // display currently in focus
-Myfloat affineMat[16]; // transformation state sent to uniform
+Myfloat affineMat[16] = {0}; // transformation state sent to uniform
 
 enum Cnd {Was,Not,Cmd,Arg,One,Sgl,Mlt};
 enum Act {Aft,Suf,Str,Inj,End,Uni,Wil,Wnt};

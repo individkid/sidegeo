@@ -37,8 +37,8 @@ char alphaof(char code)
 int indexof(char code)
 {
     int uchar = code; if (uchar < 0) uchar += 256;
-    if (uchar < 128 || uchar - 128 < Motions) return -1;
-    return uchar - 128 - Motions;
+    if (uchar < 128 + 'z' || uchar - 128 - 'z' < Motions + 'a') return -1;
+    return uchar - 128 - Motions - 'z' + 'a';
 }
 
 char ofglfw(int key)
@@ -72,7 +72,7 @@ char ofalpha(char code)
 
 char ofindex(int code)
 {
-    int uchar = (int)code + 128 + Motions;
+    int uchar = (int)code + 128 + Motions + 'z' - 'a';
     if (indexof(uchar) != code) exitErrstr("code not reversed\n");
     return uchar;
 }

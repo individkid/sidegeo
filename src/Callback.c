@@ -67,14 +67,15 @@ void leftTransform(void)
     for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     target(); only();
-    // send Filter event
+    // TODO send Filter event
     // send Face or Frame event with respondClient response
     // copy pPos in FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from qPos to 0
 }
 
 void leftManipulate(void)
 {
-    // TODO append --plane with same points as renderPreview
+    // TODO append --plane from base or construct plane
+    // delete FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from file 0
 }
 
 void rightRight(void)
