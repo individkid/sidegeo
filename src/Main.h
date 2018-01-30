@@ -81,6 +81,7 @@ void enqueMachine(Machine machine);
 void followMachine(Machine machine);
 
 void target(void);
+void only(void);
 void responseLayer(void);
 #ifdef BRINGUP
 void bringupBuiltin(void);

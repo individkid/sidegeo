@@ -53,17 +53,29 @@ void target(void)
     DEFAULT(exitErrstr("target too line\n");)
 }
 
+void init(void)
+{
+    SWITCH(click,Init) /*nop*/
+    CASE(Right) {rightRight(); leftManipulate(); click = Init;}
+    CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
+    CASE(Left) {leftManipulate(); click = Init;}
+    DEFAULT(exitErrstr("invalid click mode\n");)
+}
+
+void only(void)
+{
+    struct Display *save = current;
+    for (int i = 0; i < sizeDisplay(); i++)
+    if (i != contextHandle && mark[Sculpt] == Transform) init();
+    current = save;
+}
+
 void menu(void)
 {
     char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
     enum Menu line = indexof(chr);
-    if (mark[item[line].mode] == Transform && line != Transform) {
-    SWITCH(click,Init) /*nop*/
-    CASE(Right) {rightRight(); leftManipulate(); click = Init;}
-    CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
-    CASE(Left) {leftManipulate(); click = Init;}
-    DEFAULT(exitErrstr("invalid click mode\n");)}
+    if (mark[item[line].mode] == Transform && line != Transform) init();
     mark[item[line].mode] = line;
     if (item[line].mode == Target) target();}
     else exitErrstr("invalid menu char\n");

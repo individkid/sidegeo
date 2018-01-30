@@ -66,7 +66,7 @@ void leftTransform(void)
     wPos = 0; xPoint = xPos; yPoint = yPos; zPoint = zPos;
     for (int i = 0; i < 16; i++) displayMata[i] = displayMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    target();
+    target(); only();
 }
 
 void leftManipulate(void)
