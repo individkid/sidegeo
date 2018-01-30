@@ -55,6 +55,7 @@ struct Item item[Menus] = {
     {Performs,Action,2,"Configure","open dialog to decorate plane's facets"},
     {Performs,Action,2,"Hyperlink","jump through facet to another space"},
     {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
+    // TODO add graffiti, and stock/flow screensaver, facet decoration
 
 int esc = 0;
 int inj = 0;
@@ -179,6 +180,7 @@ void backend(char chr)
 {
     if (depth > 0) {writechr('\r'); for (int i = 0; i < sizeCslPtr(); i++) writechr(' '); writechr('\r');}
     else unwriteitem(tailline());
+    // TODO handle indexof with no echo to Cmd, and console echo only if mark changed
     if (motionof(chr) == Enter) {
         enum Menu line = tailline();
         int match = tailmatch();

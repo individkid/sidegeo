@@ -520,8 +520,8 @@ void updateContext(int sub)
     if (sub == contextHandle) return;
     current = arrayDisplay(sub,1);
     if (sub != contextHandle) exitErrstr("display too context\n");
-    // TODO send new mode to console
-    target();
+    for (int i = 0; i < Modes; i++) *enlocCmdOutput(1) = ofindex(mark[i]);
+    if (mark[Target] == Alternate) target();
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();
     useDisplayFile(contextHandle); referFile();
