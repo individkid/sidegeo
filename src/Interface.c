@@ -163,37 +163,91 @@ void responseClient(void)
 
 enum Action configureRefine(int state)
 {
-    // wait for file's complete count
-    // append plane to file's planebuf in each display
+    int file = *deargCmdInt(1);
+    int pending = *deargCmdInt(1);
+    int versor = *deargCmdInt(1);
+    Myfloat plane[3];
+    for (int i = 0; i < 3; i++) plane[i] = *deargCmdFloat(1);
+    if (arrayShare(file,1)->complete+1 < pending) return Defer;
+    if (state-- == 0) {
+    // TODO append plane to file's planebuf in each display
     // send vertex event with layer response
+    return Continue;}
+    if (state-- == 0) {
+    // wait for layer response
+    return Continue;}
+    if (state-- == 0) {
     // update pointsub client for each display
     // in each display, enque Coplane shader with renderClient follow
+    return Continue;}
+    if (state-- == 0) {
     // wait for point client size to equal vertex size in layer
+    return Continue;}
+    if (state-- == 0) {
     // enque Adpoint shader for wrt with layer follow
+    return Continue;}
+    if (state-- == 0) {
+    // wait for layer follow
+    return Continue;}
+    if (state-- == 0) {
     // send divide event with proceed response
+    return Continue;}
+    if (state-- == 0) {
+    // wait for proceed response
+    return Continue;}
     // increment file's complete count
+    arrayShare(file,1)->complete += 1;
     enqueDishader();
     return Advance;
 }
 
 void configurePlane(void)
 {
-    // increment file's pending count
-    // kick off configureRefine
+    int file = *relocCmdInt(1);
+    *enlocCmdInt(1) = arrayShare(file,1)->pending;
+    relocCmdInt(1); // versor
+    relocCmdFloat(3); // plane vector
+    arrayShare(file,1)->pending += 1;
+    enqueMachine(configureRefine);
 }
 
 void configurePoint(void)
 {
-    int plane = *delocCmdInt(1);
-    struct Share *share = arrayShare(plane,1);
+    int file = *delocCmdInt(1);
+    struct Share *share = arrayShare(file,1);
+    for (int i = 0; i < 3; i++)
+    share->point[share->collect*3+i] = *delocCmdFloat(1);
     share->collect += 1;
-    for (int i = 0; i < PLANE_DIMENSIONS; i++)
-    share->plane[i] = *delocCmdFloat(1);
-    //if (share->collect == CONSTRUCT_DIMENSIONS) {
-    //Myfloat *base = arrayDisplay(0,1)->basisMat+(versor*9);
-    //for (int i = 0; i < PLANE_DIMENSIONS; i++)
-    // save up three points to construct plane
-    // enque configurePlane
+    if (share->collect == 3) {
+    share->collect = 0;
+    // find flattest dimension
+    Myfloat mindiag[3];
+    Myfloat maxdiag[3];
+    for (int i = 0; i < 3; i++) mindiag[i] = maxdiag[i] = share->point[i];
+    for (int i = 1; i < 3; i++) for (int j = 0; j < 3; j++) if (share->point[i*3+j] < mindiag[j]) mindiag[j] = share->point[i*3+j];
+    for (int i = 1; i < 3; i++) for (int j = 0; j < 3; j++) if (share->point[i*3+j] > maxdiag[j]) maxdiag[j] = share->point[i*3+j];
+    int versor = 0;
+    for (int i = 1; i < 3; i++) if (maxdiag[i]-mindiag[i] < maxdiag[versor]-mindiag[versor]) versor = i;
+    // construct plane from collected points
+    // d=(b-a)X(c-a)
+    // (x-a)*d=0
+    // x*d-a*d=x*d-e=0
+    // x0*d0+x1*d1+x2*d2-e=0
+    // x2=(x0*d0+x1*d1-e)/(-d2)
+    Myfloat plane[3];
+    Myfloat *base = basisMat+(versor*9);
+    for (int j = 0; j < 3; j++) {
+    scalevec(share->point,-1.0,3);
+    plusvec(share->point+3,share->point,3);
+    plusvec(share->point+6,share->point,3);
+    crossvec(share->point+3,share->point+6);
+    plane[j] = dotvec(share->point,share->point+3,3);
+    for (int i = 0; i < 3; i++) if (i != versor) plane[j] += base[j*3+i]*share->point[3+i];
+    plane[j] /= -share->point[3+versor];}
+    *enlocCmdInt(1) = file;
+    *enlocCmdInt(1) = versor;
+    for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = plane[i];
+    enqueCommand(configurePlane);}
 }
 
 void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
