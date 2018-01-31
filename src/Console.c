@@ -152,6 +152,16 @@ void writematch(char chr)
     writemenu();
 }
 
+void writeline(enum Menu line)
+{
+    struct Item *iptr = &item[line];
+    for (int i = 0; i < iptr->level; i++) writechr(' ');
+    writestr(iptr->name);
+    writestr(" ** ");
+    writestr(iptr->comment);
+    writechr('\n');
+}
+
 void frontend(char key)
 {
     if (esc == 0 && key >= 'a' && key <= 'z' && inj == 0) *enlocOutput(1) = ofalpha(key);
@@ -202,18 +212,21 @@ void backend(char chr)
     else if (motionof(chr) == Back && sizeLine() == 1) writemenu();
     else if (alphaof(chr) == '\r') {useEcho(depth++); referCslPtr();}
     else if (alphaof(chr) == '\n' && depth > 0) {
-        *enlocCslPtr(1) = alphaof(chr);
         int len = sizeCslPtr();
         writestr(arrayCslPtr(0,len));
-        delocCslPtr(1); len--;
         if (*arrayCslPtr(0,1) == '-') {
+        delocCslPtr(1); len -= 1;
         if (len > 1 && *arrayCslPtr(1,1) == '-') {
-        memcpy(enlocCslOption(2),"-e",2); delocCslOption(2);}
+        delocCslPtr(1); len -= 1;
+        memcpy(enlocCslOption(2),"-e",2);}
         memcpy(enlocCslOption(len),delocCslPtr(len),len);}
         useEcho(--depth); referCslPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocCslPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));
-    else if (indexof(chr) > 0) ;// TODO handle indexof with no echo to Cmd, and console echo only if mark changed
+    else if (indexof(chr) > 0) {
+        int line = indexof(chr);
+        mark[item[line].mode] = line;
+        writeline(line);}
     else if (motionof(chr) == Space) writemenu();
     if (depth > 0) writestr(arrayCslPtr(0,sizeCslPtr()));
     else writeitem(tailline(),tailmatch());
