@@ -67,7 +67,7 @@ void leftTransform(void)
     for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     // TODO send Filter event
-    // send Face or Frame event with respondClient response
+    // send Face or Frame event with responseClient response
     // copy pPos in FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from qPos to 0
 }
 

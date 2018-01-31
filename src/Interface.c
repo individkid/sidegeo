@@ -149,6 +149,18 @@ void responseLayer(void)
     else *arrayReint(tag,0,1) = 1;
 }
 
+void responseClient(void)
+{
+    int context = *delocCmdInt(1);
+    int file = *delocCmdInt(1);
+    int data = *delocCmdInt(1);
+    int size = sizeof*arrayCmdInt(0,0);
+    int done = size**delocCmdInt(1);
+    int todo = size**delocCmdInt(1);
+    updateContext(context);
+    updateBuffer(file,data,done,todo,delocCmdInt(todo));
+}
+
 enum Action configureRefine(int state)
 {
     // wait for file's complete count
@@ -172,6 +184,14 @@ void configurePlane(void)
 
 void configurePoint(void)
 {
+    int plane = *delocCmdInt(1);
+    struct Share *share = arrayShare(plane,1);
+    share->collect += 1;
+    for (int i = 0; i < PLANE_DIMENSIONS; i++)
+    share->plane[i] = *delocCmdFloat(1);
+    //if (share->collect == CONSTRUCT_DIMENSIONS) {
+    //Myfloat *base = arrayDisplay(0,1)->basisMat+(versor*9);
+    //for (int i = 0; i < PLANE_DIMENSIONS; i++)
     // save up three points to construct plane
     // enque configurePlane
 }
