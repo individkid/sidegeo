@@ -76,11 +76,13 @@ void menu(void)
     char chr = *delocCmdInt(1);
     if (indexof(chr) >= 0) {
     enum Menu line = indexof(chr);
-    enum Menu save = mark[item[line].mode];
-    mark[item[line].mode] = line;
-    if (save == Transform && line != Transform) init();
-    if (save != Transform && line == Transform) {only(); target();}
-    if (save == Transform && line == Target) target();}
+    enum Mode mode = item[line].mode;
+    enum Menu major = mark[Sculpt];
+    enum Menu minor = mark[Target];
+    mark[mode] = line;
+    if (major != Transform && line == Transform) {only(); target();}
+    if (major == Transform && mode == Sculpt && line != Transform) init();
+    if (major == Transform && mode == Target && line != minor) {init(); target();}}
     else exitErrstr("invalid menu char\n");
 }
 
