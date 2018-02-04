@@ -103,7 +103,8 @@ enum Event {
     Frame, // inout(filter), place, embed, tag: inout(frame)
     Filter, // inout(boundary, filter), tag: tag
     Divide, // inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
-    Vertex, // place: inout(vertex)
+    Vertex, // inout(boundary), place: inout(vertex)
+    Index, // inout(boundary), place: inout(index)
     Corner, // inout(boundary), place: inout(corner)
     Events};
 
@@ -256,6 +257,7 @@ struct Share { // per file state shared across displays
     int collect; // number of points collected for construct plane
     Myfloat plane[3]; // new plane
     int versor; // versor for new plane
+    int size; // number of planes per display
 };
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers]; // uniforms used by program

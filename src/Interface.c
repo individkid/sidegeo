@@ -140,60 +140,105 @@ void file(void)
 void responseLayer(void)
 {
     int tag = *delocCmdInt(1);
-    if (sizeReint(tag) == 0) {
     int len = *delocCmdInt(1);
-    useCmdInt(); xferReint(tag,len);}
-    else *arrayReint(tag,0,1) = 1;
+    useCmdInt(); xferReint(tag,len);
 }
 
-void responseClient(void)
+void responseProceed(void)
 {
-    int context = *delocCmdInt(1);
-    int file = *delocCmdInt(1);
-    enum Data data = *delocCmdInt(1);
-    int done = *delocCmdInt(1);
-    int todo = *delocCmdInt(1);
-    updateContext(context);
-    int size = bufferFlat(file,data,todo);
-    updateBuffer(file,data,done,todo,delocCmdInt(size));
+    int tag = *delocCmdInt(1);
+    int len = sizeReint(tag);
+    *arrayReint(tag,len-1,1) = 1;
 }
 
+// classify given plane and maintain topology
 enum Action configureRefine(int state)
 {
     int file = *deargCmdInt(1);
+    int plane = *deargCmdInt(1);
+    struct Share *share = arrayShare(file,1);
+    share->versor = *deargCmdInt(1);
+    for (int i = 0; i < 3; i++) share->plane[i] = *deargCmdFloat(1);
     int pending = *deargCmdInt(1);
-    int versor = *deargCmdInt(1);
-    Myfloat plane[3];
-    for (int i = 0; i < 3; i++) plane[i] = *deargCmdFloat(1);
-    if (arrayShare(file,1)->complete+1 < pending) return Defer;
     if (state-- == 0) {
-    // TODO append plane to file's planebuf in each display
+    // wait for lock on file shared struct
+    if (share->complete+1 < pending) return Defer;
     // send vertex event with layer response
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseLayer;
+    *enlocCmdEvent(1) = Vertex;
     return Continue;}
     if (state-- == 0) {
     // wait for layer response
+    if (sizeReint(layer) == 0) return Defer;
+    // update vertsub client in display 0
+    updateContext(0);
+    int flat = sizeReint(layer);
+    int *buf = delocReint(0,flat);
+    int todo = bufferUnflat(file,VertSub,flat);
+    resetBuffer(file,VertSub);
+    updateBuffer(file,VertSub,0,todo,buf);
+    // in display 0, enque Coplane shader with renderClient follow
+    updateContext(0);
+    resetBuffer(file,VertBuf);
+    enqueShader(Coplane,file,0,renderClient);
+    // send Index event to get PointSub corresponding to VertSub
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseLayer;
+    *enlocCmdEvent(1) = Index;
     return Continue;}
     if (state-- == 0) {
-    // update pointsub client for each display
-    // in each display, enque Coplane shader with renderClient follow
-    return Continue;}
-    if (state-- == 0) {
-    // wait for point client size to equal vertex size in layer
-    return Continue;}
-    if (state-- == 0) {
+    // wait for coplane done and Index event done
+    updateContext(0);
+    if (limitBuffer(file,VertBuf) < limitBuffer(file,VertSub)) return Defer;
+    if (sizeReint(layer) == 0) return Defer;
+    // xfer coplanes to point buffers in each display
+    int len = sizeReint(layer);
+    for (int j = 0; j < len; j++) {
+    // get point from j in client VertBuf in display 0
+    updateContext(0);
+    Myfloat *point = dndateBuffer(file,VertBuf,j,1);
+    int index = *arrayReint(layer,j,1);
+    for (int i = 0; i < sizeDisplay(); i++) {
+    // put point to index in client PointBuf in each display
+    updateContext(i);
+    updateBuffer(file,PointBuf,index,1,point);}}
+    delocReint(layer,len);
+    // put plane in layer for updateUniform called from shader render
+    *enlocReint(layer,1) = share->versor;
+    for (int i = 0; i < 3; i++) *enlocRefloat(layer,1) = share->plane[i];
     // enque Adpoint shader for wrt with layer follow
+    enqueShader(Adpoint,file,0,renderLayer);
     return Continue;}
     if (state-- == 0) {
-    // wait for layer follow
-    return Continue;}
-    if (state-- == 0) {
+    // wait for wrt in layer
+    if (sizeReint(layer) == 0) return Defer;
+    // append plane to file's planebuf in each display
+    updateBuffer(file,VersorBuf,plane,1,&share->versor);
+    for (int i = 0; i < sizeDisplay(); i++) {
+    updateContext(i);
+    updateBuffer(file,PlaneBuf,plane,1,share->plane);}
     // send divide event with proceed response
+    int len = sizeReint(layer);
+    *enlocCmdHsInt(1) = len;
+    for (int i = 0; i < len; i++) *enlocCmdHsInt(1) = *delocReint(layer,1);
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseProceed;
+    *enlocCmdEvent(1) = Divide;
+    *enlocReint(layer,1) = 0;
     return Continue;}
     if (state-- == 0) {
     // wait for proceed response
+    if (*arrayReint(layer,1,1) == 0) return Defer;
+    delocReint(layer,1);
     return Continue;}
     // increment file's complete count
-    arrayShare(file,1)->complete += 1;
+    if (plane > share->size) share->size += 1;
+    if (plane > share->size) exitErrstr("refine too plane\n");
+    share->complete += 1;
     enqueDishader();
     return Advance;
 }
@@ -201,9 +246,11 @@ enum Action configureRefine(int state)
 void configurePlane(void)
 {
     int file = *relocCmdInt(1);
-    *enlocCmdInt(1) = arrayShare(file,1)->pending;
+    relocCmdInt(1); // plane subscript
     relocCmdInt(1); // versor
     relocCmdFloat(3); // plane vector
+    *enlocCmdInt(1) = arrayShare(file,1)->pending;
+    layer = uniqueLayer();
     arrayShare(file,1)->pending += 1;
     enqueMachine(configureRefine);
 }

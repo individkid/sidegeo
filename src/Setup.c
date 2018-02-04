@@ -46,7 +46,8 @@ void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
     int size = buffer->dimn*bufferType(buffer->type);
     done *= size; todo *= size;
     int lim = sizeRange(client);
-    int max = (*arraySeqmax(client,1) += 1);
+    *arraySeqmax(client,1) += 1;
+    int max = *arraySeqmax(client,1);
     int loc = 0;
     for (int i = 0; i < lim; i++) {
         int len = *delocRange(client,1);
@@ -79,6 +80,34 @@ void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
     else if (loc == done) {
         *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
         memcpy(enlocClient(client,todo),data,todo);}
+}
+
+void *dndateBuffer(int file, enum Data sub, int done, int todo)
+{
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    int client = buffer->client;
+    int base = bufferUntodo(file,sub,done);
+    int size = bufferUntodo(file,sub,todo);
+    return (void *)arrayClient(client,base,size);
+}
+
+void resetBuffer(int file, enum Data sub)
+{
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    int client = buffer->client;
+    int lim = sizeRange(client);
+    int len = sizeClient(client);
+    delocRange(client,lim);
+    delocSeqnum(client,lim);
+    delocClient(client,len);
+}
+
+int limitBuffer(int file, enum Data sub)
+{
+    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    int client = buffer->client;
+    int size = sizeClient(client);
+    return bufferTodo(file,sub,size);
 }
 
 Myuint locationBuffer(enum Data data)

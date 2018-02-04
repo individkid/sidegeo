@@ -85,6 +85,8 @@ void enqueCommand(Command cmd);
 void deferCommand(Command cmd);
 void enqueMachine(Machine machine);
 void followMachine(Machine machine);
+enum Action renderClient(int state);
+enum Action renderLayer(int state);
 
 void target(void);
 void only(void);
@@ -108,8 +110,11 @@ void updateAffine(struct File *ptr);
 void updateFile(int ctx, int sub, int cpy);
 void updateContext(int sub);
 void updateDisplay(GLFWwindow *ptr);
-void updateBuffer(int file, enum Data sub, int done, int todo, void *data);
 void updateUniform(enum Server server, int file, enum Shader shader);
+void updateBuffer(int file, enum Data sub, int done, int todo, void *data);
+void *dndateBuffer(int file, enum Data sub, int done, int todo);
+void resetBuffer(int file, enum Data sub);
+int limitBuffer(int file, enum Data sub);
 
 size_t bufferType(int size);
 int bufferPrimitive(int size);
