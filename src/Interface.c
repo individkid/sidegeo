@@ -27,6 +27,7 @@ const enum Data data = FrameSub;
 #endif
 
 DEFINE_MSGSTR(CmdConfigure)
+DEFINE_MSGSTR(CmdByte)
 
 void inject(void)
 {
@@ -55,6 +56,7 @@ void target(void)
 
 void init(void)
 {
+    if (click != Init) msgstrCmdOutput("click mode cleared in display %s", '\n', stringCmdBuf(displayName,0));
     SWITCH(click,Init) /*nop*/
     CASE(Right) {leftManipulate(); click = Init;}
     CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
@@ -99,9 +101,8 @@ void metric(void)
 void display(void)
 {
     int new = sizeDisplay();
-    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
     setupDisplay(sizeCmdBuf());
-    useCmdBuf(); xstrCmdBuf('\n'); *enlocCmdBuf(1) = 0;
+    useCmdByte(); xmsgCmdBuf(0);
     updateContext(new);
     for (enum Shader shader = 0; shader < Shaders; shader++) {
     setupCode(shader);}
@@ -109,17 +110,14 @@ void display(void)
     struct Display *save = arrayDisplay(0,1);
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
-    for (int i = 0; i < sizeDisplayFile(0); i++) {
+    updateContext(0);
+    for (int i = 0; i < sizeFile(); i++) {
+    int name = arrayFile(i,1)->name;
+    updateContext(new);
     int sub = sizeFile();
-    setupFile(arrayDisplayFile(0,i,1)->name);
-    updateFile(sub,arrayDisplayFile(0,i,1));}
-    for (int file = 0; file < sizeDisplayFile(0); file++) {
-    enum Data share[] = {PlaneBuf,VersorBuf,PointBuf};
-    int lim = sizeof(share)/sizeof*share;
-    for (int i = 0; i < lim; i++) {
-    int client = arrayFile(file,1)->buffer[share[i]].client;
-    int len = sizeClient(client);
-    updateBuffer(file,share[i],0,len,arrayClient(client,0,len));}}}
+    setupFile(name);
+    updateContext(0);
+    updateFile(new,sub,i);}}
 }
 
 void file(void)
@@ -128,9 +126,8 @@ void file(void)
     for (int context = 0; context < sizeDisplay(); context++) {
     updateContext(context);
     int sub = sizeFile();
-    if (sizeCmdBuf() == 0) *enlocCmdBuf(1) = 0;
     setupFile(sizeCmdBuf());
-    useCmdBuf(); xstrCmdBuf('\n'); *enlocCmdBuf(1) = 0;
+    useCmdByte(); xmsgCmdBuf(0);
     struct File *file = arrayFile(sub,1);
     SWITCH(mark[Target],Plane) file->fixed = 1;
     CASE(Polytope) file->fixed = 0;
@@ -145,7 +142,7 @@ void responseLayer(void)
     int tag = *delocCmdInt(1);
     if (sizeReint(tag) == 0) {
     int len = *delocCmdInt(1);
-    memcpy(enlocReint(tag,len),delocCmdInt(len),len);}
+    useCmdInt(); xferReint(tag,len);}
     else *arrayReint(tag,0,1) = 1;
 }
 
@@ -153,12 +150,12 @@ void responseClient(void)
 {
     int context = *delocCmdInt(1);
     int file = *delocCmdInt(1);
-    int data = *delocCmdInt(1);
-    int size = sizeof*arrayCmdInt(0,0);
-    int done = size**delocCmdInt(1);
-    int todo = size**delocCmdInt(1);
+    enum Data data = *delocCmdInt(1);
+    int done = *delocCmdInt(1);
+    int todo = *delocCmdInt(1);
     updateContext(context);
-    updateBuffer(file,data,done,todo,delocCmdInt(todo));
+    int size = bufferFlat(file,data,todo);
+    updateBuffer(file,data,done,todo,delocCmdInt(size));
 }
 
 enum Action configureRefine(int state)
@@ -267,37 +264,29 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
     relocCmdInt(1); /*file*/ \
     if (EVENT != Inflate) { \
     relocCmdInt(1); /*base plane*/ \
-    relocCmdInt(*relocCmdInt(1)); /*inside planes*/ \
-    relocCmdInt(*relocCmdInt(1));} /*outside planes*/ \
+    int inlen = *relocCmdInt(1); \
+    relocCmdInt(inlen); /*inside planes*/ \
+    int outlen = *relocCmdInt(1); \
+    relocCmdInt(outlen);} /*outside planes*/ \
     enqueMachine(configureSculpt);
-
-#define CONFIGURE_DEARG \
-    int embed = *deargCmdInt(1); \
-    int file = *deargCmdInt(1); \
-    int plane, inlen, outlen; \
-    int inbuf[inlen]; \
-    int outbuf[outlen]; \
-    if (embed != Inflate) { \
-    plane = *deargCmdInt(1); \
-    inlen = *deargCmdInt(1); \
-    memcpy(inbuf,deargCmdInt(inlen),inlen); \
-    outlen = *deargCmdInt(1); \
-    memcpy(outbuf,deargCmdInt(outlen),outlen);}
 
 enum Action configureSculpt(int state)
 {
-    CONFIGURE_DEARG
+    int embed = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
     struct File *ptr = arrayFile(file,1);
+    int arg = 0;
+    if (embed != Inflate) {
+    deargCmdInt(1); // plane
+    int inlen = *deargCmdInt(1); deargCmdInt(inlen); // inside
+    int outlen = *deargCmdInt(1); deargCmdInt(outlen); // outside
+    arg = 3+inlen+outlen;}
     if (state-- == 0) {
-    layer = tagReint();
+    layer = uniqueLayer();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
     *enlocCmdHsInt(1) = file;
     if (embed != Inflate) {
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = inlen;
-    memcpy(enlocCmdHsInt(inlen),inbuf,inlen);
-    *enlocCmdHsInt(1) = outlen;
-    memcpy(enlocCmdHsInt(outlen),outbuf,outlen);}
+    reargCmdInt(arg); useCmdInt(); xargCmdHsInt(arg);}
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = embed; // Fill Hollow or Inflate
@@ -318,9 +307,11 @@ enum Action configureSculpt(int state)
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     if (state-- == 0) {
-    int size = sizeReint(layer);
     updateContext(context);
-    updateBuffer(file,data,0,size,arrayReint(layer,0,size));
+    int size = sizeReint(layer);
+    int todo = bufferUnflat(file,data,size);
+    int *buf = arrayReint(layer,0,size);
+    updateBuffer(file,data,0,todo,buf);
     delocReint(layer,size);}}
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     enqueDishader();
@@ -343,33 +334,29 @@ void configureHollow(void)
 }
 
 #define CLICK_ENLOC(STR) \
-    *enlocCmdInt(1) = file; \
-    *enlocCmdInt(1) = plane; \
-    *enlocCmdFloat(1) = xpos;  \
-    *enlocCmdFloat(1) = ypos;  \
-    *enlocCmdFloat(1) = zpos;  \
-    *enlocCmdInt(1) = 0; /*wait sequence number*/ \
-    const char *str = #STR; \
-    int len = strlen(str); \
-    *enlocCmdInt(1) = len; \
-    memcpy(enlocCmdByte(len),str,len); \
+    *enlocCmdInt(1) = contextHandle; \
+    *enlocCmdInt(1) = qPoint; \
+    *enlocCmdInt(1) = pPoint; \
+    *enlocCmdFloat(1) = xPoint; \
+    *enlocCmdFloat(1) = yPoint; \
+    *enlocCmdFloat(1) = zPoint; \
+    msgstrCmdByte("%s",0,#STR); \
     enqueMachine(sculptClick);
-
-#define CLICK_DEARG \
-    int file = *deargCmdInt(1); \
-    int plane = *deargCmdInt(1); \
-    int *wait = deargCmdInt(1); \
-    Myfloat vec[3]; \
-    for (int i = 0; i < 3; i++) vec[i] = *deargCmdFloat(1); \
-    int len = *deargCmdInt(1); \
-    char str[len]; memcpy(str,deargCmdByte(len),len);
 
 enum Action sculptClick(int state)
 {
-    CLICK_DEARG
+    int context = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
+    int plane = *deargCmdInt(1);
+    deargCmdFloat(3);
+    int len = lengthCmdByte(0,0)+1;
+    int str = 0; deargCmdByte(len); str -= len;
+    updateContext(context);
     if (state-- == 0) {
-    layer = tagReint(); \
-    if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
+    layer = uniqueLayer();
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
+    reargCmdFloat(3); useCmdFloat(); xferRefloat(layer,3); // feather
+    reargCmdFloat(3); useCmdFloat(); xferRefloat(layer,2); deargCmdFloat(1); // arrow
     enqueShader(Adplane,file,0,renderLayer);
     return Continue;}
     if (state-- == 0) {
@@ -377,34 +364,33 @@ enum Action sculptClick(int state)
     if (state-- == 0) {
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = layer;
     int relen = sizeReint(layer);
     *enlocCmdHsInt(1) = relen;
-    memcpy(enlocCmdHsInt(relen),delocReint(layer,relen),relen);
+    useReint(layer); xferCmdHsInt(relen);
+    *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Locate;
     return Continue;}
     if (state-- == 0) {
     return (sizeReint(layer) == 0 ? Defer : Continue);}
     *enlocCmdConfigurer(1) = file;
-    memcpy(enlocCmdConfigure(len),str,len);
-    msgstrCmdConfigure(" %d,",plane);
+    msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);
-    for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",*delocReint(layer,1));
-    msgstrCmdConfigure(",");
+    for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
+    msgstrCmdConfigure(",",-1);
     int outlen = *delocReint(layer,1);
-    for (int i = 0; i < outlen; i++) msgstrCmdConfigure(" %d",*delocReint(layer,1));
-    msgstrCmdConfigure("\n");
+    for (int i = 0; i < outlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
+    msgstrCmdConfigure("",'\n');
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     return Advance;
 }
 
-void fillClick(int file, int plane, Myfloat xpos, Myfloat ypos, Myfloat zpos)
+void fillClick(void)
 {
     CLICK_ENLOC(fill)
 }
 
-void hollowClick(int file, int plane, Myfloat xpos, Myfloat ypos, Myfloat zpos)
+void hollowClick(void)
 {
     CLICK_ENLOC(hollow)
 }
@@ -476,18 +462,12 @@ void bringupBuiltin(void)
     };
 
     if (sizeDisplay() == 0) {
-        const char *str = "Sculpt";
-        int len = strlen(str);
-        memcpy(enlocCmdByte(len),str,len);
-        *enlocCmdByte(1) = 0;
+        msgstrCmdByte("%s",0,"Sculpt");
         enqueCommand(display);
         enqueCommand(bringupBuiltin);
         return;}
     if (sizeFile() == 0) {
-        const char *str = "bringup";
-        int len = strlen(str);
-        memcpy(enlocCmdByte(len),str,len);
-        *enlocCmdByte(1) = 0;
+        msgstrCmdByte("%s",0,"bringup");
         enqueCommand(file);
         enqueCommand(bringupBuiltin);
         return;}

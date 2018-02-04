@@ -40,7 +40,10 @@ EXTERNCBEGIN
 #define PLANE_LOCATION 0
 #define VERSOR_LOCATION 1
 #define POINT_LOCATION 2
-#define INVALID_LOCATION 3
+#define VERTEX_LOCATION 3
+#define CONSTRUCT_LOCATION 4
+#define DIMENSION_LOCATION 5
+#define INVALID_LOCATION 6
 #define POLL_DELAY 0.1
 #define NANO_SECONDS 1000000000
 #define MAX_ROTATE 0.999
@@ -104,9 +107,11 @@ enum Event {
     Corner, // inout(boundary), place: inout(corner)
     Events};
 
+// if char is unsigned and GLchar is signed
 typedef unsigned Myuint;
 typedef float Myfloat;
 typedef void (*Command)(void);
+
 enum Action { // multi command return value
     Reque, // be polite to other commands
     Defer, // wait for other commands engines threads
@@ -197,6 +202,8 @@ struct Display {
     Myfloat basisMat[27];
     Myfloat affineMata[16]; // transformation state at click time
     Myfloat affineMatb[16]; // transformation due to roller
+    int pPoint;
+    int qPoint;
     Myfloat xPoint;  // position of pierce point at click time
     Myfloat yPoint;
     Myfloat zPoint;
@@ -325,13 +332,18 @@ enum Shift {
     Shifts};
 
 #define DECLARE_MSGSTR(NAME) \
-void msgstr##NAME(const char *fmt, ...);
+int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \
-void msgstr##NAME(const char *fmt, ...) \
+int msgstr##NAME(const char *fmt, int trm, ...) \
 { \
-    va_list args; va_start(args, fmt); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
-    char buf[len+1]; va_start(args, fmt); vsnprintf(buf, len+1, fmt, args); va_end(args); \
+    int size = size##NAME(); \
+    va_list args; va_start(args, trm); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
+    char buf[len+1]; va_start(args, trm); vsnprintf(buf, len+1, fmt, args); va_end(args); \
+    if (trm == (char)-1) len -= 1; \
+    else buf[len] = trm; \
+    int sub = size##NAME(); \
     memcpy(enloc##NAME(len),buf,len); \
+    return sub; \
 }
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):

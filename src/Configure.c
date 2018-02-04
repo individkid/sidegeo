@@ -255,7 +255,7 @@ int processConfigure(int index, int len)
 	initString(processCompare);
 	initMacro(processCompare);
 	parseGlobal("\\id|@{[@|#]}/\\sg|([?+!|?-!])/\\nm|sg#{#}/\\fl|nm(?.!{#})([e|E]sg{#}])/\\ |<{&}>/");
-	if (parse("<?plane!> nm% fl% fl% fl%",len) > 0) {
+	if (parse("<?plane!> nm% fl% fl% fl%",len) > 0) { // TODO add optional name
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		*enlocPcsCmdInt(1) = index;

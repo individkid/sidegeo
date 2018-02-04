@@ -45,6 +45,8 @@
 #define basisMat current->basisMat
 #define displayMata current->affineMata
 #define displayMatb current->affineMatb
+#define pPoint current->pPoint
+#define qPoint current->qPoint
 #define xPoint current->xPoint
 #define yPoint current->yPoint
 #define zPoint current->zPoint
@@ -75,6 +77,10 @@ extern int layer;
 extern struct Display *current;
 extern Myfloat affineMat[16];
 
+DECLARE_MSGSTR(CmdBuf)
+DECLARE_MSGSTR(CmdOutput)
+
+int uniqueLayer(void);
 void enqueCommand(Command cmd);
 void deferCommand(Command cmd);
 void enqueMachine(Machine machine);
@@ -99,12 +105,18 @@ void setupDisplay(int name);
 void setupCode(enum Shader shader);
 void setupFile(int name);
 void updateAffine(struct File *ptr);
-void updateFile(int sub, struct File *copy);
+void updateFile(int ctx, int sub, int cpy);
 void updateContext(int sub);
 void updateDisplay(GLFWwindow *ptr);
 void updateBuffer(int file, enum Data sub, int done, int todo, void *data);
 void updateUniform(enum Server server, int file, enum Shader shader);
 
+size_t bufferType(int size);
+int bufferPrimitive(int size);
+int bufferFlat(int file, enum Data data, int todo);
+int bufferUnflat(int file, enum Data data, int size);
+int bufferUntodo(int file, enum Data data, int size);
+int bufferTodo(int file, enum Data data, int size);
 void enqueUniform(int context, enum Server server);
 enum Action renderLayer(int state);
 void enqueShader(enum Shader shader, int file, int display, Machine follow);

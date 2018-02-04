@@ -262,8 +262,8 @@ void intersect(in mat3 points[3], in uint versor[3], out vec3 point)\n\
     intersect(points,versor,corners["#POINT"])"
 
 const char *diplaneVertex = "\
-layout (location = 0) in vec3 plane;\n\
-layout (location = 1) in uint versor;\n\
+layout (location = LOCATION0) in vec3 plane;\n\
+layout (location = LOCATION1) in uint versor;\n\
 out data {\n\
     mat3 points;\n\
     uint versor;\n\
@@ -314,7 +314,7 @@ void main()\n\
 }\n";
 
 const char *dipointVertex = "\
-layout (location = 2) in vec3 point;\n\
+layout (location = LOCATION0) in vec3 point;\n\
 out data {\n\
     vec3 point;\n\
 } od;\n\
@@ -351,8 +351,8 @@ void main()\n\
 }\n";
 
 #define CoplaneVertex "\
-layout (location = 0) in vec3 plane;\n\
-layout (location = 1) in uint versor;\n\
+layout (location = LOCATION0) in vec3 plane;\n\
+layout (location = LOCATION1) in uint versor;\n\
 out data {\n\
     mat3 points;\n\
     uint versor;\n\
@@ -385,7 +385,7 @@ void main()\n\
 const char *coplaneFragment = 0;
 
 #define CopointVertex "\
-layout (location = 2) in vec3 point;\n\
+layout (location = LOCATION0) in vec3 point;\n\
 out data {\n\
     vec3 point;\n\
 } od;\n\
@@ -461,8 +461,8 @@ void main()\n\
 const char *adpointFragment = 0;
 
 const char *perplaneVertex = "\
-layout (location = 0) in vec3 plane;\n\
-layout (location = 1) in uint versor;\n\
+layout (location = LOCATION0) in vec3 plane;\n\
+layout (location = LOCATION1) in uint versor;\n\
 out data {\n\
     mat3 points;\n\
     uint versor;\n\
@@ -510,7 +510,7 @@ void main()\n\
 const char *perplaneFragment = 0;
 
 const char *perpointVertex = "\
-layout (location = 2) in vec3 point;\n\
+layout (location = LOCATION0) in vec3 point;\n\
 out data {\n\
     vec3 point;\n\
 } od;\n\

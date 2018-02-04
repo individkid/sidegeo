@@ -272,7 +272,7 @@ void processIgnore(int index)
 {
     if (*arrayIgnore(index,1) >= PROCESS_IGNORE) return;
     *arrayIgnore(index,1) += 1;
-    msgstrPcsOutput("syntax error in file number %d\n",index);
+    msgstrPcsOutput("syntax error in file number %d",'\n',index);
 }
 
 void processComplain(int len)

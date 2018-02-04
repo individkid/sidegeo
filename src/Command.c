@@ -19,6 +19,14 @@
 #include "Main.h"
 
 int seqnum = 0;
+int unique = 0;
+
+int uniqueLayer(void)
+{
+    unique += 1;
+    if (unique == 0) unique += 1;
+    return unique;
+}
 
 void enqueMachine(Machine machine)
 {
@@ -86,6 +94,7 @@ void commandBefore()
     *enlocRedo(1) = ptrCmdByte();
     *enlocRedo(1) = ptrVoid();
     *enlocRedo(1) = ptrRender();
+    *enlocCmdBuf(1) = 0;
 }
 
 void commandAfter()

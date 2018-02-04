@@ -66,6 +66,8 @@ int depth = 0;
 void inject(void);
 void menu(void);
 
+DEFINE_MSGSTR(CslOption)
+
 enum Menu tailline(void)
 {
     return *arrayLine(sizeLine()-1,1);
@@ -218,8 +220,8 @@ void backend(char chr)
         delocCslPtr(1); len -= 1;
         if (len > 1 && *arrayCslPtr(1,1) == '-') {
         delocCslPtr(1); len -= 1;
-        memcpy(enlocCslOption(2),"-e",2);}
-        memcpy(enlocCslOption(len),delocCslPtr(len),len);}
+        msgstrCslOption("-e",' ');}
+        useCslPtr(); xferCslOption(len);}
         useEcho(--depth); referCslPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocCslPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));

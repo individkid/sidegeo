@@ -114,19 +114,8 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Configure -- open dialog to decorate plane's facets  
     * Hyperlink -- jump through facet to another space  
     * Execute -- call Haskell function attached to facet  
-    * Draw -- draw on facet with traditional stylus  
-  * Stylus -- what Draw motion does  
-    * Segment -- draw segment between two clicks  
-    * Path -- draw end to end segments between clicks  
-    * Polygon -- drag segment to triangle to polygon  
-    * Blur -- drag across curve to blur or sharpen  
-    * Smooth -- drag across curve to smooth or sharpen  
-    * Widen -- drag across curve to widen or narrow  
-    * Fill -- drag across curve to fill or hollow  
-    * Bright -- drag across curve to brighten or darken  
-    * Color -- drag across curve to rotate color wheel  
 
-Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. The names supplied in --time --start commands have file scope shared by --branch and --jump files.
+Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. The names supplied in --time --start --plane commands have file scope shared by --branch and --jump files.
 
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  
@@ -146,6 +135,9 @@ Configuration/history files consist of commands. User input appends to file. App
   * --source takes sound file, microphone, or noise as volatile stock  
   * --media binds Haskell expression to evaluate when stock changes  
   * --color takes plane subscript and decoration  
+  * --graffiti takes plane subscript and stylus type and motions  
+  * --bitmap takes plane subscript and texture specification  
+  * --saver takes plane subscript and timewheel value for colors  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  

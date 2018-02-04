@@ -25,6 +25,9 @@ Myfloat affineMat[16] = {0}; // transformation state sent to uniform
 enum Cnd {Was,Not,Cmd,Arg,One,Sgl,Mlt};
 enum Act {Aft,Suf,Str,Inj,End,Uni,Wil,Wnt};
 
+DEFINE_MSGSTR(CmdBuf)
+DEFINE_MSGSTR(CmdOutput)
+
 void displayError(int error, const char *description)
 {
    printf("GLFW error %d %s\n", error, description);
@@ -34,6 +37,8 @@ int main(int argc, char **argv)
 {
     if (sizeof(GLuint) != sizeof(Myuint)) exitErrstr("gluint too sizeof\n");
     if (sizeof(GLfloat) != sizeof(Myfloat)) exitErrstr("glfloat too sizeof\n");
+    GLchar glchr = -1; char chr = -1; GLchar chr2glchr = chr; char glchr2chr = glchr;
+    if (glchr != chr2glchr || chr != glchr2chr) exitErrstr("glchr too chr\n");
 
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");

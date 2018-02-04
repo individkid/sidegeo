@@ -26,8 +26,6 @@ const enum Shader dishader = Dipoint;
 const enum Shader pershader = Perpoint;
 #endif
 
-DEFINE_MSGSTR(CmdOutput)
-
 size_t bufferType(int size)
 {
     size_t retval = 0;
@@ -45,6 +43,30 @@ int bufferPrimitive(int size)
     CASE(GL_TRIANGLES_ADJACENCY) retval = 6;
     DEFAULT(exitErrstr("unknown render primitive\n");)
     return retval;
+}
+
+int bufferFlat(int file, enum Data data, int todo)
+{
+    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    return todo*buffer->dimn;
+}
+
+int bufferUnflat(int file, enum Data data, int size)
+{
+    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    return size/buffer->dimn;
+}
+
+int bufferUntodo(int file, enum Data data, int todo)
+{
+    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    return todo*buffer->dimn*bufferType(buffer->type);
+}
+
+int bufferTodo(int file, enum Data data, int size)
+{
+    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    return size/(buffer->dimn*bufferType(buffer->type));
 }
 
 enum Type bufferSeqnum(struct Buffer *buffer)
@@ -352,11 +374,11 @@ enum Action renderClient(int state)
     SWITCH(buffer[*i].type,GL_UNSIGNED_INT) {
         int result[done*dimn];
         glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, result);
-        updateBuffer(render->file,*i,0,size,result);}
+        updateBuffer(render->file,*i,0,done,result);}
     CASE(GL_FLOAT) {
         Myfloat result[done*dimn];
         glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, result);
-        updateBuffer(render->file,*i,0,size,result);}
+        updateBuffer(render->file,*i,0,done,result);}
     DEFAULT(exitErrstr("unknown render type\n");)
     glBindBuffer(GL_ARRAY_BUFFER, 0);}
     return Advance;    
@@ -382,9 +404,9 @@ void enqueShader(enum Shader shader, int file, int context, Machine follow)
     render.context = context;
     *enlocRender(1) = render;
     enqueMachine(&renderLock);
-    if (arrayCode(shader,1)->feedback > 0) followMachine(&renderWrap);
+    if (*arrayCode(shader,1)->feedback < Datas) followMachine(&renderWrap);
     followMachine(&renderDraw);
-    if (arrayCode(shader,1)->feedback > 0) followMachine(&renderWait);
+    if (*arrayCode(shader,1)->feedback < Datas) followMachine(&renderWait);
     if (follow) followMachine(follow);
     followMachine(&renderUnlock);
 }

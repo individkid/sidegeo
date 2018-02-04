@@ -51,13 +51,13 @@ void haskellConsume(void *arg)
     while (sizeEvent() > 0) {
         filenum = *delocHsInt(1);
         int size = *delocHsInt(1);
-        memcpy(enlocInout(size),delocHsInt(size),size);
+        useHsInt(); xferInout(size);
         enum Event event = *delocEvent(1);
         int num = *castEnum(event);
         if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
         size = sizeInout();
         *enlocHsCmdInt(1) = size;
-        memcpy(enlocHsCmdInt(size),delocInout(size),size);
+        useInout(); xferHsCmdInt(size);
         *enlocHsCommand(1) = *delocHsCmd(1);}
 }
 

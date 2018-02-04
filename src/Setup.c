@@ -43,6 +43,8 @@ void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
 {
     struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
     int client = buffer->client;
+    int size = buffer->dimn*bufferType(buffer->type);
+    done *= size; todo *= size;
     int lim = sizeRange(client);
     int max = (*arraySeqmax(client,1) += 1);
     int loc = 0;
@@ -79,6 +81,19 @@ void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
         memcpy(enlocClient(client,todo),data,todo);}
 }
 
+Myuint locationBuffer(enum Data data)
+{
+    Myuint loc = INVALID_LOCATION;
+    SWITCH(data,PlaneBuf) loc = PLANE_LOCATION;
+    CASE(VersorBuf) loc = VERSOR_LOCATION;
+    CASE(PointBuf) loc = POINT_LOCATION;
+    CASE(VertBuf) loc = VERTEX_LOCATION;
+    CASE(CnstrBuf) loc = CONSTRUCT_LOCATION;
+    CASE(DimnBuf) loc = DIMENSION_LOCATION;
+    DEFAULT(loc = INVALID_LOCATION;)
+    return loc;
+}
+
 void setupFile(int name)
 {
     int sub = sizeFile();
@@ -88,29 +103,40 @@ void setupFile(int name)
     file->name = name;
     identmat(file->saved,4);
     identmat(file->ratio,4);
-    setupBuffer(file->buffer+PlaneBuf,"plane",PLANE_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
-    setupBuffer(file->buffer+VersorBuf,"versor",VERSOR_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
-    setupBuffer(file->buffer+PointBuf,"point",POINT_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-    setupBuffer(file->buffer+PierceBuf,"pierce",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-    setupBuffer(file->buffer+VertBuf,"vertex",INVALID_LOCATION,GL_FLOAT,POINT_DIMENSIONS);
-    setupBuffer(file->buffer+CnstrBuf,"construct",INVALID_LOCATION,GL_FLOAT,PLANE_DIMENSIONS);
-    setupBuffer(file->buffer+DimnBuf,"dimension",INVALID_LOCATION,GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
-    setupBuffer(file->buffer+SideBuf,"side",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
-    setupBuffer(file->buffer+HalfBuf,"half",INVALID_LOCATION,GL_FLOAT,SCALAR_DIMENSIONS);
-    setupBuffer(file->buffer+FaceSub,"face",INVALID_LOCATION,GL_UNSIGNED_INT,FACE_DIMENSIONS);
-    setupBuffer(file->buffer+FrameSub,"frame",INVALID_LOCATION,GL_UNSIGNED_INT,FRAME_DIMENSIONS);
-    setupBuffer(file->buffer+VertSub,"vertex",INVALID_LOCATION,GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
-    setupBuffer(file->buffer+CnstrSub,"construct",INVALID_LOCATION,GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
+    setupBuffer(file->buffer+PlaneBuf,"plane",locationBuffer(PlaneBuf),GL_FLOAT,PLANE_DIMENSIONS);
+    setupBuffer(file->buffer+VersorBuf,"versor",locationBuffer(VersorBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
+    setupBuffer(file->buffer+PointBuf,"point",locationBuffer(PointBuf),GL_FLOAT,POINT_DIMENSIONS);
+    setupBuffer(file->buffer+PierceBuf,"pierce",locationBuffer(PierceBuf),GL_FLOAT,POINT_DIMENSIONS);
+    setupBuffer(file->buffer+VertBuf,"vertex",locationBuffer(VertBuf),GL_FLOAT,POINT_DIMENSIONS);
+    setupBuffer(file->buffer+CnstrBuf,"construct",locationBuffer(CnstrBuf),GL_FLOAT,PLANE_DIMENSIONS);
+    setupBuffer(file->buffer+DimnBuf,"dimension",locationBuffer(DimnBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS);
+    setupBuffer(file->buffer+SideBuf,"side",locationBuffer(SideBuf),GL_FLOAT,SCALAR_DIMENSIONS);
+    setupBuffer(file->buffer+HalfBuf,"half",locationBuffer(HalfBuf),GL_FLOAT,SCALAR_DIMENSIONS);
+    setupBuffer(file->buffer+FaceSub,"face",locationBuffer(FaceSub),GL_UNSIGNED_INT,FACE_DIMENSIONS);
+    setupBuffer(file->buffer+FrameSub,"frame",locationBuffer(FrameSub),GL_UNSIGNED_INT,FRAME_DIMENSIONS);
+    setupBuffer(file->buffer+VertSub,"vertex",locationBuffer(VertSub),GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS);
+    setupBuffer(file->buffer+CnstrSub,"construct",locationBuffer(CnstrSub),GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS);
 }
 
-void updateFile(int sub, struct File *copy)
+void updateFile(int ctx, int sub, int cpy)
 {
-    struct File *file = arrayFile(sub,1);
+    struct File *file = arrayDisplayFile(ctx,sub,1);
+    struct File *copy = arrayFile(cpy,1);
     file->tweak = copy->tweak;
     file->fixed = copy->fixed;
     file->last = copy->last;
     copymat(file->saved,copy->saved,4);
     copymat(file->ratio,copy->ratio,4);
+    for (enum Data i = 0; i < Datas; i++) {
+    struct Buffer *buffer = copy->buffer+i;
+    int client = buffer->client;
+    int size = sizeClient(client);
+    int todo = bufferTodo(cpy, i, size);
+    char *buf = arrayClient(client,0,size);
+    int save = contextHandle;
+    updateContext(ctx);
+    updateBuffer(sub, i, 0, todo, buf);
+    updateContext(save);}
 }
 
 void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
@@ -152,17 +178,28 @@ void updateUniform(enum Server server, int file, enum Shader shader)
         struct File *ptr = arrayFile(file,1);
         updateAffine(ptr);
         glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->sent);
-    CASE(Feather)
-        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xPos,yPos,zPos);
+    CASE(Feather) {
+        Myfloat xpoint, ypoint, zpoint;
+        if (layer) {
+        xpoint = *delocRefloat(layer,1);
+        ypoint = *delocRefloat(layer,1);
+        zpoint = *delocRefloat(layer,1);}
+        else {xpoint = xPoint; ypoint = yPoint; zpoint = zPoint;}
+        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xpoint,ypoint,zpoint);
         CASE(Adpoint)
             if (file < 0) exitErrstr("affine too file\n");
             struct Share *ptr = arrayShare(file,1);
             Myfloat *base = basisMat+ptr->versor*9;
             Myfloat xVec[3] = {base[0]+ptr->plane[0],base[1]+ptr->plane[0],base[2]+ptr->plane[0]};
             glUniform3f(uniform->handle,xVec[0],xVec[1],xVec[2]);
-        DEFAULT(exitErrstr("feather too shader\n");)
-    CASE(Arrow)
-        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xPos*slope,yPos*slope,1.0);
+        DEFAULT(exitErrstr("feather too shader\n");)}
+    CASE(Arrow) {
+        Myfloat xpoint, ypoint;
+        if (layer) {
+        xpoint = *delocRefloat(layer,1);
+        ypoint = *delocRefloat(layer,1);}
+        else {xpoint = xPoint; ypoint = yPoint;}
+        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xpoint*slope,ypoint*slope,1.0);
         CASE(Adpoint)
             if (file < 0) exitErrstr("affine too file\n");
             struct Share *ptr = arrayShare(file,1);
@@ -175,7 +212,7 @@ void updateUniform(enum Server server, int file, enum Shader shader)
             Myfloat normal[3]; crossvec(copyvec(normal,yDif,3),zDif);
             if (normal[ptr->versor] < 0.0) scalevec(normal,-1.0,3);
             glUniform3f(uniform->handle,normal[0],normal[1],normal[2]);
-        DEFAULT(exitErrstr("arrow too shader\n");)
+        DEFAULT(exitErrstr("arrow too shader\n");)}
     CASE(Cutoff)
         glUniform1f(uniform->handle,cutoff);
     CASE(Slope)
@@ -308,28 +345,49 @@ const char *outputCode(enum Shader shader)
     return "";
 }
 
-extern const GLchar *uniformCode;
-extern const GLchar *projectCode;
-extern const GLchar *pierceCode;
-extern const GLchar *sideCode;
-extern const GLchar *expandCode;
-extern const GLchar *constructCode;
-extern const GLchar *intersectCode;
+int locationCode(int sub, enum Shader shader)
+{
+    enum Data buffer[3];
+    for (int i = 0; i < 3; i++) buffer[i] = bufferVertex(i,shader);
+    int location[3];
+    for (int i = 0; i < 3 && buffer[i] < Datas; i++) location[i] = locationBuffer(buffer[i]);
+    if (location[sub] < INVALID_LOCATION) return msgstrCmdBuf("#define LOCATION%d %d",0,sub,location[sub]);
+    return 0;
+}
+
+int arrayLocation(const char **source, enum Shader shader)
+{
+    int sub[3] = {0}; for (int i = 0; i < 3; i++) sub[i] = locationCode(i,shader);
+    int len[3] = {0}; for (int i = 0; i < 3; i++) len[i] = lengthCmdBuf(sub[i],0);
+    int tot = 0; for (int i = 0; i < 3; i++) {tot += len[i]; if (len[i]) tot += 1;}
+    const char *buf = arrayCmdBuf(sub[0],tot); tot = 0;
+    int num = 0; for (int i = 0; i < 3; i++) if (len[i]) {source[num] = buf+tot; num += 1; tot += len[i]+1;}
+    return num;
+}
+
+extern const char *uniformCode;
+extern const char *projectCode;
+extern const char *pierceCode;
+extern const char *sideCode;
+extern const char *expandCode;
+extern const char *constructCode;
+extern const char *intersectCode;
 
 Myuint compileProgram(
-    const GLchar *vertexCode, const GLchar *geometryCode, const GLchar *fragmentCode,
+    const char *vertexCode, const char *geometryCode, const char *fragmentCode,
     int inp, int outp, const char *name, enum Shader shader)
 {
     GLint success = 0;
-    GLchar infoLog[512];
-    const GLchar *source[10] = {0};
+    char infoLog[512];
+    const char *source[10] = {0};
     Myuint prog = glCreateProgram();
     Myuint vertex = glCreateShader(GL_VERTEX_SHADER);
     arrayCode(shader,1)->input = inp; arrayCode(shader,1)->output = outp; arrayCode(shader,1)->handle = prog; arrayCode(shader,1)->name = name;
     source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
-    source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode;
-    source[7] = vertexCode;
-    glShaderSource(vertex, 8, source, NULL);
+    source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode; int num = 7;
+    num += arrayLocation(source+num,shader);
+    source[num] = vertexCode; num += 1;
+    glShaderSource(vertex, num, source, NULL);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
@@ -374,36 +432,36 @@ Myuint compileProgram(
     return prog;
 }
 
-extern const GLchar *diplaneVertex;
-extern const GLchar *diplaneGeometry;
-extern const GLchar *diplaneFragment;
-extern const GLchar *dipointVertex;
-extern const GLchar *dipointGeometry;
-extern const GLchar *dipointFragment;
-extern const GLchar *coplaneVertex;
-extern const GLchar *coplaneGeometry;
-extern const GLchar *coplaneFragment;
-extern const GLchar *copointVertex;
-extern const GLchar *copointGeometry;
-extern const GLchar *copointFragment;
-extern const GLchar *adplaneVertex;
-extern const GLchar *adplaneGeometry;
-extern const GLchar *adplaneFragment;
-extern const GLchar *adpointVertex;
-extern const GLchar *adpointGeometry;
-extern const GLchar *adpointFragment;
-extern const GLchar *perplaneVertex;
-extern const GLchar *perplaneGeometry;
-extern const GLchar *perplaneFragment;
-extern const GLchar *perpointVertex;
-extern const GLchar *perpointGeometry;
-extern const GLchar *perpointFragment;
-extern const GLchar *replaneVertex;
-extern const GLchar *replaneGeometry;
-extern const GLchar *replaneFragment;
-extern const GLchar *repointVertex;
-extern const GLchar *repointGeometry;
-extern const GLchar *repointFragment;
+extern const char *diplaneVertex;
+extern const char *diplaneGeometry;
+extern const char *diplaneFragment;
+extern const char *dipointVertex;
+extern const char *dipointGeometry;
+extern const char *dipointFragment;
+extern const char *coplaneVertex;
+extern const char *coplaneGeometry;
+extern const char *coplaneFragment;
+extern const char *copointVertex;
+extern const char *copointGeometry;
+extern const char *copointFragment;
+extern const char *adplaneVertex;
+extern const char *adplaneGeometry;
+extern const char *adplaneFragment;
+extern const char *adpointVertex;
+extern const char *adpointGeometry;
+extern const char *adpointFragment;
+extern const char *perplaneVertex;
+extern const char *perplaneGeometry;
+extern const char *perplaneFragment;
+extern const char *perpointVertex;
+extern const char *perpointGeometry;
+extern const char *perpointFragment;
+extern const char *replaneVertex;
+extern const char *replaneGeometry;
+extern const char *replaneFragment;
+extern const char *repointVertex;
+extern const char *repointGeometry;
+extern const char *repointFragment;
 
 void setupCode(enum Shader shader)
 {
@@ -456,7 +514,7 @@ void setupDisplay(int name)
     current = enlocDisplay(1);
     displayName = name;
     enum Menu init[Modes] = INIT;
-    memcpy(mark,init,sizeof(init));
+    for (enum Mode i = 0; i < Modes; i++) mark[i] = init[i];
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -506,10 +564,8 @@ void setupDisplay(int name)
     basisMat[i] = (one ? 1.0 : 0.0);}
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    const char *str = "preview";
-    int len = strlen(str);
     setupFile(sizeCmdBuf());
-    memcpy(enlocCmdBuf(len),str,len);
+    msgstrCmdBuf("preview",0);
     current = save;
     if (current == 0) for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
