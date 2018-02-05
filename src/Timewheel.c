@@ -72,7 +72,14 @@ void startCount(void)
 void startListen(void)
 {
     startCount();
-	// TODO
+    struct Audio init = {0};
+    // TODO disable callbacks while calling enloc
+    struct Audio *audio = enlocAudio(1);
+    *audio = init;
+    if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),PORTAUDIO_SIZE,enlocWave(PORTAUDIO_SIZE)) < 0) exitErrstr("portaudio too size\n");
+    if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),PORTAUDIO_SIZE,enlocWave(PORTAUDIO_SIZE)) < 0) exitErrstr("portaudio too size\n");
+    // TODO reenable callbacks
+	// TODO kick off callback function with index of audio
 }
 
 void startSource(void)
@@ -276,7 +283,7 @@ int *audioBuffer(int *buf, int loc, int lim)
     return buf+loc%lim;
 }
 
-int audioOutput(int *buf, int lim, int loc, int len, float *out)
+int audioOutput(int *buf, int lim, int loc, int len, float *out) // TODO use portaudio ringbuffer
 {
     int siz = 0;
     while (siz < lim && *(buf+(loc+siz)%lim) != -1) siz += 1;
@@ -331,8 +338,8 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
     void *userData )
 {
     (void) inputBuffer; /* Prevent unused variable warning. */
-    struct Audio *audio = userData;
-    audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer);
-    audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
+    struct Audio *audio = arrayAudio(void2int(userData),1);
+    // audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer);
+    // audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
     return 0;
 }

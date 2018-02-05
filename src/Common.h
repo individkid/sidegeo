@@ -27,6 +27,7 @@ EXTERNCBEGIN
 #include <limits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include "pa_ringbuffer.h"
 
 #define BRINGUP
 #define PLANE_DIMENSIONS 3
@@ -53,6 +54,7 @@ EXTERNCBEGIN
 #define ROLLER_DELTA 1.0
 #define INVALID0 1.0e38
 #define INVALID1 1.0e37
+#define PORTAUDIO_SIZE (1<<10)
 
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Move,Copy,Transform,
@@ -334,9 +336,10 @@ enum Shift {
     Shifts};
 
 struct Audio {
-    int *buf;
-    int siz;
-    int loc;
+    PaUtilRingBuffer left;
+    PaUtilRingBuffer right;
+    int lloc;
+    int rloc;
 };
 
 #define DECLARE_MSGSTR(NAME) \
@@ -524,9 +527,7 @@ DECLARE_EXTRA(Shape,struct Shape)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
-DECLARE_META(Wave0,int)
-DECLARE_META(Wave1,int)
-DECLARE_POINTER(Pipe,int)
+DECLARE_LOCAL(Wave,int)
 DECLARE_LOCAL(Audio,struct Audio)
 DECLARE_TREE(Pack,int,int)
 

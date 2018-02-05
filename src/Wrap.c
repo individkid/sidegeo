@@ -18,3 +18,7 @@
 
 void show_tree(const char *arg0, void *arg1, int arg2) {}
 #include "rbtree.c"
+#include <stdatomic.h>
+#define OSMemoryBarrier my_atomic_thread_fence
+void my_atomic_thread_fence() {atomic_thread_fence(memory_order_seq_cst);}
+#include "pa_ringbuffer.c"

@@ -63,7 +63,8 @@ executable sculpt
                        src/Wrap.c,
                        libpqueue/src/pqueue.c
   include-dirs:        libpqueue/src,
-                       rbtree
+                       rbtree,
+                       portaudio/src/common
   if os(linux)
     extra-libraries:   GLEW,
                        GL,
