@@ -518,7 +518,8 @@ DECLARE_EXTRA(Shape,struct Shape)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
-DECLARE_META(Wave,int)
+DECLARE_META(Wave0,int)
+DECLARE_META(Wave1,int)
 DECLARE_POINTER(Pipe,int)
 DECLARE_TREE(Pack,int,int)
 

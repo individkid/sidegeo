@@ -425,7 +425,8 @@ DEFINE_EXTRA(Shape,struct Shape,Sound)
 
 DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)
-DEFINE_META(Wave,int)
+DEFINE_META(Wave0,int)
+DEFINE_META(Wave1,int)
 DEFINE_POINTER(Pipe,int)
 DEFINE_TREE(Pack,int,int)
 

@@ -271,41 +271,56 @@ void timewheelAfter(void)
 	if (err != paNoError) printf("PortAudio error: %s\n",Pa_GetErrorText(err));
 }
 
+void portaudioOutput(int len, float *out)
+{
+    int num = sizePipe()/len;
+    if (num > 7) {
+    // if more than 7, then ignore those between second and
+    // what would be third if there were less than 8
+    int lim = 2*len;
+    int from = 2*len;
+    int to = (num-5)*len;
+    for (int i = 0; i < lim; i++) {
+    *arrayPipe(to,1) = *arrayPipe(from,1);
+    to -= 1;
+    from -= 1;}
+    delocPipe((num-7)*len);}
+    for (int i = 0; i < len; i++) {
+    SWITCH(num,0) FALL(1) {
+    // zeros with no deloc
+    *out = 0;
+    out += 2;}
+    CASE(2) FALL(3) {
+    // sliding weighted average of first two len, and deloc none
+    float first = i*1.0/len;
+    float second = (len-i-1)*1.0/len;
+    *out = first**arrayPipe(i,1)+second**arrayPipe(len+i,1);
+    out += 2;}
+    CASE(4) FALL(5) {
+    // second len without average, and deloc one len
+    *out = *arrayPipe(len+i,1);
+    out += 2;}
+    DEFAULT({
+    // sliding weighted average of second two len, and deloc two len
+    float second = (len-i-1)*1.0/len;
+    float third = i*1.0/len;
+    *out = second**arrayPipe(len+i,1)+third**arrayPipe(2*len+i,1);
+    out += 2;})}
+    SWITCH(num,0) FALL(1) /*nop*/;
+    CASE(2) FALL(3) /*nop*/;
+    CASE(4) FALL(5) delocPipe(len);
+    DEFAULT(delocPipe(2*len);)
+}
+
 int portaudoCallback( const void *inputBuffer, void *outputBuffer,
     unsigned long framesPerBuffer,
     const PaStreamCallbackTimeInfo* timeInfo,
     PaStreamCallbackFlags statusFlags,
     void *userData )
 {
-    int sub = void2int(userData);
-    useWave(sub); referPipe();
-    float *out = (float*)outputBuffer;
     (void) inputBuffer; /* Prevent unused variable warning. */
-    if (sizePipe() < 2*framesPerBuffer) {
-        // zeros with no deloc
-        for (int i = 0; i < framesPerBuffer; i++) {
-            *out++ = 0; // left
-            *out++ = 0;}} // right
-    else if (sizePipe() < 4*framesPerBuffer) {
-        // sliding weighted average of first two framesPerBuffer, and deloc none
-        for (int i = 0; i < framesPerBuffer; i++) {
-            float first = i*1.0/framesPerBuffer;
-            float second = (framesPerBuffer-i-1)*1.0/framesPerBuffer;
-            *out++ = first**arrayPipe(i,1)+second**arrayPipe(framesPerBuffer+i,1);
-            *out++ = first**arrayPipe(i,1)+second**arrayPipe(framesPerBuffer+i,1);}}
-    else if (sizePipe() < 6*framesPerBuffer) {
-        // second framesPerBuffer without average, and deloc one framesPerBuffer
-        for (int i = 0; i < framesPerBuffer; i++) {
-            *out++ = *arrayPipe(framesPerBuffer+i,1);
-            *out++ = *arrayPipe(framesPerBuffer+i,1);}
-        delocPipe(framesPerBuffer);}
-    else {
-        // sliding weighted average of second two framesPerBuffer, and deloc two framesPerBuffer
-        for (int i = 0; i < framesPerBuffer; i++) {
-            float second = (framesPerBuffer-i-1)*1.0/framesPerBuffer;
-            float third = i*1.0/framesPerBuffer;
-            *out++ = second**arrayPipe(framesPerBuffer+i,1)+third**arrayPipe(2*framesPerBuffer+i,1);
-            *out++ = second**arrayPipe(framesPerBuffer+i,1)+third**arrayPipe(2*framesPerBuffer+i,1);}
-        delocPipe(2*framesPerBuffer);}
+    int sub = void2int(userData);
+    useWave0(sub); referPipe(); portaudioOutput(framesPerBuffer,(float *)outputBuffer);
+    useWave1(sub); referPipe(); portaudioOutput(framesPerBuffer,(float *)outputBuffer+1);
     return 0;
 }
