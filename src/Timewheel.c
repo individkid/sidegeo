@@ -270,3 +270,42 @@ void timewheelAfter(void)
 	PaError err = Pa_Terminate();
 	if (err != paNoError) printf("PortAudio error: %s\n",Pa_GetErrorText(err));
 }
+
+int portaudoCallback( const void *inputBuffer, void *outputBuffer,
+    unsigned long framesPerBuffer,
+    const PaStreamCallbackTimeInfo* timeInfo,
+    PaStreamCallbackFlags statusFlags,
+    void *userData )
+{
+    int sub = void2int(userData);
+    useWave(sub); referPipe();
+    float *out = (float*)outputBuffer;
+    (void) inputBuffer; /* Prevent unused variable warning. */
+    if (sizePipe() < 2*framesPerBuffer) {
+        // zeros with no deloc
+        for (int i = 0; i < framesPerBuffer; i++) {
+            *out++ = 0; // left
+            *out++ = 0;}} // right
+    else if (sizePipe() < 4*framesPerBuffer) {
+        // sliding weighted average of first two framesPerBuffer, and deloc none
+        for (int i = 0; i < framesPerBuffer; i++) {
+            float first = i*1.0/framesPerBuffer;
+            float second = (framesPerBuffer-i-1)*1.0/framesPerBuffer;
+            *out++ = first**arrayPipe(i,1)+second**arrayPipe(framesPerBuffer+i,1);
+            *out++ = first**arrayPipe(i,1)+second**arrayPipe(framesPerBuffer+i,1);}}
+    else if (sizePipe() < 6*framesPerBuffer) {
+        // second framesPerBuffer without average, and deloc one framesPerBuffer
+        for (int i = 0; i < framesPerBuffer; i++) {
+            *out++ = *arrayPipe(framesPerBuffer+i,1);
+            *out++ = *arrayPipe(framesPerBuffer+i,1);}
+        delocPipe(framesPerBuffer);}
+    else {
+        // sliding weighted average of second two framesPerBuffer, and deloc two framesPerBuffer
+        for (int i = 0; i < framesPerBuffer; i++) {
+            float second = (framesPerBuffer-i-1)*1.0/framesPerBuffer;
+            float third = i*1.0/framesPerBuffer;
+            *out++ = second**arrayPipe(framesPerBuffer+i,1)+third**arrayPipe(2*framesPerBuffer+i,1);
+            *out++ = second**arrayPipe(framesPerBuffer+i,1)+third**arrayPipe(2*framesPerBuffer+i,1);}
+        delocPipe(2*framesPerBuffer);}
+    return 0;
+}
