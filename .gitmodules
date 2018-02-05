@@ -4,3 +4,6 @@
 [submodule "rbtree"]
 	path = rbtree
 	url = https://github.com/frobnitzem/rbtree.git
+[submodule "portaudio"]
+	path = portaudio
+	url = git://git.assembla.com/portaudio.git
