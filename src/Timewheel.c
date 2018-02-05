@@ -271,20 +271,29 @@ void timewheelAfter(void)
 	if (err != paNoError) printf("PortAudio error: %s\n",Pa_GetErrorText(err));
 }
 
-void portaudioOutput(int len, float *out)
+int *audioBuffer(int *buf, int loc, int lim)
 {
-    int num = sizePipe()/len;
+    return buf+loc%lim;
+}
+
+int audioOutput(int *buf, int lim, int loc, int len, float *out)
+{
+    int siz = 0;
+    while (siz < lim && *(buf+(loc+siz)%lim) != -1) siz += 1;
+    int num = siz/len;
     if (num > 7) {
     // if more than 7, then ignore those between second and
-    // what would be third if there were less than 8
-    int lim = 2*len;
-    int from = 2*len;
-    int to = (num-5)*len;
-    for (int i = 0; i < lim; i++) {
-    *arrayPipe(to,1) = *arrayPipe(from,1);
+    // what would be third if there were 7
+    int two = 2*len;
+    int from = two;
+    int to = from+(num-7)*len;
+    for (int i = 0; i < two; i++) {
     to -= 1;
-    from -= 1;}
-    delocPipe((num-7)*len);}
+    from -= 1;
+    *(buf+(loc+to)%lim) = *(buf+(loc+from)%lim);}
+    for (int i = 0; i < to; i++) *(buf+(loc+i)%lim) = -1;
+    loc += to;
+    num = 7;}
     for (int i = 0; i < len; i++) {
     SWITCH(num,0) FALL(1) {
     // zeros with no deloc
@@ -294,33 +303,36 @@ void portaudioOutput(int len, float *out)
     // sliding weighted average of first two len, and deloc none
     float first = i*1.0/len;
     float second = (len-i-1)*1.0/len;
-    *out = first**arrayPipe(i,1)+second**arrayPipe(len+i,1);
+    *out = first**(buf+(loc+i)%lim)+second**(buf+(loc+len+i)%lim);
     out += 2;}
     CASE(4) FALL(5) {
     // second len without average, and deloc one len
-    *out = *arrayPipe(len+i,1);
+    *out = *(buf+(len+i)%lim);
     out += 2;}
-    DEFAULT({
+    CASE(6) FALL(7) {
     // sliding weighted average of second two len, and deloc two len
     float second = (len-i-1)*1.0/len;
     float third = i*1.0/len;
-    *out = second**arrayPipe(len+i,1)+third**arrayPipe(2*len+i,1);
-    out += 2;})}
+    *out = second**(buf+(loc+len+i)%lim)+third**(buf+(loc+2*len+i)%lim);
+    out += 2;}
+    DEFAULT(exitErrstr("audo too num\n");)}
     SWITCH(num,0) FALL(1) /*nop*/;
     CASE(2) FALL(3) /*nop*/;
-    CASE(4) FALL(5) delocPipe(len);
-    DEFAULT(delocPipe(2*len);)
+    CASE(4) FALL(5) {for (int i = 0; i < len; i++) *(buf+(loc+i)%lim) = -1; loc += len;}
+    CASE(6) FALL(7) {for (int i = 0; i < 2*len; i++) *(buf+(loc+i)%lim) = -1; loc += 2*len;}
+    DEFAULT(exitErrstr("audio too num");)
+    return loc%lim;
 }
 
-int portaudoCallback( const void *inputBuffer, void *outputBuffer,
+int audioCallback( const void *inputBuffer, void *outputBuffer,
     unsigned long framesPerBuffer,
     const PaStreamCallbackTimeInfo* timeInfo,
     PaStreamCallbackFlags statusFlags,
     void *userData )
 {
     (void) inputBuffer; /* Prevent unused variable warning. */
-    int sub = void2int(userData);
-    useWave0(sub); referPipe(); portaudioOutput(framesPerBuffer,(float *)outputBuffer);
-    useWave1(sub); referPipe(); portaudioOutput(framesPerBuffer,(float *)outputBuffer+1);
+    struct Audio *audio = userData;
+    audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer);
+    audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
     return 0;
 }

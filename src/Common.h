@@ -333,6 +333,12 @@ enum Shift {
     Run, // state is to be scheduled
     Shifts};
 
+struct Audio {
+    int *buf;
+    int siz;
+    int loc;
+};
+
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \
@@ -521,6 +527,7 @@ DECLARE_PRIORITY(Wheel,struct Change)
 DECLARE_META(Wave0,int)
 DECLARE_META(Wave1,int)
 DECLARE_POINTER(Pipe,int)
+DECLARE_LOCAL(Audio,struct Audio)
 DECLARE_TREE(Pack,int,int)
 
 DECLARE_SOURCE(TwCommands)
