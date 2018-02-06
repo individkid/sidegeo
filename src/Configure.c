@@ -347,7 +347,7 @@ int processConfigure(int index, int len)
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		state.vld = 1<<Map; // Map in vld because subscripts are from string position
+		state.vld = (1<<Map)|(1<<Run); // Map in vld because subscripts are from string position
 		retval = timeName(&state.wav,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Wav;

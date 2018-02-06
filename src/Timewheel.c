@@ -69,19 +69,140 @@ void startCount(void)
         stateCount += 1;}
 }
 
+struct Region{
+    void *ptr0;
+    void *ptr1;
+    ring_buffer_size_t siz0;
+    ring_buffer_size_t siz1;    
+};
+
+int audioBuffer(struct Region *region, int sub)
+{
+    if (region->siz0 < sub+1) return *((int *)region->ptr1+sub-region->siz0);
+    return *((int *)region->ptr0+sub);
+}
+
+void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO use portaudio ringbuffer
+{
+    struct Region region = {0};
+    int siz = PaUtil_GetRingBufferReadAvailable(buf);
+    if (PaUtil_GetRingBufferReadRegions(buf,siz,&region.ptr0,&region.siz0,&region.ptr1,&region.siz1) < siz) exitErrstr("ring too sub\n");
+    if (siz < loc+len) {
+        for (int i = 0; i < len; i++) {
+            *out = 0;
+            out += 2;}}
+    else if (siz < loc+len+len && loc < len) {
+        for (int i = 0; i < len; i++) {
+            float first, second;
+            if (i < len-loc) {
+                first = 0.0;
+                second = 1.0;}
+            else {
+                first = (i-len+loc)*1.0/loc;
+                second = (len-i)*1.0/loc;}
+            int fst = audioBuffer(&region,i);
+            int scd = audioBuffer(&region,loc+i);
+            *out = first*fst+second*scd;
+            out += 2;}}
+    else if (siz < loc+2*len) {
+        for (int i = 0; i < len; i++) {
+            float first = i*1.0/len;
+            float second = (len-i)*1.0/len;
+            int fst = audioBuffer(&region,i);
+            int scd = audioBuffer(&region,loc+i);
+            *out = first*fst+second*scd;
+            out += 2;}}
+    else if (siz < loc+3*len) {
+        for (int i = 0; i < len; i++) {
+            *out = audioBuffer(&region,loc+i);
+            out += 2;}
+        if (PaUtil_AdvanceRingBufferReadIndex(buf,loc) < loc) exitErrstr("ring too loc\n");}
+    else {
+        int aft = siz-3*len;
+        for (int i = 0; i < len; i++) {
+            float second = i*1.0/len;
+            float third = (len-i)*1.0/len;
+            int scd = audioBuffer(&region,loc+i);
+            int thd = audioBuffer(&region,aft+i);
+            *out = second*scd+third*thd;
+            out += 2;}
+        if (PaUtil_AdvanceRingBufferReadIndex(buf,aft) < aft) exitErrstr("ring too aft\n");}
+}
+
+int audioCallback( const void *inputBuffer, void *outputBuffer,
+    unsigned long framesPerBuffer,
+    const PaStreamCallbackTimeInfo* timeInfo,
+    PaStreamCallbackFlags statusFlags,
+    void *userData )
+{
+    (void) inputBuffer; /* Prevent unused variable warning. */
+    struct Audio *audio = arrayAudio(void2int(userData),1);
+    audioOutput(&audio->left,audio->loc,framesPerBuffer,(float *)outputBuffer);
+    audioOutput(&audio->right,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
+    audio->loc = framesPerBuffer;
+    return 0;
+}
+
+void audioStop(void)
+{
+    for (int i = 0; i < sizeAudio(); i++) {
+    struct Sound *sound = arraySound(i,1);
+    struct Audio *audio = arrayAudio(i,1);
+    if (!((sound->vld>>Map)&1) && (sound->vld>>Run)&1) {
+    if (Pa_AbortStream(audio->stream) != paNoError) exitErrstr("stream too abort\n");}}
+}
+
+void audioRestart(void)
+{
+    for (int i = 0; i < sizeAudio(); i++) {
+    struct Sound *sound = arraySound(i,1);
+    struct Audio *audio = arrayAudio(i,1);
+    if (!((sound->vld>>Map)&1) && (sound->vld>>Run)&1) {
+    if (Pa_StartStream(audio->stream) != paNoError) exitErrstr("stream too start\n");}}
+}
+
 void startListen(void)
 {
     startCount();
-    struct Audio init = {0};
-    // TODO disable callbacks while calling enloc
-    int sub = sizeAudio();
-    struct Audio *audio = enlocAudio(1);
-    *audio = init;
-    audio->siz = PORTAUDIO_SIZE;
-    if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
-    if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
-    // TODO reenable callbacks
-	// TODO kick off callback function with index of audio
+    int sub = *castPack(*delocTwInt(1));
+    struct Sound *sound = arraySound(sub,1);
+    if ((sound->vld>>Map)&1) {
+        // disable callbacks while calling enloc
+        audioStop();
+        // audio corresponds to listen
+        while (sizeAudio() <= sub) {
+        struct Audio init = {0};
+        *enlocAudio(1) = init;}
+        struct Audio *audio = arrayAudio(sub,1);
+        audio->siz = PORTAUDIO_SIZE;
+        if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
+        if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
+        // reenable callbacks
+        audioRestart();
+        sound->vld &= ~(1<<Map);
+        // TODO get non-default arguments from struct Sound
+        if (Pa_OpenDefaultStream( &audio->stream,
+            0,          /* no input channels */
+            2,          /* stereo output */
+            paFloat32,  /* 32 bit floating point output */
+            SAMPLE_RATE,
+            paFramesPerBufferUnspecified,
+                /* frames per buffer, i.e. the number
+                   of sample frames that PortAudio will
+                   request from the callback. Many apps
+                   may want to use
+                   paFramesPerBufferUnspecified, which
+                   tells PortAudio to pick the best,
+                   possibly changing, buffer size.*/
+            audioCallback, /* this is your callback function */
+            int2void(sub) ) /*This is a pointer that will be passed to
+                               your callback*/
+            != paNoError) exitErrstr("stream too open\n");}
+    else if ((sound->vld>>Run)&1) sound->vld &= ~(1<<Run);
+    else sound->vld |= 1<<Run;
+    struct Audio *audio = arrayAudio(sub,1);
+    if ((sound->vld>>Run)&1) {if (Pa_StartStream(audio->stream) != paNoError) exitErrstr("stream too start\n");}
+    else {if (Pa_AbortStream(audio->stream) != paNoError) exitErrstr("stream too abort\n");}
 }
 
 void startSource(void)
@@ -130,14 +251,19 @@ void startState(void)
         startRatio(var,&state->upd);
         startRatio(var,&state->dly);
         startRatio(var,&state->sch);}
-    if ((state->vld>>Run)&1) state->vld &= ~(1<<Run);
+    else if ((state->vld>>Run)&1) state->vld &= ~(1<<Run);
     else state->vld |= 1<<Run;
     if ((state->vld>>Run)&1) *scheduleTime(ofTime(getTime())) = sub;
 }
 
 void finishListen(void)
 {
-    // TODO
+    audioStop();
+    for (int i = 0; i < sizeAudio(); i++) {
+    struct Sound *sound = arraySound(i,1);
+    struct Audio *audio = arrayAudio(i,1);
+    if (!((sound->vld>>Map)&1)) {
+    if (Pa_CloseStream(audio->stream) != paNoError) exitErrstr("stream too close\n");}}
 }
 
 void finishSource(void)
@@ -152,7 +278,9 @@ void finishMetric(void)
 
 void pipeWave(int wave, Myfloat value)
 {
-	// TODO
+	// TODO if ring is full and loc is less than 1/4 drop value
+    // TODO if ring is full and loc is not less than 1/4 audioStop enlarge ring audioRestart
+    // TODO if ring is not full append value
 }
 
 void evalExp(Myfloat value)
@@ -278,74 +406,4 @@ void timewheelAfter(void)
     finishMetric();
 	PaError err = Pa_Terminate();
 	if (err != paNoError) printf("PortAudio error: %s\n",Pa_GetErrorText(err));
-}
-
-int accessBuffer(PaUtilRingBuffer *buf, int sub)
-{
-    void *ptr0 = 0;
-    void *ptr1 = 0;
-    ring_buffer_size_t siz0 = 0;
-    ring_buffer_size_t siz1 = 0;
-    if (PaUtil_GetRingBufferReadRegions(buf,sub+1,&ptr0,&siz0,&ptr1,&siz1) < sub+1) exitErrstr("ring too sub\n");
-    if (siz0 < sub+1) return *((int *)ptr1+sub-siz0);
-    return *((int *)ptr0+sub);
-}
-
-void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO use portaudio ringbuffer
-{
-    int siz = PaUtil_GetRingBufferReadAvailable(buf);
-    if (siz < loc+len) {
-        for (int i = 0; i < len; i++) {
-            *out = 0;
-            out += 2;}}
-    else if (siz < loc+len+len && loc < len) {
-        for (int i = 0; i < len; i++) {
-            float first, second;
-            if (i < len-loc) {
-                first = 0.0;
-                second = 1.0;}
-            else {
-                first = (i-len+loc)*1.0/loc;
-                second = (len-i)*1.0/loc;}
-            int fst = accessBuffer(buf,i);
-            int scd = accessBuffer(buf,loc+i);
-            *out = first*fst+second*scd;
-            out += 2;}}
-    else if (siz < loc+2*len) {
-        for (int i = 0; i < len; i++) {
-            float first = i*1.0/len;
-            float second = (len-i)*1.0/len;
-            int fst = accessBuffer(buf,i);
-            int scd = accessBuffer(buf,loc+i);
-            *out = first*fst+second*scd;
-            out += 2;}}
-    else if (siz < loc+3*len) {
-        for (int i = 0; i < len; i++) {
-            *out = accessBuffer(buf,loc+i);
-            out += 2;}
-        if (PaUtil_AdvanceRingBufferReadIndex(buf,loc) < loc) exitErrstr("ring too loc\n");}
-    else {
-        int aft = siz-3*len;
-        for (int i = 0; i < len; i++) {
-            float second = i*1.0/len;
-            float third = (len-i)*1.0/len;
-            int scd = accessBuffer(buf,loc+i);
-            int thd = accessBuffer(buf,aft+i);
-            *out = second*scd+third*thd;
-            out += 2;}
-        if (PaUtil_AdvanceRingBufferReadIndex(buf,aft) < aft) exitErrstr("ring too aft\n");}
-}
-
-int audioCallback( const void *inputBuffer, void *outputBuffer,
-    unsigned long framesPerBuffer,
-    const PaStreamCallbackTimeInfo* timeInfo,
-    PaStreamCallbackFlags statusFlags,
-    void *userData )
-{
-    (void) inputBuffer; /* Prevent unused variable warning. */
-    struct Audio *audio = arrayAudio(void2int(userData),1);
-    audioOutput(&audio->left,audio->loc,framesPerBuffer,(float *)outputBuffer);
-    audioOutput(&audio->right,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
-    audio->loc = framesPerBuffer;
-    return 0;
 }

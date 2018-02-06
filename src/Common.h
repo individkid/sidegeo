@@ -55,6 +55,7 @@ EXTERNCBEGIN
 #define INVALID0 1.0e38
 #define INVALID1 1.0e37
 #define PORTAUDIO_SIZE (1<<10)
+#define SAMPLE_RATE (44100)
 
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Move,Copy,Transform,
@@ -311,6 +312,7 @@ struct Signal { // information for opening source
 };
 struct Sound { // information for opening destination
     int idt; // how other states will refer to this one
+    int vld; // initialized, running, suspended
 };
 struct Shape { // information for measuring shapes
     int idt; // how other states will refer to this one
@@ -336,6 +338,7 @@ enum Shift {
     Shifts};
 
 struct Audio {
+    void *stream;
     PaUtilRingBuffer left;
     PaUtilRingBuffer right;
     int loc;
