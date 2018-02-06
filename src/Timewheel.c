@@ -82,7 +82,7 @@ int audioBuffer(struct Region *region, int sub)
     return *((int *)region->ptr0+sub);
 }
 
-void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO use portaudio ringbuffer
+void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out, int inc) // TODO use portaudio ringbuffer
 {
     struct Region region = {0};
     int siz = PaUtil_GetRingBufferReadAvailable(buf);
@@ -90,7 +90,7 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
     if (siz < loc+len) {
         for (int i = 0; i < len; i++) {
             *out = 0;
-            out += 1;}}
+            out += inc;}}
     else if (siz < loc+len+len && loc < len) {
         for (int i = 0; i < len; i++) {
             float first, second;
@@ -103,7 +103,7 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
             int fst = audioBuffer(&region,i);
             int scd = audioBuffer(&region,loc+i);
             *out = first*fst+second*scd;
-            out += 1;}}
+            out += inc;}}
     else if (siz < loc+2*len) {
         for (int i = 0; i < len; i++) {
             float first = i*1.0/len;
@@ -111,11 +111,11 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
             int fst = audioBuffer(&region,i);
             int scd = audioBuffer(&region,loc+i);
             *out = first*fst+second*scd;
-            out += 1;}}
+            out += inc;}}
     else if (siz < loc+3*len) {
         for (int i = 0; i < len; i++) {
             *out = audioBuffer(&region,loc+i);
-            out += 1;}
+            out += inc;}
         if (PaUtil_AdvanceRingBufferReadIndex(buf,loc) < loc) exitErrstr("ring too loc\n");}
     else {
         int aft = siz-3*len;
@@ -125,7 +125,7 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
             int scd = audioBuffer(&region,loc+i);
             int thd = audioBuffer(&region,aft+i);
             *out = second*scd+third*thd;
-            out += 1;}
+            out += inc;}
         if (PaUtil_AdvanceRingBufferReadIndex(buf,aft) < aft) exitErrstr("ring too aft\n");}
 }
 
@@ -137,7 +137,8 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
 {
     (void) inputBuffer; /* Prevent unused variable warning. */
     struct Audio *audio = arrayAudio(void2int(userData),1);
-    audioOutput(&audio->mono,audio->loc,framesPerBuffer,(float *)outputBuffer);
+    audioOutput(&audio->left,audio->loc,framesPerBuffer,(float *)outputBuffer,2);
+    audioOutput(&audio->right,audio->loc,framesPerBuffer,(float *)outputBuffer+1,2);
     audio->loc = framesPerBuffer;
     return 0;
 }
@@ -174,15 +175,17 @@ void startListen(void)
         *enlocAudio(1) = init;}
         struct Audio *audio = arrayAudio(sub,1);
         audio->siz = PORTAUDIO_SIZE;
-        int *buf = enlocWave(sub,audio->siz);
-        if (PaUtil_InitializeRingBuffer(&audio->mono,sizeof(int),audio->siz,buf) < 0) exitErrstr("portaudio too size\n");
+        int *left = enlocLeft(sub,audio->siz);
+        int *right = enlocRight(sub,audio->siz);
+        if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),audio->siz,left) < 0) exitErrstr("portaudio too size\n");
+        if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),audio->siz,right) < 0) exitErrstr("portaudio too size\n");
         // reenable callbacks
         audioRestart();
         sound->vld &= ~(1<<Map);
         // TODO get non-default arguments from struct Sound
         if (Pa_OpenDefaultStream( &audio->stream,
             0,          /* no input channels */
-            1,          /* stereo output */ // mono output
+            2,          /* stereo output */
             paFloat32,  /* 32 bit floating point output */
             SAMPLE_RATE,
             paFramesPerBufferUnspecified,
@@ -245,6 +248,8 @@ void startState(void)
     if ((state->vld>>Map)&1) {
         state->vld &= ~(1<<Map);
         if ((state->vld>>Wav)&1) state->wav = *castPack(state->wav);
+        if ((state->vld>>Lft)&1) state->lft = *castPack(state->lft);
+        if ((state->vld>>Rgt)&1) state->rgt = *castPack(state->rgt);
         if ((state->vld>>Met)&1) state->met = *castPack(state->met);
         int var = state->vsub;
         startRatio(var,&state->upd);
@@ -275,14 +280,24 @@ void finishMetric(void)
     // TODO
 }
 
-void pipeWave(int wave, Myfloat value)
+void pipeLeft(int wave, Myfloat value)
 {
     struct Sound *sound = arraySound(wave,1);
     if ((sound->vld>>Map)&1) return;
     if (!((sound->vld>>Run)&1)) return;
     struct Audio *audio = arrayAudio(wave,1);
-    int siz = PaUtil_GetRingBufferWriteAvailable(&audio->mono);
-    if (siz > 0) {if (Pa_WriteStream(&audio->mono,&value,1) != paNoError) exitErrstr("stream too write\n");}
+    int siz = PaUtil_GetRingBufferWriteAvailable(&audio->left);
+    if (siz > 0) {if (Pa_WriteStream(&audio->left,&value,1) != paNoError) exitErrstr("stream too write\n");}
+}
+
+void pipeRight(int wave, Myfloat value)
+{
+    struct Sound *sound = arraySound(wave,1);
+    if ((sound->vld>>Map)&1) return;
+    if (!((sound->vld>>Run)&1)) return;
+    struct Audio *audio = arrayAudio(wave,1);
+    int siz = PaUtil_GetRingBufferWriteAvailable(&audio->right);
+    if (siz > 0) {if (Pa_WriteStream(&audio->right,&value,1) != paNoError) exitErrstr("stream too write\n");}
 }
 
 void evalExp(Myfloat value)
@@ -365,7 +380,8 @@ void timewheelConsume(void *arg)
         int sub = ((change.vld>>Map)&1 ? *castPack(change.sub) : change.sub);
         struct State *state = arrayState(sub,1);
         state->amt = change.val;
-        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);}
+        if (((state->vld>>Wav)&1) || ((state->vld>>Lft)&1)) pipeLeft(state->wav,state->amt);
+        if (((state->vld>>Wav)&1) || ((state->vld>>Rgt)&1)) pipeRight(state->wav,state->amt);}
 }
 
 long long timewheelDelay(void)
@@ -397,7 +413,8 @@ void timewheelProduce(void *arg)
         struct Change change = *advanceWheel();
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
-        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->amt);
+        if (((state->vld>>Wav)&1) || ((state->vld>>Lft)&1)) pipeLeft(state->wav,state->amt);
+        if (((state->vld>>Wav)&1) || ((state->vld>>Rgt)&1)) pipeRight(state->wav,state->amt);
         if ((state->vld>>Exp)&1) evalExp(state->amt);}
 }
 

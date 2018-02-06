@@ -295,8 +295,10 @@ struct Ratio {
     struct Nomial n,d;};
 struct State {
     int idt; // how other states will refer to this one
-    int vld; // enable for wav, met
+    int vld; // enable for wav, lft, rgt, met
     int wav; // index of waveform pipeline
+    int lft; // index of left channel
+    int rgt; // index of right channel
     int fun; // index into string buffer for haskell expression
     int met; // metric request argument
     Myfloat amt; // amout of stock
@@ -330,7 +332,9 @@ enum Control {
     Metric,
     Start};
 enum Shift {
-    Wav, // send new amount to waveform pipeline
+    Wav, // send new amount to both channls
+    Lft, // send new amount to left channel
+    Rgt, // send new amount to right chanel
     Met, // send metric command when read
     Exp, // evaluate haskell expression when written
     Map, // indices are not packed
@@ -339,7 +343,8 @@ enum Shift {
 
 struct Audio {
     void *stream;
-    PaUtilRingBuffer mono;
+    PaUtilRingBuffer left;
+    PaUtilRingBuffer right;
     int loc;
     int siz;
 };
@@ -529,7 +534,8 @@ DECLARE_EXTRA(Shape,struct Shape)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
-DECLARE_META(Wave,int)
+DECLARE_META(Left,int)
+DECLARE_META(Right,int)
 DECLARE_LOCAL(Audio,struct Audio)
 DECLARE_TREE(Pack,int,int)
 
