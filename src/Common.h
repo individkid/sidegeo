@@ -339,8 +339,7 @@ enum Shift {
 
 struct Audio {
     void *stream;
-    PaUtilRingBuffer left;
-    PaUtilRingBuffer right;
+    PaUtilRingBuffer mono;
     int loc;
     int siz;
 };

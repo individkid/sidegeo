@@ -20,6 +20,13 @@
 
 #include "Common.h"
 
+struct Region{ // for random access to circular buffer
+    void *ptr0;
+    void *ptr1;
+    ring_buffer_size_t siz0;
+    ring_buffer_size_t siz1;    
+};
+
 int stateCount = 0; // how many from State have been entered into Pack
 int listenCount = 0;
 int sourceCount = 0;
@@ -69,13 +76,6 @@ void startCount(void)
         stateCount += 1;}
 }
 
-struct Region{
-    void *ptr0;
-    void *ptr1;
-    ring_buffer_size_t siz0;
-    ring_buffer_size_t siz1;    
-};
-
 int audioBuffer(struct Region *region, int sub)
 {
     if (region->siz0 < sub+1) return *((int *)region->ptr1+sub-region->siz0);
@@ -90,7 +90,7 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
     if (siz < loc+len) {
         for (int i = 0; i < len; i++) {
             *out = 0;
-            out += 2;}}
+            out += 1;}}
     else if (siz < loc+len+len && loc < len) {
         for (int i = 0; i < len; i++) {
             float first, second;
@@ -103,7 +103,7 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
             int fst = audioBuffer(&region,i);
             int scd = audioBuffer(&region,loc+i);
             *out = first*fst+second*scd;
-            out += 2;}}
+            out += 1;}}
     else if (siz < loc+2*len) {
         for (int i = 0; i < len; i++) {
             float first = i*1.0/len;
@@ -111,11 +111,11 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
             int fst = audioBuffer(&region,i);
             int scd = audioBuffer(&region,loc+i);
             *out = first*fst+second*scd;
-            out += 2;}}
+            out += 1;}}
     else if (siz < loc+3*len) {
         for (int i = 0; i < len; i++) {
             *out = audioBuffer(&region,loc+i);
-            out += 2;}
+            out += 1;}
         if (PaUtil_AdvanceRingBufferReadIndex(buf,loc) < loc) exitErrstr("ring too loc\n");}
     else {
         int aft = siz-3*len;
@@ -125,7 +125,7 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO us
             int scd = audioBuffer(&region,loc+i);
             int thd = audioBuffer(&region,aft+i);
             *out = second*scd+third*thd;
-            out += 2;}
+            out += 1;}
         if (PaUtil_AdvanceRingBufferReadIndex(buf,aft) < aft) exitErrstr("ring too aft\n");}
 }
 
@@ -137,8 +137,7 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
 {
     (void) inputBuffer; /* Prevent unused variable warning. */
     struct Audio *audio = arrayAudio(void2int(userData),1);
-    audioOutput(&audio->left,audio->loc,framesPerBuffer,(float *)outputBuffer);
-    audioOutput(&audio->right,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
+    audioOutput(&audio->mono,audio->loc,framesPerBuffer,(float *)outputBuffer);
     audio->loc = framesPerBuffer;
     return 0;
 }
@@ -175,8 +174,8 @@ void startListen(void)
         *enlocAudio(1) = init;}
         struct Audio *audio = arrayAudio(sub,1);
         audio->siz = PORTAUDIO_SIZE;
-        if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
-        if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
+        int *buf = enlocWave(sub,audio->siz);
+        if (PaUtil_InitializeRingBuffer(&audio->mono,sizeof(int),audio->siz,buf) < 0) exitErrstr("portaudio too size\n");
         // reenable callbacks
         audioRestart();
         sound->vld &= ~(1<<Map);
@@ -282,8 +281,8 @@ void pipeWave(int wave, Myfloat value)
     if ((sound->vld>>Map)&1) return;
     if (!((sound->vld>>Run)&1)) return;
     struct Audio *audio = arrayAudio(wave,1);
-    int siz = PaUtil_GetRingBufferWriteAvailable(audio->stream);
-    if (siz > 0) {if (Pa_WriteStream(audio->stream,&value,1) != paNoError) exitErrstr("stream too write\n");}
+    int siz = PaUtil_GetRingBufferWriteAvailable(&audio->mono);
+    if (siz > 0) {if (Pa_WriteStream(&audio->mono,&value,1) != paNoError) exitErrstr("stream too write\n");}
 }
 
 void evalExp(Myfloat value)
