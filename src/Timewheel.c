@@ -182,7 +182,7 @@ void startListen(void)
         // TODO get non-default arguments from struct Sound
         if (Pa_OpenDefaultStream( &audio->stream,
             0,          /* no input channels */
-            2,          /* stereo output */
+            1,          /* stereo output */ // mono output
             paFloat32,  /* 32 bit floating point output */
             SAMPLE_RATE,
             paFramesPerBufferUnspecified,
