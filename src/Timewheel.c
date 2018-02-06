@@ -284,8 +284,8 @@ int accessBuffer(PaUtilRingBuffer *buf, int sub)
 {
     void *ptr0 = 0;
     void *ptr1 = 0;
-    int siz0 = 0;
-    int siz1 = 0;
+    ring_buffer_size_t siz0 = 0;
+    ring_buffer_size_t siz1 = 0;
     if (PaUtil_GetRingBufferReadRegions(buf,sub+1,&ptr0,&siz0,&ptr1,&siz1) < sub+1) exitErrstr("ring too sub\n");
     if (siz0 < sub+1) return *((int *)ptr1+sub-siz0);
     return *((int *)ptr0+sub);
