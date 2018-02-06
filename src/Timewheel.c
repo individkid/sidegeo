@@ -278,9 +278,12 @@ void finishMetric(void)
 
 void pipeWave(int wave, Myfloat value)
 {
-	// TODO if ring is full and loc is less than 1/4 drop value
-    // TODO if ring is full and loc is not less than 1/4 audioStop enlarge ring audioRestart
-    // TODO if ring is not full append value
+    struct Sound *sound = arraySound(wave,1);
+    if ((sound->vld>>Map)&1) return;
+    if (!((sound->vld>>Run)&1)) return;
+    struct Audio *audio = arrayAudio(wave,1);
+    int siz = PaUtil_GetRingBufferWriteAvailable(audio->stream);
+    if (siz > 0) {if (Pa_WriteStream(audio->stream,&value,1) != paNoError) exitErrstr("stream too write\n");}
 }
 
 void evalExp(Myfloat value)
