@@ -74,10 +74,12 @@ void startListen(void)
     startCount();
     struct Audio init = {0};
     // TODO disable callbacks while calling enloc
+    int sub = sizeAudio();
     struct Audio *audio = enlocAudio(1);
     *audio = init;
-    if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),PORTAUDIO_SIZE,enlocWave(PORTAUDIO_SIZE)) < 0) exitErrstr("portaudio too size\n");
-    if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),PORTAUDIO_SIZE,enlocWave(PORTAUDIO_SIZE)) < 0) exitErrstr("portaudio too size\n");
+    audio->siz = PORTAUDIO_SIZE;
+    if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
+    if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),audio->siz,enlocWave(sub,audio->siz)) < 0) exitErrstr("portaudio too size\n");
     // TODO reenable callbacks
 	// TODO kick off callback function with index of audio
 }
@@ -135,12 +137,12 @@ void startState(void)
 
 void finishListen(void)
 {
-	// TODO
+    // TODO
 }
 
 void finishSource(void)
 {
-	// TODO
+    // TODO
 }
 
 void finishMetric(void)
@@ -278,57 +280,60 @@ void timewheelAfter(void)
 	if (err != paNoError) printf("PortAudio error: %s\n",Pa_GetErrorText(err));
 }
 
-int *audioBuffer(int *buf, int loc, int lim)
+int accessBuffer(PaUtilRingBuffer *buf, int sub)
 {
-    return buf+loc%lim;
+    void *ptr0 = 0;
+    void *ptr1 = 0;
+    int siz0 = 0;
+    int siz1 = 0;
+    if (PaUtil_GetRingBufferReadRegions(buf,sub+1,&ptr0,&siz0,&ptr1,&siz1) < sub+1) exitErrstr("ring too sub\n");
+    if (siz0 < sub+1) return *((int *)ptr1+sub-siz0);
+    return *((int *)ptr0+sub);
 }
 
-int audioOutput(int *buf, int lim, int loc, int len, float *out) // TODO use portaudio ringbuffer
+void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out) // TODO use portaudio ringbuffer
 {
-    int siz = 0;
-    while (siz < lim && *(buf+(loc+siz)%lim) != -1) siz += 1;
-    int num = siz/len;
-    if (num > 7) {
-    // if more than 7, then ignore those between second and
-    // what would be third if there were 7
-    int two = 2*len;
-    int from = two;
-    int to = from+(num-7)*len;
-    for (int i = 0; i < two; i++) {
-    to -= 1;
-    from -= 1;
-    *(buf+(loc+to)%lim) = *(buf+(loc+from)%lim);}
-    for (int i = 0; i < to; i++) *(buf+(loc+i)%lim) = -1;
-    loc += to;
-    num = 7;}
-    for (int i = 0; i < len; i++) {
-    SWITCH(num,0) FALL(1) {
-    // zeros with no deloc
-    *out = 0;
-    out += 2;}
-    CASE(2) FALL(3) {
-    // sliding weighted average of first two len, and deloc none
-    float first = i*1.0/len;
-    float second = (len-i-1)*1.0/len;
-    *out = first**(buf+(loc+i)%lim)+second**(buf+(loc+len+i)%lim);
-    out += 2;}
-    CASE(4) FALL(5) {
-    // second len without average, and deloc one len
-    *out = *(buf+(len+i)%lim);
-    out += 2;}
-    CASE(6) FALL(7) {
-    // sliding weighted average of second two len, and deloc two len
-    float second = (len-i-1)*1.0/len;
-    float third = i*1.0/len;
-    *out = second**(buf+(loc+len+i)%lim)+third**(buf+(loc+2*len+i)%lim);
-    out += 2;}
-    DEFAULT(exitErrstr("audo too num\n");)}
-    SWITCH(num,0) FALL(1) /*nop*/;
-    CASE(2) FALL(3) /*nop*/;
-    CASE(4) FALL(5) {for (int i = 0; i < len; i++) *(buf+(loc+i)%lim) = -1; loc += len;}
-    CASE(6) FALL(7) {for (int i = 0; i < 2*len; i++) *(buf+(loc+i)%lim) = -1; loc += 2*len;}
-    DEFAULT(exitErrstr("audio too num");)
-    return loc%lim;
+    int siz = PaUtil_GetRingBufferReadAvailable(buf);
+    if (siz < loc+len) {
+        for (int i = 0; i < len; i++) {
+            *out = 0;
+            out += 2;}}
+    else if (siz < loc+len+len && loc < len) {
+        for (int i = 0; i < len; i++) {
+            float first, second;
+            if (i < len-loc) {
+                first = 0.0;
+                second = 1.0;}
+            else {
+                first = (i-len+loc)*1.0/loc;
+                second = (len-i)*1.0/loc;}
+            int fst = accessBuffer(buf,i);
+            int scd = accessBuffer(buf,loc+i);
+            *out = first*fst+second*scd;
+            out += 2;}}
+    else if (siz < loc+2*len) {
+        for (int i = 0; i < len; i++) {
+            float first = i*1.0/len;
+            float second = (len-i)*1.0/len;
+            int fst = accessBuffer(buf,i);
+            int scd = accessBuffer(buf,loc+i);
+            *out = first*fst+second*scd;
+            out += 2;}}
+    else if (siz < loc+3*len) {
+        for (int i = 0; i < len; i++) {
+            *out = accessBuffer(buf,loc+i);
+            out += 2;}
+        if (PaUtil_AdvanceRingBufferReadIndex(buf,loc) < loc) exitErrstr("ring too loc\n");}
+    else {
+        int aft = siz-3*len;
+        for (int i = 0; i < len; i++) {
+            float second = i*1.0/len;
+            float third = (len-i)*1.0/len;
+            int scd = accessBuffer(buf,loc+i);
+            int thd = accessBuffer(buf,aft+i);
+            *out = second*scd+third*thd;
+            out += 2;}
+        if (PaUtil_AdvanceRingBufferReadIndex(buf,aft) < aft) exitErrstr("ring too aft\n");}
 }
 
 int audioCallback( const void *inputBuffer, void *outputBuffer,
@@ -339,7 +344,8 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
 {
     (void) inputBuffer; /* Prevent unused variable warning. */
     struct Audio *audio = arrayAudio(void2int(userData),1);
-    // audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer);
-    // audio->loc = audioOutput(audio->buf,audio->siz,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
+    audioOutput(&audio->left,audio->loc,framesPerBuffer,(float *)outputBuffer);
+    audioOutput(&audio->right,audio->loc,framesPerBuffer,(float *)outputBuffer+1);
+    audio->loc = framesPerBuffer;
     return 0;
 }

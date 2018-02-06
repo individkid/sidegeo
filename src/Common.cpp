@@ -426,7 +426,7 @@ DEFINE_EXTRA(Shape,struct Shape,Sound)
 
 DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)
-DEFINE_LOCAL(Wave,int)
+DEFINE_META(Wave,int)
 DEFINE_LOCAL(Audio,struct Audio)
 DEFINE_TREE(Pack,int,int)
 

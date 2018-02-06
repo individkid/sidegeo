@@ -338,8 +338,8 @@ enum Shift {
 struct Audio {
     PaUtilRingBuffer left;
     PaUtilRingBuffer right;
-    int lloc;
-    int rloc;
+    int loc;
+    int siz;
 };
 
 #define DECLARE_MSGSTR(NAME) \
@@ -527,7 +527,7 @@ DECLARE_EXTRA(Shape,struct Shape)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
-DECLARE_LOCAL(Wave,int)
+DECLARE_META(Wave,int)
 DECLARE_LOCAL(Audio,struct Audio)
 DECLARE_TREE(Pack,int,int)
 
