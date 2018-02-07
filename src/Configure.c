@@ -330,7 +330,7 @@ int processConfigure(int index, int len)
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse(
-		"<?time!> id% <?,!> (id)% <?,!> (id)% <?,!>"
+		"<?time!> id% <?,!> (id)% <?,!> (id)% <?,!> (id)% <?,!>"
 		" (fl)% <?,!> (fl)% <?,!> (fl)% <?,!>"
 		TIME_RATIO
 		TIME_RATIO
@@ -348,9 +348,12 @@ int processConfigure(int index, int len)
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		state.vld = (1<<Map)|(1<<Run); // Map in vld because subscripts are from string position
-		retval = timeName(&state.wav,&chrpos,&intpos);
+		retval = timeName(&state.lft,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval > 0) state.vld |= 1<<Wav;
+		if (retval > 0) state.vld |= 1<<Lft;
+		retval = timeName(&state.lft,&chrpos,&intpos);
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (retval > 0) state.vld |= 1<<Rgt;
 		retval = timeName(&state.met,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Met;

@@ -296,7 +296,6 @@ struct Ratio {
 struct State {
     int idt; // how other states will refer to this one
     int vld; // enable for wav, lft, rgt, met
-    int wav; // index of waveform pipeline
     int lft; // index of left channel
     int rgt; // index of right channel
     int fun; // index into string buffer for haskell expression
@@ -332,7 +331,6 @@ enum Control {
     Metric,
     Start};
 enum Shift {
-    Wav, // send new amount to both channls
     Lft, // send new amount to left channel
     Rgt, // send new amount to right chanel
     Met, // send metric command when read

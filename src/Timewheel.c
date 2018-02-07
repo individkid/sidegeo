@@ -247,7 +247,6 @@ void startState(void)
     struct State *state = arrayState(sub,1);
     if ((state->vld>>Map)&1) {
         state->vld &= ~(1<<Map);
-        if ((state->vld>>Wav)&1) state->wav = *castPack(state->wav);
         if ((state->vld>>Lft)&1) state->lft = *castPack(state->lft);
         if ((state->vld>>Rgt)&1) state->rgt = *castPack(state->rgt);
         if ((state->vld>>Met)&1) state->met = *castPack(state->met);
@@ -380,8 +379,8 @@ void timewheelConsume(void *arg)
         int sub = ((change.vld>>Map)&1 ? *castPack(change.sub) : change.sub);
         struct State *state = arrayState(sub,1);
         state->amt = change.val;
-        if (((state->vld>>Wav)&1) || ((state->vld>>Lft)&1)) pipeLeft(state->wav,state->amt);
-        if (((state->vld>>Wav)&1) || ((state->vld>>Rgt)&1)) pipeRight(state->wav,state->amt);}
+        if ((state->vld>>Lft)&1) pipeLeft(state->lft,state->amt);
+        if ((state->vld>>Rgt)&1) pipeRight(state->rgt,state->amt);}
 }
 
 long long timewheelDelay(void)
@@ -413,8 +412,8 @@ void timewheelProduce(void *arg)
         struct Change change = *advanceWheel();
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
-        if (((state->vld>>Wav)&1) || ((state->vld>>Lft)&1)) pipeLeft(state->wav,state->amt);
-        if (((state->vld>>Wav)&1) || ((state->vld>>Rgt)&1)) pipeRight(state->wav,state->amt);
+        if ((state->vld>>Lft)&1) pipeLeft(state->lft,state->amt);
+        if ((state->vld>>Rgt)&1) pipeRight(state->rgt,state->amt);
         if ((state->vld>>Exp)&1) evalExp(state->amt);}
 }
 
