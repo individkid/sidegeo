@@ -82,7 +82,7 @@ int audioBuffer(struct Region *region, int sub)
     return *((int *)region->ptr0+sub);
 }
 
-void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out, int inc) // TODO use portaudio ringbuffer
+void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out, int inc)
 {
     struct Region region = {0};
     int siz = PaUtil_GetRingBufferReadAvailable(buf);
@@ -136,29 +136,33 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
     void *userData )
 {
     (void) inputBuffer; /* Prevent unused variable warning. */
-    struct Audio *audio = arrayAudio(void2int(userData),1);
-    audioOutput(&audio->left,audio->loc,framesPerBuffer,(float *)outputBuffer,2);
-    audioOutput(&audio->right,audio->loc,framesPerBuffer,(float *)outputBuffer+1,2);
-    audio->loc = framesPerBuffer;
+    int sub = void2int(userData);
+    struct Stream *stream = arrayStream(sub,1);
+    for (int i = 0; i < stream->num; i++) {
+    PaUtilRingBuffer *buf = arrayChannel(sub,i,1);
+    audioOutput(buf,stream->loc,framesPerBuffer,(float *)outputBuffer+i,stream->num);}
+    stream->loc = framesPerBuffer;
     return 0;
 }
 
 void audioStop(void)
 {
-    for (int i = 0; i < sizeAudio(); i++) {
+    for (int i = 0; i < sizeSound(); i++) {
     struct Sound *sound = arraySound(i,1);
-    struct Audio *audio = arrayAudio(i,1);
-    if (!((sound->vld>>Map)&1) && (sound->vld>>Run)&1) {
-    if (Pa_AbortStream(audio->stream) != paNoError) exitErrstr("stream too abort\n");}}
+    if ((sound->vld>>Map)&1) continue;
+    if (!((sound->vld>>Run)&1)) continue;
+    void *stream = arrayStream(i,1);
+    if (Pa_AbortStream(stream) != paNoError) exitErrstr("stream too abort\n");}
 }
 
 void audioRestart(void)
 {
-    for (int i = 0; i < sizeAudio(); i++) {
+    for (int i = 0; i < sizeSound(); i++) {
     struct Sound *sound = arraySound(i,1);
-    struct Audio *audio = arrayAudio(i,1);
-    if (!((sound->vld>>Map)&1) && (sound->vld>>Run)&1) {
-    if (Pa_StartStream(audio->stream) != paNoError) exitErrstr("stream too start\n");}}
+    if ((sound->vld>>Map)&1) continue;
+    if (!((sound->vld>>Run)&1)) continue;
+    void *stream = arrayStream(i,1);
+    if (Pa_StartStream(stream) != paNoError) exitErrstr("stream too start\n");}
 }
 
 void startListen(void)
@@ -169,23 +173,25 @@ void startListen(void)
     if ((sound->vld>>Map)&1) {
         // disable callbacks while calling enloc
         audioStop();
-        // audio corresponds to listen
-        while (sizeAudio() <= sub) {
-        struct Audio init = {0};
-        *enlocAudio(1) = init;}
-        struct Audio *audio = arrayAudio(sub,1);
-        audio->siz = PORTAUDIO_SIZE;
-        int *left = enlocLeft(sub,audio->siz);
-        int *right = enlocRight(sub,audio->siz);
-        if (PaUtil_InitializeRingBuffer(&audio->left,sizeof(int),audio->siz,left) < 0) exitErrstr("portaudio too size\n");
-        if (PaUtil_InitializeRingBuffer(&audio->right,sizeof(int),audio->siz,right) < 0) exitErrstr("portaudio too size\n");
-        // reenable callbacks
-        audioRestart();
-        sound->vld &= ~(1<<Map);
+        // audio corresponds to stream
+        while (sizeStream() <= sub) {
+            struct Stream init = {0};
+            *enlocStream(1) = init;}
+        usedChannel(sub);
+        sound->siz = PORTAUDIO_SIZE; // TODO take from configure
+        sound->num = 2; // TODO take from configue
+        int *buf = enlocChnBuf(sub,sound->siz*sound->num);
+        for (int i = 0; i < sound->num; i++) {
+        PaUtilRingBuffer *channel = enlocChannel(sub,1);
+        if (PaUtil_InitializeRingBuffer(channel,sizeof(int),sound->siz,buf) < 0) exitErrstr("portaudio too size\n");
+        buf += sound->siz;}
+        struct Stream *stream = arrayStream(sub,1);        
         // TODO get non-default arguments from struct Sound
-        if (Pa_OpenDefaultStream( &audio->stream,
+        stream->num = sound->num;
+        stream->loc = 0;
+        if (Pa_OpenDefaultStream( &stream->stream,
             0,          /* no input channels */
-            2,          /* stereo output */
+            stream->num, /* stereo output */
             paFloat32,  /* 32 bit floating point output */
             SAMPLE_RATE,
             paFramesPerBufferUnspecified,
@@ -199,12 +205,15 @@ void startListen(void)
             audioCallback, /* this is your callback function */
             int2void(sub) ) /*This is a pointer that will be passed to
                                your callback*/
-            != paNoError) exitErrstr("stream too open\n");}
+            != paNoError) exitErrstr("stream too open\n");
+        // reenable callbacks
+        audioRestart();
+        sound->vld &= ~(1<<Map);}
     else if ((sound->vld>>Run)&1) sound->vld &= ~(1<<Run);
     else sound->vld |= 1<<Run;
-    struct Audio *audio = arrayAudio(sub,1);
-    if ((sound->vld>>Run)&1) {if (Pa_StartStream(audio->stream) != paNoError) exitErrstr("stream too start\n");}
-    else {if (Pa_AbortStream(audio->stream) != paNoError) exitErrstr("stream too abort\n");}
+    struct Stream *stream = arrayStream(sub,1);
+    if ((sound->vld>>Run)&1) {if (Pa_StartStream(stream->stream) != paNoError) exitErrstr("stream too start\n");}
+    else {if (Pa_AbortStream(stream->stream) != paNoError) exitErrstr("stream too abort\n");}
 }
 
 void startSource(void)
@@ -247,8 +256,7 @@ void startState(void)
     struct State *state = arrayState(sub,1);
     if ((state->vld>>Map)&1) {
         state->vld &= ~(1<<Map);
-        if ((state->vld>>Lft)&1) state->lft = *castPack(state->lft);
-        if ((state->vld>>Rgt)&1) state->rgt = *castPack(state->rgt);
+        if ((state->vld>>Wav)&1) state->wav = *castPack(state->wav);
         if ((state->vld>>Met)&1) state->met = *castPack(state->met);
         int var = state->vsub;
         startRatio(var,&state->upd);
@@ -262,11 +270,11 @@ void startState(void)
 void finishListen(void)
 {
     audioStop();
-    for (int i = 0; i < sizeAudio(); i++) {
+    for (int i = 0; i < sizeStream(); i++) {
     struct Sound *sound = arraySound(i,1);
-    struct Audio *audio = arrayAudio(i,1);
+    struct Stream *stream = arrayStream(i,1);
     if (!((sound->vld>>Map)&1)) {
-    if (Pa_CloseStream(audio->stream) != paNoError) exitErrstr("stream too close\n");}}
+    if (Pa_CloseStream(stream->stream) != paNoError) exitErrstr("stream too close\n");}}
 }
 
 void finishSource(void)
@@ -279,24 +287,14 @@ void finishMetric(void)
     // TODO
 }
 
-void pipeLeft(int wave, Myfloat value)
+void pipeWave(int wave, int sub, Myfloat value)
 {
     struct Sound *sound = arraySound(wave,1);
     if ((sound->vld>>Map)&1) return;
     if (!((sound->vld>>Run)&1)) return;
-    struct Audio *audio = arrayAudio(wave,1);
-    int siz = PaUtil_GetRingBufferWriteAvailable(&audio->left);
-    if (siz > 0) {if (Pa_WriteStream(&audio->left,&value,1) != paNoError) exitErrstr("stream too write\n");}
-}
-
-void pipeRight(int wave, Myfloat value)
-{
-    struct Sound *sound = arraySound(wave,1);
-    if ((sound->vld>>Map)&1) return;
-    if (!((sound->vld>>Run)&1)) return;
-    struct Audio *audio = arrayAudio(wave,1);
-    int siz = PaUtil_GetRingBufferWriteAvailable(&audio->right);
-    if (siz > 0) {if (Pa_WriteStream(&audio->right,&value,1) != paNoError) exitErrstr("stream too write\n");}
+    PaUtilRingBuffer *channel = arrayChannel(wave,sub,1);
+    int siz = PaUtil_GetRingBufferWriteAvailable(channel);
+    if (siz > 0) {if (Pa_WriteStream(channel,&value,1) != paNoError) exitErrstr("stream too write\n");}
 }
 
 void evalExp(Myfloat value)
@@ -379,8 +377,7 @@ void timewheelConsume(void *arg)
         int sub = ((change.vld>>Map)&1 ? *castPack(change.sub) : change.sub);
         struct State *state = arrayState(sub,1);
         state->amt = change.val;
-        if ((state->vld>>Lft)&1) pipeLeft(state->lft,state->amt);
-        if ((state->vld>>Rgt)&1) pipeRight(state->rgt,state->amt);}
+        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->sub,state->amt);}
 }
 
 long long timewheelDelay(void)
@@ -412,8 +409,7 @@ void timewheelProduce(void *arg)
         struct Change change = *advanceWheel();
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
-        if ((state->vld>>Lft)&1) pipeLeft(state->lft,state->amt);
-        if ((state->vld>>Rgt)&1) pipeRight(state->rgt,state->amt);
+        if ((state->vld>>Wav)&1) pipeWave(state->wav,state->sub,state->amt);
         if ((state->vld>>Exp)&1) evalExp(state->amt);}
 }
 

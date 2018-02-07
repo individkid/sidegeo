@@ -298,7 +298,8 @@ inline bool operator!=(const State &left, const State &right) {return false;}
 inline bool operator!=(const Signal &left, const Signal &right) {return false;}
 inline bool operator!=(const Sound &left, const Sound &right) {return false;}
 inline bool operator!=(const Shape &left, const Shape &right) {return false;}
-inline bool operator!=(const Audio &left, const Audio &right) {return false;}
+inline bool operator!=(const Stream &left, const Stream &right) {return false;}
+inline bool operator!=(PaUtilRingBuffer &left, PaUtilRingBuffer &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
@@ -426,9 +427,9 @@ DEFINE_EXTRA(Shape,struct Shape,Sound)
 
 DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)
-DEFINE_META(Left,int)
-DEFINE_META(Right,int)
-DEFINE_LOCAL(Audio,struct Audio)
+DEFINE_META(ChnBuf,int)
+DEFINE_META(Channel,PaUtilRingBuffer)
+DEFINE_LOCAL(Stream,struct Stream)
 DEFINE_TREE(Pack,int,int)
 
 DEFINE_SOURCE(TwCommands,CmnCommands,Timewheels)

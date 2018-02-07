@@ -296,8 +296,8 @@ struct Ratio {
 struct State {
     int idt; // how other states will refer to this one
     int vld; // enable for wav, lft, rgt, met
-    int lft; // index of left channel
-    int rgt; // index of right channel
+    int wav; // index of stream
+    int sub; // index of channel in stream
     int fun; // index into string buffer for haskell expression
     int met; // metric request argument
     Myfloat amt; // amout of stock
@@ -313,7 +313,14 @@ struct Signal { // information for opening source
 };
 struct Sound { // information for opening destination
     int idt; // how other states will refer to this one
-    int vld; // initialized, running, suspended
+    int vld; // whether uninitialized, running, or suspended
+    int num; // number of channels
+    int siz; // size of ring buffer per channel
+};
+struct Stream { // only changed when streams are disabled
+    int loc; // offset of elements to be sent from ring buffer
+    int num; // copied from struct Sound
+    void *stream; // portaudio handle
 };
 struct Shape { // information for measuring shapes
     int idt; // how other states will refer to this one
@@ -331,21 +338,12 @@ enum Control {
     Metric,
     Start};
 enum Shift {
-    Lft, // send new amount to left channel
-    Rgt, // send new amount to right chanel
+    Wav, // send new amount to channel
     Met, // send metric command when read
     Exp, // evaluate haskell expression when written
     Map, // indices are not packed
     Run, // state is to be scheduled
     Shifts};
-
-struct Audio {
-    void *stream;
-    PaUtilRingBuffer left;
-    PaUtilRingBuffer right;
-    int loc;
-    int siz;
-};
 
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
@@ -532,9 +530,9 @@ DECLARE_EXTRA(Shape,struct Shape)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
-DECLARE_META(Left,int)
-DECLARE_META(Right,int)
-DECLARE_LOCAL(Audio,struct Audio)
+DECLARE_META(ChnBuf,int)
+DECLARE_META(Channel,PaUtilRingBuffer)
+DECLARE_LOCAL(Stream,struct Stream)
 DECLARE_TREE(Pack,int,int)
 
 DECLARE_SOURCE(TwCommands)
