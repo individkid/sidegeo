@@ -112,7 +112,7 @@ void audioOutput(PaUtilRingBuffer *buf, int loc, int len, float *out, int inc)
             int scd = audioBuffer(&region,loc+i);
             *out = first*fst+second*scd;
             out += inc;}}
-    else if (siz < loc+3*len) {
+    else if (siz < loc+5*len) {
         for (int i = 0; i < len; i++) {
             *out = audioBuffer(&region,loc+i);
             out += inc;}
@@ -151,8 +151,8 @@ void audioStop(void)
     struct Sound *sound = arraySound(i,1);
     if ((sound->vld>>Map)&1) continue;
     if (!((sound->vld>>Run)&1)) continue;
-    void *stream = arrayStream(i,1);
-    if (Pa_AbortStream(stream) != paNoError) exitErrstr("stream too abort\n");}
+    struct Stream *stream = arrayStream(i,1);
+    if (Pa_AbortStream(stream->ptr) != paNoError) exitErrstr("stream too abort\n");}
 }
 
 void audioRestart(void)
@@ -161,8 +161,8 @@ void audioRestart(void)
     struct Sound *sound = arraySound(i,1);
     if ((sound->vld>>Map)&1) continue;
     if (!((sound->vld>>Run)&1)) continue;
-    void *stream = arrayStream(i,1);
-    if (Pa_StartStream(stream) != paNoError) exitErrstr("stream too start\n");}
+    struct Stream *stream = arrayStream(i,1);
+    if (Pa_StartStream(stream->ptr) != paNoError) exitErrstr("stream too start\n");}
 }
 
 void startListen(void)
@@ -189,7 +189,7 @@ void startListen(void)
         // TODO get non-default arguments from struct Sound
         stream->num = sound->num;
         stream->loc = 0;
-        if (Pa_OpenDefaultStream( &stream->stream,
+        if (Pa_OpenDefaultStream( &stream->ptr,
             0,          /* no input channels */
             stream->num, /* stereo output */
             paFloat32,  /* 32 bit floating point output */
@@ -212,8 +212,8 @@ void startListen(void)
     else if ((sound->vld>>Run)&1) sound->vld &= ~(1<<Run);
     else sound->vld |= 1<<Run;
     struct Stream *stream = arrayStream(sub,1);
-    if ((sound->vld>>Run)&1) {if (Pa_StartStream(stream->stream) != paNoError) exitErrstr("stream too start\n");}
-    else {if (Pa_AbortStream(stream->stream) != paNoError) exitErrstr("stream too abort\n");}
+    if ((sound->vld>>Run)&1) {if (Pa_StartStream(stream->ptr) != paNoError) exitErrstr("stream too start\n");}
+    else {if (Pa_AbortStream(stream->ptr) != paNoError) exitErrstr("stream too abort\n");}
 }
 
 void startSource(void)
@@ -274,7 +274,7 @@ void finishListen(void)
     struct Sound *sound = arraySound(i,1);
     struct Stream *stream = arrayStream(i,1);
     if (!((sound->vld>>Map)&1)) {
-    if (Pa_CloseStream(stream->stream) != paNoError) exitErrstr("stream too close\n");}}
+    if (Pa_CloseStream(stream->ptr) != paNoError) exitErrstr("stream too close\n");}}
 }
 
 void finishSource(void)

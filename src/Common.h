@@ -320,7 +320,7 @@ struct Sound { // information for opening destination
 struct Stream { // only changed when streams are disabled
     int loc; // offset of elements to be sent from ring buffer
     int num; // copied from struct Sound
-    void *stream; // portaudio handle
+    void *ptr; // portaudio handle
 };
 struct Shape { // information for measuring shapes
     int idt; // how other states will refer to this one
