@@ -610,7 +610,6 @@ void updateContext(int sub)
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();
     useDisplayFile(contextHandle); referFile();
-    enquePershader();
 }
 
 void updateDisplay(GLFWwindow *ptr)

@@ -429,6 +429,7 @@ void enqueDishader(void)
 
 void enquePershader(void)
 {
+    if (layer != 0) exitErrstr("enque too layer\n");
     updateContext(0);
     for (int i = 0; i < sizeFile(); i++)
     enqueShader(pershader,i,0,renderPierce);

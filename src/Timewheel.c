@@ -137,7 +137,7 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
     PaUtilRingBuffer *buf = arrayChannel(sub,i,1);
     audioOutput(buf,stream->loc,framesPerBuffer,(float *)outputBuffer+i,stream->num);}
     stream->loc = framesPerBuffer;
-    return 0;
+    return paContinue;
 }
 
 void audioStop(void)
@@ -365,6 +365,7 @@ void timewheelConsume(void *arg)
         struct State *state = arrayState(sub,1);
         state->amt = change->val;
         if (state->typ == Write) {
+        if (change->map) exitErrstr("change too map\n");
         if (state->ctl == Open) pipeWrite(state->idx,state->sub,state->amt);
         if (state->ctl == Shape) presentMetric(state->idx,state->amt);}}
 }
