@@ -92,7 +92,8 @@ void metric(void)
 {
     int index = *delocCmdInt(1);
     int stock = *delocCmdInt(1);
-    struct Change change = {0}; // Map bit is clear because sub is from timewheel
+    struct Change change = {0};
+    change.map = 1; // sub is from timewheel
     change.sub = stock;
     change.val = 0; // TODO enque machines to calculate change val
     *enlocCmdChange(1) = change;

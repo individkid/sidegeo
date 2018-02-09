@@ -293,9 +293,16 @@ struct Nomial {
 };
 struct Ratio {
     struct Nomial n,d;};
+enum Control {
+    Start,
+    Open,
+    Shape};
 struct State {
     int idt; // how other states will refer to this one
-    int vld; // enable for wave, metric, expression
+    int map; // indices are not packed
+    int run; // whether to schedule toggled by control
+    enum Control ctl; // none stream metric
+    enum Type typ; // read or write stream or metric
     int idx; // index of shape or stream
     int sub; // index of channel in stream
     Myfloat amt; // amout of stock
@@ -308,7 +315,8 @@ struct State {
 };
 struct Stream { // for opening and maintaining stream
     int idt; // how other states will refer to this one
-    int vld; // whether uninitialized, running, or suspended
+    int map; // indices are not packed
+    int run; // callback is scheduled
     int otp; // number of output channels
     int inp; // number of input channels
     int siz; // size of ring buffer per channel
@@ -326,19 +334,8 @@ struct Metric { // for measuring and modifying shapes
 struct Change {
     Myfloat val; // new value for stock
     int sub; // index of stock for value
-    int vld; // whether sub is packed or not
+    int map; // whether sub is packed or not
 };
-enum Control {
-    Open,
-    Shape,
-    Start};
-enum Shift {
-    Wav, // stream amounts with channel
-    Met, // stream amounts with command or event
-    Typ, // stream direction is output
-    Map, // indices are not packed
-    Run, // state is to be scheduled
-    Shifts};
 
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);

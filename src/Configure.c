@@ -336,7 +336,9 @@ int processConfigure(int index, int len)
 		TIME_RATIO
 		TIME_RATIO
 		,len) > 0) {
-		struct State state;
+		struct State state = {0};
+		// map is clear because sub is from name
+		// run is clear to toggle and start
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		int retval;
@@ -347,12 +349,12 @@ int processConfigure(int index, int len)
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		state.vld = (1<<Map)|(1<<Run); // Map in vld because subscripts are from string position
 		retval = timeName(&state.idx,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval > 0) state.vld |= 1<<Met;
+		if (retval > 0) {state.ctl = Shape; state.typ = Read;}// TODO syntax to choose direction
 		retval = forceInt(&state.sub,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		if (retval > 0) {state.ctl = Open; state.typ = Write;}// TODO syntax to choose direction
 		retval = timeFloat(&state.amt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.amt = strtof("0",0);
@@ -383,14 +385,13 @@ int processConfigure(int index, int len)
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	else if (parse("<?change!> id% fl%",len) > 0) {
-		struct Change change;
+		struct Change change = {0}; // map is clear because sub is from name
 		int chrpos = chrsiz;
 		int intpos = intsiz;
 		int siz = timeIdent(&change.sub,&chrpos,&intpos);
 		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
 		siz = timeFloat(&change.val,&chrpos,&intpos);
 		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
-		change.vld = 1<<Map; // Map in vld because subscript is from string position
 		*enlocPcsChange(1) = change;
 		configurePass(chrsiz,intsiz);
 		return 1;}
