@@ -295,9 +295,7 @@ inline bool operator!=(const Display &left, const Display &right) {return false;
 inline bool operator!=(const Render &left, const Render &right) {return false;}
 inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
-inline bool operator!=(const Signal &left, const Signal &right) {return false;}
-inline bool operator!=(const Sound &left, const Sound &right) {return false;}
-inline bool operator!=(const Shape &left, const Shape &right) {return false;}
+inline bool operator!=(const Metric &left, const Metric &right) {return false;}
 inline bool operator!=(const Stream &left, const Stream &right) {return false;}
 inline bool operator!=(PaUtilRingBuffer &left, PaUtilRingBuffer &right) {return false;}
 
@@ -327,10 +325,10 @@ DEFINE_STAGE(CmnControl,enum Control,CmnChange)
 DEFINE_STAGE(CmnTwInt,int,CmnControl)
 DEFINE_STAGE(CmnCoefficient,Myfloat,CmnTwInt)
 DEFINE_STAGE(CmnVariable,int,CmnCoefficient)
-DEFINE_STAGE(CmnState,struct State,CmnVariable)
-DEFINE_STAGE(CmnSignal,struct Signal,CmnState)
-DEFINE_STAGE(CmnSound,struct Sound,CmnSignal)
-DEFINE_STAGE(CmnShape,struct Shape,CmnSound)
+DEFINE_STAGE(CmnArgument,int,CmnVariable)
+DEFINE_STAGE(CmnState,struct State,CmnArgument)
+DEFINE_STAGE(CmnMetric,struct Metric,CmnState)
+DEFINE_STAGE(CmnStream,struct Stream,CmnMetric)
 
 
 DEFINE_LOCAL(Argument,int)
@@ -417,19 +415,16 @@ DEFINE_DEST(Timewheels,CmnTimewheels,CmnTimewheels)
 DEFINE_STAGE(Change,struct Change,Timewheels)
 DEFINE_STAGE(Control,enum Control,Change)
 DEFINE_STAGE(TwInt,int,Control)
-DEFINE_EXTRA(TwByte,char,TwInt)
-DEFINE_EXTRA(Coefficient,Myfloat,TwByte)
+DEFINE_EXTRA(Coefficient,Myfloat,TwInt)
 DEFINE_EXTRA(Variable,int,Coefficient)
 DEFINE_EXTRA(State,struct State,Variable)
-DEFINE_EXTRA(Signal,struct Signal,State)
-DEFINE_EXTRA(Sound,struct Sound,Signal)
-DEFINE_EXTRA(Shape,struct Shape,Sound)
+DEFINE_EXTRA(Stream,struct Stream,State)
+DEFINE_EXTRA(Metric,struct Metric,Stream)
 
 DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)
 DEFINE_META(ChnBuf,int)
 DEFINE_META(Channel,PaUtilRingBuffer)
-DEFINE_LOCAL(Stream,struct Stream)
 DEFINE_TREE(Pack,int,int)
 
 DEFINE_SOURCE(TwCommands,CmnCommands,Timewheels)
@@ -463,10 +458,10 @@ DEFINE_STAGE(PcsControl,enum Control,PcsChange)
 DEFINE_STAGE(PcsTwInt,int,PcsControl)
 DEFINE_STAGE(PcsCoefficient,Myfloat,PcsTwInt)
 DEFINE_STAGE(PcsVariable,int,PcsCoefficient)
-DEFINE_STAGE(PcsState,struct State,PcsVariable)
-DEFINE_STAGE(PcsSignal,struct Signal,PcsState)
-DEFINE_STAGE(PcsSound,struct Sound,PcsSignal)
-DEFINE_STAGE(PcsShape,struct Shape,PcsSound)
+DEFINE_STAGE(PcsArgument,int,PcsVariable)
+DEFINE_STAGE(PcsState,struct State,PcsArgument)
+DEFINE_STAGE(PcsMetric,struct Metric,PcsState)
+DEFINE_STAGE(PcsStream,struct Stream,PcsMetric)
 
 DEFINE_LOCAL(PcsInt,int)
 DEFINE_LOCAL(PcsChar,char)

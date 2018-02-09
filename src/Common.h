@@ -295,11 +295,9 @@ struct Ratio {
     struct Nomial n,d;};
 struct State {
     int idt; // how other states will refer to this one
-    int vld; // enable for wav, lft, rgt, met
-    int wav; // index of stream
+    int vld; // enable for wave, metric, expression
+    int idx; // index of shape or stream
     int sub; // index of channel in stream
-    int fun; // index into string buffer for haskell expression
-    int met; // metric request argument
     Myfloat amt; // amout of stock
     Myfloat min,max; // saturation limits
     int csub; // subscript into coefficients
@@ -308,24 +306,22 @@ struct State {
     struct Ratio dly; // formula for when to apply value
     struct Ratio sch; // formula for reschedule time
 };
-struct Signal { // information for opening source
-    int idt; // how other states will refer to this one
-};
-struct Sound { // information for opening destination
+struct Stream { // for opening and maintaining stream
     int idt; // how other states will refer to this one
     int vld; // whether uninitialized, running, or suspended
-    int num; // number of channels
+    int otp; // number of output channels
+    int inp; // number of input channels
     int siz; // size of ring buffer per channel
+    int num; // intrnal use total channels
+    int loc; // internal use stream buffer size
+    void *ptr; // internal use stream handle
 };
-struct Stream { // only changed when streams are disabled
-    int loc; // offset of elements to be sent from ring buffer
-    int num; // copied from struct Sound
-    void *ptr; // portaudio handle
-};
-struct Shape { // information for measuring shapes
+struct Metric { // for measuring and modifying shapes
     int idt; // how other states will refer to this one
-    Command metric;
-    int index;
+    Command inter; // metric or feedback between files
+    enum Event intra; // metric or feedback within a file
+    int arg; // argument index
+    int siz; // number of arguments
 };
 struct Change {
     Myfloat val; // new value for stock
@@ -333,14 +329,13 @@ struct Change {
     int vld; // whether sub is packed or not
 };
 enum Control {
-    Listen,
-    Source,
-    Metric,
+    Open,
+    Shape,
     Start};
 enum Shift {
-    Wav, // send new amount to channel
-    Met, // send metric command when read
-    Exp, // evaluate haskell expression when written
+    Wav, // stream amounts with channel
+    Met, // stream amounts with command or event
+    Typ, // stream direction is output
     Map, // indices are not packed
     Run, // state is to be scheduled
     Shifts};
@@ -430,10 +425,10 @@ DECLARE_STAGE(CmnControl,enum Control)
 DECLARE_STAGE(CmnTwInt,int)
 DECLARE_STAGE(CmnCoefficient,Myfloat)
 DECLARE_STAGE(CmnVariable,int)
+DECLARE_STAGE(CmnArgument,int)
 DECLARE_STAGE(CmnState,struct State)
-DECLARE_STAGE(CmnSignal,struct Signal)
-DECLARE_STAGE(CmnSound,struct Sound)
-DECLARE_STAGE(CmnShape,struct Shape)
+DECLARE_STAGE(CmnMetric,struct Metric)
+DECLARE_STAGE(CmnStream,struct Stream)
 
 
 DECLARE_LOCAL(Argument,int)
@@ -520,19 +515,17 @@ DECLARE_DEST(Timewheels)
 DECLARE_STAGE(Change,struct Change)
 DECLARE_STAGE(Control,enum Control)
 DECLARE_STAGE(TwInt,int)
-DECLARE_EXTRA(TwByte,char)
 DECLARE_EXTRA(Coefficient,Myfloat)
 DECLARE_EXTRA(Variable,int)
+DECLARE_EXTRA(Argument,int)
 DECLARE_EXTRA(State,struct State)
-DECLARE_EXTRA(Signal,struct Signal)
-DECLARE_EXTRA(Sound,struct Sound)
-DECLARE_EXTRA(Shape,struct Shape)
+DECLARE_EXTRA(Metric,struct Metric)
+DECLARE_EXTRA(Stream,struct Stream)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
 DECLARE_META(ChnBuf,int)
 DECLARE_META(Channel,PaUtilRingBuffer)
-DECLARE_LOCAL(Stream,struct Stream)
 DECLARE_TREE(Pack,int,int)
 
 DECLARE_SOURCE(TwCommands)

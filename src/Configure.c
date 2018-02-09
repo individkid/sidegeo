@@ -330,7 +330,7 @@ int processConfigure(int index, int len)
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse(
-		"<?time!> id% <?,!> (id)% <?,!> (id)% <?,!> (nm)% <?,!>"
+		"<?time!> id% <?,!> (id)% <?,!> (id)% <?,!>"
 		" (fl)% <?,!> (fl)% <?,!> (fl)% <?,!>"
 		TIME_RATIO
 		TIME_RATIO
@@ -348,12 +348,9 @@ int processConfigure(int index, int len)
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		state.vld = (1<<Map)|(1<<Run); // Map in vld because subscripts are from string position
-		retval = timeName(&state.met,&chrpos,&intpos);
+		retval = timeName(&state.idx,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval > 0) state.vld |= 1<<Met;
-		retval = timeName(&state.wav,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval > 0) state.vld |= 1<<Wav;
 		retval = forceInt(&state.sub,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		retval = timeFloat(&state.amt,&chrpos,&intpos);
@@ -362,7 +359,7 @@ int processConfigure(int index, int len)
 		retval = timeFloat(&state.min,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.min = strtof("-INF",0);
-		retval = timeFloat(&state.min,&chrpos,&intpos);
+		retval = timeFloat(&state.max,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.max = strtof("+INF",0);
 		state.csub = cofsiz + sizePcsCoefficient();
