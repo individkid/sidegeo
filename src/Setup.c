@@ -208,13 +208,17 @@ void updateUniform(enum Server server, int file, enum Shader shader)
         updateAffine(ptr);
         glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->sent);
     CASE(Feather) {
-        Myfloat xpoint, ypoint, zpoint;
-        if (layer) {
-        xpoint = *delocRefloat(layer,1);
-        ypoint = *delocRefloat(layer,1);
-        zpoint = *delocRefloat(layer,1);}
-        else {xpoint = xPoint; ypoint = yPoint; zpoint = zPoint;}
-        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xpoint,ypoint,zpoint);
+        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) {
+            Myfloat xpoint, ypoint, zpoint;
+            if (layer) {
+            xpoint = *delocRefloat(layer,1);
+            ypoint = *delocRefloat(layer,1);
+            zpoint = *delocRefloat(layer,1);}
+            else {
+            xpoint = xPoint;
+            ypoint = yPoint;
+            zpoint = zPoint;}
+            glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
         CASE(Adpoint)
             if (file < 0) exitErrstr("affine too file\n");
             struct Share *ptr = arrayShare(file,1);
@@ -223,12 +227,17 @@ void updateUniform(enum Server server, int file, enum Shader shader)
             glUniform3f(uniform->handle,xVec[0],xVec[1],xVec[2]);
         DEFAULT(exitErrstr("feather too shader\n");)}
     CASE(Arrow) {
-        Myfloat xpoint, ypoint;
-        if (layer) {
-        xpoint = *delocRefloat(layer,1);
-        ypoint = *delocRefloat(layer,1);}
-        else {xpoint = xPoint; ypoint = yPoint;}
-        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) glUniform3f(uniform->handle,xpoint*slope,ypoint*slope,1.0);
+        SWITCH(shader,Perplane) FALL(Perpoint) {
+            Myfloat xpoint, ypoint, zpoint;
+            if (layer) {
+            xpoint = *delocRefloat(layer,1);
+            ypoint = *delocRefloat(layer,1);
+            zpoint = *delocRefloat(layer,1);}
+            else {
+            xpoint = xPoint*slope;
+            ypoint = yPoint*slope;
+            zpoint = 1.0;}
+            glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
         CASE(Adpoint)
             if (file < 0) exitErrstr("affine too file\n");
             struct Share *ptr = arrayShare(file,1);
@@ -333,7 +342,7 @@ enum Server uniformServer(int i, enum Shader shader)
     CASE(Dipoint) {enum Server server[4] = {Affine,Servers}; return server[i];}
     CASE(Coplane) {enum Server server[4] = {Servers}; return server[i];}
     CASE(Copoint) {enum Server server[4] = {Servers}; return server[i];}
-    CASE(Adplane) {enum Server server[4] = {Feather,Arrow,Servers}; return server[i];}
+    CASE(Adplane) {enum Server server[4] = {Feather,Servers}; return server[i];}
     CASE(Adpoint) {enum Server server[4] = {Feather,Arrow,Servers}; return server[i];}
     CASE(Perplane) {enum Server server[4] = {Affine,Feather,Arrow,Servers}; return server[i];}
     CASE(Perpoint) {enum Server server[4] = {Affine,Feather,Arrow,Servers}; return server[i];}

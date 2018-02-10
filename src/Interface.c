@@ -103,7 +103,8 @@ void display(void)
 {
     int new = sizeDisplay();
     setupDisplay(sizeCmdBuf());
-    useCmdByte(); xmsgCmdBuf(0);
+    int len = lengthCmdByte(0,0);
+    useCmdByte(); xferCmdBuf(len+1);
     updateContext(new);
     for (enum Shader shader = 0; shader < Shaders; shader++) {
     setupCode(shader);}
@@ -128,7 +129,8 @@ void file(void)
     updateContext(context);
     int sub = sizeFile();
     setupFile(sizeCmdBuf());
-    useCmdByte(); xmsgCmdBuf(0);
+    int len = lengthCmdByte(0,0);
+    useCmdByte(); xferCmdBuf(len+1);
     struct File *file = arrayFile(sub,1);
     SWITCH(mark[Target],Plane) file->fixed = 1;
     CASE(Polytope) file->fixed = 0;
@@ -334,7 +336,7 @@ enum Action configureSculpt(int state)
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
     *enlocCmdHsInt(1) = file;
     if (embed != Inflate) {
-    reargCmdInt(arg); useCmdInt(); xargCmdHsInt(arg);}
+    useCmdInt(); copyCmdHsInt(0,-arg,arg);}
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = embed; // Fill Hollow or Inflate
@@ -403,8 +405,7 @@ enum Action sculptClick(int state)
     if (state-- == 0) {
     layer = uniqueLayer();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
-    reargCmdFloat(3); useCmdFloat(); xferRefloat(layer,3); // feather
-    reargCmdFloat(3); useCmdFloat(); xferRefloat(layer,2); deargCmdFloat(1); // arrow
+    useCmdFloat(); copyRefloat(layer,0,-3,3); // feather
     enqueShader(Adplane,file,0,renderLayer);
     return Continue;}
     if (state-- == 0) {

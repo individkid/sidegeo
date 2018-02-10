@@ -87,7 +87,6 @@ EXTERNC int readable##NAME(ELEM val);
 // queue driven
 
 #define DECLARE_SOURCE(NAME) \
-EXTERNC void ack##NAME(int *siz);
 // xfer and signal corresponding dest to consume
 #define DECLARE_REDO(NAME) \
 EXTERNC void redo##NAME(void); \
@@ -111,13 +110,8 @@ EXTERNC TYPE *alloc##NAME(int siz); \
 EXTERNC void pack##NAME(int sub, int siz); \
 EXTERNC TYPE *dearg##NAME(int siz); \
 EXTERNC int enarg##NAME(void); \
-EXTERNC TYPE *rearg##NAME(int siz); \
 EXTERNC int length##NAME(int sub, TYPE val); \
 EXTERNC TYPE *string##NAME(int sub, TYPE val); \
-EXTERNC TYPE *destr##NAME(TYPE val); \
-EXTERNC int xstr##NAME(TYPE val); \
-EXTERNC int xmsg##NAME(TYPE val); \
-EXTERNC TYPE *xarg##NAME(int siz); \
 EXTERNC TYPE *copy##NAME(int to, int from, int siz); \
 EXTERNC struct QueueBase *ptr##NAME(void);
 
@@ -134,13 +128,8 @@ EXTERNC TYPE *alloc##NAME(INDEX idx,int siz); \
 EXTERNC void pack##NAME(INDEX idx,int sub, int siz); \
 EXTERNC TYPE *dearg##NAME(INDEX idx,int siz); \
 EXTERNC int enarg##NAME(INDEX idx); \
-EXTERNC TYPE *rearg##NAME(INDEX idx,int siz); \
 EXTERNC int length##NAME(INDEX idx,int sub, TYPE val); \
 EXTERNC TYPE *string##NAME(INDEX idx,int sub, TYPE val); \
-EXTERNC TYPE *destr##NAME(INDEX idx,TYPE val); \
-EXTERNC int xstr##NAME(INDEX idx,TYPE val); \
-EXTERNC int xmsg##NAME(INDEX idx,TYPE val); \
-EXTERNC TYPE *xarg##NAME(INDEX idx,int siz); \
 EXTERNC TYPE *copy##NAME(INDEX idx, int to, int from, int siz); \
 EXTERNC struct QueueBase *ptr##NAME(INDEX idx);
 
@@ -596,25 +585,10 @@ struct QueueXfer : QueueXbase {
         mutex->unlock();
         return retval;
     }
-    void ack(int *siz)
-    {
-        mutex->lock();
-        QueueBase *source = (flag ? next : mutex->next);
-        QueueBase *dest = (flag ? mutex->next : next);
-        int retval = 0;
-        for (; source != 0; source = source->next, dest = dest->next, siz++) {
-            if (dest == 0) exitErrstr("xfer too ptr\n");
-            if (*siz > 0) {
-                source->use(); dest->xfer(*siz);
-                if (!dest->flag) retval = 1;}}
-        if (flag && retval) mutex->signal();
-        mutex->unlock();
-    }
 };
 
 #define DEFINE_SOURCE(NAME,NEXT,XPTR) \
 QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,1); \
-extern "C" void ack##NAME(int *siz) {NAME##Inst.ack(siz);}
 // xfer, signal, no consume
 #define DEFINE_DEST(NAME,NEXT,XPTR) \
 QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,0); \
@@ -817,12 +791,6 @@ template<class TYPE> struct QueueStruct : QueueBase {
         para = keep = 0;
         return len;
     }
-    TYPE *rearg(int siz)
-    {
-        keep -= siz; head -= siz;
-        if (keep < para) exitErrstr("rearg too siz\n");
-        return head;
-    }
     int length(int sub, TYPE val)
     {
         int len = 0;
@@ -833,35 +801,6 @@ template<class TYPE> struct QueueStruct : QueueBase {
     TYPE *string(int sub, TYPE val)
     {
         return array(sub,length(sub,val));
-    }
-    TYPE *destr(TYPE val)
-    {
-        int siz = 0; while (siz < size() && *array(siz,1) != val) siz++;
-        if (siz < size()) siz++;
-        return deloc(siz);
-    }
-    int xstr(TYPE val)
-    {
-        if (!src) exitErrstr("enstr too src\n");
-        int siz = src->size(); TYPE *buf = src->destr(val);
-        siz -= src->size(); siz -= 1; memcpy(enloc(siz),buf,siz*sizeof*buf);
-        src = 0;
-        return siz;
-    }
-    int xmsg(TYPE val)
-    {
-        if (!src) exitErrstr("enmsg too src\n");
-        int siz = src->size(); TYPE *buf = src->destr(val);
-        siz -= src->size(); memcpy(enloc(siz),buf,siz*sizeof*buf);
-        src = 0;
-        return siz;
-    }
-    TYPE *xarg(int siz)
-    {
-        if (!src) exitErrstr("enarg too src\n");
-        TYPE *buf = src->dearg(siz);
-        src = 0;
-        return (TYPE *)memcpy(enloc(siz),buf,siz*sizeof*buf);
     }
     TYPE *copy(int to, int from, int siz)
     {
@@ -888,13 +827,8 @@ extern "C" TYPE *alloc##NAME(int siz) {return NAME##Inst.alloc(siz);} \
 extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.pack(sub,siz);} \
 extern "C" TYPE *dearg##NAME(int siz) {return NAME##Inst.dearg(siz);} \
 extern "C" int enarg##NAME(void) {return NAME##Inst.enarg();} \
-extern "C" TYPE *rearg##NAME(int siz) {return NAME##Inst.rearg(siz);} \
 extern "C" int length##NAME(int sub, TYPE val) {return NAME##Inst.length(sub,val);} \
 extern "C" TYPE *string##NAME(int sub, TYPE val) {return NAME##Inst.string(sub,val);} \
-extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.destr(val);} \
-extern "C" int xstr##NAME(TYPE val) {return NAME##Inst.xstr(val);} \
-extern "C" int xmsg##NAME(TYPE val) {return NAME##Inst.xmsg(val);} \
-extern "C" TYPE *xarg##NAME(int siz) {return NAME##Inst.xarg(siz);} \
 extern "C" TYPE *copy##NAME(int to, int from, int siz) {return NAME##Inst.copy(to,from,siz);} \
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.ptr();}
 
@@ -911,13 +845,8 @@ extern "C" TYPE *alloc##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->alloc(s
 extern "C" void pack##NAME(INDEX idx, int sub, int siz) {NAME##Inst.PTR->pack(sub,siz);} \
 extern "C" TYPE *dearg##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->dearg(siz);} \
 extern "C" int enarg##NAME(INDEX idx) {return NAME##Inst.PTR->enarg();} \
-extern "C" TYPE *rearg##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->rearg(siz);} \
 extern "C" int length##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->length(sub,val);} \
 extern "C" TYPE *string##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->string(sub,val);} \
-extern "C" TYPE *destr##NAME(INDEX idx, TYPE val) {return NAME##Inst.PTR->destr(val);} \
-extern "C" int xstr##NAME(INDEX idx, TYPE val) {return NAME##Inst.PTR->xstr(val);} \
-extern "C" int xmsg##NAME(INDEX idx, TYPE val) {return NAME##Inst.PTR->xmsg(val);} \
-extern "C" TYPE *xarg##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->xarg(siz);} \
 extern "C" TYPE *copy##NAME(INDEX idx, int to, int from, int siz) {return NAME##Inst.PTR->copy(to,from,siz);} \
 extern "C" QueueBase *ptr##NAME(INDEX idx) {return NAME##Inst.PTR->ptr();}
 
@@ -934,13 +863,8 @@ extern "C" TYPE *alloc##NAME(int siz) {return NAME##Inst.PTR->alloc(siz);} \
 extern "C" void pack##NAME(int sub, int siz) {NAME##Inst.PTR->pack(sub,siz);} \
 extern "C" TYPE *dearg##NAME(int siz) {return NAME##Inst.PTR->dearg(siz);} \
 extern "C" int enarg##NAME(void) {return NAME##Inst.PTR->enarg();} \
-extern "C" TYPE *rearg##NAME(int siz) {return NAME##Inst.PTR->rearg(siz);} \
 extern "C" int length##NAME(int sub, TYPE val) {return NAME##Inst.PTR->length(sub,val);} \
 extern "C" TYPE *string##NAME(int sub, TYPE val) {return NAME##Inst.PTR->string(sub,val);} \
-extern "C" TYPE *destr##NAME(TYPE val) {return NAME##Inst.PTR->destr(val);} \
-extern "C" int xstr##NAME(TYPE val) {return NAME##Inst.PTR->xstr(val);} \
-extern "C" int xmsg##NAME(TYPE val) {return NAME##Inst.PTR->xmsg(val);} \
-extern "C" TYPE *xarg##NAME(int siz) {return NAME##Inst.PTR->xarg(siz);} \
 extern "C" TYPE *copy##NAME(int to, int from, int siz) {return NAME##Inst.PTR->copy(to,from,siz);} \
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.PTR->ptr();}
 

@@ -298,7 +298,8 @@ void processConsume(void *arg)
 {
     while (sizeConfigurer() > 0) {
         int idx = *delocConfigurer(1);
-        int len = (useConfigure(),xstrPcsChar('\n'));
+        int len = lengthConfigure(0,'\n');
+        useConfigure(); xferPcsChar(len); delocConfigure(1);
         if (processWrite(idx,len) < 0) processError(idx);
         if (*arrayWrite(idx,1) < 0) processIgnore(idx);}
     useOption(); xferStage(sizeOption());
@@ -314,7 +315,8 @@ void processProduce(void *arg)
         if (len < 0) processError(thread);
         if (len == 0) *arrayYield(thread,1) = 1;}
     else if (sizeStage() > 0) {
-        int len = (useStage(),xstrPcsChar('\n'));
+        int len = lengthStage(0,'\n');
+        useStage(); xferPcsChar(len); delocStage(1);
         len = processOption(len);
         if (len < 0) processComplain(-len);
         if (len > 0) len = processInit(len);

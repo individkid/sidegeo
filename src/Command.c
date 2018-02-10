@@ -42,13 +42,6 @@ void followMachine(Machine machine)
     *enlocMachine(1) = machine;
 }
 
-void glueMachine()
-{
-    unlocArgument(1);
-    *arrayCluster(sizeCluster()-1,1) += 1;
-    unlocLayer(1);
-}
-
 enum Action command(int state)
 {
     Command cmd = *delocVoid(1);

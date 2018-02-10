@@ -422,22 +422,12 @@ in data {\n\
 out float scalar;\n\
 void main()\n\
 {\n\
-    vec3 head = feather + arrow;\n\
-    vec3 tail = feather;\n\
-    float proj0;\n\
-    float proj1;\n\
-    float negate;\n\
-    project3(id[0].points,id[0].versor,head,proj0);\n\
-    project3(id[0].points,id[0].versor,tail,proj1);\n\
+    float proj;\n\
+    project3(id[0].points,id[0].versor,feather,proj);\n\
     switch (id[0].versor) {\n\
-        case (uint(0)): if (tail[0] > proj1) negate = 1.0; else negate = -1.0; break;\n\
-        case (uint(1)): if (tail[1] > proj1) negate = 1.0; else negate = -1.0; break;\n\
-        case (uint(2)): if (tail[2] > proj1) negate = 1.0; else negate = -1.0; break;\n\
-        default: negate = invalid[0]; break;}\n\
-    switch (id[0].versor) {\n\
-        case (uint(0)): scalar = negate*(head[0]-proj0); break;\n\
-        case (uint(1)): scalar = negate*(head[1]-proj0); break;\n\
-        case (uint(2)): scalar = negate*(head[2]-proj0); break;\n\
+        case (uint(0)): scalar = feather[0]-proj; break;\n\
+        case (uint(1)): scalar = feather[1]-proj; break;\n\
+        case (uint(2)): scalar = feather[2]-proj; break;\n\
         default: scalar = invalid[0]; break;}\n\
     EmitVertex();\n\
     EndPrimitive();\n\
