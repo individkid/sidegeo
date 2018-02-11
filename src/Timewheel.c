@@ -128,13 +128,24 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
     PaStreamCallbackFlags statusFlags,
     void *userData )
 {
-    (void) inputBuffer; /* Prevent unused variable warning. */
     int sub = void2int(userData);
     struct Stream *stream = arrayStream(sub,1);
-    for (int i = 0; i < stream->num; i++) {
+    for (int i = 0; i < stream->otp; i++) {
     PaUtilRingBuffer *buf = arrayChannel(sub,i,1);
     audioOutput(buf,stream->loc,framesPerBuffer,(float *)outputBuffer+i,stream->num);}
     stream->loc = framesPerBuffer;
+    PaUtilRingBuffer *channel = arrayChannel(sub,0,stream->num);
+    float *input = (float *)inputBuffer;
+    if (stream->inp == 1) {
+    int siz = PaUtil_GetRingBufferWriteAvailable(channel);
+    if (siz > framesPerBuffer) siz = framesPerBuffer;
+    if (PaUtil_WriteRingBuffer(channel,input,siz) != paNoError) exitErrstr("stream too write\n");}
+    PaUtilRingBuffer *shingle = channel+stream->otp;
+    for (int i = 0; i < framesPerBuffer; i++) {
+    int siz = PaUtil_GetRingBufferWriteAvailable(shingle);
+    if (siz > 0) {if (PaUtil_WriteRingBuffer(shingle,input,siz) != paNoError) exitErrstr("stream too write\n");}
+    shingle += 1;
+    if (shingle == channel+stream->num) shingle = channel+stream->otp;}
     return paContinue;
 }
 
