@@ -249,7 +249,7 @@ int processCompare(const void *left, const void *right)
 	TIME_PATTERN
 
 int processConfigure(int index, int len)
-{
+{ // given unlocProChar(len), return -1 error, 0 yield, >0 continue
 	int chrsiz = sizePcsChar()-len;
 	int intsiz = sizePcsInt();
 	initString(processCompare);
@@ -406,13 +406,13 @@ int processConfigure(int index, int len)
 		*enlocPcsChange(1) = change;
 		configurePass(chrsiz,intsiz);
 		return 1;}
-	// TODO metric listen source
+	// TODO metric source listen media
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
 		return 1;}
 	else if (parse("<?yield!>",len) > 0) {
 		if (intsiz != sizePcsInt() || chrsiz != sizePcsChar()) exitErrstr("configure too size\n");
 		return 0;}
-    return -1; // given unlocProChar(len), return -1 error, 0 yield, >0 continue
+    return -1;
 }
 

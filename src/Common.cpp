@@ -425,11 +425,13 @@ DEFINE_PRIORITY(Time,int)
 DEFINE_PRIORITY(Wheel,struct Change)
 DEFINE_META(ChnBuf,int)
 DEFINE_META(Channel,PaUtilRingBuffer)
+DEFINE_LOCAL(ArgBuf,int)
 DEFINE_TREE(Pack,int,int)
 
 DEFINE_SOURCE(TwCommands,CmnCommands,Timewheels)
 DEFINE_STAGE(TwCommand,Command,TwCommands)
 DEFINE_STAGE(TwCmdInt,int,TwCommand)
+DEFINE_STAGE(TwCmdFloat,Myfloat,TwCmdInt)
 
 
 DEFINE_DEST(Processes,CmnProcesses,CmnProcesses)

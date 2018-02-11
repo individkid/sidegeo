@@ -47,6 +47,7 @@ EXTERNCBEGIN
 #define INVALID_LOCATION 6
 #define POLL_DELAY 0.1
 #define NANO_SECONDS 1000000000
+#define MICRO_SECONDS 1000000
 #define MAX_ROTATE 0.999
 #define ROLLER_GRANULARITY 30.0
 #define NUM_FEEDBACK 3
@@ -326,8 +327,7 @@ struct Stream { // for opening and maintaining stream
 };
 struct Metric { // for measuring and modifying shapes
     int idt; // how other states will refer to this one
-    Command inter; // metric or feedback between files
-    enum Event intra; // metric or feedback within a file
+    Command cmd; // metric or feedback between files
     int arg; // argument index
     int siz; // number of arguments
 };
@@ -523,11 +523,13 @@ DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
 DECLARE_META(ChnBuf,int)
 DECLARE_META(Channel,PaUtilRingBuffer)
+DECLARE_LOCAL(ArgBuf,int)
 DECLARE_TREE(Pack,int,int)
 
 DECLARE_SOURCE(TwCommands)
 DECLARE_STAGE(TwCommand,Command)
 DECLARE_STAGE(TwCmdInt,int)
+DECLARE_STAGE(TwCmdFloat,Myfloat)
 
 
 DECLARE_DEST(Processes)

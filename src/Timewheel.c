@@ -16,9 +16,9 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <portaudio.h>
-
 #include "Common.h"
+#include "portaudio.h"
+#include <sys/time.h>
 
 struct Region{ // for random access to circular buffer
     void *ptr0;
@@ -31,25 +31,23 @@ int stateCount = 0; // how many from State have been entered into Pack
 int listenCount = 0;
 int sourceCount = 0;
 int metricCount = 0;
+long long timeBase = 0;
 
-pqueue_pri_t ofTime(double time)
+pqueue_pri_t ofTime(long long time)
 {
-    return 0; // TODO
+    return time;
 }
 
-double timeOf(pqueue_pri_t time)
+long long timeOf(pqueue_pri_t time)
 {
-    return 0; // TODO
+    return time;
 }
 
-double getTime(void)
+long long getTime(void)
 {
-    return 0; // TODO
-}
-
-void setTime(struct timespec *delay, double time)
-{
-    // TODO
+    struct timeval tv;
+    if (gettimeofday(&tv,NULL) < 0) exitErrstr("time too get\n");
+    return (tv.tv_sec-timeBase)*MICRO_SECONDS+tv.tv_usec;
 }
 
 void startCount(void)
@@ -158,14 +156,10 @@ void audioRestart(void)
 
 void audioOpen(int sub, struct Stream *stream)
 {
-    // audio corresponds to stream
     while (sizeStream() <= sub) {
         struct Stream init = {0};
         *enlocStream(1) = init;}
     usedChannel(sub);
-    stream->siz = PORTAUDIO_SIZE; // TODO take from configure
-    stream->inp = 1; // TODO take from configure
-    stream->otp = 2; // TODO take from configure
     stream->num = stream->inp+stream->otp;
     int *buf = enlocChnBuf(sub,stream->siz*stream->num);
     for (int i = 0; i < stream->num; i++) {
@@ -210,7 +204,10 @@ void startStream(void)
 void startMetric(void)
 {
     startCount();
-    // TODO
+    int sub = *castPack(*delocTwInt(1));
+    struct Metric *metric = arrayMetric(sub,1);
+    metric->arg = sizeArgBuf();
+    enlocArgBuf(metric->siz);
 }
 
 void startVariable(int sub, int num)
@@ -251,20 +248,6 @@ void startState(void)
     if (state->run) *scheduleTime(ofTime(getTime())) = sub;
 }
 
-void finishStream(void)
-{
-    audioStop();
-    for (int i = 0; i < sizeStream(); i++) {
-    struct Stream *stream = arrayStream(i,1);
-    if (stream->map) {
-    if (Pa_CloseStream(stream->ptr) != paNoError) exitErrstr("stream too close\n");}}
-}
-
-void finishMetric(void)
-{
-    // TODO
-}
-
 void pipeRead(int wave, int sub, Myfloat *value)
 {
     struct Stream *stream = arrayStream(wave,1);
@@ -286,13 +269,21 @@ void pipeWrite(int wave, int sub, Myfloat value)
 void requestMetric(int index, int response)
 {
     struct Metric *metric = arrayMetric(index,1);
-    // TODO
+    int to = sizeTwCmdInt();
+    enlocTwCmdInt(metric->siz);
+    useArgBuf(); copyTwCmdInt(to,metric->arg,metric->siz);
+    *enlocTwCmdInt(1) = response;
+    *enlocTwCommand(1) = metric->cmd;
 }
 
 void presentMetric(int index, Myfloat value)
 {
     struct Metric *metric = arrayMetric(index,1);
-    // TODO
+    int to = sizeTwCmdInt();
+    enlocTwCmdInt(metric->siz);
+    useArgBuf(); copyTwCmdInt(to,metric->arg,metric->siz);
+    *enlocTwCmdFloat(1) = value;
+    *enlocTwCommand(1) = metric->cmd;
 }
 
 Myfloat saturate(Myfloat val, struct State *ptr)
@@ -348,6 +339,9 @@ double evaluate(int *csub, int *vsub, struct Ratio *ratio)
 
 void timewheelBefore(void)
 {
+    struct timeval tv;
+    if (gettimeofday(&tv,NULL) < 0) exitErrstr("time too get\n");
+    timeBase = tv.tv_sec;
     PaError err = Pa_Initialize();
     if (err != paNoError) exitErrstr("PortAudio error: %s\n",Pa_GetErrorText(err));
 }
@@ -372,25 +366,25 @@ void timewheelConsume(void *arg)
 
 long long timewheelDelay(void)
 {
-    double current = getTime();
-    double time = whenTime();
-    double wheel = whenWheel();
+    long long current = getTime();
+    long long time = whenTime();
+    long long wheel = whenWheel();
     if (time < wheel) return time-current;
-    return (long long)(wheel-current);
+    return wheel-current;
 }
 
 void timewheelProduce(void *arg)
 {
-    double current = getTime();
+    long long current = getTime();
     while (readyTime(ofTime(current))) {
         int sub = *advanceTime();
         struct State *state = arrayState(sub,1);
         if (!state->run) continue; 
         int csub = state->csub;
         int vsub = state->vsub;
-        double update = evaluate(&csub,&vsub,&state->upd);
-        double delay = evaluate(&csub,&vsub,&state->dly);
-        double schedule = evaluate(&csub,&vsub,&state->sch);
+        long long update = evaluate(&csub,&vsub,&state->upd);
+        long long delay = evaluate(&csub,&vsub,&state->dly);
+        long long schedule = evaluate(&csub,&vsub,&state->sch);
         Myfloat val = saturate(update,state);
         struct Change change; change.val = val; change.sub = sub;
         *scheduleTime(ofTime(current+schedule)) = sub;
@@ -406,8 +400,11 @@ void timewheelProduce(void *arg)
 
 void timewheelAfter(void)
 {
-    finishStream();
-    finishMetric();
+    audioStop();
+    for (int i = 0; i < sizeStream(); i++) {
+    struct Stream *stream = arrayStream(i,1);
+    if (stream->map) {
+    if (Pa_CloseStream(stream->ptr) != paNoError) exitErrstr("stream too close\n");}}
 	PaError err = Pa_Terminate();
 	if (err != paNoError) printf("PortAudio error: %s\n",Pa_GetErrorText(err));
 }
