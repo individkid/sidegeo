@@ -134,12 +134,14 @@ int audioCallback( const void *inputBuffer, void *outputBuffer,
     PaUtilRingBuffer *buf = arrayChannel(sub,i,1);
     audioOutput(buf,stream->loc,framesPerBuffer,(float *)outputBuffer+i,stream->num);}
     stream->loc = framesPerBuffer;
+    if (stream->inp == 0) return paContinue;
     PaUtilRingBuffer *channel = arrayChannel(sub,0,stream->num);
     float *input = (float *)inputBuffer;
     if (stream->inp == 1) {
     int siz = PaUtil_GetRingBufferWriteAvailable(channel);
     if (siz > framesPerBuffer) siz = framesPerBuffer;
-    if (PaUtil_WriteRingBuffer(channel,input,siz) != paNoError) exitErrstr("stream too write\n");}
+    if (PaUtil_WriteRingBuffer(channel,input,siz) != paNoError) exitErrstr("stream too write\n");
+    return paContinue;}
     PaUtilRingBuffer *shingle = channel+stream->otp;
     for (int i = 0; i < framesPerBuffer; i++) {
     int siz = PaUtil_GetRingBufferWriteAvailable(shingle);
