@@ -295,7 +295,7 @@ struct Ratio {
     struct Nomial n,d;};
 enum Control {
     Start,
-    Open,
+    Sound,
     Shape};
 struct State {
     int idt; // how other states will refer to this one
@@ -516,8 +516,8 @@ DECLARE_EXTRA(Coefficient,Myfloat)
 DECLARE_EXTRA(Variable,int)
 DECLARE_EXTRA(Argument,int)
 DECLARE_EXTRA(State,struct State)
-DECLARE_EXTRA(Metric,struct Metric)
 DECLARE_EXTRA(Stream,struct Stream)
+DECLARE_EXTRA(Metric,struct Metric)
 
 DECLARE_PRIORITY(Time,int)
 DECLARE_PRIORITY(Wheel,struct Change)
@@ -557,9 +557,8 @@ DECLARE_STAGE(PcsTwInt,int)
 DECLARE_STAGE(PcsCoefficient,Myfloat)
 DECLARE_STAGE(PcsVariable,int)
 DECLARE_STAGE(PcsState,struct State)
-DECLARE_STAGE(PcsSignal,struct Signal)
-DECLARE_STAGE(PcsSound,struct Sound)
-DECLARE_STAGE(PcsShape,struct Shape)
+DECLARE_STAGE(PcsStream,struct Stream)
+DECLARE_STAGE(PcsMetric,struct Metric)
 
 DECLARE_LOCAL(PcsInt,int) // given and/or result
 DECLARE_LOCAL(PcsChar,char) // given and/or result

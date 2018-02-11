@@ -242,7 +242,7 @@ void startState(void)
     struct State *state = arrayState(sub,1);
     if (!state->map) {
         state->map = 1;
-        if (state->ctl == Open || state->ctl == Shape) state->idx = *castPack(state->idx);
+        if (state->ctl == Sound || state->ctl == Shape) state->idx = *castPack(state->idx);
         int var = state->vsub;
         startRatio(var,&state->upd);
         startRatio(var,&state->dly);
@@ -306,7 +306,7 @@ Myfloat amount(int sub)
 {
     struct State *state = arrayState(sub,1);
     if (state->typ == Read) {
-    if (state->ctl == Open) pipeRead(state->idx,state->sub,&state->amt);
+    if (state->ctl == Sound) pipeRead(state->idx,state->sub,&state->amt);
     if (state->ctl == Shape) requestMetric(state->idx,sub);}
     return state->amt;
 }
@@ -355,7 +355,7 @@ void timewheelBefore(void)
 void timewheelConsume(void *arg)
 {
     while (sizeControl() > 0) {
-        SWITCH(*delocControl(1),Open) startStream();
+        SWITCH(*delocControl(1),Sound) startStream();
         CASE(Shape) startMetric();
         CASE(Start) startState();
         DEFAULT(exitErrstr("time too control\n");)}
@@ -366,7 +366,7 @@ void timewheelConsume(void *arg)
         state->amt = change->val;
         if (state->typ == Write) {
         if (change->map) exitErrstr("change too map\n");
-        if (state->ctl == Open) pipeWrite(state->idx,state->sub,state->amt);
+        if (state->ctl == Sound) pipeWrite(state->idx,state->sub,state->amt);
         if (state->ctl == Shape) presentMetric(state->idx,state->amt);}}
 }
 
@@ -400,7 +400,7 @@ void timewheelProduce(void *arg)
         struct State *state = arrayState(change.sub,1);
         state->amt = change.val;
         if (state->typ == Write) {
-        if (state->ctl == Open) pipeWrite(state->idx,state->sub,state->amt);
+        if (state->ctl == Sound) pipeWrite(state->idx,state->sub,state->amt);
         if (state->ctl == Shape) presentMetric(state->idx,state->amt);}}
 }
 

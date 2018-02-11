@@ -55,7 +55,6 @@ struct Item item[Menus] = {
     {Performs,Action,2,"Configure","open dialog to decorate plane's facets"},
     {Performs,Action,2,"Hyperlink","jump through facet to another space"},
     {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
-    // TODO add graffiti, and stock/flow screensaver, facet decoration
 
 int esc = 0;
 int inj = 0;

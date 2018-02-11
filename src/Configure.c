@@ -330,7 +330,11 @@ int processConfigure(int index, int len)
 		configurePass(chrsiz,intsiz);
 		return 1;}
 	if (parse(
-		"<?time!> id% <?,!> (id)% <?,!> (id)% <?,!>"
+		"<?time!> id% [<?Start!> 0 |"
+		" <?Read!> <?Shape!> 1 id% |"
+		" <?Write!> <?Shape!> 2 id% |"
+		" <?Read!> <?Sound!> 3 id% nm% |"
+		" <?Write!> <?Sound!> 4 id% nm%]"
 		" (fl)% <?,!> (fl)% <?,!> (fl)% <?,!>"
 		TIME_RATIO
 		TIME_RATIO
@@ -349,12 +353,19 @@ int processConfigure(int index, int len)
 		*enlocReady(1) = 0;
 		retval = timeName(&state.idt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
+		char chr = *arrayPcsChar(chrpos,1); chrpos += 1; 
+		SWITCH(chr,'0') state.ctl = Start;
+		CASE('1') {state.typ = Read; state.ctl = Shape;}
+		CASE('2') {state.typ = Write; state.ctl = Shape;}
+		CASE('3') {state.typ = Read; state.ctl = Sound;}
+		CASE('4') {state.typ = Write; state.ctl = Sound;}
+		DEFAULT(exitErrstr("typ too ctl\n");)
+		if (state.ctl == Shape || state.ctl == Sound) {
 		retval = timeName(&state.idx,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval > 0) {state.ctl = Shape; state.typ = Read;}// TODO syntax to choose direction
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}}
+		if (state.ctl == Sound) {
 		retval = forceInt(&state.sub,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval > 0) {state.ctl = Open; state.typ = Write;}// TODO syntax to choose direction
+		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}}
 		retval = timeFloat(&state.amt,&chrpos,&intpos);
 		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
 		if (retval == 0) state.amt = strtof("0",0);
