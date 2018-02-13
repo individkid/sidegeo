@@ -182,8 +182,7 @@ enum Action configureRefine(int state)
     int todo = bufferUnflat(file,VertSub,flat);
     resetBuffer(file,VertSub);
     updateBuffer(file,VertSub,0,todo,buf);
-    // in display 0, enque Coplane shader with renderClient follow
-    updateContext(0);
+    // enque Coplane shader with renderClient follow
     resetBuffer(file,VertBuf);
     enqueShader(Coplane,file,0,renderClient);
     // send Index event to get PointSub corresponding to VertSub

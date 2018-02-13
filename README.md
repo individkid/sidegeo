@@ -122,8 +122,8 @@ Configuration/history files consist of commands. User input appends to file. App
   * --inflate initializes to facets between inside and outside regions  
   * --fill adds faces attached to outside region and removes inside faces  
   * --hollow adds faces attached to inside region and removes outside faces  
-  * --force takes buffer type and subscript to change  
-  * --test check current state against given value  
+  * --command sends named command with listed arguments  
+  * --event sends named event with listed arguments  
   * --sample takes per-boundary sidedness to sample with similar embed  
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  

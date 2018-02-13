@@ -67,15 +67,33 @@ void leftTransform(void)
     pPoint = pPos; qPoint = qPos;
     for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    // TODO send Filter event
+    if (mark[Target] == Plane) {
+    // TODO if manipulate mode
+    // find rPoint free slot in clipboard
+    // insert plane in FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from file to rPoint in clipboard
+    // send Filter events to enable rPoint in clipboard and disable all displays in pPoint in qPoint
     // send Face or Frame event with responseClient response
-    // copy pPos in FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from qPos to 0
+    }
 }
 
 void leftManipulate(void)
 {
-    // TODO append --plane from base or construct plane
-    // delete FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from file 0
+    if (mark[Target] == Plane) {
+    // TODO if manipulate mode
+    // append --plane from base or construct plane from rPoint in clipboard
+    // append --command doneManipulate with pPoint qPoint rPoint arguments
+    }
+}
+
+void doneManipulate(void)
+{
+    // restore given clipboard plane and filter from clipboard to given plane in given file
+    // follow last event with doneClipboard with given clipboard slot as argument
+}
+
+void doneClipboard(void)
+{
+    // release given FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from clipboad
 }
 
 void rightRight(void)

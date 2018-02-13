@@ -300,35 +300,6 @@ int processConfigure(int index, int len)
 		*enlocPcsCmdCmd(1) = configureHollow;
 		configurePass(chrsiz,intsiz);
 		return 1;}
-	if (parse("force CmdInt {nm%}%",len) > 0) {
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		usePcsCmdInt(); referForceInt();
-		if (forceArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		configurePass(chrsiz,intsiz);
-		return 1;}
-	if (parse("force CmdInts {nm%}%",len) > 0) {
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		if (configureArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		configurePass(chrsiz,intsiz);
-		return 1;}
-	if (parse("force HsInt {nm%}%",len) > 0) {
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		usePcsHsInt(); referForceInt();
-		if (forceArray(&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		configurePass(chrsiz,intsiz);
-		return 1;}
-	if (parse("force HsInts {nm%}%",len) > 0) {
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		int count = sizePcsHsInt(); enlocPcsCmdInt(1);
-		usePcsHsInt(); referForceInt();
-		int temp; if ((temp = forceArray(&chrpos,&intpos)) < 0) return -1;
-		*arrayPcsHsInt(count,1) = temp;
-		configurePass(chrsiz,intsiz);
-		return 1;}
 	if (parse(
 		"<?time!> id% [<?Start!> 0 |"
 		" <?Read!> <?Shape!> 1 id% |"
@@ -406,6 +377,7 @@ int processConfigure(int index, int len)
 		*enlocPcsChange(1) = change;
 		configurePass(chrsiz,intsiz);
 		return 1;}
+	// TODO command event
 	// TODO metric source listen media
 	else if (parse("<?inject!> {.}%",len) > 0) {
 		usePcsChar(); xferOption(*delocPcsInt(1));
