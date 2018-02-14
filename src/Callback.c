@@ -68,20 +68,26 @@ void leftTransform(void)
     for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     if (mark[Target] == Plane) {
-    rPoint = unusedSlot();
-    *enlocCmdHsInt(1) = 1; // inout size
+    rPoint = openSlot();
+    // TODO copy planes or points at pPoint in qPoint to clipboard at rPoint
+    *enlocCmdHsInt(1) = 3; // inout size
+    *enlocCmdHsInt(1) = pPoint;
+    *enlocCmdHsInt(1) = qPoint;
     *enlocCmdHsInt(1) = rPoint;
     *enlocCmdHsInt(1) = 1; // passthrough size
-    *enlocCmdHsInt(1) = contextHandle;
-    *enlocCmdHsCmd(1) = startManipulate;
-    *enlocCmdEvent(1) = Slot;}
+    *enlocCmdHsInt(1) = pPoint;
+    *enlocCmdHsCmd(1) = enqueClient;
+    *enlocCmdEvent(1) = Swap;}
 }
 
 void leftManipulate(void)
 {
     if (mark[Target] == Plane) {
-    *enlocCmdInt(1) = contextHandle;
-    enqueCommand(doneManipulate);}
+    // TODO msgstr transformed plane, swap filters, update element arrays, and re-render
+    // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
+    // sideband msgstr --event Swap with pPoint qPoint rPoint and no callback
+    // sideband msgstr --command enqueClient with pPoint
+    closeSlot(rPoint); rPoint = -1;}
 }
 
 void rightRight(void)

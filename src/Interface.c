@@ -142,31 +142,33 @@ void file(void)
 
 void responseLayer(void)
 {
-    int tag = *delocCmdInt(1);
     int len = *delocCmdInt(1);
+    int path = *arrayCmdInt(len,1);
+    if (path != 1) exitErrstr("response too path\n");
+    int tag = *arrayCmdInt(1+len,1);
     useCmdInt(); xferReint(tag,len);
+    delocCmdInt(1); // tag
 }
 
 void responseProceed(void)
 {
+    int len = *delocCmdInt(1);
+    if (len != 0) exitErrstr("response too len\n");
+    int path = *delocCmdInt(1);
+    if (path != 1) exitErrstr("response too path\n");
     int tag = *delocCmdInt(1);
-    int len = sizeReint(tag);
-    *arrayReint(tag,len-1,1) = 1;
+    int size = sizeReint(tag);
+    *arrayReint(tag,size-1,1) = 1;
 }
 
-void startManipulate(void)
+int openSlot(void)
+{
+    return -1; // TODO
+}
+
+void closeSlot(int slot)
 {
     // TODO
-}
-
-void doneManipulate(void)
-{
-    // TODO
-}
-
-int unusedSlot(void)
-{
-    return 0; // TODO
 }
 
 // classify given plane and maintain topology

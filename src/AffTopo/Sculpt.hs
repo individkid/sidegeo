@@ -42,8 +42,6 @@ data Event =
     Inflate | -- place: embed
     Face | -- inout(filter), place, embed, tag: inout(face)
     Frame |
-    Slot |
-    Free |
     Other |
     Both |
     Swap |
@@ -59,14 +57,12 @@ eventOf 2 = Hollow
 eventOf 3 = Inflate
 eventOf 4 = Face
 eventOf 5 = Frame
-eventOf 6 = Slot
-eventOf 7 = Free
-eventOf 8 = Other
-eventOf 9 = Both
-eventOf 10 = Swap
-eventOf 11 = Divide
-eventOf 12 = Vertex
-eventOf 13 = Corner
+eventOf 6 = Other
+eventOf 7 = Both
+eventOf 8 = Swap
+eventOf 9 = Divide
+eventOf 10 = Vertex
+eventOf 11 = Corner
 eventOf _ = Error
 
 ofEvent :: Event -> Int
@@ -76,14 +72,12 @@ ofEvent Hollow = 2
 ofEvent Inflate = 3
 ofEvent Face = 4
 ofEvent Frame = 5
-ofEvent Slot = 6
-ofEvent Free = 7
-ofEvent Other = 8
-ofEvent Both = 9
-ofEvent Swap = 10
-ofEvent Divide = 11
-ofEvent Vertex = 12
-ofEvent Corner = 13
+ofEvent Other = 6
+ofEvent Both = 7
+ofEvent Swap = 8
+ofEvent Divide = 9
+ofEvent Vertex = 10
+ofEvent Corner = 11
 ofEvent _ = (-1)
 
 ofString :: [Char] -> Event
@@ -93,8 +87,6 @@ ofString "Hollow" = Hollow
 ofString "Inflate" = Inflate
 ofString "Face" = Face
 ofString "Frame" = Frame
-ofString "Slot" = Slot
-ofString "Free" = Free
 ofString "Other" = Other
 ofString "Both" = Both
 ofString "Swap" = Swap
@@ -140,8 +132,6 @@ handleEvent event = case (eventOf (fromIntegral event)) of
  Inflate -> return False
  Face -> return False
  Frame -> return False
- Slot -> return False
- Free -> return False
  Other -> return False
  Both -> return False
  Swap -> return False

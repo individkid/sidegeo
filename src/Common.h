@@ -105,8 +105,6 @@ enum Event {
     Inflate, // place: embed
     Face, // inout(filter), place, embed, tag: inout(face)
     Frame, // inout(filter), place, embed, tag: inout(frame)
-    Slot,
-    Free,
     Other,
     Both,
     Swap,

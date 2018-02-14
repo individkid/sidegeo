@@ -34,8 +34,6 @@ void setupEnum(void)
     val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate) < 0) exitErrstr("enum too event\n"); else *castEnum(Inflate) = val;
     val = handleEnum("Face"); if (val < 0 || insertEnum(Face) < 0) exitErrstr("enum too event\n"); else *castEnum(Face) = val;
     val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame) < 0) exitErrstr("enum too event\n"); else *castEnum(Frame) = val;
-    val = handleEnum("Slot"); if (val < 0 || insertEnum(Slot) < 0) exitErrstr("enum too event\n"); else *castEnum(Slot) = val;
-    val = handleEnum("Free"); if (val < 0 || insertEnum(Free) < 0) exitErrstr("enum too event\n"); else *castEnum(Free) = val;
     val = handleEnum("Other"); if (val < 0 || insertEnum(Other) < 0) exitErrstr("enum too event\n"); else *castEnum(Other) = val;
     val = handleEnum("Both"); if (val < 0 || insertEnum(Both) < 0) exitErrstr("enum too event\n"); else *castEnum(Both) = val;
     val = handleEnum("Swap"); if (val < 0 || insertEnum(Swap) < 0) exitErrstr("enum too event\n"); else *castEnum(Swap) = val;

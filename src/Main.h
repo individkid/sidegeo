@@ -92,9 +92,8 @@ enum Action renderLayer(int state);
 void target(void);
 void only(void);
 void responseLayer(void);
-void startManipulate(void);
-void doneManipulate(void);
-int unusedSlot(void);
+int openSlot(void);
+void closeSlot(int slot);
 #ifdef BRINGUP
 void bringupBuiltin(void);
 #endif
