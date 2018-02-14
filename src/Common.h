@@ -207,8 +207,9 @@ struct Display {
     Myfloat basisMat[27];
     Myfloat affineMata[16]; // transformation state at click time
     Myfloat affineMatb[16]; // transformation due to roller
-    int pPoint;
-    int qPoint;
+    int pPoint; // pierced plane at click time
+    int qPoint; // file of pierced plane at click time
+    int rPoint; // slot in clipboard at click time
     Myfloat xPoint;  // position of pierce point at click time
     Myfloat yPoint;
     Myfloat zPoint;

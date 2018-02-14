@@ -154,6 +154,17 @@ void responseProceed(void)
     *arrayReint(tag,len-1,1) = 1;
 }
 
+void doneManipulate(void)
+{
+    // TODO swap given clipboard filter with given plane in given file
+    // follow last event with doneClipboard with given clipboard slot as argument
+}
+
+void doneClipboard(void)
+{
+    // TODO release given slot and call enqueClient
+}
+
 // classify given plane and maintain topology
 enum Action configureRefine(int state)
 {
@@ -308,45 +319,11 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
     msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
 }
 
-#define CONFIGURE_RELOC(EVENT) \
-    *enlocCmdInt(1) = (int)EVENT; \
-    relocCmdInt(1); /*file*/ \
-    if (EVENT != Inflate) { \
-    relocCmdInt(1); /*base plane*/ \
-    int inlen = *relocCmdInt(1); \
-    relocCmdInt(inlen); /*inside planes*/ \
-    int outlen = *relocCmdInt(1); \
-    relocCmdInt(outlen);} /*outside planes*/ \
-    enqueMachine(configureSculpt);
-
-enum Action configureSculpt(int state)
+enum Action dequeClient(int state)
 {
-    int embed = *deargCmdInt(1);
     int file = *deargCmdInt(1);
-    struct File *ptr = arrayFile(file,1);
-    int arg = 0;
-    if (embed != Inflate) {
-    deargCmdInt(1); // plane
-    int inlen = *deargCmdInt(1); deargCmdInt(inlen); // inside
-    int outlen = *deargCmdInt(1); deargCmdInt(outlen); // outside
-    arg = 3+inlen+outlen;}
-    if (state-- == 0) {
-    layer = uniqueLayer();
-    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
-    *enlocCmdHsInt(1) = file;
-    if (embed != Inflate) {
-    useCmdInt(); copyCmdHsInt(0,-arg,arg);}
-    *enlocCmdHsInt(1) = layer;
-    *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = embed; // Fill Hollow or Inflate
-    *enlocReint(layer,1) = 0;
-    return Continue;}
-    if (state-- == 0) {
-    return (arrayReint(layer,0,1) == 0 ? Defer : Continue);}
     for (int context = 0; context < sizeDisplay(); context++) {
     if (state-- == 0) {
-    if (sizeReint(layer) != 1) exitErrstr("layer too size\n");
-    delocReint(layer,1);
     *enlocCmdHsInt(1) = context;
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = layer;
@@ -354,8 +331,7 @@ enum Action configureSculpt(int state)
     *enlocCmdEvent(1) = event; // Face or Frame
     return Continue;}
     if (state-- == 0) {
-    return (sizeReint(layer) == 0 ? Defer : Continue);}
-    if (state-- == 0) {
+    if (sizeReint(layer) == 0) return Defer;
     updateContext(context);
     int size = sizeReint(layer);
     int todo = bufferUnflat(file,data,size);
@@ -367,19 +343,39 @@ enum Action configureSculpt(int state)
     return Advance;
 }
 
+// TODO move xfer commands to configure
 void configureInflate(void)
 {
-    CONFIGURE_RELOC(Inflate)
+    // 0 file
+    useCmdInt(); xferCmdHsInt(1);
+    *enlocCmdHsCmd(1) = enqueClient; // TODO get haskell to pass through file
+    *enlocCmdEvent(1) = Inflate;
 }
 
 void configureFill(void)
 {
-    CONFIGURE_RELOC(Fill)
+    // 0 file
+    // 1 base plane
+    int inlen = *arrayCmdInt(2,1);
+    // 2<= inside <2+inleninside
+    int outlen = *arrayCmdInt(2+inlen,1);
+    // 3+inlen<= outside <3+inlen+outlen
+    useCmdInt(); xferCmdHsInt(3+inlen+outlen);
+    *enlocCmdHsCmd(1) = enqueClient; // TODO get haskell to pass through file
+    *enlocCmdEvent(1) = Fill;
 }
 
 void configureHollow(void)
 {
-    CONFIGURE_RELOC(Hollow)
+    // 0 file
+    // 1 base plane
+    int inlen = *arrayCmdInt(2,1);
+    // 2<= inside <2+inleninside
+    int outlen = *arrayCmdInt(2+inlen,1);
+    // 3+inlen<= outside <3+inlen+outlen
+    useCmdInt(); xferCmdHsInt(3+inlen+outlen);
+    *enlocCmdHsCmd(1) = enqueClient; // TODO get haskell to pass through file
+    *enlocCmdEvent(1) = Hollow;
 }
 
 #define CLICK_ENLOC(STR) \
@@ -419,8 +415,7 @@ enum Action sculptClick(int state)
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Locate;
     return Continue;}
-    if (state-- == 0) {
-    return (sizeReint(layer) == 0 ? Defer : Continue);}
+    if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfigurer(1) = file;
     msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);

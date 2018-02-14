@@ -52,12 +52,12 @@ void haskellConsume(void *arg)
         filenum = *delocHsInt(1);
         int size = *delocHsInt(1);
         useHsInt(); xferInout(size);
-        enum Event event = *delocEvent(1);
+        enum Event event = *delocEvent(1); // TODO conform to this calling convention
         int num = *castEnum(event);
         if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
         size = sizeInout();
         *enlocHsCmdInt(1) = size;
-        useInout(); xferHsCmdInt(size);
+        useInout(); xferHsCmdInt(size); // TODO pass through command arguments
         *enlocHsCommand(1) = *delocHsCmd(1);}
 }
 

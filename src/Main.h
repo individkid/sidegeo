@@ -47,6 +47,7 @@
 #define displayMatb current->affineMatb
 #define pPoint current->pPoint
 #define qPoint current->qPoint
+#define rPoint current->rPoint
 #define xPoint current->xPoint
 #define yPoint current->yPoint
 #define zPoint current->zPoint
@@ -127,5 +128,7 @@ enum Action renderLayer(int state);
 void enqueShader(enum Shader shader, int file, int display, Machine follow);
 void enqueDishader(void);
 void enquePershader(void);
+void enqueClient(void);
+enum Action dequeClient(int state);
 
 #endif
