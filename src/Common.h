@@ -105,7 +105,11 @@ enum Event {
     Inflate, // place: embed
     Face, // inout(filter), place, embed, tag: inout(face)
     Frame, // inout(filter), place, embed, tag: inout(frame)
-    Filter, // inout(boundary, filter), tag: tag
+    Slot,
+    Free,
+    Other,
+    Both,
+    Swap,
     Divide, // inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex, // inout(boundary), place: inout(vertex)
     Index, // inout(boundary), place: inout(index)

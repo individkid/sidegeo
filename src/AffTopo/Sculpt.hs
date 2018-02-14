@@ -41,8 +41,12 @@ data Event =
     Hollow | -- inout(polyant), place, embed: embed
     Inflate | -- place: embed
     Face | -- inout(filter), place, embed, tag: inout(face)
-    Frame | -- inout(filter), place, embed, tag: inout(frame)
-    Filter | -- inout(boundary, filter), tag: tag
+    Frame |
+    Slot |
+    Free |
+    Other |
+    Both |
+    Swap |
     Divide | -- inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex | -- place: inout(vertex)
     Corner | -- inout(boundary), place: inout(corner)
@@ -55,10 +59,14 @@ eventOf 2 = Hollow
 eventOf 3 = Inflate
 eventOf 4 = Face
 eventOf 5 = Frame
-eventOf 6 = Filter
-eventOf 7 = Divide
-eventOf 8 = Vertex
-eventOf 9 = Corner
+eventOf 6 = Slot
+eventOf 7 = Free
+eventOf 8 = Other
+eventOf 9 = Both
+eventOf 10 = Swap
+eventOf 11 = Divide
+eventOf 12 = Vertex
+eventOf 13 = Corner
 eventOf _ = Error
 
 ofEvent :: Event -> Int
@@ -68,10 +76,14 @@ ofEvent Hollow = 2
 ofEvent Inflate = 3
 ofEvent Face = 4
 ofEvent Frame = 5
-ofEvent Filter = 6
-ofEvent Divide = 7
-ofEvent Vertex = 8
-ofEvent Corner = 9
+ofEvent Slot = 6
+ofEvent Free = 7
+ofEvent Other = 8
+ofEvent Both = 9
+ofEvent Swap = 10
+ofEvent Divide = 11
+ofEvent Vertex = 12
+ofEvent Corner = 13
 ofEvent _ = (-1)
 
 ofString :: [Char] -> Event
@@ -81,7 +93,11 @@ ofString "Hollow" = Hollow
 ofString "Inflate" = Inflate
 ofString "Face" = Face
 ofString "Frame" = Frame
-ofString "Filter" = Filter
+ofString "Slot" = Slot
+ofString "Free" = Free
+ofString "Other" = Other
+ofString "Both" = Both
+ofString "Swap" = Swap
 ofString "Divide" = Divide
 ofString "Vertex" = Vertex
 ofString "Corner" = Corner
@@ -124,7 +140,11 @@ handleEvent event = case (eventOf (fromIntegral event)) of
  Inflate -> return False
  Face -> return False
  Frame -> return False
- Filter -> return False
+ Slot -> return False
+ Free -> return False
+ Other -> return False
+ Both -> return False
+ Swap -> return False
  Divide -> return False
  Vertex -> return False
  Corner -> return False

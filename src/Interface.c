@@ -154,15 +154,19 @@ void responseProceed(void)
     *arrayReint(tag,len-1,1) = 1;
 }
 
-void doneManipulate(void)
+void startManipulate(void)
 {
-    // TODO swap given clipboard filter with given plane in given file
-    // follow last event with doneClipboard with given clipboard slot as argument
+    // TODO
 }
 
-void doneClipboard(void)
+void doneManipulate(void)
 {
-    // TODO release given slot and call enqueClient
+    // TODO
+}
+
+int unusedSlot(void)
+{
+    return 0; // TODO
 }
 
 // classify given plane and maintain topology
@@ -324,8 +328,10 @@ enum Action dequeClient(int state)
     int file = *deargCmdInt(1);
     for (int context = 0; context < sizeDisplay(); context++) {
     if (state-- == 0) {
+    *enlocCmdHsInt(1) = 2;
     *enlocCmdHsInt(1) = context;
     *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1;
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = event; // Face or Frame
@@ -346,35 +352,40 @@ enum Action dequeClient(int state)
 // TODO move xfer commands to configure
 void configureInflate(void)
 {
-    // 0 file
-    useCmdInt(); xferCmdHsInt(1);
-    *enlocCmdHsCmd(1) = enqueClient; // TODO get haskell to pass through file
+    int file = *delocCmdInt(1);
+    *enlocCmdHsInt(1) = 1; // inout size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = enqueClient;
     *enlocCmdEvent(1) = Inflate;
 }
 
 void configureFill(void)
 {
-    // 0 file
-    // 1 base plane
+    int file = *arrayCmdInt(0,1);
+    int plane = *arrayCmdInt(1,1);
     int inlen = *arrayCmdInt(2,1);
-    // 2<= inside <2+inleninside
-    int outlen = *arrayCmdInt(2+inlen,1);
-    // 3+inlen<= outside <3+inlen+outlen
-    useCmdInt(); xferCmdHsInt(3+inlen+outlen);
-    *enlocCmdHsCmd(1) = enqueClient; // TODO get haskell to pass through file
+    int outlen = *arrayCmdInt(3+inlen,1);
+    *enlocCmdHsInt(1) = 4+inlen+outlen; // inout size
+    useCmdInt(); xferCmdHsInt(4+inlen+outlen);
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = enqueClient;
     *enlocCmdEvent(1) = Fill;
 }
 
 void configureHollow(void)
 {
-    // 0 file
-    // 1 base plane
+    int file = *arrayCmdInt(0,1);
+    int plane = *arrayCmdInt(1,1);
     int inlen = *arrayCmdInt(2,1);
-    // 2<= inside <2+inleninside
-    int outlen = *arrayCmdInt(2+inlen,1);
-    // 3+inlen<= outside <3+inlen+outlen
-    useCmdInt(); xferCmdHsInt(3+inlen+outlen);
-    *enlocCmdHsCmd(1) = enqueClient; // TODO get haskell to pass through file
+    int outlen = *arrayCmdInt(3+inlen,1);
+    *enlocCmdHsInt(1) = 4+inlen+outlen; // inout size
+    useCmdInt(); xferCmdHsInt(4+inlen+outlen);
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = enqueClient;
     *enlocCmdEvent(1) = Hollow;
 }
 

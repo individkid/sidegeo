@@ -67,20 +67,21 @@ void leftTransform(void)
     pPoint = pPos; qPoint = qPos;
     for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    if (mark[Target] == Plane) { // TODO if manipulate mode
-    // find rPoint free slot in clipboard
-    // insert plane in FaceSub/PlaneBuf/VersorBuf or FrameSub/PointBuf from file to rPoint in clipboard in every display
-    // send event to move filter from pPoint in qPoint to rPoint in clipboard
-    // call enqueClient to send Face/Frame event and dishader for each display
-    }
+    if (mark[Target] == Plane) {
+    rPoint = unusedSlot();
+    *enlocCmdHsInt(1) = 1; // inout size
+    *enlocCmdHsInt(1) = rPoint;
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = contextHandle;
+    *enlocCmdHsCmd(1) = startManipulate;
+    *enlocCmdEvent(1) = Slot;}
 }
 
 void leftManipulate(void)
 {
-    if (mark[Target] == Plane) { // TODO if manipulate mode
-    // append --plane from base or construct plane from rPoint in clipboard
-    // append --command doneManipulate with pPoint qPoint rPoint arguments
-    }
+    if (mark[Target] == Plane) {
+    *enlocCmdInt(1) = contextHandle;
+    enqueCommand(doneManipulate);}
 }
 
 void rightRight(void)
