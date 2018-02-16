@@ -597,5 +597,6 @@ DECLARE_LOCAL(Less,int) // reading upto here
 DECLARE_LOCAL(More,int) // writing as owner from here
 DECLARE_META(Side,int) // filepos of sideband
 DECLARE_META(Band,char) // endline terminated sideband
+DECLARE_LOCAL(Play,int) // filepos for next sidaband
 
 #endif

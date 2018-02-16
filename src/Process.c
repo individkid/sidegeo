@@ -113,9 +113,20 @@ struct Helper {
         if (retval == -1) {GIVEMORE(INDEX) return -1;} else break;}
 
 #define NEXTSIDE(INDEX,SIDE) \
-    SIDE = INT_MAX;
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    if (sizeSide(INDEX) > 0) SIDE = *arraySide(INDEX,0,1); \
+    else SIDE = INT_MAX; \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 #define READSIDE(INDEX,FILE,SIZE,PIPE) \
-    /*send next sideband*/
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    int len_ = lengthBand(INDEX,0,'\n'); delocSide(INDEX,1); \
+    if (write(SIZE,&len_,sizeof(len_)) != sizeof(len_)) exitErrstr("write too sizeof\n"); \
+    if (write(PIPE,delocBand(INDEX,len_+1),len_) != len_) exitErrstr("write too length\n"); \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+#define WRITEPLAY(INDEX,POS) \
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno)); \
+    *arrayPlay(INDEX,1) = POS; \
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 
 #define MINIMUM(INDEX,FILE,SIZE,LEN,LOCK,POS) \
     GETLESS(INDEX,POS) \
@@ -182,8 +193,8 @@ void *helperRead(void *arg)
         int filemax,lockmin,posmin,sidemax;
         MINIMUM(helper.index,helper.file,helper.size,filemax,lockmin,posmin) // filemax <= lockmin <= posmin
         NEXTSIDE(helper.index,sidemax)
-        if (readpos-len > sidemax) exitErrstr("side too skipped\n");
-        else if (readpos-len == sidemax) {
+        if (readpos-len == sidemax ||
+            (readpos-len > sidemax && len > 1 && buf[0] == '-' && buf[1] == '-')) {
             READSIDE(helper.index,helper.file,helper.size,helper.pipe)
             continue;}
         else if (readpos < filemax) {
@@ -230,13 +241,16 @@ int processWrite(int index, int writelen)
     TAKEMORE(index,filelen) // within mutex, set *arrayMore(index,1) to filelen
     WRITELOCK(index,file,SEEK_END,0,writelen,F_WRLCK) // wait for lock at eof of size writelen
     WRITELEN(index,file,filelen) // get filelen
-    WRITEBUF(index,file,filelen,writebuf,writelen) // write writelen bytes to file at filelen from writebuf
+    WRITEPLAY(index,filelen) // within mutex, advance sideband location
+    WRITEBUF(index,file,filelen,"--",2) // write prelimiter
+    WRITEBUF(index,file,filelen+2,writebuf,writelen) // write writelen bytes to file at filelen from writebuf
+    WRITEBUF(index,file,filelen+2+writelen,"\n",1) // write postlimiter
     WRITELOCK(index,file,SEEK_END,0,writelen,F_UNLCK) // unlock written bytes
     GIVEMORE(index) // within mutex, set *arrayMore(index,1) to infinite, and signal cond
     pid_t pid;
     READPID(index,file,pid) // seek to start of file, read PROCESS_PIDLEN bytes, sscanf into pid
     SENDSIG(index,pid) // send SIGUSR2 to process identified by pid
-    return 0;
+    return filelen+2+writelen;
 }
 
 int processRead(int pipe, int size)
@@ -260,7 +274,7 @@ int processInit(int len)
 	if (len < 0) exitErrstr("init too len\n");
     *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
     helper.index = thread = sizeRead();
-    *enlocYield(1) = 0; *enlocIgnore(1) = 0; *enlocLess(1) = 0; *enlocMore(1) = INT_MAX;
+    *enlocYield(1) = 0; *enlocIgnore(1) = 0;
     *enlocWrite(1) = open(filename,O_RDWR);
     helper.file = open(filename,O_RDWR);;
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
@@ -269,6 +283,7 @@ int processInit(int len)
     if (pipe(pipefd) != 0) exitErrstr("reader pipe failed: %s\n",strerror(errno));
     *enlocSize(1) = pipefd[0]; helper.size = pipefd[1];
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    *enlocLess(1) = 0; *enlocMore(1) = INT_MAX; *enlocPlay(1) = 0; usedSide(usageSide()); usedBand(usageBand());
     if (pthread_create(enlocHelper(1),0,helperRead,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
@@ -309,9 +324,15 @@ void processConsume(void *arg)
     while (sizeConfigurer() > 0) {
         int idx = *delocConfigurer(1);
         int len = lengthConfigure(0,'\n');
+        if (idx >= 0) {
         useConfigure(); xferPcsChar(len); delocConfigure(1);
         if (processWrite(idx,len) < 0) processError(idx);
         if (*arrayWrite(idx,1) < 0) processIgnore(idx);}
+        else {
+        if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+        *enlocSide(1-idx,1) = *arrayPlay(1-idx,1);
+        useConfigure(); xferBand(1-idx,len+1);
+        if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));}}
     useOption(); xferStage(sizeOption());
 }
 
