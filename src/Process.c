@@ -112,6 +112,11 @@ struct Helper {
         if (retval == -1 && errno == EINTR) continue; \
         if (retval == -1) {GIVEMORE(INDEX) return -1;} else break;}
 
+#define NEXTSIDE(INDEX,SIDE) \
+    SIDE = INT_MAX;
+#define READSIDE(INDEX,FILE,SIZE,PIPE) \
+    /*send next sideband*/
+
 #define MINIMUM(INDEX,FILE,SIZE,LEN,LOCK,POS) \
     GETLESS(INDEX,POS) \
     if (POS < INT_MAX) LOCK = POS; \
@@ -120,20 +125,21 @@ struct Helper {
     else READLEN(INDEX,FILE,SIZE,LEN)
 #define READBUF(INDEX,FILE,SIZE,PIPE,BUF,LEN,LENGTH,POS,LIM) \
     READPOS(INDEX,FILE,SIZE,POS) \
-    while (POS < LIM) { \
-        int len_ = PROCESS_STEP-LEN; \
-        if (LEN+len_ > LIM-POS) len_ = LIM-POS-LEN; \
-        if (read(FILE,BUF+LEN,len_) < 0) {ERRORINJ(INDEX,SIZE) return 0;} LEN += len_; \
-        if (LEN == 1 || (LEN > 2 && BUF[0] == '\n' && BUF[1] == '-' && BUF[2] == '-')) { \
-            if (write(SIZE,&LENGTH,sizeof(LENGTH)) != sizeof(LENGTH)) exitErrstr("helper too size\n"); LENGTH = 0; \
-            for (int i = 0; i < LEN-1; i++) BUF[i] = BUF[i+1]; LEN -= 1; POS += 1;} \
-        if (LEN > 1 && BUF[0] == '-' && BUF[1] == '-') { \
-            for (int i = 0; i < LEN-2; i++) BUF[i] = BUF[i+2]; LEN -= 2; POS += 2;} \
-        if (BUF[0] == '\n' && LEN < 3) exitErrstr("helper too len\n"); \
-        if (BUF[0] == '\n') BUF[0] = ' '; \
-        len_ = 0; while (len_ < LEN && BUF[len_] != '\n') len_++; \
-        if (write(PIPE,BUF,len_) != len_) exitErrstr("helper too pipe\n"); LENGTH += len_; \
-        for (int i = 0; i < LEN-len_; i++) BUF[i] = BUF[i+len_]; LEN -= len_; POS += len_;}
+    int len_ = PROCESS_STEP-LEN; if (LEN+len_ > LIM-POS) len_ = LIM-POS-LEN; \
+    if (read(FILE,BUF+LEN,len_) !=len_) {ERRORINJ(INDEX,SIZE) return 0;} LEN += len_; POS += len_; \
+    if (LEN > 1 && BUF[0] == '-' && buf[1] == '-') { \
+        for (int i = 0; i < LEN-2; i++) BUF[i] = BUF[i+2]; LEN -= 2;} \
+    else if ((LEN > 2 && BUF[0] == '\n' && BUF[1] == '-' && BUF[2] == '-') || \
+        (LEN == 1 && BUF[0] == '\n') || LEN == 0) { \
+        if (write(SIZE,&length,sizeof(length)) != sizeof(length)) exitErrstr("write too sizeof\n"); length = 0; \
+        if (LEN > 0) for (int i = 1; i < LEN; i++) BUF[i-1] = BUF[i]; LEN -= 1;} \
+    else if (LEN > 0 && BUF[0] == '\n') { \
+        if (write(PIPE,BUF,1) != 1) exitErrstr("write too one\n"); length += 1; \
+        for (int i = 1; i < LEN; i++) BUF[i-1] = BUF[i]; LEN -= 1;} \
+    else { \
+        int sub_ = LEN; for (int i = 0; i < LEN; i++) if (BUF[i] == '\n') {sub_ = i; break;} \
+        if (write(PIPE,BUF,sub_) != sub_) exitErrstr("write too sub\n");  length += sub_; \
+        for (int i = sub_; i < LEN; i++) BUF[i-sub_] = BUF[i]; LEN -= sub_;}
 #define WRITEBUF(INDEX,FILE,POS,BUF,LEN) \
     WRITEPOS(INDEX,FILE,POS) \
     if (write(FILE,BUF,LEN) < 0) {GIVEMORE(INDEX) return -1;}
@@ -173,11 +179,15 @@ void *helperRead(void *arg)
     int readpos = PROCESS_PIDLEN;
     char buf[PROCESS_STEP]; int len = 0; int length = 0;
     while (1) {
-        int filemin,lockmin,posmin;
-        MINIMUM(helper.index,helper.file,helper.size,filemin,lockmin,posmin) // filemin <= lockmin <= posmin
-        if (readpos < filemin) {
-            READBUF(helper.index,helper.file,helper.size,helper.pipe,buf,len,length,readpos,filemin) // advance readpos to filemin
-            if (readpos < filemin) {ERRORINJ(helper.index,helper.size) return 0;}
+        int filemax,lockmin,posmin,sidemax;
+        MINIMUM(helper.index,helper.file,helper.size,filemax,lockmin,posmin) // filemax <= lockmin <= posmin
+        NEXTSIDE(helper.index,sidemax)
+        if (readpos-len > sidemax) exitErrstr("side too skipped\n");
+        else if (readpos-len == sidemax) {
+            READSIDE(helper.index,helper.file,helper.size,helper.pipe)
+            continue;}
+        else if (readpos < filemax) {
+            READBUF(helper.index,helper.file,helper.size,helper.pipe,buf,len,length,readpos,filemax)
             continue;}
         else if (readpos == posmin) {
             YIELDINJ(helper.size)
@@ -190,7 +200,7 @@ void *helperRead(void *arg)
             WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,readpos,1,F_UNLCK) // unlock right away
             GIVELESS(helper.index) // set arrayLess to 0
             continue;}
-        else if (readpos == filemin) {
+        else if (readpos == filemax) {
             YIELDINJ(helper.size)
             int retval;
             TRYLOCK(helper.index,helper.file,helper.size,0,1,F_WRLCK,SEEK_SET,retval) //try lock on pos 0
@@ -200,8 +210,8 @@ void *helperRead(void *arg)
                 continue;}
             WRITEPID(helper.index,helper.file,helper.size) // write pid to pos 0
             while (1) {
-                MINIMUM(helper.index,helper.file,helper.size,filemin,lockmin,posmin) // filemin <= lockmin <= posmin
-                if (readpos < filemin) {
+                MINIMUM(helper.index,helper.file,helper.size,filemax,lockmin,posmin) // filemax <= lockmin <= posmin
+                if (readpos < filemax) {
                     WAITLOCK(helper.index,helper.file,helper.size,SEEK_SET,0,1,F_UNLCK) // unlock pos 0
                     break;}
                 WAITSIG} // pselect for sigusr2

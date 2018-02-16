@@ -574,6 +574,8 @@ DECLARE_TREE(Imager,int,int) // name index to image index
 DECLARE_LOCAL(Ready,int) // per state count of forward uses
 DECLARE_META(Image,int) // per state list of backward users
 DECLARE_POINTER(ForceInt,int) // pointer to int queue to force
+DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
+DECLARE_TREE(Count,int,int) // location in PcsIntPtr of match count
 
 DECLARE_LOCAL(Format,char) // modifiable copy of format string
 DECLARE_TREE(Macro,int,int) // val to replace key in format
@@ -593,7 +595,7 @@ DECLARE_LOCAL(Write,int) // file handles
 DECLARE_LOCAL(Helper,pthread_t) // thread handle
 DECLARE_LOCAL(Less,int) // reading upto here
 DECLARE_LOCAL(More,int) // writing as owner from here
-DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
-DECLARE_TREE(Count,int,int) // location in PcsIntPtr of match count
+DECLARE_META(Side,int) // filepos of sideband
+DECLARE_META(Band,char) // endline terminated sideband
 
 #endif
