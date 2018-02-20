@@ -41,7 +41,7 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn)
 
 void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
 {
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
     int client = buffer->client;
     int size = buffer->dimn*bufferType(buffer->type);
     done *= size; todo *= size;
@@ -84,7 +84,7 @@ void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
 
 void *dndateBuffer(int file, enum Data sub, int done, int todo)
 {
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
     int client = buffer->client;
     int base = bufferUntodo(file,sub,done);
     int size = bufferUntodo(file,sub,todo);
@@ -93,7 +93,7 @@ void *dndateBuffer(int file, enum Data sub, int done, int todo)
 
 void resetBuffer(int file, enum Data sub)
 {
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
     int client = buffer->client;
     int lim = sizeRange(client);
     int len = sizeClient(client);
@@ -104,7 +104,7 @@ void resetBuffer(int file, enum Data sub)
 
 int limitBuffer(int file, enum Data sub)
 {
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
     int client = buffer->client;
     int size = sizeClient(client);
     return bufferTodo(file,sub,size);
@@ -125,8 +125,8 @@ Myuint locationBuffer(enum Data data)
 
 void setupFile(int name)
 {
-    int sub = sizeFile();
-    struct File *file = enlocFile(1);
+    int sub = sizePoly();
+    struct File *file = enlocPoly(1);
     struct File init = {0};
     *file = init;
     file->name = name;
@@ -149,8 +149,8 @@ void setupFile(int name)
 
 void updateFile(int ctx, int sub, int cpy)
 {
-    struct File *file = arrayDisplayFile(ctx,sub,1);
-    struct File *copy = arrayFile(cpy,1);
+    struct File *file = arrayDisplayPoly(ctx,sub,1);
+    struct File *copy = arrayPoly(cpy,1);
     file->tweak = copy->tweak;
     file->fixed = copy->fixed;
     file->last = copy->last;
@@ -204,7 +204,7 @@ void updateUniform(enum Server server, int file, enum Shader shader)
         glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
     CASE(Affine)
         if (file < 0) exitErrstr("affine too file\n");
-        struct File *ptr = arrayFile(file,1);
+        struct File *ptr = arrayPoly(file,1);
         updateAffine(ptr);
         glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->sent);
     CASE(Feather) {
@@ -618,7 +618,7 @@ void updateContext(int sub)
     if (mark[Sculpt] == Transform) {only(); target();}
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();
-    useDisplayFile(contextHandle); referFile();
+    useDisplayPoly(contextHandle); referPoly();
 }
 
 void updateDisplay(GLFWwindow *ptr)

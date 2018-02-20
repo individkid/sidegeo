@@ -46,11 +46,11 @@ void inject(void)
 void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
-    for (int j = 0; j < sizeDisplayFile(i); j++)
-    SWITCH(mark[Target],Plane) arrayDisplayFile(i,j,1)->fixed = (j>0);
-    CASE(Polytope) arrayDisplayFile(i,j,1)->fixed = (j!=qPos);
-    CASE(Alternate) arrayDisplayFile(i,j,1)->fixed = (i!=contextHandle);
-    CASE(Session) arrayDisplayFile(i,j,1)->fixed = 0;
+    for (int j = 0; j < sizeDisplayPoly(i); j++)
+    SWITCH(mark[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0);
+    CASE(Polytope) arrayDisplayPoly(i,j,1)->fixed = (j!=qPos);
+    CASE(Alternate) arrayDisplayPoly(i,j,1)->fixed = (i!=contextHandle);
+    CASE(Session) arrayDisplayPoly(i,j,1)->fixed = 0;
     DEFAULT(exitErrstr("target too line\n");)
 }
 
@@ -113,10 +113,10 @@ void display(void)
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
     updateContext(0);
-    for (int i = 0; i < sizeFile(); i++) {
-    int name = arrayFile(i,1)->name;
+    for (int i = 0; i < sizePoly(); i++) {
+    int name = arrayPoly(i,1)->name;
     updateContext(new);
-    int sub = sizeFile();
+    int sub = sizePoly();
     setupFile(name);
     updateContext(0);
     updateFile(new,sub,i);}}
@@ -127,11 +127,11 @@ void file(void)
     int save = contextHandle;
     for (int context = 0; context < sizeDisplay(); context++) {
     updateContext(context);
-    int sub = sizeFile();
+    int sub = sizePoly();
     setupFile(sizeCmdBuf());
     int len = lengthCmdByte(0,0);
     useCmdByte(); xferCmdBuf(len+1);
-    struct File *file = arrayFile(sub,1);
+    struct File *file = arrayPoly(sub,1);
     SWITCH(mark[Target],Plane) file->fixed = 1;
     CASE(Polytope) file->fixed = 0;
     CASE(Alternate) file->fixed = (context==save);
@@ -299,7 +299,7 @@ void configurePoint(void)
 
 void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
 {
-    struct File *ptr = arrayFile(file,1);
+    struct File *ptr = arrayPoly(file,1);
     Myfloat u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
     tweakvec(u,0,ptr->tweak,3);
     Myfloat v[3] = {0};
@@ -324,7 +324,7 @@ enum Action configureSculpt(int state)
 {
     int embed = *deargCmdInt(1);
     int file = *deargCmdInt(1);
-    struct File *ptr = arrayFile(file,1);
+    struct File *ptr = arrayPoly(file,1);
     int arg = 0;
     if (embed != Inflate) {
     deargCmdInt(1); // plane
@@ -515,7 +515,7 @@ void bringupBuiltin(void)
         enqueCommand(display);
         enqueCommand(bringupBuiltin);
         return;}
-    if (sizeFile() == 0) {
+    if (sizePoly() == 0) {
         msgstrCmdByte("%s",0,"bringup");
         enqueCommand(file);
         enqueCommand(bringupBuiltin);

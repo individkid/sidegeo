@@ -442,8 +442,8 @@ DECLARE_LOCAL(Display,struct Display)
 DECLARE_LOCAL(Share,struct Share)
 DECLARE_META(DisplayCode,struct Code)
 DECLARE_POINTER(Code,struct Code)
-DECLARE_META(DisplayFile,struct File)
-DECLARE_POINTER(File,struct File)
+DECLARE_META(DisplayPoly,struct File)
+DECLARE_POINTER(Poly,struct File)
 DECLARE_LOCAL(CmdBuf,char)
 DECLARE_LOCAL(Seqmax,int)
 DECLARE_META(Seqnum,int)
@@ -582,14 +582,17 @@ DECLARE_POINTER(NestPtr,int)
 DECLARE_POINTER(PrefixPtr,char)
 
 DECLARE_LOCAL(Stage,char) // copy of options for process
-DECLARE_LOCAL(Read,int) // data pipe handles
+DECLARE_LOCAL(File,int) // file handles
+DECLARE_LOCAL(Loop,int) // fifo handles
+DECLARE_LOCAL(Back,int) // fifo handles
+DECLARE_LOCAL(Pipe,int) // data pipe handles
 DECLARE_LOCAL(Size,int) // size pipe handles
+DECLARE_LOCAL(Side,int) // sideband pipe
+DECLARE_LOCAL(Band,int) // sideband size pipe
+DECLARE_LOCAL(Sync,int) // sideband inject position pipe
 DECLARE_LOCAL(Yield,int) // whether file is yielding
 DECLARE_LOCAL(Ignore,int) // ignored error count
-DECLARE_LOCAL(Write,int) // file handles
 DECLARE_LOCAL(Helper,pthread_t) // thread handle
-DECLARE_LOCAL(Less,int) // reading upto here
-DECLARE_LOCAL(More,int) // writing as owner from here
 DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
 DECLARE_TREE(Count,int,int) // location in PcsIntPtr of match count
 

@@ -47,25 +47,25 @@ int bufferPrimitive(int size)
 
 int bufferFlat(int file, enum Data data, int todo)
 {
-    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    struct Buffer *buffer = arrayPoly(file,1)->buffer+data;
     return todo*buffer->dimn;
 }
 
 int bufferUnflat(int file, enum Data data, int size)
 {
-    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    struct Buffer *buffer = arrayPoly(file,1)->buffer+data;
     return size/buffer->dimn;
 }
 
 int bufferUntodo(int file, enum Data data, int todo)
 {
-    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    struct Buffer *buffer = arrayPoly(file,1)->buffer+data;
     return todo*buffer->dimn*bufferType(buffer->type);
 }
 
 int bufferTodo(int file, enum Data data, int size)
 {
-    struct Buffer *buffer = arrayFile(file,1)->buffer+data;
+    struct Buffer *buffer = arrayPoly(file,1)->buffer+data;
     return size/(buffer->dimn*bufferType(buffer->type));
 }
 
@@ -97,7 +97,7 @@ enum Action dequeWrap(int state)
     int file = *deargCmdInt(1);
     enum Data sub = *deargCmdInt(1);
     updateContext(context);
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
     if (buffer->lock.write == 0) exitErrstr("wrap not locked\n");
     size_t size = buffer->dimn*bufferType(buffer->type);
     if (buffer->room) {
@@ -130,7 +130,7 @@ enum Action dequeWrap(int state)
 void enqueWrap(int context, int file, enum Data sub, int room)
 {
     updateContext(context);
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
     buffer->wrap = buffer->room;
     if (buffer->wrap == 0) buffer->wrap = 1;
     while (room > buffer->wrap) buffer->wrap *= 2;
@@ -143,7 +143,7 @@ enum Action dequeBuffer(int state)
     int file = *deargCmdInt(1);
     enum Data sub = *deargCmdInt(1);
     updateContext(context);
-    struct Buffer *buffer = &arrayFile(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
     if (buffer->lock.write == 0) exitErrstr("buffer not locked\n");
     int client = buffer->client;
     int size = buffer->dimn*bufferType(buffer->type);
@@ -200,7 +200,7 @@ void enqueUniform(int context, enum Server server)
 
 #define RENDER_DEARG \
     struct Render *render = deargRender(1); \
-    struct File *file = arrayFile(render->file,1); \
+    struct File *file = arrayPoly(render->file,1); \
     struct Code *shader = arrayCode(render->shader,1); \
     updateContext(render->context); \
     enum Data *vertex = shader->vertex; \
