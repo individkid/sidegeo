@@ -142,16 +142,33 @@ void file(void)
 
 void responseLayer(void)
 {
-    int tag = *delocCmdInt(1);
     int len = *delocCmdInt(1);
+    int path = *arrayCmdInt(len,1);
+    if (path != 1) exitErrstr("response too path\n");
+    int tag = *arrayCmdInt(1+len,1);
     useCmdInt(); xferReint(tag,len);
+    delocCmdInt(1); // tag
 }
 
 void responseProceed(void)
 {
+    int len = *delocCmdInt(1);
+    if (len != 0) exitErrstr("response too len\n");
+    int path = *delocCmdInt(1);
+    if (path != 1) exitErrstr("response too path\n");
     int tag = *delocCmdInt(1);
-    int len = sizeReint(tag);
-    *arrayReint(tag,len-1,1) = 1;
+    int size = sizeReint(tag);
+    *arrayReint(tag,size-1,1) = 1;
+}
+
+int openSlot(void)
+{
+    return -1; // TODO
+}
+
+void closeSlot(int slot)
+{
+    // TODO
 }
 
 // classify given plane and maintain topology
@@ -182,8 +199,7 @@ enum Action configureRefine(int state)
     int todo = bufferUnflat(file,VertSub,flat);
     resetBuffer(file,VertSub);
     updateBuffer(file,VertSub,0,todo,buf);
-    // in display 0, enque Coplane shader with renderClient follow
-    updateContext(0);
+    // enque Coplane shader with renderClient follow
     resetBuffer(file,VertBuf);
     enqueShader(Coplane,file,0,renderClient);
     // send Index event to get PointSub corresponding to VertSub
@@ -309,54 +325,21 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
     msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
 }
 
-#define CONFIGURE_RELOC(EVENT) \
-    *enlocCmdInt(1) = (int)EVENT; \
-    relocCmdInt(1); /*file*/ \
-    if (EVENT != Inflate) { \
-    relocCmdInt(1); /*base plane*/ \
-    int inlen = *relocCmdInt(1); \
-    relocCmdInt(inlen); /*inside planes*/ \
-    int outlen = *relocCmdInt(1); \
-    relocCmdInt(outlen);} /*outside planes*/ \
-    enqueMachine(configureSculpt);
-
-enum Action configureSculpt(int state)
+enum Action dequeClient(int state)
 {
-    int embed = *deargCmdInt(1);
     int file = *deargCmdInt(1);
-    struct File *ptr = arrayPoly(file,1);
-    int arg = 0;
-    if (embed != Inflate) {
-    deargCmdInt(1); // plane
-    int inlen = *deargCmdInt(1); deargCmdInt(inlen); // inside
-    int outlen = *deargCmdInt(1); deargCmdInt(outlen); // outside
-    arg = 3+inlen+outlen;}
-    if (state-- == 0) {
-    layer = uniqueLayer();
-    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
-    *enlocCmdHsInt(1) = file;
-    if (embed != Inflate) {
-    useCmdInt(); copyCmdHsInt(0,-arg,arg);}
-    *enlocCmdHsInt(1) = layer;
-    *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = embed; // Fill Hollow or Inflate
-    *enlocReint(layer,1) = 0;
-    return Continue;}
-    if (state-- == 0) {
-    return (arrayReint(layer,0,1) == 0 ? Defer : Continue);}
     for (int context = 0; context < sizeDisplay(); context++) {
     if (state-- == 0) {
-    if (sizeReint(layer) != 1) exitErrstr("layer too size\n");
-    delocReint(layer,1);
+    *enlocCmdHsInt(1) = 2;
     *enlocCmdHsInt(1) = context;
     *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1;
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = event; // Face or Frame
     return Continue;}
     if (state-- == 0) {
-    return (sizeReint(layer) == 0 ? Defer : Continue);}
-    if (state-- == 0) {
+    if (sizeReint(layer) == 0) return Defer;
     updateContext(context);
     int size = sizeReint(layer);
     int todo = bufferUnflat(file,data,size);
@@ -368,19 +351,44 @@ enum Action configureSculpt(int state)
     return Advance;
 }
 
+// TODO move xfer commands to configure
 void configureInflate(void)
 {
-    CONFIGURE_RELOC(Inflate)
+    int file = *delocCmdInt(1);
+    *enlocCmdHsInt(1) = 1; // inout size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = enqueClient;
+    *enlocCmdEvent(1) = Inflate;
 }
 
 void configureFill(void)
 {
-    CONFIGURE_RELOC(Fill)
+    int file = *arrayCmdInt(0,1);
+    int plane = *arrayCmdInt(1,1);
+    int inlen = *arrayCmdInt(2,1);
+    int outlen = *arrayCmdInt(3+inlen,1);
+    *enlocCmdHsInt(1) = 4+inlen+outlen; // inout size
+    useCmdInt(); xferCmdHsInt(4+inlen+outlen);
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = enqueClient;
+    *enlocCmdEvent(1) = Fill;
 }
 
 void configureHollow(void)
 {
-    CONFIGURE_RELOC(Hollow)
+    int file = *arrayCmdInt(0,1);
+    int plane = *arrayCmdInt(1,1);
+    int inlen = *arrayCmdInt(2,1);
+    int outlen = *arrayCmdInt(3+inlen,1);
+    *enlocCmdHsInt(1) = 4+inlen+outlen; // inout size
+    useCmdInt(); xferCmdHsInt(4+inlen+outlen);
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = enqueClient;
+    *enlocCmdEvent(1) = Hollow;
 }
 
 #define CLICK_ENLOC(STR) \
@@ -420,8 +428,7 @@ enum Action sculptClick(int state)
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Locate;
     return Continue;}
-    if (state-- == 0) {
-    return (sizeReint(layer) == 0 ? Defer : Continue);}
+    if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfigurer(1) = file;
     msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);

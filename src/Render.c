@@ -422,6 +422,13 @@ void enqueSwap(void)
     enqueShader(dishader,i,context,0);
 }
 
+void enqueClient(void)
+{
+    layer = uniqueLayer();
+    relocCmdInt(1); // file
+    enqueMachine(dequeClient);    
+}
+
 void enqueDishader(void)
 {
     for (int i = 0; i < sizeDisplay(); i++) {*enlocCmdInt(1) = i; enqueCommand(enqueSwap);}

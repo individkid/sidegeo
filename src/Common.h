@@ -105,7 +105,9 @@ enum Event {
     Inflate, // place: embed
     Face, // inout(filter), place, embed, tag: inout(face)
     Frame, // inout(filter), place, embed, tag: inout(frame)
-    Filter, // inout(boundary, filter), tag: tag
+    Other,
+    Both,
+    Swap,
     Divide, // inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex, // inout(boundary), place: inout(vertex)
     Index, // inout(boundary), place: inout(index)
@@ -207,8 +209,9 @@ struct Display {
     Myfloat basisMat[27];
     Myfloat affineMata[16]; // transformation state at click time
     Myfloat affineMatb[16]; // transformation due to roller
-    int pPoint;
-    int qPoint;
+    int pPoint; // pierced plane at click time
+    int qPoint; // file of pierced plane at click time
+    int rPoint; // slot in clipboard at click time
     Myfloat xPoint;  // position of pierce point at click time
     Myfloat yPoint;
     Myfloat zPoint;
@@ -571,6 +574,8 @@ DECLARE_TREE(Imager,int,int) // name index to image index
 DECLARE_LOCAL(Ready,int) // per state count of forward uses
 DECLARE_META(Image,int) // per state list of backward users
 DECLARE_POINTER(ForceInt,int) // pointer to int queue to force
+DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
+DECLARE_TREE(Count,int,int) // location in PcsIntPtr of match count
 
 DECLARE_LOCAL(Format,char) // modifiable copy of format string
 DECLARE_TREE(Macro,int,int) // val to replace key in format
@@ -593,7 +598,5 @@ DECLARE_LOCAL(Sync,int) // sideband inject position pipe
 DECLARE_LOCAL(Yield,int) // whether file is yielding
 DECLARE_LOCAL(Ignore,int) // ignored error count
 DECLARE_LOCAL(Helper,pthread_t) // thread handle
-DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
-DECLARE_TREE(Count,int,int) // location in PcsIntPtr of match count
 
 #endif

@@ -34,7 +34,9 @@ void setupEnum(void)
     val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate) < 0) exitErrstr("enum too event\n"); else *castEnum(Inflate) = val;
     val = handleEnum("Face"); if (val < 0 || insertEnum(Face) < 0) exitErrstr("enum too event\n"); else *castEnum(Face) = val;
     val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame) < 0) exitErrstr("enum too event\n"); else *castEnum(Frame) = val;
-    val = handleEnum("Filter"); if (val < 0 || insertEnum(Filter) < 0) exitErrstr("enum too event\n"); else *castEnum(Filter) = val;
+    val = handleEnum("Other"); if (val < 0 || insertEnum(Other) < 0) exitErrstr("enum too event\n"); else *castEnum(Other) = val;
+    val = handleEnum("Both"); if (val < 0 || insertEnum(Both) < 0) exitErrstr("enum too event\n"); else *castEnum(Both) = val;
+    val = handleEnum("Swap"); if (val < 0 || insertEnum(Swap) < 0) exitErrstr("enum too event\n"); else *castEnum(Swap) = val;
     val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
     val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
     val = handleEnum("Corner"); if (val < 0 || insertEnum(Corner) < 0) exitErrstr("enum too event\n"); else *castEnum(Corner) = val;
@@ -49,16 +51,19 @@ void haskellBefore(void)
 void haskellConsume(void *arg)
 {
     while (sizeEvent() > 0) {
-        filenum = *delocHsInt(1);
-        int size = *delocHsInt(1);
-        useHsInt(); xferInout(size);
-        enum Event event = *delocEvent(1);
-        int num = *castEnum(event);
-        if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
-        size = sizeInout();
-        *enlocHsCmdInt(1) = size;
-        useInout(); xferHsCmdInt(size);
-        *enlocHsCommand(1) = *delocHsCmd(1);}
+    filenum = *delocHsInt(1);
+    int size = *delocHsInt(1);
+    useHsInt(); xferInout(size);
+    enum Event event = *delocEvent(1);
+    int num = *castEnum(event);
+    if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
+    size = sizeInout();
+    *enlocHsCmdInt(1) = size;
+    useInout(); xferHsCmdInt(size);
+    size = *delocHsInt(1);
+    if  (size >= 0) {
+    useHsInt(); xferHsCmdInt(size);
+    *enlocHsCommand(1) = *delocHsCmd(1);}}
 }
 
 void haskellAfter(void)

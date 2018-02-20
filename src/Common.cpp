@@ -474,6 +474,8 @@ DEFINE_TREE(Imager,int,int);
 DEFINE_LOCAL(Ready,int)
 DEFINE_META(Image,int)
 DEFINE_POINTER(ForceInt,int)
+DEFINE_TREE(Base,struct QueueBase *,int)
+DEFINE_TREE(Count,int,int)
 
 DEFINE_LOCAL(Format,char)
 DEFINE_TREE(Macro,int,int)
@@ -496,6 +498,3 @@ DEFINE_LOCAL(Sync,int)
 DEFINE_LOCAL(Yield,int)
 DEFINE_LOCAL(Ignore,int)
 DEFINE_LOCAL(Helper,pthread_t)
-DEFINE_TREE(Base,struct QueueBase *,int)
-DEFINE_TREE(Count,int,int)
-
