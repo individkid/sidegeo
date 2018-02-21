@@ -210,7 +210,7 @@ int processInit(int len)
     int sidefd[2]; if (pipe(sidefd) != 0) exitErrstr("side pipe failed: %s\n",strerror(errno));
     int bandfd[2]; if (pipe(bandfd) != 0) exitErrstr("band pipe failed: %s\n",strerror(errno));
     int syncfd[2]; if (pipe(syncfd) != 0) exitErrstr("sync pipe failed: %s\n",strerror(errno));
-    // TODO set syncfd[0] nonblocking
+    if (fcntl(syncfd[0],F_SETFL,O_NONBLOCK) < 0) exitErrstr("sync fcntl failed: %s\n",strerror(errno));
     *arrayFile(thread,1) = file; helper.file = file;
     *arrayLoop(thread,1) = datw; helper.loop = datr;
     *arrayBack(thread,1) = sizw; helper.back = sizr;
