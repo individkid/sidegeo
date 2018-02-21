@@ -37,37 +37,12 @@ struct Helper {
     int band; // pipe for sideband sizes
     int sync; // pipe for sideband location
 } helper;
-/*
-forever,
- while read from file not eof,
-  read command from file at current location.
-  skip double dash nop.
-  check side band sync for pipe size.
-  send command to pipe size.
-  update current location.
- try for writelock of ridiculous length at current location.
- if writelock acquired,
-  find eof location.
- if writelock acquired but current location not eof,
-  release writelock.
- if writelock acquired and current location is eof,
-  block on read from back.
-  read from loop.
-  append to file.
-  append double dash nop.
-  check side band sync for pipe size.
-  send command to pipe size.
-  update current location.
-  release writelock.
- if writelock not acquired,
-  wait for readlock at current location of one byte.
-  release readlock.
-*/
 
 #define PROCESS_LOOP ".dat"
 #define PROCESS_BACK ".siz"
 #define PROCESS_STEP 20
 #define PROCESS_IGNORE 3
+#define PROCESS_LEN INT_MAX
 
 struct Helper helperInit(void)
 {
@@ -86,27 +61,108 @@ void errorinj(struct Helper *hlp, sigjmp_buf *env)
     longjmp(*env,-1);
 }
 
-#define READBUF(INDEX,FILE,SIZE,PIPE,BUF,LEN,LENGTH,POS,LIM) \
-    READPOS(INDEX,FILE,SIZE,POS) \
-    while (POS < LIM) { \
-        int len_ = PROCESS_STEP-LEN; \
-        if (LEN+len_ > LIM-POS) len_ = LIM-POS-LEN; \
-        if (read(FILE,BUF+LEN,len_) < 0) {ERRORINJ(INDEX,SIZE) return 0;} LEN += len_; \
-        if (LEN == 1 || (LEN > 2 && BUF[0] == '\n' && BUF[1] == '-' && BUF[2] == '-')) { \
-            if (write(SIZE,&LENGTH,sizeof(LENGTH)) != sizeof(LENGTH)) exitErrstr("helper too size\n"); LENGTH = 0; \
-            for (int i = 0; i < LEN-1; i++) BUF[i] = BUF[i+1]; LEN -= 1; POS += 1;} \
-        if (LEN > 1 && BUF[0] == '-' && BUF[1] == '-') { \
-            for (int i = 0; i < LEN-2; i++) BUF[i] = BUF[i+2]; LEN -= 2; POS += 2;} \
-        if (BUF[0] == '\n' && LEN < 3) exitErrstr("helper too len\n"); \
-        if (BUF[0] == '\n') BUF[0] = ' '; \
-        len_ = 0; while (len_ < LEN && BUF[len_] != '\n') len_++; \
-        if (write(PIPE,BUF,len_) != len_) exitErrstr("helper too pipe\n"); LENGTH += len_; \
-        for (int i = 0; i < LEN-len_; i++) BUF[i] = BUF[i+len_]; LEN -= len_; POS += len_;}
-
+/*
+forever,
+ while read from file not eof,
+  read command from file at current location.
+  leave triple dash at end.
+  check side band sync for pipe size.
+  send command to pipe size.
+  update current location to third dash or eof.
+ try for writelock of ridiculous length at current location.
+ if writelock acquired,
+  find triple dash at end or eof as end location.
+ if writelock acquired but current location not at end,
+  release writelock.
+ if writelock acquired and current location is at end,
+  block on read from loop back.
+  append to file overwriting triple dash.
+  append triple dash.
+  release writelock.
+ if writelock not acquired,
+  wait for readlock at current location of one byte.
+  release readlock.
+*/
 void *processHelper(void *arg)
 {
     struct Helper helper = helperInit();
-    // TODO see pseudocode
+    sigjmp_buf jmpenv = {0};
+    if (setjmp(jmpenv) != 0) return 0;
+    char buffer[PROCESS_STEP] = {0};
+    int buflen = 0;
+    int cmdlen = 0;
+    int filepos = 0;
+    int syncpos = -1;
+    while (1) {
+    while (1) {
+        if (lseek(helper.file,filepos,SEEK_SET) < 0) errorinj(&helper,&jmpenv);
+        int readlen = PROCESS_STEP-buflen;
+        int retlen = read(helper.file,buffer+buflen,readlen);
+        if (retlen < 0) errorinj(&helper,&jmpenv);
+        buflen += retlen; cmdlen += retlen; filepos += retlen;
+        int endlen = 0; while (endlen < 3 && endlen < buflen && buffer[endlen] == "\n--"[endlen]) endlen += 1;
+        if (retlen < readlen && endlen > 0 && endlen < 3 && buflen < 3) break;
+        if (endlen == 3) {
+            if (write(helper.size,&cmdlen,sizeof(cmdlen)) != sizeof(cmdlen)) exitErrstr("size too write\n");
+            for (int i = 3; i < buflen; i++) buffer[i-3] = buffer[i];
+            buflen -= 3; cmdlen = 0;}
+        if (buflen == 0) while (1) {
+        if (syncpos < 0) {
+            int retval = read(helper.sync,&syncpos,sizeof(syncpos));
+            if (retval < 0) exitErrstr("sync too read\n");
+            if (retval == 0) {syncpos = -1; break;}}
+        if (syncpos >= 0 && syncpos <= filepos-buflen) {
+            int size = 0; if (read(helper.band,&size,sizeof(size)) != sizeof(size)) exitErrstr("band too read\n");
+            char buf[size]; if (read(helper.side,buf,size) != size) exitErrstr("side too read\n");
+            if (write(helper.pipe,buf,size) != size) exitErrstr("pipe too write\n");
+            if (write(helper.size,&size,sizeof(size)) != sizeof(size)) exitErrstr("size too write\n");
+            syncpos = -1;}}
+        if (endlen > 0 && endlen < 3 && buflen > 2) {
+            if (write(helper.pipe,buffer,1) < 1) exitErrstr("pipe too write\n");
+            for (int i = 1; i < buflen; i++) buffer[i-1] = buffer[i];
+            buflen -= 1;}
+        int linelen = 0; while (linelen < buflen && buffer[linelen] != '\n') linelen += 1;
+        if (write(helper.pipe,buffer,linelen) < linelen) exitErrstr("pipe too write\n");
+        for (int i = linelen; i < buflen; i++) buffer[i-linelen] = buffer[i];
+        buflen -= linelen;
+        if (retlen < readlen && buflen == 0) break;}
+    struct flock lock = {0};
+    lock.l_start = filepos;
+    lock.l_len = PROCESS_LEN;
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    int retval = fcntl(helper.file,F_SETLK,&lock);
+    if (retval < 0 && errno != EAGAIN) errorinj(&helper,&jmpenv);
+    int atend = 0;
+    if (retval == 0) {
+        struct stat statbuf = {0};
+        if (fstat(helper.file,&statbuf) < 0) errorinj(&helper,&jmpenv);
+        if (statbuf.st_size == filepos && buflen == 0) atend = 1;}
+    if (retval == 0 && atend == 1) {
+        int size = 0;
+        if (read(helper.back,&size,sizeof(size)) != sizeof(size)) errorinj(&helper,&jmpenv);
+        char buf[size];
+        if (read(helper.loop,buf,size) != size) errorinj(&helper,&jmpenv);
+        if (lseek(helper.file,filepos,SEEK_SET) < 0) errorinj(&helper,&jmpenv);
+        if (write(helper.file,buf,size) != size) errorinj(&helper,&jmpenv);
+        if (write(helper.file,"\n--",3) != 3) errorinj(&helper,&jmpenv);
+    if (retval == 0) {
+        lock.l_start = filepos;
+        lock.l_len = PROCESS_LEN;
+        lock.l_type = F_UNLCK;
+        lock.l_whence = SEEK_SET;
+        if (fcntl(helper.file,F_SETLK,&lock) < 0) errorinj(&helper,&jmpenv);}
+    if (retval < 0) {
+        lock.l_start = filepos;
+        lock.l_len = 1;
+        lock.l_type = F_RDLCK;
+        lock.l_whence = SEEK_SET;
+        if (fcntl(helper.file,F_SETLKW,&lock) < 0) errorinj(&helper,&jmpenv);
+        lock.l_start = filepos;
+        lock.l_len = 1;
+        lock.l_type = F_UNLCK;
+        lock.l_whence = SEEK_SET;
+        if (fcntl(helper.file,F_SETLK,&lock) < 0) errorinj(&helper,&jmpenv);}}}
     return 0;
 }
 
@@ -143,7 +199,15 @@ int processInit(int len)
     int sidefd[2]; if (pipe(sidefd) != 0) exitErrstr("side pipe failed: %s\n",strerror(errno));
     int bandfd[2]; if (pipe(bandfd) != 0) exitErrstr("band pipe failed: %s\n",strerror(errno));
     int syncfd[2]; if (pipe(syncfd) != 0) exitErrstr("sync pipe failed: %s\n",strerror(errno));
-    insertCmnProcesses(sizefd[0]);
+    // TODO set syncfd[0] nonblocking
+    *arrayFile(thread,1) = file; helper.file = file;
+    *arrayLoop(thread,1) = datw; helper.loop = datr;
+    *arrayBack(thread,1) = sizw; helper.back = sizr;
+    *arrayPipe(thread,1) = pipefd[0]; helper.pipe = pipefd[1];
+    *arraySize(thread,1) = sizefd[0]; insertCmnProcesses(sizefd[0]); helper.size = sizefd[1];
+    *arraySide(thread,1) = sidefd[1]; helper.side = sidefd[0];
+    *arrayBand(thread,1) = bandfd[1]; helper.band = bandfd[0];
+    *arraySync(thread,1) = syncfd[1]; helper.sync = syncfd[0];
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     if (pthread_create(enlocHelper(1),0,processHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
