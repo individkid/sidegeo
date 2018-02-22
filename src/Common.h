@@ -588,13 +588,11 @@ DECLARE_POINTER(PrefixPtr,char)
 
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(File,int) // file handles
+DECLARE_LOCAL(Side,int) // sideband handles
 DECLARE_LOCAL(Loop,int) // fifo handles
 DECLARE_LOCAL(Back,int) // fifo handles
 DECLARE_LOCAL(Pipe,int) // data pipe handles
 DECLARE_LOCAL(Size,int) // size pipe handles
-DECLARE_LOCAL(Side,int) // sideband pipe
-DECLARE_LOCAL(Band,int) // sideband size pipe
-DECLARE_LOCAL(Sync,int) // sideband inject position pipe
 DECLARE_LOCAL(Yield,int) // whether file is yielding
 DECLARE_LOCAL(Ignore,int) // ignored error count
 DECLARE_LOCAL(Helper,pthread_t) // thread handle
