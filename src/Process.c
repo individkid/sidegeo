@@ -26,9 +26,6 @@
 #define PROCESS_STEP 20
 #define PROCESS_IGNORE 3
 #define PROCESS_LEN INT_MAX
-#define PROCESS_FIFO (1<<0)
-#define PROCESS_FCNTL (1<<1)
-#define PROCESS_FSTAT (1<<2)
 
 int processConfigure(int index, int len);
 int processOption(int len);
@@ -123,6 +120,16 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
     if (retlen < readlen && hlp->buflen == 0) break;}
 }
 
+int setlock(int fd, int pos, int len, int type, int wait)
+{
+    struct flock lock = {0};
+    lock.l_start = pos;
+    lock.l_len = len;
+    lock.l_type = type;
+    lock.l_whence = SEEK_SET;
+    return fcntl(fd,wait,&lock);
+}
+
 /*
 forever,
  while read from file not eof,
@@ -153,12 +160,7 @@ void *processHelper(void *arg)
     inithlp(hlp);
     while (1) {
     readbuf(hlp,env);
-    struct flock lock = {0};
-    lock.l_start = hlp->filepos;
-    lock.l_len = PROCESS_LEN;
-    lock.l_type = F_WRLCK;
-    lock.l_whence = SEEK_SET;
-    int retval = fcntl(hlp->file,F_SETLK,&lock);
+    int retval = setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_WRLCK,F_SETLK);
     if (retval < 0 && errno != EAGAIN) errorinj(hlp,env);
     int atend = 0;
     if (retval == 0) {
@@ -173,42 +175,25 @@ void *processHelper(void *arg)
         if (lseek(hlp->file,hlp->filepos,SEEK_SET) < 0) errorinj(hlp,env);
         if (hlp->filepos == 0 && write(hlp->file,"--",2) != 2) errorinj(hlp,env);
         if (write(hlp->file,buf,size) != size) errorinj(hlp,env);
-        if (write(hlp->file,"\n--",3) != 3) errorinj(hlp,env);
+        if (write(hlp->file,"\n--",3) != 3) errorinj(hlp,env);}
     if (retval == 0) {
-        lock.l_start = hlp->filepos;
-        lock.l_len = PROCESS_LEN;
-        lock.l_type = F_UNLCK;
-        lock.l_whence = SEEK_SET;
-        if (fcntl(hlp->file,F_SETLK,&lock) < 0) errorinj(hlp,env);}
+        if (setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}
     if (retval < 0) {
-        lock.l_start = hlp->filepos;
-        lock.l_len = 1;
-        lock.l_type = F_RDLCK;
-        lock.l_whence = SEEK_SET;
-        if (fcntl(hlp->file,F_SETLKW,&lock) < 0) errorinj(hlp,env);
-        lock.l_start = hlp->filepos;
-        lock.l_len = 1;
-        lock.l_type = F_UNLCK;
-        lock.l_whence = SEEK_SET;
-        if (fcntl(hlp->file,F_SETLK,&lock) < 0) errorinj(hlp,env);}}}
+        if (setlock(hlp->file,hlp->filepos,1,F_RDLCK,F_SETLKW) < 0) errorinj(hlp,env);
+        if (setlock(hlp->file,hlp->filepos,1,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}}
     return 0;
 }
 
-char *filename(const char *dot, const char *ext)
-{
-    
-}
-
-int openfile(const char *file, const char *dot, const char *ext, int flags, int setf, mode_t mode, mode_t *getm, int fifo)
+int openfile(const char *file, const char *dot, const char *ext, int flags, mode_t mode, int setf, mode_t *getm)
 {
     int hide = strlen(file); while (hide > 0 && file[hide-1] != '/') hide -= 1;
     int len = strlen(file)+strlen(dot)+strlen(ext)+1;
     char name[len]; for (int i = 0; i < len; i++) name[i] = 0;
     strncat(name,file,hide); strcat(name,dot); strcat(name,file+hide); strcat(name,ext);
-    if ((fifo&PROCESS_FIFO) && mkfifo(name,mode) < 0 && errno != EEXIST) return -1;
-    int fd = open(name,flags,mode);
-    if ((fifo&PROCESS_FCNTL) && fcntl(fd,F_SETFL,setf) < 0) return -1;
-    if (fifo&PROCESS_FSTAT) {
+    if (!(flags&O_CREAT) && mode && mkfifo(name,mode) < 0 && errno != EEXIST) return -1;
+    int fd = ((flags&O_CREAT) ? open(name,flags,mode) : open(name,flags));
+    if (setf && fcntl(fd,F_SETFL,setf) < 0) return -1;
+    if (getm) {
     struct stat statbuf = {0};
     if (fstat(fd,&statbuf) < 0) return -1;
     *getm = statbuf.st_mode;}
@@ -223,13 +208,13 @@ int processInit(int len)
     *enlocYield(1) = 0; *enlocIgnore(1) = 0;
     *enlocFile(1) = -1; *enlocSide(1) = -1;
     *enlocPipe(1) = -1; *enlocSize(1) = -1;
-    mode_t mode = 0;
-    int file = openfile(filename,"","",O_RDWR|O_CREAT,0,00660,&mode,PROCESS_FSTAT);
-    int side = openfile(filename,".",PROCESS_SIDE,O_RDWR|O_CREAT,0,mode,0,0);
-    int datr = openfile(filename,".",PROCESS_LOOP,O_RDONLY|O_NONBLOCK,0,mode,0,PROCESS_FIFO);
-    int datw = openfile(filename,".",PROCESS_LOOP,O_WRONLY,0,mode,0,PROCESS_FIFO);
-    int sizr = openfile(filename,".",PROCESS_BACK,O_RDONLY|O_NONBLOCK,O_RDONLY,mode,0,PROCESS_FIFO|PROCESS_FCNTL);
-    int sizw = openfile(filename,".",PROCESS_BACK,O_WRONLY,0,mode,0,PROCESS_FIFO);
+    mode_t mode = 00660;
+    int file = openfile(filename,"", "",          O_RDWR|O_CREAT,     mode,0,&mode);
+    int side = openfile(filename,".",PROCESS_SIDE,O_RDWR|O_CREAT,     mode,0,0);
+    int datr = openfile(filename,".",PROCESS_LOOP,O_RDONLY|O_NONBLOCK,mode,0,0);
+    int datw = openfile(filename,".",PROCESS_LOOP,O_WRONLY,           mode,0,0);
+    int sizr = openfile(filename,".",PROCESS_BACK,O_RDONLY|O_NONBLOCK,mode,O_RDONLY,0);
+    int sizw = openfile(filename,".",PROCESS_BACK,O_WRONLY,           mode,0,0);
     if (file < 0 || side < 0 || datr < 0 || datw < 0 || sizr < 0 || sizw < 0) return -1;
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("read pipe failed: %s\n",strerror(errno));
     int sizefd[2]; if (pipe(sizefd) != 0) exitErrstr("size pipe failed: %s\n",strerror(errno));
