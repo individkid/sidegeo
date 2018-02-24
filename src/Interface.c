@@ -429,6 +429,7 @@ enum Action sculptClick(int state)
     *enlocCmdEvent(1) = Locate;
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
+    *enlocCmdConfiguree(1) = 0;
     *enlocCmdConfigurer(1) = file;
     msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);

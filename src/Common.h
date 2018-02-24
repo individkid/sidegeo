@@ -413,6 +413,7 @@ DECLARE_FDSET(CmnProcesses,int)
 DECLARE_STAGE(CmnOption,char)
 DECLARE_STAGE(CmnConfigure,char)
 DECLARE_STAGE(CmnConfigurer,int)
+DECLARE_STAGE(CmnConfiguree,int)
 
 DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,enum Event)
@@ -468,6 +469,7 @@ DECLARE_SOURCE(CmdProcesses)
 DECLARE_STAGE(CmdOption,char)
 DECLARE_STAGE(CmdConfigure,char)
 DECLARE_STAGE(CmdConfigurer,int)
+DECLARE_STAGE(CmdConfiguree,int)
 
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,enum Event)
@@ -539,6 +541,7 @@ DECLARE_DEST(Processes)
 DECLARE_STAGE(Option,char)
 DECLARE_STAGE(Configure,char)
 DECLARE_STAGE(Configurer,int)
+DECLARE_STAGE(Configuree,int)
 
 DECLARE_SOURCE(PcsOutputs)
 DECLARE_STAGE(PcsOutput,char)
@@ -589,8 +592,7 @@ DECLARE_POINTER(PrefixPtr,char)
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(File,int) // file handles
 DECLARE_LOCAL(Side,int) // sideband handles
-DECLARE_LOCAL(Loop,int) // fifo handles
-DECLARE_LOCAL(Back,int) // fifo handles
+DECLARE_LOCAL(Fifo,int) // fifo handles
 DECLARE_LOCAL(Pipe,int) // data pipe handles
 DECLARE_LOCAL(Size,int) // size pipe handles
 DECLARE_LOCAL(Yield,int) // whether file is yielding
