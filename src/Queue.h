@@ -311,9 +311,9 @@ struct QueueStdin : QueueMutex {
     struct timespec notime;
     void (*func0)();
     void (*func1)();
-    QueueStdin(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *), void (*fnc4)(void *)) : QueueMutex(fnc3,fnc4) {
-        func0 = fnc2;
-        func1 = fnc5;
+    QueueStdin(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)()) : QueueMutex(fnc3,fnc4) {
+        func0 = fnc0;
+        func1 = fnc1;
     }
     virtual ~QueueStdin() {}
     virtual void signal()
@@ -370,11 +370,13 @@ struct QueueFdset : QueueMutex {
     struct timespec notime;
     void (*func0)();
     void (*func1)();
-    QueueFdset(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *), void (*fnc4)(void *)) : QueueMutex(fnc3,fnc4) {
+    int (*func)();
+    QueueFdset(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,fnc4) {
         FD_ZERO(&fds);
         maxfd = 0;
-        func0 = fnc2;
-        func1 = fnc5;
+        func0 = fnc0;
+        func1 = fnc1;
+        func = fnc;
     }
     virtual ~QueueFdset() {}
     virtual void insert(int fd) {if (fd > maxfd) maxfd = fd; FD_SET(fd, &fds);}
@@ -401,6 +403,7 @@ struct QueueFdset : QueueMutex {
     }
     virtual int delay()
     {
+        if ((*func)()) return 1;
         rfds = fds;
         int lenSel = pselect(maxfd+1, &rfds, 0, 0, 0, &saved);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
@@ -409,6 +412,7 @@ struct QueueFdset : QueueMutex {
     }
     virtual int nodelay()
     {
+        if ((*func)()) return 1;
         rfds = fds;
         int lenSel = pselect(maxfd+1, &rfds, 0, 0, &notime, 0);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
@@ -423,11 +427,11 @@ struct QueueTime : QueueMutex {
     long long (*func)();
     void (*func0)();
     void (*func1)();
-    QueueTime(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *), void (*fnc4)(void *), long long (*fnc)()) : QueueMutex(fnc3,fnc4)
+    QueueTime(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)(), long long (*fnc)()) : QueueMutex(fnc3,fnc4)
     {
         func = fnc;
-        func0 = fnc2;
-        func1 = fnc5;
+        func0 = fnc0;
+        func1 = fnc1;
     }
     virtual ~QueueTime() {}
     virtual void signal()
@@ -471,11 +475,11 @@ struct QueueCond : QueueMutex {
     pthread_cond_t cond;
     void (*func0)();
     void (*func1)();
-    QueueCond(void (*fnc2)(), void (*fnc5)(), void (*fnc3)(void *)) : QueueMutex(fnc3,0)
+    QueueCond(void (*fnc3)(void *), void (*fnc0)(), void (*fnc1)()) : QueueMutex(fnc3,0)
     {
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
-        func0 = fnc2;
-        func1 = fnc5;
+        func0 = fnc0;
+        func1 = fnc1;
     }
     virtual ~QueueCond()
     {

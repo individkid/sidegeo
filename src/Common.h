@@ -339,6 +339,13 @@ struct Change {
     int sub; // index of stock for value
     int map; // whether sub is packed or not
 };
+struct Header { // information about data appended to files
+    int siz; // number of bytes appended
+    int pos; // filepos indicating when to append sideband
+    int pid; // which process sideband belongs to
+    int neg; // whether this is sideband data
+    int idx; // which fifo to append to
+};
 
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
@@ -590,6 +597,8 @@ DECLARE_POINTER(NestPtr,int)
 DECLARE_POINTER(PrefixPtr,char)
 
 DECLARE_LOCAL(Stage,char) // copy of options for process
+DECLARE_LOCAL(Header,struct Header) // staged fifo headers
+DECLARE_LOCAL(Body,char) // staged fifo data
 DECLARE_LOCAL(File,int) // file handles
 DECLARE_LOCAL(Side,int) // sideband handles
 DECLARE_LOCAL(Fifo,int) // fifo handles

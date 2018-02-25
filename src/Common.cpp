@@ -273,6 +273,7 @@ void afterConsole(void);
 
 void processBefore(void);
 void processConsume(void *arg);
+int processDelay(void);
 void processProduce(void *arg);
 void processAfter(void);
 
@@ -297,7 +298,8 @@ inline bool operator!=(const Change &left, const Change &right) {return false;}
 inline bool operator!=(const State &left, const State &right) {return false;}
 inline bool operator!=(const Metric &left, const Metric &right) {return false;}
 inline bool operator!=(const Stream &left, const Stream &right) {return false;}
-inline bool operator!=(PaUtilRingBuffer &left, PaUtilRingBuffer &right) {return false;}
+inline bool operator!=(const PaUtilRingBuffer &left, const PaUtilRingBuffer &right) {return false;}
+inline bool operator!=(const Header &left, const Header &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
@@ -306,21 +308,21 @@ DEFINE_STAGE(CmnCmdFloat,Myfloat,CmnCmdInt)
 DEFINE_STAGE(CmnCmdByte,char,CmnCmdFloat)
 DEFINE_STAGE(CmnCmdCmd,Command,CmnCmdByte)
 
-DEFINE_STDIN(CmnOutputs,beforeConsole,afterConsole,consumeConsole,produceConsole)
+DEFINE_STDIN(CmnOutputs,consumeConsole,produceConsole,beforeConsole,afterConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
-DEFINE_FDSET(CmnProcesses,int,processBefore,processAfter,processConsume,processProduce)
+DEFINE_FDSET(CmnProcesses,int,processConsume,processProduce,processBefore,processAfter,processDelay)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigurer,int,CmnConfigure)
 DEFINE_STAGE(CmnConfiguree,int,CmnConfigurer)
 
-DEFINE_COND(CmnHaskells,haskellBefore,haskellAfter,haskellConsume)
+DEFINE_COND(CmnHaskells,haskellConsume,haskellBefore,haskellAfter)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnHsCmd,Command,CmnEvent)
 DEFINE_STAGE(CmnHsInt,int,CmnHsCmd)
 
-DEFINE_TIME(CmnTimewheels,timewheelBefore,timewheelAfter,timewheelConsume,timewheelProduce,timewheelDelay)
+DEFINE_TIME(CmnTimewheels,timewheelConsume,timewheelProduce,timewheelBefore,timewheelAfter,timewheelDelay)
 DEFINE_STAGE(CmnChange,struct Change,CmnTimewheels)
 DEFINE_STAGE(CmnControl,enum Control,CmnChange)
 DEFINE_STAGE(CmnTwInt,int,CmnControl)
@@ -490,6 +492,8 @@ DEFINE_POINTER(NestPtr,int)
 DEFINE_POINTER(PrefixPtr,char)
 
 DEFINE_LOCAL(Stage,char)
+DEFINE_LOCAL(Header,struct Header)
+DEFINE_LOCAL(Body,char)
 DEFINE_LOCAL(File,int)
 DEFINE_LOCAL(Side,int)
 DEFINE_LOCAL(Fifo,int)

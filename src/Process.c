@@ -33,12 +33,6 @@ int toggle = 0;
 int thread = 0;
 pthread_mutex_t mutex;
 pthread_cond_t cond;
-struct Header {
-    int siz;
-    int pos;
-    int pid;
-    int neg;
-};
 struct Helper {
     int file; // command el dash dash
     int side; // pos pid siz command
@@ -201,8 +195,9 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
     int len = strlen(file)+strlen(dot)+strlen(ext)+1;
     char name[len]; for (int i = 0; i < len; i++) name[i] = 0;
     strncat(name,file,hide); strcat(name,dot); strcat(name,file+hide); strcat(name,ext);
-    if (!(flags&O_CREAT) && mode && mkfifo(name,mode) < 0 && errno != EEXIST) return -1;
+    if (!(flags&O_CREAT) && mkfifo(name,mode) < 0 && errno != EEXIST) return -1;
     int fd = ((flags&O_CREAT) ? open(name,flags,mode) : open(name,flags));
+    if (fd < 0) return -1;
     if (setf && fcntl(fd,F_SETFL,setf) < 0) return -1;
     if (getm) {
     struct stat statbuf = {0};
@@ -220,10 +215,10 @@ int processInit(int len)
     *enlocFile(1) = -1; *enlocSide(1) = -1;
     *enlocPipe(1) = -1; *enlocSize(1) = -1;
     mode_t mode = 00660;
-    int file = openfile(filename,"", "",          O_RDWR|O_CREAT,     mode,0,&mode);
-    int side = openfile(filename,".",PROCESS_SIDE,O_RDWR|O_CREAT,     mode,0,0);
-    int datr = openfile(filename,".",PROCESS_FIFO,O_RDONLY|O_NONBLOCK,mode,O_RDONLY,0);
-    int datw = openfile(filename,".",PROCESS_FIFO,O_WRONLY,           mode,0,0);
+    int file = openfile(filename,"", "",         O_RDWR|O_CREAT,     mode,0,&mode);
+    int side = openfile(filename,"",PROCESS_SIDE,O_RDWR|O_CREAT,     mode,0,0);
+    int datr = openfile(filename,"",PROCESS_FIFO,O_RDONLY|O_NONBLOCK,mode,O_RDONLY,0);
+    int datw = openfile(filename,"",PROCESS_FIFO,O_WRONLY,           mode,0,0);
     if (file < 0 || side < 0 || datr < 0 || datw < 0) return -1;
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("read pipe failed: %s\n",strerror(errno));
     int flags = fcntl(pipefd[0],F_GETFL); if (flags < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
@@ -238,31 +233,6 @@ int processInit(int len)
     if (pthread_create(enlocHelper(1),0,processHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-    return 0;
-}
-
-int processWrite(int index, int writelen)
-{
-    char *writebuf = unlocPcsChar(writelen);
-    struct Header header = {0};
-    header.pid = getpid();
-    header.siz = writelen;
-    int fifo = *arrayFifo(index,1);
-    if (write(fifo,&header,sizeof(header)) != sizeof(header)) return -1;
-    if (write(fifo,writebuf,writelen) != writelen) return -1;
-    return 0;
-}
-
-int processSide(int index, int writelen)
-{
-    char *writebuf = unlocPcsChar(writelen);
-    struct Header header = {0};
-    header.pid = getpid();
-    header.siz = writelen;
-    header.neg = 1;
-    int fifo = *arrayFifo(index,1);
-    if (write(fifo,&header,sizeof(header)) != sizeof(header)) return -1;
-    if (write(fifo,writebuf,writelen) != writelen) return -1;
     return 0;
 }
 
@@ -313,13 +283,22 @@ void processBefore(void)
 void processConsume(void *arg)
 {
     while (sizeConfigurer() > 0) {
-        int neg = *delocConfiguree(1);
-        int idx = *delocConfigurer(1);
-        int len = lengthConfigure(0,'\n');
-        useConfigure(); xferPcsChar(len); delocConfigure(1);
-        if (neg) {if (processSide(idx,len) < 0) processError(idx);}
-        else {if (processWrite(idx,len) < 0) processError(idx);}}
+        struct Header header = {0};
+        header.siz = lengthConfigure(0,'\n');
+        header.pid = getpid();
+        header.neg = *delocConfiguree(1);
+        header.idx = *delocConfigurer(1);
+        *enlocHeader(1) = header;
+        useConfigure(); xferBody(header.siz); delocConfigure(1);}
     useOption(); xferStage(sizeOption());
+}
+
+int processDelay(void)
+{
+    if (toggle) return 0;
+    if (sizeStage() > 0) return 1;
+    if (sizeHeader() > 0) return 1;
+    return 0;
 }
 
 void processProduce(void *arg)
@@ -331,6 +310,10 @@ void processProduce(void *arg)
         if (len > 0) len = processConfigure(thread,len);
         if (len < 0) processError(thread);
         if (len == 0) *arrayYield(thread,1) = 1;}
+    else if (sizeHeader() > 0) {
+        struct Header *header = delocHeader(1);
+        if (write(*arrayFifo(header->idx,1),header,sizeof(struct Header)) != sizeof(struct Header)) processError(header->idx);
+        if (write(*arrayFifo(header->idx,1),delocBody(header->siz),header->siz) != header->siz) processError(header->idx);}
     else if (sizeStage() > 0) {
         int len = lengthStage(0,'\n');
         useStage(); xferPcsChar(len); delocStage(1);
