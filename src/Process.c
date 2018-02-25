@@ -295,7 +295,6 @@ void processConsume(void *arg)
 
 int processDelay(void)
 {
-    if (toggle) return 0;
     if (sizeStage() > 0) return 1;
     if (sizeHeader() > 0) return 1;
     return 0;
