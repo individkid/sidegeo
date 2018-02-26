@@ -29,6 +29,7 @@
 int processConfigure(int index, int len);
 int processOption(int len);
 
+int single = 0;
 int toggle = 0;
 int thread = 0;
 pthread_mutex_t mutex;
@@ -208,7 +209,6 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
 
 int processInit(int len)
 {
-    toggle = 1;
     thread = sizeFile();
     *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
     *enlocYield(1) = 0; *enlocIgnore(1) = 0;
@@ -228,7 +228,7 @@ int processInit(int len)
     *arraySide(thread,1) = side; helper.side = side;
     *arrayFifo(thread,1) = datw; helper.fifo = datr;
     *arrayPipe(thread,1) = pipefd[0]; helper.pipe = pipefd[1];
-    *arraySize(thread,1) = sizefd[0]; insertCmnProcesses(sizefd[0]); helper.size = sizefd[1];
+    *arraySize(thread,1) = sizefd[0]; helper.size = sizefd[1];
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     if (pthread_create(enlocHelper(1),0,processHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
@@ -246,18 +246,15 @@ int processRead(int pipe, int size)
     return len;
 }
 
-void processYield(void)
-{
-    thread = (thread+1) % sizeFile(); if (sizeOption() > 0) toggle = 0;
-}
-
 void processError(int index)
 {
     if (pthread_cancel(*arrayHelper(index,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
-    if (*arraySize(index,1) >= 0) removeCmnProcesses(*arraySize(index,1));
+    if (*arrayYield(index,1)) {
+        removeCmnProcesses(*arraySize(index,1));
+        *arrayYield(index,1) = 0;
+        toggle -= 1;}
     *arrayFile(index,1) = *arraySide(index,1) = -1; *arrayFifo(index,1) = -1;
     *arrayPipe(index,1) = *arraySize(index,1) = -1;
-    processYield();
 }
 
 DEFINE_MSGSTR(PcsOutput)
@@ -295,20 +292,38 @@ void processConsume(void *arg)
 
 int processDelay(void)
 {
-    if (sizeStage() > 0) return 1;
+    if (single) return 0;
     if (sizeHeader() > 0) return 1;
+    if (sizeStage() > 0) return 1;
     return 0;
 }
 
 void processProduce(void *arg)
 {
-    if (toggle && *arrayPipe(thread,1) < 0) processYield();
-    else if (toggle && *arrayYield(thread,1) && !readableCmnProcesses(*arrayPipe(thread,1))) processYield();
-    else if (toggle) {
+    if (single) {
+        if (*arrayYield(thread,1) == 0) exitErrstr("thread too yield\n");
+        if (readableCmnProcesses(*arrayPipe(thread,1)) == 0) exitErrstr("thread too readable\n");
         int len = processRead(*arrayPipe(thread,1),*arraySize(thread,1));
-        if (len > 0) len = processConfigure(thread,len);
-        if (len < 0) processError(thread);
-        if (len == 0) *arrayYield(thread,1) = 1;}
+        if (len >= 0) len = processConfigure(thread,len);
+        if (len < 0) {single = 0; processError(thread);}
+        if (len == 0) {
+        *arrayYield(thread,1) = 0;
+        removeCmnProcesses(*arraySize(thread,1));
+        single = 0; toggle -= 1; thread = (thread+1) % sizePipe();
+        if (toggle != 0) exitErrstr("toggle too zero\n");}}
+    else if (toggle && *arrayYield(thread,1) == 0) {
+        thread = (thread+1) % sizePipe();}
+    else if (toggle && readableCmnProcesses(*arrayPipe(thread,1)) == 0) {
+        *arrayYield(thread,1) = 0;
+        removeCmnProcesses(*arraySize(thread,1));
+        toggle -= 1; thread = (thread+1) % sizePipe();}
+    else if (toggle) {
+        for (int i = 0; i < sizeYield(); i++)
+        if (i != thread && *arrayYield(i,1)) {
+        *arrayYield(i,1) = 0;
+        removeCmnProcesses(*arraySize(i,1));
+        toggle -= 1;}
+        single = 1;}
     else if (sizeHeader() > 0) {
         struct Header *header = delocHeader(1);
         if (write(*arrayFifo(header->idx,1),header,sizeof(struct Header)) != sizeof(struct Header)) processError(header->idx);
@@ -319,8 +334,17 @@ void processProduce(void *arg)
         len = processOption(len);
         if (len < 0) processComplain(-len);
         if (len > 0) len = processInit(len);
-        if (len < 0) processError(thread);}
-    else toggle = 1;
+        if (len < 0) processError(thread);
+        else {
+        insertCmnProcesses(*arraySize(thread,1));
+        *arrayYield(thread,1) = 1;
+        toggle += 1; single = 1;}}
+    else {
+        for (int i = 0; i < sizeSize(); i++)
+        if (*arraySize(i,1) >= 0) {
+        *arrayYield(i,1) = 1;
+        insertCmnProcesses(*arraySize(i,1));
+        toggle += 1;}}
 }
 
 void processAfter(void)
