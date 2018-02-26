@@ -209,6 +209,9 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
 
 int processInit(int len)
 {
+    for (int i = 0; i < sizeSize(); i++)
+    if (*arraySize(i,1) >= 0)
+    removeCmnProcesses(*arraySize(i,1));
     thread = sizeFile(); toggle += 1; single = 1;
     *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
     *enlocIgnore(1) = 0;
@@ -306,19 +309,18 @@ void processProduce(void *arg)
         if (len >= 0) len = processConfigure(thread,len);
         if (len < 0) {single = 0; processError(thread);}
         if (len == 0) {
-        removeCmnProcesses(*arraySize(thread,1));
-        single = 0; toggle -= 1; thread = (thread+1) % sizePipe();
-        if (toggle != 0) exitErrstr("toggle too zero\n");}}
-    else if (toggle && *arraySize(thread,1) < 0) {
-        thread = (thread+1) % sizePipe();}
-    else if (toggle && readableCmnProcesses(*arrayPipe(thread,1)) == 0) {
-        toggle -= 1; thread = (thread+1) % sizePipe();}
+        for (int i = 0; i < sizeSize(); i++)
+        if (i != thread && *arraySize(i,1) >= 0)
+        insertCmnProcesses(*arraySize(i,1));
+        toggle = 1; single = 0;}}
     else if (toggle) {
         for (int i = 0; i < sizeSize(); i++)
-        if (i != thread && *arraySize(i,1) >= 0) {
+        if (*arraySize(i,1) >= 0 && readableCmnProcesses(*arraySize(i,1))) {
+        thread = i; break;}
+        for (int i = 0; i < sizeSize(); i++)
+        if (i != thread && *arraySize(i,1) >= 0)
         removeCmnProcesses(*arraySize(i,1));
-        toggle -= 1;}
-        single = 1;}
+        toggle = 0; single = 1;}
     else if (sizeHeader() > 0) {
         struct Header *header = delocHeader(1);
         if (write(*arrayFifo(header->idx,1),header,sizeof(struct Header)) != sizeof(struct Header)) processError(header->idx);
@@ -330,9 +332,7 @@ void processProduce(void *arg)
         if (len < 0) processComplain(-len);
         if (len > 0) len = processInit(len);
         if (len < 0) processError(thread);}
-    else {
-        for (int i = 0; i < sizeSize(); i++)
-        if (*arraySize(i,1) >= 0) toggle += 1;}
+    else toggle = 1;
 }
 
 void processAfter(void)
