@@ -403,7 +403,7 @@ struct QueueFdset : QueueMutex {
     }
     virtual int delay()
     {
-        if ((*func)()) return 1;
+        if ((*func)()) return nodelay();
         rfds = fds;
         int lenSel = pselect(maxfd+1, &rfds, 0, 0, 0, &saved);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
@@ -412,12 +412,11 @@ struct QueueFdset : QueueMutex {
     }
     virtual int nodelay()
     {
-        if ((*func)()) return 1;
         rfds = fds;
         int lenSel = pselect(maxfd+1, &rfds, 0, 0, &notime, 0);
         if (lenSel < 0 && errno == EINTR) lenSel = 0;
         if (lenSel < 0) exitErrstr("pselect failed: %s\n", strerror(errno));
-        return lenSel;
+        return (lenSel || (*func)());
     }
 };
 
