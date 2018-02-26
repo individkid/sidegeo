@@ -604,7 +604,6 @@ DECLARE_LOCAL(Side,int) // sideband handles
 DECLARE_LOCAL(Fifo,int) // fifo handles
 DECLARE_LOCAL(Pipe,int) // data pipe handles
 DECLARE_LOCAL(Size,int) // size pipe handles
-DECLARE_LOCAL(Yield,int) // whether file is yielding
 DECLARE_LOCAL(Ignore,int) // ignored error count
 DECLARE_LOCAL(Helper,pthread_t) // thread handle
 
