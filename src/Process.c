@@ -26,6 +26,7 @@
 #define PROCESS_IGNORE 3
 #define PROCESS_LEN INT_MAX
 #define PROCESS_END "\n--"
+#define PROCESS_ENDS 3
 
 int processConfigure(int index, int len);
 int processOption(int len);
@@ -40,11 +41,11 @@ struct Helper {
     int fifo; // data to append
     int pipe; // helper side of pipe
     int size; // helper side of sizes
-    int endlen;
-    int cmdlen;
-    int cmdnum;
-    int filepos;
-    int sidepos;
+    int endlen; // progress through terminator
+    int cmdlen; // written to pipe
+    int cmdnum; // written to size
+    int filepos; // read and scanned
+    int sidepos; // location to read
     struct Header header;
 } helper = {0};
 
@@ -94,21 +95,26 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
     if (retlen < 0) errorinj(hlp,env);
     int offset = 0;
     for (int i = 0; i < retlen; i++) {
-        if (buffer[i] == PROCESS_END[hlp->endlen]) hlp->endlen += 1;
-        else {hlp->filepos += hlp->endlen+1; hlp->cmdlen += hlp->endlen+1; hlp->endlen = 0;}
-        if (hlp->endlen == 3 && i > offset+3) {
-            int len = i-3-offset;
-            if (hlp->cmdnum > 0 && write(hlp->pipe,buffer+offset,len) != len) exitErrstr("pipe too offset\n");
-            offset += len;}
-        if (hlp->endlen == 3) {
+        int match = (buffer[i] == PROCESS_END[hlp->endlen]);
+        if (match && hlp->endlen == 0) {
+            int len = i-offset;
+            if (hlp->cmdnum > 0 && write(hlp->pipe,buffer+offset,len) != len) exitErrstr("pipe too end\n");
+            hlp->cmdlen += len; offset = i;}
+        if (!match && hlp->endlen > 0) {
+            int len = hlp->endlen;
+            if (hlp->cmdnum > 0 && write(hlp->pipe,PROCESS_END,len) != len) exitErrstr("pipe too end\n");
+            hlp->cmdlen += len; hlp->endlen = 0;}
+        if (match) {hlp->endlen += 1; offset += 1;}
+        else hlp->cmdlen += 1;
+        hlp->filepos += 1;
+        if (hlp->endlen == PROCESS_ENDS) {
             int len = sizeof(hlp->cmdlen);
             if (hlp->cmdnum > 0 && write(hlp->size,&hlp->cmdlen,len) != len) exitErrstr("size too length");
             hlp->cmdlen = 0; hlp->endlen = 0; hlp->cmdnum += 1;
             readside(hlp,env);}}
-    if (hlp->endlen < 3) {
+    if (retlen > offset+hlp->endlen) {
         int len = retlen-offset-hlp->endlen;
-        if (hlp->cmdnum > 0 && write(hlp->pipe,buffer+offset,len) == len) exitErrstr("pipe too len\n");
-        hlp->filepos += len;}
+        if (hlp->cmdnum > 0 && write(hlp->pipe,buffer+offset,len) != len) exitErrstr("pipe too len\n");}
     if (retlen < PROCESS_STEP) break;}
 }
 
