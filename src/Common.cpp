@@ -355,6 +355,7 @@ DEFINE_LOCAL(Seqmax,int)
 DEFINE_META(Seqnum,int)
 DEFINE_META(Range,int)
 DEFINE_META(Client,char)
+DEFINE_LOCAL(Same,int)
 
 DEFINE_DEST(Commands,CmnCommands,CmnCommands)
 DEFINE_STAGE(Command,Command,Commands)

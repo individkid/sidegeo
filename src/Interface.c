@@ -234,11 +234,9 @@ enum Action configureRefine(int state)
     if (state-- == 0) {
     // wait for wrt in layer
     if (sizeReint(layer) == 0) return Defer;
-    // append plane to file's planebuf in each display
+    // append plane to file's planebuf
     updateBuffer(file,VersorBuf,plane,1,&share->versor);
-    for (int i = 0; i < sizeDisplay(); i++) {
-    updateContext(i);
-    updateBuffer(file,PlaneBuf,plane,1,share->plane);}
+    updateBuffer(file,PlaneBuf,plane,1,share->plane);
     // send divide event with proceed response
     int len = sizeReint(layer);
     *enlocCmdHsInt(1) = len;

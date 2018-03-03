@@ -460,6 +460,7 @@ DECLARE_LOCAL(Seqmax,int)
 DECLARE_META(Seqnum,int)
 DECLARE_META(Range,int)
 DECLARE_META(Client,char)
+DECLARE_LOCAL(Same,int)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
