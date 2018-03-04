@@ -105,9 +105,9 @@ enum Event {
     Inflate, // place: embed
     Face, // inout(filter), place, embed, tag: inout(face)
     Frame, // inout(filter), place, embed, tag: inout(frame)
-    Other,
-    Both,
-    Swap,
+    Other, // move given plane membership from one context to another context
+    Both, // copy given plane membership from one context to another context
+    Swap, // swap given context membership of one plane with another plane
     Divide, // inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex, // inout(boundary), place: inout(vertex)
     Index, // inout(boundary), place: inout(index)
@@ -265,6 +265,7 @@ struct Share { // per file state shared across displays
     Myfloat plane[3]; // new plane
     int versor; // versor for new plane
     int size; // number of planes per display
+    int client[Datas]; // sometimes client data is shared between displays
 };
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers]; // uniforms used by program
@@ -460,7 +461,6 @@ DECLARE_LOCAL(Seqmax,int)
 DECLARE_META(Seqnum,int)
 DECLARE_META(Range,int)
 DECLARE_META(Client,char)
-DECLARE_LOCAL(Same,int)
 
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)

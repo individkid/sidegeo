@@ -422,11 +422,11 @@ void enqueSwap(void)
     enqueShader(dishader,i,context,0);
 }
 
-void enqueClient(void)
+void enqueFilter(void)
 {
     layer = uniqueLayer();
     relocCmdInt(1); // file
-    enqueMachine(dequeClient);    
+    enqueMachine(dequeFilter);    
 }
 
 void enqueDishader(void)

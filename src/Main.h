@@ -77,6 +77,7 @@
 extern int layer;
 extern struct Display *current;
 extern Myfloat affineMat[16];
+extern const enum Event event;
 
 DECLARE_MSGSTR(CmdBuf)
 DECLARE_MSGSTR(CmdOutput)
@@ -130,7 +131,7 @@ enum Action renderLayer(int state);
 void enqueShader(enum Shader shader, int file, int display, Machine follow);
 void enqueDishader(void);
 void enquePershader(void);
-void enqueClient(void);
-enum Action dequeClient(int state);
+void enqueFilter(void);
+enum Action dequeFilter(int state);
 
 #endif

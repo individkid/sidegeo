@@ -323,7 +323,7 @@ void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
     msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
 }
 
-enum Action dequeClient(int state)
+enum Action dequeFilter(int state)
 {
     int file = *deargCmdInt(1);
     for (int context = 0; context < sizeDisplay(); context++) {
@@ -357,7 +357,7 @@ void configureInflate(void)
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = file;
-    *enlocCmdHsCmd(1) = enqueClient;
+    *enlocCmdHsCmd(1) = enqueFilter;
     *enlocCmdEvent(1) = Inflate;
 }
 
@@ -371,7 +371,7 @@ void configureFill(void)
     useCmdInt(); xferCmdHsInt(4+inlen+outlen);
     *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = file;
-    *enlocCmdHsCmd(1) = enqueClient;
+    *enlocCmdHsCmd(1) = enqueFilter;
     *enlocCmdEvent(1) = Fill;
 }
 
@@ -385,7 +385,7 @@ void configureHollow(void)
     useCmdInt(); xferCmdHsInt(4+inlen+outlen);
     *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = file;
-    *enlocCmdHsCmd(1) = enqueClient;
+    *enlocCmdHsCmd(1) = enqueFilter;
     *enlocCmdEvent(1) = Hollow;
 }
 

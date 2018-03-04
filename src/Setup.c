@@ -119,10 +119,13 @@ Myuint locationBuffer(enum Data data)
     return loc;
 }
 
-int setupClient(enum Data data)
+int setupClient(int file, enum Data data)
 {
-    while (sizeSame() < data) *enlocSame(1) = 0;
-    int share = *arraySame(data,1);
+    while (sizeShare() < file) {
+        struct Share init = {0};
+        *enlocShare(1) = init;}
+    struct Share *ptr = arrayShare(file,1);
+    int share = ptr->client[data];
     if (share > 0)
     SWITCH(data,PlaneBuf)
     FALL(VersorBuf)
@@ -134,7 +137,7 @@ int setupClient(enum Data data)
     usedSeqnum(client);
     usedRange(client);
     usedClient(client);
-    *arraySame(data,1) = client;
+    ptr->client[data] = client;
     return client;
 }
 
@@ -147,19 +150,19 @@ void setupFile(int name)
     file->name = name;
     identmat(file->saved,4);
     identmat(file->ratio,4);
-    setupBuffer(file->buffer+PlaneBuf,"plane",locationBuffer(PlaneBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(PlaneBuf));
-    setupBuffer(file->buffer+VersorBuf,"versor",locationBuffer(VersorBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(VersorBuf));
-    setupBuffer(file->buffer+PointBuf,"point",locationBuffer(PointBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(PointBuf));
-    setupBuffer(file->buffer+PierceBuf,"pierce",locationBuffer(PierceBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(PierceBuf));
-    setupBuffer(file->buffer+VertBuf,"vertex",locationBuffer(VertBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(VertBuf));
-    setupBuffer(file->buffer+CnstrBuf,"construct",locationBuffer(CnstrBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(CnstrBuf));
-    setupBuffer(file->buffer+DimnBuf,"dimension",locationBuffer(DimnBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(DimnBuf));
-    setupBuffer(file->buffer+SideBuf,"side",locationBuffer(SideBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(SideBuf));
-    setupBuffer(file->buffer+HalfBuf,"half",locationBuffer(HalfBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(HalfBuf));
-    setupBuffer(file->buffer+FaceSub,"face",locationBuffer(FaceSub),GL_UNSIGNED_INT,FACE_DIMENSIONS,setupClient(FaceSub));
-    setupBuffer(file->buffer+FrameSub,"frame",locationBuffer(FrameSub),GL_UNSIGNED_INT,FRAME_DIMENSIONS,setupClient(FrameSub));
-    setupBuffer(file->buffer+VertSub,"vertex",locationBuffer(VertSub),GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,setupClient(VertSub));
-    setupBuffer(file->buffer+CnstrSub,"construct",locationBuffer(CnstrSub),GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,setupClient(CnstrSub));
+    setupBuffer(file->buffer+PlaneBuf,"plane",locationBuffer(PlaneBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(sub,PlaneBuf));
+    setupBuffer(file->buffer+VersorBuf,"versor",locationBuffer(VersorBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(sub,VersorBuf));
+    setupBuffer(file->buffer+PointBuf,"point",locationBuffer(PointBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,PointBuf));
+    setupBuffer(file->buffer+PierceBuf,"pierce",locationBuffer(PierceBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,PierceBuf));
+    setupBuffer(file->buffer+VertBuf,"vertex",locationBuffer(VertBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,VertBuf));
+    setupBuffer(file->buffer+CnstrBuf,"construct",locationBuffer(CnstrBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(sub,CnstrBuf));
+    setupBuffer(file->buffer+DimnBuf,"dimension",locationBuffer(DimnBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(sub,DimnBuf));
+    setupBuffer(file->buffer+SideBuf,"side",locationBuffer(SideBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(sub,SideBuf));
+    setupBuffer(file->buffer+HalfBuf,"half",locationBuffer(HalfBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(sub,HalfBuf));
+    setupBuffer(file->buffer+FaceSub,"face",locationBuffer(FaceSub),GL_UNSIGNED_INT,FACE_DIMENSIONS,setupClient(sub,FaceSub));
+    setupBuffer(file->buffer+FrameSub,"frame",locationBuffer(FrameSub),GL_UNSIGNED_INT,FRAME_DIMENSIONS,setupClient(sub,FrameSub));
+    setupBuffer(file->buffer+VertSub,"vertex",locationBuffer(VertSub),GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,setupClient(sub,VertSub));
+    setupBuffer(file->buffer+CnstrSub,"construct",locationBuffer(CnstrSub),GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,setupClient(sub,CnstrSub));
 }
 
 void updateFile(int ctx, int sub, int cpy)
