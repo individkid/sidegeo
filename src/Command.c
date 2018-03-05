@@ -88,9 +88,9 @@ void commandBefore()
     *enlocRedo(1) = ptrVoid();
     *enlocRedo(1) = ptrRender();
     *enlocCmdBuf(1) = 0;
-    msgstrCmdByte("Sculpt");
+    msgstrCmdByte("Sculpt",0);
     enqueCommand(display); // main display
-    msgstrCmdByte("");
+    msgstrCmdByte("preview",0);
     enqueCommand(file); // preview file
 #ifdef BRINGUP
     enqueCommand(&bringupBuiltin);

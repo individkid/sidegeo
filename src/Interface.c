@@ -104,8 +104,7 @@ void display(void)
     useCmdByte(); xferCmdBuf(len+1);
     setupDisplay(name);
     updateContext(new);
-    for (enum Shader shader = 0; shader < Shaders; shader++) {
-    setupCode(shader);}
+    for (enum Shader shader = 0; shader < Shaders; shader++) setupCode(shader);
     if (new > 0) {
     struct Display *save = arrayDisplay(0,1);
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
@@ -132,7 +131,7 @@ void file(void)
     int sub = sizePoly();
     setupFile(name);
     struct File *file = arrayPoly(sub,1);
-    SWITCH(mark[Target],Plane) file->fixed = (file->name > 0);
+    SWITCH(mark[Target],Plane) file->fixed = (sub>0);
     CASE(Polytope) file->fixed = 0;
     CASE(Alternate) file->fixed = (context==save);
     CASE(Session) file->fixed = 0;
@@ -516,16 +515,6 @@ void bringupBuiltin(void)
         3,0,1,
     };
 
-    if (sizeDisplay() == 0) {
-        msgstrCmdByte("%s",0,"Sculpt");
-        enqueCommand(display);
-        enqueCommand(bringupBuiltin);
-        return;}
-    if (sizePoly() == 0) {
-        msgstrCmdByte("%s",0,"bringup");
-        enqueCommand(file);
-        enqueCommand(bringupBuiltin);
-        return;}
     updateContext(0);
     updateBuffer(0,PlaneBuf,0,NUM_PLANES,plane);
     updateBuffer(0,VersorBuf,0,NUM_PLANES,versor);

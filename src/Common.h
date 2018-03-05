@@ -359,7 +359,7 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
     if (trm == (char)-1) len -= 1; \
     else buf[len] = trm; \
     int sub = size##NAME(); \
-    memcpy(enloc##NAME(len),buf,len); \
+    memcpy(enloc##NAME(len+1),buf,len+1); \
     return sub; \
 }
 

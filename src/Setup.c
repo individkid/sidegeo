@@ -18,94 +18,6 @@
 
 #include "Main.h"
 
-void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn, int client)
-{
-    struct Buffer buffer = {0};
-    buffer.name = name;
-    glGenBuffers(1, &buffer.handle);
-    glGenQueries(1, &buffer.query);
-    buffer.loc = loc;
-    buffer.type = type;
-    buffer.dimn = dimn;
-    buffer.client = client;
-    if (loc != INVALID_LOCATION) {
-    glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
-    glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    *ptr = buffer;
-}
-
-void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
-{
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
-    int client = buffer->client;
-    int size = buffer->dimn*bufferType(buffer->type);
-    done *= size; todo *= size;
-    int lim = sizeRange(client);
-    *arraySeqmax(client,1) += 1;
-    int max = *arraySeqmax(client,1);
-    int loc = 0;
-    for (int i = 0; i < lim; i++) {
-        int len = *delocRange(client,1);
-        int num = *delocSeqnum(client,1);
-        if (loc+len <= done) {
-            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
-        else if (loc < done && loc+len <= done+todo) {
-            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,len-(done-loc));
-            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
-        else if (loc < done) {
-            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,todo);
-            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);
-            int post = len-pre-todo; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
-        else if (loc == done && loc+len <= done+todo) {
-            delocClient(client,len);
-            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
-        else if (loc+len <= done+todo) {
-            delocClient(client,len);}
-        else if (loc < done+todo) {
-            int pre = done+todo-loc; delocClient(client,pre);
-            int post = len-pre; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
-        else {
-            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
-        loc += len;}
-    if (loc < done) {
-        int pre = done-loc;
-        *enlocRange(client,1) = pre+todo; *enlocSeqnum(client,1) = max;
-        for (int i = 0; i < pre; i++) *enlocRange(client,1) = 0;
-        memcpy(enlocClient(client,todo),data,todo);}
-    else if (loc == done) {
-        *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
-        memcpy(enlocClient(client,todo),data,todo);}
-}
-
-void *dndateBuffer(int file, enum Data sub, int done, int todo)
-{
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
-    int client = buffer->client;
-    int base = bufferUntodo(file,sub,done);
-    int size = bufferUntodo(file,sub,todo);
-    return (void *)arrayClient(client,base,size);
-}
-
-void resetBuffer(int file, enum Data sub)
-{
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
-    int client = buffer->client;
-    int lim = sizeRange(client);
-    int len = sizeClient(client);
-    delocRange(client,lim);
-    delocSeqnum(client,lim);
-    delocClient(client,len);
-}
-
-int limitBuffer(int file, enum Data sub)
-{
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
-    int client = buffer->client;
-    int size = sizeClient(client);
-    return bufferTodo(file,sub,size);
-}
-
 Myuint locationBuffer(enum Data data)
 {
     Myuint loc = INVALID_LOCATION;
@@ -117,172 +29,6 @@ Myuint locationBuffer(enum Data data)
     CASE(DimnBuf) loc = DIMENSION_LOCATION;
     DEFAULT(loc = INVALID_LOCATION;)
     return loc;
-}
-
-int setupClient(int file, enum Data data)
-{
-    while (sizeShare() < file) {
-        struct Share init = {0};
-        *enlocShare(1) = init;}
-    struct Share *ptr = arrayShare(file,1);
-    int share = ptr->client[data];
-    if (share > 0)
-    SWITCH(data,PlaneBuf)
-    FALL(VersorBuf)
-    FALL(PointBuf)
-    return share;
-    DEFAULT()
-    int client = usageClient();
-    *enlocSeqmax(1) = 0;
-    usedSeqnum(client);
-    usedRange(client);
-    usedClient(client);
-    ptr->client[data] = client;
-    return client;
-}
-
-void setupFile(int name)
-{
-    int sub = sizePoly();
-    struct File *file = enlocPoly(1);
-    struct File init = {0};
-    *file = init;
-    file->name = name;
-    identmat(file->saved,4);
-    identmat(file->ratio,4);
-    setupBuffer(file->buffer+PlaneBuf,"plane",locationBuffer(PlaneBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(sub,PlaneBuf));
-    setupBuffer(file->buffer+VersorBuf,"versor",locationBuffer(VersorBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(sub,VersorBuf));
-    setupBuffer(file->buffer+PointBuf,"point",locationBuffer(PointBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,PointBuf));
-    setupBuffer(file->buffer+PierceBuf,"pierce",locationBuffer(PierceBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,PierceBuf));
-    setupBuffer(file->buffer+VertBuf,"vertex",locationBuffer(VertBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,VertBuf));
-    setupBuffer(file->buffer+CnstrBuf,"construct",locationBuffer(CnstrBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(sub,CnstrBuf));
-    setupBuffer(file->buffer+DimnBuf,"dimension",locationBuffer(DimnBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(sub,DimnBuf));
-    setupBuffer(file->buffer+SideBuf,"side",locationBuffer(SideBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(sub,SideBuf));
-    setupBuffer(file->buffer+HalfBuf,"half",locationBuffer(HalfBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(sub,HalfBuf));
-    setupBuffer(file->buffer+FaceSub,"face",locationBuffer(FaceSub),GL_UNSIGNED_INT,FACE_DIMENSIONS,setupClient(sub,FaceSub));
-    setupBuffer(file->buffer+FrameSub,"frame",locationBuffer(FrameSub),GL_UNSIGNED_INT,FRAME_DIMENSIONS,setupClient(sub,FrameSub));
-    setupBuffer(file->buffer+VertSub,"vertex",locationBuffer(VertSub),GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,setupClient(sub,VertSub));
-    setupBuffer(file->buffer+CnstrSub,"construct",locationBuffer(CnstrSub),GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,setupClient(sub,CnstrSub));
-}
-
-void updateFile(int ctx, int sub, int cpy)
-{
-    struct File *file = arrayDisplayPoly(ctx,sub,1);
-    struct File *copy = arrayPoly(cpy,1);
-    file->tweak = copy->tweak;
-    file->fixed = copy->fixed;
-    file->last = copy->last;
-    copymat(file->saved,copy->saved,4);
-    copymat(file->ratio,copy->ratio,4);
-    for (enum Data i = 0; i < Datas; i++) {
-    struct Buffer *buffer = copy->buffer+i;
-    int client = buffer->client;
-    int size = sizeClient(client);
-    int todo = bufferTodo(cpy, i, size);
-    char *buf = arrayClient(client,0,size);
-    int save = contextHandle;
-    updateContext(ctx);
-    updateBuffer(sub, i, 0, todo, buf);
-    updateContext(save);}
-}
-
-void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
-{
-    struct Uniform uniform = {0};
-    SWITCH(server,Invalid) uniform.name = "invalid";
-    CASE(Basis) uniform.name = "basis";
-    CASE(Affine) uniform.name = "affine";
-    CASE(Feather) uniform.name = "feather";
-    CASE(Arrow) uniform.name = "arrow";
-    CASE(Cutoff) uniform.name = "cutoff";
-    CASE(Slope) uniform.name = "slope";
-    CASE(Aspect) uniform.name = "aspect";
-    DEFAULT(exitErrstr("invalid server uniform\n");)
-    uniform.handle = glGetUniformLocation(program, uniform.name);
-    *ptr = uniform;
-}
-
-void updateAffine(struct File *ptr)
-{
-    int posedge = (ptr->fixed && !ptr->last);
-    int negedge = (!ptr->fixed && ptr->last);
-    ptr->last = ptr->fixed;
-    if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),affineMat,4);
-    if (negedge) jumpmat(invmat(copymat(ptr->ratio,affineMat,4),4),ptr->saved,4);
-    if (ptr->fixed) copymat(ptr->sent,ptr->saved,4);
-    else timesmat(copymat(ptr->sent,ptr->ratio,4),affineMat,4);
-}
-
-void updateUniform(enum Server server, int file, enum Shader shader)
-{
-    struct Uniform *uniform = arrayCode(shader,1)->uniform+server;
-    SWITCH(server,Invalid)
-        glUniform1fv(uniform->handle,2,invalid);
-    CASE(Basis)
-        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
-    CASE(Affine)
-        if (file < 0) exitErrstr("affine too file\n");
-        struct File *ptr = arrayPoly(file,1);
-        updateAffine(ptr);
-        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->sent);
-    CASE(Feather) {
-        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) {
-            Myfloat xpoint, ypoint, zpoint;
-            if (layer) {
-            xpoint = *delocRefloat(layer,1);
-            ypoint = *delocRefloat(layer,1);
-            zpoint = *delocRefloat(layer,1);}
-            else {
-            xpoint = xPoint;
-            ypoint = yPoint;
-            zpoint = zPoint;}
-            glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
-        CASE(Adpoint)
-            if (file < 0) exitErrstr("affine too file\n");
-            struct Share *ptr = arrayShare(file,1);
-            Myfloat *base = basisMat+ptr->versor*9;
-            Myfloat xVec[3] = {base[0]+ptr->plane[0],base[1]+ptr->plane[0],base[2]+ptr->plane[0]};
-            glUniform3f(uniform->handle,xVec[0],xVec[1],xVec[2]);
-        DEFAULT(exitErrstr("feather too shader\n");)}
-    CASE(Arrow) {
-        SWITCH(shader,Perplane) FALL(Perpoint) {
-            Myfloat xpoint, ypoint, zpoint;
-            if (layer) {
-            xpoint = *delocRefloat(layer,1);
-            ypoint = *delocRefloat(layer,1);
-            zpoint = *delocRefloat(layer,1);}
-            else {
-            xpoint = xPoint*slope;
-            ypoint = yPoint*slope;
-            zpoint = 1.0;}
-            glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
-        CASE(Adpoint)
-            if (file < 0) exitErrstr("affine too file\n");
-            struct Share *ptr = arrayShare(file,1);
-            Myfloat *base = basisMat+ptr->versor*9;
-            Myfloat xVec[3] = {base[0]+ptr->plane[0],base[1]+ptr->plane[0],base[2]+ptr->plane[0]};
-            Myfloat yVec[3] = {base[0]+ptr->plane[1],base[1]+ptr->plane[1],base[2]+ptr->plane[1]};
-            Myfloat zVec[3] = {base[0]+ptr->plane[2],base[1]+ptr->plane[2],base[2]+ptr->plane[2]};
-            Myfloat yDif[3]; plusvec(scalevec(copyvec(yDif,xVec,3),-1.0,3),yVec,3);
-            Myfloat zDif[3]; plusvec(scalevec(copyvec(zDif,xVec,3),-1.0,3),zVec,3);
-            Myfloat normal[3]; crossvec(copyvec(normal,yDif,3),zDif);
-            if (normal[ptr->versor] < 0.0) scalevec(normal,-1.0,3);
-            glUniform3f(uniform->handle,normal[0],normal[1],normal[2]);
-        DEFAULT(exitErrstr("arrow too shader\n");)}
-    CASE(Cutoff)
-        glUniform1f(uniform->handle,cutoff);
-    CASE(Slope)
-        glUniform1f(uniform->handle,slope);
-    CASE(Aspect) {
-#ifdef __APPLE__
-        glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
-#ifdef __linux__
-        glViewport(0, 0, xSiz, ySiz);
-#endif
-        aspect = (Myfloat)ySiz/(Myfloat)xSiz;
-        glUniform1f(uniform->handle,aspect);}
-    DEFAULT(exitErrstr("invalid server uniform\n");)
 }
 
 enum Data bufferVertex(int i, enum Shader shader)
@@ -519,6 +265,95 @@ extern const char *repointVertex;
 extern const char *repointGeometry;
 extern const char *repointFragment;
 
+void displayCursor(GLFWwindow *display, double xpos, double ypos);;
+void displayClose(GLFWwindow* ptr);
+void displayClick(GLFWwindow *ptr, int button, int action, int mods);
+void displayCursor(GLFWwindow *ptr, double xpos, double ypos);
+void displayScroll(GLFWwindow *ptr, double xoffset, double yoffset);
+void displayKey(GLFWwindow* ptr, int key, int scancode, int action, int mods);
+void displayLocation(GLFWwindow *ptr, int xloc, int yloc);
+void displaySize(GLFWwindow *ptr, int width, int height);
+void displayRefresh(GLFWwindow *ptr);
+
+void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn, int client)
+{
+    struct Buffer buffer = {0};
+    buffer.name = name;
+    glGenBuffers(1, &buffer.handle);
+    glGenQueries(1, &buffer.query);
+    buffer.loc = loc;
+    buffer.type = type;
+    buffer.dimn = dimn;
+    buffer.client = client;
+    if (loc != INVALID_LOCATION) {
+    glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
+    glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);}
+    *ptr = buffer;
+}
+
+int setupClient(int file, enum Data data)
+{
+    while (sizeShare() < file) {
+        struct Share init = {0};
+        *enlocShare(1) = init;}
+    struct Share *ptr = arrayShare(file,1);
+    int share = ptr->client[data];
+    if (share > 0)
+    SWITCH(data,PlaneBuf)
+    FALL(VersorBuf)
+    FALL(PointBuf)
+    return share;
+    DEFAULT()
+    int client = usageClient();
+    *enlocSeqmax(1) = 0;
+    usedSeqnum(client);
+    usedRange(client);
+    usedClient(client);
+    ptr->client[data] = client;
+    return client;
+}
+
+void setupFile(int name)
+{
+    int sub = sizePoly();
+    struct File *file = enlocPoly(1);
+    struct File init = {0};
+    *file = init;
+    file->name = name;
+    identmat(file->saved,4);
+    identmat(file->ratio,4);
+    setupBuffer(file->buffer+PlaneBuf,"plane",locationBuffer(PlaneBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(sub,PlaneBuf));
+    setupBuffer(file->buffer+VersorBuf,"versor",locationBuffer(VersorBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(sub,VersorBuf));
+    setupBuffer(file->buffer+PointBuf,"point",locationBuffer(PointBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,PointBuf));
+    setupBuffer(file->buffer+PierceBuf,"pierce",locationBuffer(PierceBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,PierceBuf));
+    setupBuffer(file->buffer+VertBuf,"vertex",locationBuffer(VertBuf),GL_FLOAT,POINT_DIMENSIONS,setupClient(sub,VertBuf));
+    setupBuffer(file->buffer+CnstrBuf,"construct",locationBuffer(CnstrBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(sub,CnstrBuf));
+    setupBuffer(file->buffer+DimnBuf,"dimension",locationBuffer(DimnBuf),GL_UNSIGNED_INT,SCALAR_DIMENSIONS,setupClient(sub,DimnBuf));
+    setupBuffer(file->buffer+SideBuf,"side",locationBuffer(SideBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(sub,SideBuf));
+    setupBuffer(file->buffer+HalfBuf,"half",locationBuffer(HalfBuf),GL_FLOAT,SCALAR_DIMENSIONS,setupClient(sub,HalfBuf));
+    setupBuffer(file->buffer+FaceSub,"face",locationBuffer(FaceSub),GL_UNSIGNED_INT,FACE_DIMENSIONS,setupClient(sub,FaceSub));
+    setupBuffer(file->buffer+FrameSub,"frame",locationBuffer(FrameSub),GL_UNSIGNED_INT,FRAME_DIMENSIONS,setupClient(sub,FrameSub));
+    setupBuffer(file->buffer+VertSub,"vertex",locationBuffer(VertSub),GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,setupClient(sub,VertSub));
+    setupBuffer(file->buffer+CnstrSub,"construct",locationBuffer(CnstrSub),GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,setupClient(sub,CnstrSub));
+}
+
+void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
+{
+    struct Uniform uniform = {0};
+    SWITCH(server,Invalid) uniform.name = "invalid";
+    CASE(Basis) uniform.name = "basis";
+    CASE(Affine) uniform.name = "affine";
+    CASE(Feather) uniform.name = "feather";
+    CASE(Arrow) uniform.name = "arrow";
+    CASE(Cutoff) uniform.name = "cutoff";
+    CASE(Slope) uniform.name = "slope";
+    CASE(Aspect) uniform.name = "aspect";
+    DEFAULT(exitErrstr("invalid server uniform\n");)
+    uniform.handle = glGetUniformLocation(program, uniform.name);
+    *ptr = uniform;
+}
+
 void setupCode(enum Shader shader)
 {
     while (sizeCode() < shader) {struct Code code = {0}; *enlocCode(1) = code;}
@@ -553,16 +388,6 @@ void setupCode(enum Shader shader)
     for (int i = 0; (temp = code->reader[i]) < Servers; i++) updateUniform(temp,-1,shader);
     glUseProgram(0);
 }
-
-void displayCursor(GLFWwindow *display, double xpos, double ypos);;
-void displayClose(GLFWwindow* ptr);
-void displayClick(GLFWwindow *ptr, int button, int action, int mods);
-void displayCursor(GLFWwindow *ptr, double xpos, double ypos);
-void displayScroll(GLFWwindow *ptr, double xoffset, double yoffset);
-void displayKey(GLFWwindow* ptr, int key, int scancode, int action, int mods);
-void displayLocation(GLFWwindow *ptr, int xloc, int yloc);
-void displaySize(GLFWwindow *ptr, int width, int height);
-void displayRefresh(GLFWwindow *ptr);
 
 void setupDisplay(int name)
 {
@@ -624,6 +449,153 @@ void setupDisplay(int name)
     if (current == 0) for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
 
+void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
+{
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    int client = buffer->client;
+    int size = buffer->dimn*bufferType(buffer->type);
+    done *= size; todo *= size;
+    int lim = sizeRange(client);
+    *arraySeqmax(client,1) += 1;
+    int max = *arraySeqmax(client,1);
+    int loc = 0;
+    for (int i = 0; i < lim; i++) {
+        int len = *delocRange(client,1);
+        int num = *delocSeqnum(client,1);
+        if (loc+len <= done) {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        else if (loc < done && loc+len <= done+todo) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,len-(done-loc));
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc < done) {
+            int pre = done-loc; *enlocRange(client,1) = pre; *enlocSeqnum(client,1) = num; relocClient(client,pre); delocClient(client,todo);
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);
+            int post = len-pre-todo; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else if (loc == done && loc+len <= done+todo) {
+            delocClient(client,len);
+            *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max; memcpy(enlocClient(client,todo),data,todo);}
+        else if (loc+len <= done+todo) {
+            delocClient(client,len);}
+        else if (loc < done+todo) {
+            int pre = done+todo-loc; delocClient(client,pre);
+            int post = len-pre; *enlocRange(client,1) = post; *enlocSeqnum(client,1) = num; relocClient(client,post);}
+        else {
+            *enlocRange(client,1) = len; *enlocSeqnum(client,1) = num; relocClient(client,len);}
+        loc += len;}
+    if (loc < done) {
+        int pre = done-loc;
+        *enlocRange(client,1) = pre+todo; *enlocSeqnum(client,1) = max;
+        for (int i = 0; i < pre; i++) *enlocRange(client,1) = 0;
+        memcpy(enlocClient(client,todo),data,todo);}
+    else if (loc == done) {
+        *enlocRange(client,1) = todo; *enlocSeqnum(client,1) = max;
+        memcpy(enlocClient(client,todo),data,todo);}
+}
+
+void updateFile(int ctx, int sub, int cpy)
+{
+    struct File *file = arrayDisplayPoly(ctx,sub,1);
+    struct File *copy = arrayPoly(cpy,1);
+    file->tweak = copy->tweak;
+    file->fixed = copy->fixed;
+    file->last = copy->last;
+    copymat(file->saved,copy->saved,4);
+    copymat(file->ratio,copy->ratio,4);
+    for (enum Data i = 0; i < Datas; i++) {
+    struct Buffer *buffer = copy->buffer+i;
+    int client = buffer->client;
+    int size = sizeClient(client);
+    int todo = bufferTodo(cpy, i, size);
+    char *buf = arrayClient(client,0,size);
+    int save = contextHandle;
+    updateContext(ctx);
+    updateBuffer(sub, i, 0, todo, buf);
+    updateContext(save);}
+}
+
+void updateAffine(struct File *ptr)
+{
+    int posedge = (ptr->fixed && !ptr->last);
+    int negedge = (!ptr->fixed && ptr->last);
+    ptr->last = ptr->fixed;
+    if (posedge) timesmat(copymat(ptr->saved,ptr->ratio,4),affineMat,4);
+    if (negedge) jumpmat(invmat(copymat(ptr->ratio,affineMat,4),4),ptr->saved,4);
+    if (ptr->fixed) copymat(ptr->sent,ptr->saved,4);
+    else timesmat(copymat(ptr->sent,ptr->ratio,4),affineMat,4);
+}
+
+void updateUniform(enum Server server, int file, enum Shader shader)
+{
+    struct Uniform *uniform = arrayCode(shader,1)->uniform+server;
+    SWITCH(server,Invalid)
+        glUniform1fv(uniform->handle,2,invalid);
+    CASE(Basis)
+        glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
+    CASE(Affine)
+        if (file < 0) exitErrstr("affine too file\n");
+        struct File *ptr = arrayPoly(file,1);
+        updateAffine(ptr);
+        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->sent);
+    CASE(Feather) {
+        SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) {
+            Myfloat xpoint, ypoint, zpoint;
+            if (layer) {
+            xpoint = *delocRefloat(layer,1);
+            ypoint = *delocRefloat(layer,1);
+            zpoint = *delocRefloat(layer,1);}
+            else {
+            xpoint = xPoint;
+            ypoint = yPoint;
+            zpoint = zPoint;}
+            glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
+        CASE(Adpoint)
+            if (file < 0) exitErrstr("affine too file\n");
+            struct Share *ptr = arrayShare(file,1);
+            Myfloat *base = basisMat+ptr->versor*9;
+            Myfloat xVec[3] = {base[0]+ptr->plane[0],base[1]+ptr->plane[0],base[2]+ptr->plane[0]};
+            glUniform3f(uniform->handle,xVec[0],xVec[1],xVec[2]);
+        DEFAULT(exitErrstr("feather too shader\n");)}
+    CASE(Arrow) {
+        SWITCH(shader,Perplane) FALL(Perpoint) {
+            Myfloat xpoint, ypoint, zpoint;
+            if (layer) {
+            xpoint = *delocRefloat(layer,1);
+            ypoint = *delocRefloat(layer,1);
+            zpoint = *delocRefloat(layer,1);}
+            else {
+            xpoint = xPoint*slope;
+            ypoint = yPoint*slope;
+            zpoint = 1.0;}
+            glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
+        CASE(Adpoint)
+            if (file < 0) exitErrstr("affine too file\n");
+            struct Share *ptr = arrayShare(file,1);
+            Myfloat *base = basisMat+ptr->versor*9;
+            Myfloat xVec[3] = {base[0]+ptr->plane[0],base[1]+ptr->plane[0],base[2]+ptr->plane[0]};
+            Myfloat yVec[3] = {base[0]+ptr->plane[1],base[1]+ptr->plane[1],base[2]+ptr->plane[1]};
+            Myfloat zVec[3] = {base[0]+ptr->plane[2],base[1]+ptr->plane[2],base[2]+ptr->plane[2]};
+            Myfloat yDif[3]; plusvec(scalevec(copyvec(yDif,xVec,3),-1.0,3),yVec,3);
+            Myfloat zDif[3]; plusvec(scalevec(copyvec(zDif,xVec,3),-1.0,3),zVec,3);
+            Myfloat normal[3]; crossvec(copyvec(normal,yDif,3),zDif);
+            if (normal[ptr->versor] < 0.0) scalevec(normal,-1.0,3);
+            glUniform3f(uniform->handle,normal[0],normal[1],normal[2]);
+        DEFAULT(exitErrstr("arrow too shader\n");)}
+    CASE(Cutoff)
+        glUniform1f(uniform->handle,cutoff);
+    CASE(Slope)
+        glUniform1f(uniform->handle,slope);
+    CASE(Aspect) {
+#ifdef __APPLE__
+        glViewport(0, 0, xSiz*2, ySiz*2);
+#endif
+#ifdef __linux__
+        glViewport(0, 0, xSiz, ySiz);
+#endif
+        aspect = (Myfloat)ySiz/(Myfloat)xSiz;
+        glUniform1f(uniform->handle,aspect);}
+    DEFAULT(exitErrstr("invalid server uniform\n");)
+}
+
 void updateContext(int sub)
 {
     if (current == 0) exitErrstr("display too current\n");
@@ -643,4 +615,32 @@ void updateDisplay(GLFWwindow *ptr)
     int sub = 0;
     while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
     updateContext(sub);
+}
+
+void *dndateBuffer(int file, enum Data sub, int done, int todo)
+{
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    int client = buffer->client;
+    int base = bufferUntodo(file,sub,done);
+    int size = bufferUntodo(file,sub,todo);
+    return (void *)arrayClient(client,base,size);
+}
+
+void resetBuffer(int file, enum Data sub)
+{
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    int client = buffer->client;
+    int lim = sizeRange(client);
+    int len = sizeClient(client);
+    delocRange(client,lim);
+    delocSeqnum(client,lim);
+    delocClient(client,len);
+}
+
+int limitBuffer(int file, enum Data sub)
+{
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    int client = buffer->client;
+    int size = sizeClient(client);
+    return bufferTodo(file,sub,size);
 }
