@@ -27,6 +27,8 @@ enum Act {Aft,Suf,Str,Inj,End,Uni,Wil,Wnt};
 
 DEFINE_MSGSTR(CmdBuf)
 DEFINE_MSGSTR(CmdOutput)
+DEFINE_MSGSTR(CmdByte)
+DEFINE_MSGSTR(CmdConfigure)
 
 void displayError(int error, const char *description)
 {
@@ -47,10 +49,6 @@ int main(int argc, char **argv)
     GLenum err = glewInit();
     if (GLEW_OK != err) {
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
-#endif
-
-#ifdef BRINGUP
-    enqueCommand(&bringupBuiltin);
 #endif
 
     int condition = 1<<Not;

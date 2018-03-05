@@ -620,8 +620,6 @@ void setupDisplay(int name)
     basisMat[i] = (one ? 1.0 : 0.0);}
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    setupFile(sizeCmdBuf());
-    msgstrCmdBuf("preview",0);
     current = save;
     if (current == 0) for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }

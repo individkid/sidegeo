@@ -26,9 +26,6 @@ const enum Event event = Frame;
 const enum Data data = FrameSub;
 #endif
 
-DEFINE_MSGSTR(CmdConfigure)
-DEFINE_MSGSTR(CmdByte)
-
 void inject(void)
 {
     char chr = *delocCmdInt(1);
@@ -102,9 +99,10 @@ void metric(void)
 void display(void)
 {
     int new = sizeDisplay();
-    setupDisplay(sizeCmdBuf());
+    int name = sizeCmdBuf();
     int len = lengthCmdByte(0,0);
     useCmdByte(); xferCmdBuf(len+1);
+    setupDisplay(name);
     updateContext(new);
     for (enum Shader shader = 0; shader < Shaders; shader++) {
     setupCode(shader);}
@@ -125,14 +123,16 @@ void display(void)
 void file(void)
 {
     int save = contextHandle;
+    int name = sizeCmdBuf();
+    int len = lengthCmdByte(0,0);
+    if (len > 0) {useCmdByte(); xferCmdBuf(len+1);}
+    else name = 0;
     for (int context = 0; context < sizeDisplay(); context++) {
     updateContext(context);
     int sub = sizePoly();
-    setupFile(sizeCmdBuf());
-    int len = lengthCmdByte(0,0);
-    useCmdByte(); xferCmdBuf(len+1);
+    setupFile(name);
     struct File *file = arrayPoly(sub,1);
-    SWITCH(mark[Target],Plane) file->fixed = 1;
+    SWITCH(mark[Target],Plane) file->fixed = (file->name > 0);
     CASE(Polytope) file->fixed = 0;
     CASE(Alternate) file->fixed = (context==save);
     CASE(Session) file->fixed = 0;

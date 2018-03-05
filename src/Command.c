@@ -88,6 +88,13 @@ void commandBefore()
     *enlocRedo(1) = ptrVoid();
     *enlocRedo(1) = ptrRender();
     *enlocCmdBuf(1) = 0;
+    msgstrCmdByte("Sculpt");
+    enqueCommand(display); // main display
+    msgstrCmdByte("");
+    enqueCommand(file); // preview file
+#ifdef BRINGUP
+    enqueCommand(&bringupBuiltin);
+#endif
 }
 
 void commandAfter()

@@ -81,6 +81,8 @@ extern const enum Event event;
 
 DECLARE_MSGSTR(CmdBuf)
 DECLARE_MSGSTR(CmdOutput)
+DECLARE_MSGSTR(CmdByte)
+DECLARE_MSGSTR(CmdConfigure)
 
 int uniqueLayer(void);
 void enqueCommand(Command cmd);
@@ -92,6 +94,8 @@ enum Action renderLayer(int state);
 
 void target(void);
 void only(void);
+void display(void);
+void file(void);
 void responseLayer(void);
 int openSlot(void);
 void closeSlot(int slot);
