@@ -69,22 +69,10 @@ void leftTransform(void)
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     if (mark[Target] == Plane) {
     rPoint = openSlot();
-    if (event == Face) {
-        // TODO copy from qPoint PlaneBuf planes indicated by FaceSub vector subscripted by pPoint
-        // copy to 0 PlaneBuf vector subscripted by rPoint
-    }
-    else {
-        // TODO copy from qPoint PointBuf points indicated by FrameSub vector subscripted by pPoint
-        // copy to 0 PointBuf vector subscripted by rPoint
-    }
-    *enlocCmdHsInt(1) = 3; // inout size
-    *enlocCmdHsInt(1) = pPoint;
-    *enlocCmdHsInt(1) = qPoint;
-    *enlocCmdHsInt(1) = rPoint;
-    *enlocCmdHsInt(1) = 1; // passthrough size
-    *enlocCmdHsInt(1) = pPoint;
-    *enlocCmdHsCmd(1) = enqueFilter;
-    *enlocCmdEvent(1) = Swap;}
+    *enlocCmdInt(1) = pPoint;
+    *enlocCmdInt(1) = qPoint;
+    *enlocCmdInt(1) = rPoint;
+    enqueMachine(transformClick);}
 }
 
 void leftManipulate(void)

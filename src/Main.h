@@ -99,6 +99,7 @@ void file(void);
 void responseLayer(void);
 int openSlot(void);
 void closeSlot(int slot);
+enum Action transformClick(int state);
 #ifdef BRINGUP
 void bringupBuiltin(void);
 #endif

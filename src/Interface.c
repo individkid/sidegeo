@@ -388,6 +388,22 @@ void configureHollow(void)
     *enlocCmdEvent(1) = Hollow;
 }
 
+enum Action transformClick(int state)
+{
+    int plane = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
+    int slot = *deargCmdInt(1);
+    // send Face/Frame event with responseLayer to get
+    //  PlaneBuf/PointBuf elements referred to by
+    //  vector number plane in FaceSub/FrameSub of file number file.
+    // send Face/Frame event with responseLayer to get
+    //  FaceSub/FrameSub vector number slot in plane number zero.
+    // copy vectors from PlaneBuf/PointBuf in file to preview.
+    // send Swap event to swap visibility of plane and slot.
+    //  with enqueFilter response.
+    return Advance;
+}
+
 #define CLICK_ENLOC(STR) \
     *enlocCmdInt(1) = contextHandle; \
     *enlocCmdInt(1) = qPoint; \
@@ -448,78 +464,3 @@ void hollowClick(void)
 {
     CLICK_ENLOC(hollow)
 }
-
-#ifdef BRINGUP
-#define NUM_PLANES 4
-#define NUM_POINTS 4
-#define NUM_FACES 3
-#define NUM_FRAMES 3
-#define NUM_SIDES 3
-
-void bringupBuiltin(void)
-{
-    // f = 1
-    // h^2 = f^2 - 0.5^2
-    // a + b = h
-    // a > b
-    // a^2 = b^2 + 0.5^2 = (h - a)^2 + 0.5^2 = h^2 - 2ha + a^2 + 0.5^2
-    // 2ha = h^2 + 0.5^2
-    // a = (h^2 + 0.5^2)/(2h) = 1/(2h)
-    // a^2 = (h^2 + 0.5^2)^2/(4h^2)
-    // i^2 = f^2 - a^2
-    // p + q = i
-    // p > q
-    // p^2 = q^2 + a^2 = (i - p)^2 + a^2 = i^2 - 2ip + p^2 + a^2
-    // 2ip = i^2 + a^2
-    // p = (i^2 + a^2)/(2i) = 1/(2i)
-    Myfloat z = 0.0;
-    Myfloat f = 1.0; // length of edges
-    Myfloat g = 0.5; // midpoint on edge from corner
-    Myfloat fs = f * f;
-    Myfloat gs = g * g;
-    Myfloat hs = fs - gs;
-    Myfloat h = sqrt(hs); // height of triangle
-    Myfloat hd = h + h;
-    Myfloat a = fs / hd; // distance from corner to center of triangle
-    Myfloat b = h - a; // distance from base to center of triangle
-    Myfloat as = a * a;
-    Myfloat is = fs - as;
-    Myfloat i = sqrt(is); // height of tetrahedron
-    Myfloat id = i + i;
-    Myfloat p = fs / id; // distance from vertex to center of tetrahedron
-    Myfloat q = i - p; // distance from base to center of tetrahedron
-    Myfloat tetrahedron[NUM_POINTS*POINT_DIMENSIONS] = {
-        -g,-b, q,
-         g,-b, q,
-         z, a, q,
-         z, z,-p,
-    };
-    Myfloat plane[NUM_PLANES*PLANE_DIMENSIONS] = {
- 0.204124, 0.204124, 0.204124,
- 0.250000, -0.327350, 0.658248,
- -0.250000, 0.327350, -0.658248,
- -0.216506, -0.216506, -0.570060,
-    };
-    Myuint versor[NUM_PLANES*SCALAR_DIMENSIONS] = {
-        2,0,0,1,
-    };
-    Myuint face[NUM_FACES*FACE_DIMENSIONS] = {
-        0,1,2,3,2,3,
-        1,2,3,0,3,0,
-        2,3,0,1,0,1,
-    };
-    Myuint vertex[NUM_POINTS*INCIDENCE_DIMENSIONS] = {
-        0,1,2,
-        1,2,3,
-        2,3,0,
-        3,0,1,
-    };
-
-    updateContext(0);
-    updateBuffer(0,PlaneBuf,0,NUM_PLANES,plane);
-    updateBuffer(0,VersorBuf,0,NUM_PLANES,versor);
-    updateBuffer(0,FaceSub,0,NUM_FACES,face);
-    updateBuffer(0,VertSub,0,NUM_POINTS,vertex);
-    enqueDishader();
-}
-#endif
