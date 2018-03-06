@@ -46,14 +46,36 @@ void compass(double xdelta, double ydelta)
     displayCursor(displayHandle,xwarp,ywarp);
 }
 
+#define CLICK_ENLOC(STR) \
+    *enlocCmdInt(1) = contextHandle; \
+    *enlocCmdInt(1) = qPoint; \
+    *enlocCmdInt(1) = pPoint; \
+    *enlocCmdFloat(1) = xPoint; \
+    *enlocCmdFloat(1) = yPoint; \
+    *enlocCmdFloat(1) = zPoint; \
+    msgstrCmdByte("%s",0,#STR); \
+    enqueMachine(sculptClick);
+
 void leftAdditive(void)
 {
-    // TODO
+    CLICK_ENLOC(fill)
 }
 
 void leftSubtractive(void)
 {
-    // TODO
+    CLICK_ENLOC(hollow)
+}
+
+void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
+{
+    struct File *ptr = arrayPoly(file,1);
+    Myfloat u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
+    tweakvec(u,0,ptr->tweak,3);
+    Myfloat v[3] = {0};
+    tweakvec(v,1.0,1.0,3);
+    int versor;
+    basearrow(u,v,&versor,basisMat,3);
+    msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
 }
 
 void leftRefine(void)

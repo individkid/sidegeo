@@ -20,10 +20,8 @@
 
 #ifdef BRINGUP
 const enum Event event = Face;
-const enum Data data = FaceSub;
 #else
 const enum Event event = Frame;
-const enum Data data = FrameSub;
 #endif
 
 void inject(void)
@@ -259,6 +257,63 @@ enum Action configureRefine(int state)
     return Advance;
 }
 
+enum Action transformClick(int state)
+{
+    int plane = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
+    int slot = *deargCmdInt(1);
+    // send Face/Frame event with responseLayer to get
+    //  PlaneBuf/PointBuf elements referred to by
+    //  vector number plane in FaceSub/FrameSub of file number file.
+    // send Face/Frame event with responseLayer to get
+    //  FaceSub/FrameSub vector number slot in plane number zero.
+    // copy vectors from PlaneBuf/PointBuf in file to preview.
+    // send Swap event to swap visibility of plane and slot.
+    //  with enqueFilter response.
+    return Advance;
+}
+
+enum Action sculptClick(int state)
+{
+    int context = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
+    int plane = *deargCmdInt(1);
+    deargCmdFloat(3);
+    int len = lengthCmdByte(0,0)+1;
+    int str = 0; deargCmdByte(len); str -= len;
+    updateContext(context);
+    if (state-- == 0) {
+    layer = uniqueLayer();
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
+    useCmdFloat(); copyRefloat(layer,0,-3,3); // feather
+    enqueShader(Adplane,file,0,renderLayer);
+    return Continue;}
+    if (state-- == 0) {
+    return (sizeReint(layer) == 0 ? Defer : Continue);}
+    if (state-- == 0) {
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = plane;
+    int relen = sizeReint(layer);
+    *enlocCmdHsInt(1) = relen;
+    useReint(layer); xferCmdHsInt(relen);
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseLayer;
+    *enlocCmdEvent(1) = Locate;
+    return Continue;}
+    if (sizeReint(layer) == 0) return Defer;
+    *enlocCmdConfiguree(1) = 0;
+    *enlocCmdConfigurer(1) = file;
+    msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
+    int inlen = *delocReint(layer,1);
+    for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
+    msgstrCmdConfigure(",",-1);
+    int outlen = *delocReint(layer,1);
+    for (int i = 0; i < outlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
+    msgstrCmdConfigure("",'\n');
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
+    return Advance;
+}
+
 void configurePlane(void)
 {
     int file = *relocCmdInt(1);
@@ -310,45 +365,6 @@ void configurePoint(void)
     enqueCommand(configurePlane);}
 }
 
-void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
-{
-    struct File *ptr = arrayPoly(file,1);
-    Myfloat u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
-    tweakvec(u,0,ptr->tweak,3);
-    Myfloat v[3] = {0};
-    tweakvec(v,1.0,1.0,3);
-    int versor;
-    basearrow(u,v,&versor,basisMat,3);
-    msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
-}
-
-enum Action dequeFilter(int state)
-{
-    int file = *deargCmdInt(1);
-    for (int context = 0; context < sizeDisplay(); context++) {
-    if (state-- == 0) {
-    *enlocCmdHsInt(1) = 2;
-    *enlocCmdHsInt(1) = context;
-    *enlocCmdHsInt(1) = file;
-    *enlocCmdHsInt(1) = 1;
-    *enlocCmdHsInt(1) = layer;
-    *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = event; // Face or Frame
-    return Continue;}
-    if (state-- == 0) {
-    if (sizeReint(layer) == 0) return Defer;
-    updateContext(context);
-    int size = sizeReint(layer);
-    int todo = bufferUnflat(file,data,size);
-    int *buf = arrayReint(layer,0,size);
-    updateBuffer(file,data,0,todo,buf);
-    delocReint(layer,size);}}
-    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
-    enqueDishader();
-    return Advance;
-}
-
-// TODO move xfer commands to configure
 void configureInflate(void)
 {
     int file = *delocCmdInt(1);
@@ -386,81 +402,4 @@ void configureHollow(void)
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsCmd(1) = enqueFilter;
     *enlocCmdEvent(1) = Hollow;
-}
-
-enum Action transformClick(int state)
-{
-    int plane = *deargCmdInt(1);
-    int file = *deargCmdInt(1);
-    int slot = *deargCmdInt(1);
-    // send Face/Frame event with responseLayer to get
-    //  PlaneBuf/PointBuf elements referred to by
-    //  vector number plane in FaceSub/FrameSub of file number file.
-    // send Face/Frame event with responseLayer to get
-    //  FaceSub/FrameSub vector number slot in plane number zero.
-    // copy vectors from PlaneBuf/PointBuf in file to preview.
-    // send Swap event to swap visibility of plane and slot.
-    //  with enqueFilter response.
-    return Advance;
-}
-
-#define CLICK_ENLOC(STR) \
-    *enlocCmdInt(1) = contextHandle; \
-    *enlocCmdInt(1) = qPoint; \
-    *enlocCmdInt(1) = pPoint; \
-    *enlocCmdFloat(1) = xPoint; \
-    *enlocCmdFloat(1) = yPoint; \
-    *enlocCmdFloat(1) = zPoint; \
-    msgstrCmdByte("%s",0,#STR); \
-    enqueMachine(sculptClick);
-
-enum Action sculptClick(int state)
-{
-    int context = *deargCmdInt(1);
-    int file = *deargCmdInt(1);
-    int plane = *deargCmdInt(1);
-    deargCmdFloat(3);
-    int len = lengthCmdByte(0,0)+1;
-    int str = 0; deargCmdByte(len); str -= len;
-    updateContext(context);
-    if (state-- == 0) {
-    layer = uniqueLayer();
-    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
-    useCmdFloat(); copyRefloat(layer,0,-3,3); // feather
-    enqueShader(Adplane,file,0,renderLayer);
-    return Continue;}
-    if (state-- == 0) {
-    return (sizeReint(layer) == 0 ? Defer : Continue);}
-    if (state-- == 0) {
-    *enlocCmdHsInt(1) = file;
-    *enlocCmdHsInt(1) = plane;
-    int relen = sizeReint(layer);
-    *enlocCmdHsInt(1) = relen;
-    useReint(layer); xferCmdHsInt(relen);
-    *enlocCmdHsInt(1) = layer;
-    *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = Locate;
-    return Continue;}
-    if (sizeReint(layer) == 0) return Defer;
-    *enlocCmdConfiguree(1) = 0;
-    *enlocCmdConfigurer(1) = file;
-    msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
-    int inlen = *delocReint(layer,1);
-    for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
-    msgstrCmdConfigure(",",-1);
-    int outlen = *delocReint(layer,1);
-    for (int i = 0; i < outlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
-    msgstrCmdConfigure("",'\n');
-    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
-    return Advance;
-}
-
-void fillClick(void)
-{
-    CLICK_ENLOC(fill)
-}
-
-void hollowClick(void)
-{
-    CLICK_ENLOC(hollow)
 }

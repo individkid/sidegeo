@@ -84,7 +84,9 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
   * Tweak -- click tweaks plane possibly holding space fixed  
-  * Perform -- click replaces polytope, opens equalizer, or calls function  
+  * Equalizer -- click opens panel to modifie clicked items  
+  * Hyperlink -- click jumps through facet to another space  
+  * Execute -- click calls Haskell function attached to facet  
   * Move -- click moves pierced target to alternate display  
   * Copy -- click copies pierced target to alternate display  
   * Transform -- modify transform matrix for pierced target  
@@ -97,7 +99,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Clock -- rotate picture plane around perpendicular to pierce point  
     * Scale -- grow or shrink polytope with pierce point fixed  
     * Drive -- move picture plane forward or back  
-  * Target -- target of Alternate/Transform click mode  
+  * Target -- target of Move/Copy/Transform click mode  
     * Plane -- target is the pierced plane  
     * Polytope -- target is the pierced polytope  
     * Alternate -- target is planes in focused display  
@@ -110,10 +112,11 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Sample -- whether space fixed in Tweak mode  
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
-  * Action -- what Perform click does  
-    * Configure -- open dialog to decorate plane's facets  
-    * Hyperlink -- jump through facet to another space  
-    * Execute -- call Haskell function attached to facet  
+  * Panel -- which panel opened by Equalizer  
+    * Graffiti -- open panel to draw on facet with styluses  
+    * System -- open panel for stocks flows and attachments  
+    * Markup -- open panel for attached files and commands  
+    * Topology -- open panel for classifications to sample  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. The names supplied in --time --start --plane commands have file scope shared by --branch and --jump files.
 

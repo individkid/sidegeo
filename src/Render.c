@@ -21,9 +21,11 @@
 #ifdef BRINGUP
 const enum Shader dishader = Diplane;
 const enum Shader pershader = Perplane;
+const enum Data data = FaceSub;
 #else
 const enum Shader dishader = Dipoint;
 const enum Shader pershader = Perpoint;
+const enum Data data = FrameSub;
 #endif
 
 size_t bufferType(int size)
@@ -196,6 +198,39 @@ void enqueUniform(int context, enum Server server)
     *enlocCmdInt(1) = server;
     *enlocCmdInt(1) = 0;
     enqueMachine(dequeUniform);
+}
+
+enum Action dequeFilter(int state)
+{
+    int file = *deargCmdInt(1);
+    for (int context = 0; context < sizeDisplay(); context++) {
+    if (state-- == 0) {
+    *enlocCmdHsInt(1) = 2;
+    *enlocCmdHsInt(1) = context;
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseLayer;
+    *enlocCmdEvent(1) = event; // Face or Frame
+    return Continue;}
+    if (state-- == 0) {
+    if (sizeReint(layer) == 0) return Defer;
+    updateContext(context);
+    int size = sizeReint(layer);
+    int todo = bufferUnflat(file,data,size);
+    int *buf = arrayReint(layer,0,size);
+    updateBuffer(file,data,0,todo,buf);
+    delocReint(layer,size);}}
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
+    enqueDishader();
+    return Advance;
+}
+
+void enqueFilter(void)
+{
+    layer = uniqueLayer();
+    relocCmdInt(1); // file
+    enqueMachine(dequeFilter);    
 }
 
 #define RENDER_DEARG \
@@ -420,13 +455,6 @@ void enqueSwap(void)
     renderClear = 1;
     for (int i = 0; i < sizeFile(); i++)
     enqueShader(dishader,i,context,0);
-}
-
-void enqueFilter(void)
-{
-    layer = uniqueLayer();
-    relocCmdInt(1); // file
-    enqueMachine(dequeFilter);    
 }
 
 void enqueDishader(void)

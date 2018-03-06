@@ -347,7 +347,7 @@ void processProduce(void *arg)
         struct Header *header = delocHeader(1);
         if (write(*arrayFifo(header->idx,1),header,sizeof(struct Header)) != sizeof(struct Header)) processError(header->idx);
         if (write(*arrayFifo(header->idx,1),delocBody(header->siz),header->siz) != header->siz) processError(header->idx);}
-    else {thread = 0; toggle = 1;}
+    else toggle = 1;
 }
 
 void processAfter(void)
