@@ -145,7 +145,6 @@ Configuration/history files consist of commands. User input appends to file. App
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
   * --action attaches Haskell function to boundary to be activated by click  
-  * --canvas captures drawings on facets of a boundary  
   * --matrix takes transformation of display, ignored if not -F file  
   * --project takes slope and cutoff, ignored if not -F file  
   * --configure pore, membrane, interpolate, texture, rate  
