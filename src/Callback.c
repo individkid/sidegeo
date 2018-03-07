@@ -97,11 +97,10 @@ void leftTransform(void)
 void leftManipulate(void)
 {
     if (mark[Target] == Plane) {
-    // TODO msgstr transformed plane, swap filters, update element arrays, and re-render
-    // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
-    // sideband msgstr --event Swap with pPoint qPoint rPoint and no callback
-    // sideband msgstr --command enqueClient with pPoint
-    closeSlot(rPoint); rPoint = -1;}
+    *enlocCmdInt(1) = pPoint;
+    *enlocCmdInt(1) = qPoint;
+    *enlocCmdInt(1) = rPoint;
+    enqueMachine(manipulateClick);}
 }
 
 void rightRight(void)

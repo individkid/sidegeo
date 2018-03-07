@@ -273,6 +273,19 @@ enum Action transformClick(int state)
     return Advance;
 }
 
+enum Action manipulateClick(int state)
+{
+    int plane = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
+    int slot = *deargCmdInt(1);
+    // TODO msgstr transformed plane, swap filters, update element arrays, and re-render
+    // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
+    // closeSlot(rPoint); rPoint = -1;
+    // sideband msgstr --event Swap with pPoint qPoint rPoint and no callback
+    // sideband msgstr --command enqueClient with pPoint
+    return Advance;
+}
+
 enum Action sculptClick(int state)
 {
     int context = *deargCmdInt(1);

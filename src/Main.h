@@ -100,6 +100,7 @@ void responseLayer(void);
 int openSlot(void);
 void closeSlot(int slot);
 enum Action transformClick(int state);
+enum Action manipulateClick(int state);
 enum Action sculptClick(int state);
 #ifdef BRINGUP
 void bringupBuiltin(void);
