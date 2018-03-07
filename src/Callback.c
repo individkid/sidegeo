@@ -66,21 +66,18 @@ void leftSubtractive(void)
     CLICK_ENLOC(hollow)
 }
 
-void refineClick(int file, Myfloat xpos, Myfloat ypos, Myfloat zpos)
+void leftRefine(void)
 {
-    struct File *ptr = arrayPoly(file,1);
-    Myfloat u[3]; u[0] = xpos; u[1] = ypos; u[2] = zpos;
+    struct File *ptr = arrayPoly(qPos,1);
+    Myfloat u[3]; u[0] = xPos; u[1] = yPos; u[2] = zPos;
     tweakvec(u,0,ptr->tweak,3);
     Myfloat v[3] = {0};
     tweakvec(v,1.0,1.0,3);
     int versor;
     basearrow(u,v,&versor,basisMat,3);
-    msgstrCmdConfigure("plane %d %f %f %f\n",versor,u[0],u[1],u[2]);
-}
-
-void leftRefine(void)
-{
-    // TODO
+    *enlocConfiguree(1) = 0;
+    *enlocConfigurer(1) = qPos;
+    msgstrCmdConfigure("plane -1 %d %f %f %f",'\n',versor,u[0],u[1],u[2]);
 }
 
 void leftTransform(void)
