@@ -218,6 +218,7 @@ enum Action sculptClick(int state)
     int relen = sizeReint(layer);
     *enlocCmdHsInt(1) = relen;
     useReint(layer); xferCmdHsInt(relen);
+    *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Locate;
@@ -241,17 +242,17 @@ enum Action configureRefine(int state)
 {
     int plane = *deargCmdInt(1);
     int file = *deargCmdInt(1);
+    int vsr = 0; deargCmdInt(1); vsr -= 1; // versor
+    int vec = 0; deargCmdFloat(1); vec -= 3; // plane
+    int pending = *deargCmdInt(1); vsr -= 1;
+    // wait for lock on file shared struct
     struct Share *share = arrayShare(file,1);
-    share->versor = *deargCmdInt(1);
-    for (int i = 0; i < 3; i++) share->plane[i] = *deargCmdFloat(1);
-    int pending = *deargCmdInt(1);
+    if (share->complete+1 < pending) return Defer;
     updateContext(0);
     if (state-- == 0) {
-    // wait for lock on file shared struct
-    if (share->complete+1 < pending) return Defer;
     // put plane in layer for updateUniform called from shader render
-    *enlocReint(layer,1) = share->versor;
-    for (int i = 0; i < 3; i++) *enlocRefloat(layer,1) = share->plane[i];
+    *enlocReint(layer,1) = *arrayCmdInt(vsr,1);
+    useCmdFloat(); copyRefloat(layer,0,vec,3);
     // enque Adpoint shader for wrt with layer follow
     enqueShader(Adpoint,file,0,renderLayer);
     return Continue;}
@@ -259,13 +260,15 @@ enum Action configureRefine(int state)
     // wait for wrt in layer
     if (sizeReint(layer) == 0) return Defer;
     // append plane to file's planebuf
-    updateBuffer(file,VersorBuf,plane,1,&share->versor);
-    updateBuffer(file,PlaneBuf,plane,1,share->plane);
+    updateBuffer(file,VersorBuf,plane,1,arrayCmdInt(vsr,1));
+    updateBuffer(file,PlaneBuf,plane,1,arrayCmdFloat(vec,3));
     // send divide event with proceed response
     int len = sizeReint(layer);
     *enlocCmdHsInt(1) = len;
     for (int i = 0; i < len; i++) *enlocCmdHsInt(1) = *delocReint(layer,1);
+    *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseProceed;
     *enlocCmdEvent(1) = Divide;
@@ -273,10 +276,12 @@ enum Action configureRefine(int state)
     return Continue;}
     if (state-- == 0) {
     // wait for proceed response
-    if (*arrayReint(layer,1,1) == 0) return Defer;
+    if (*arrayReint(layer,0,1) == 0) return Defer;
     delocReint(layer,1);
     // send vertex event with layer response
+    *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Vertex; // get element array for points on plane
@@ -294,14 +299,14 @@ enum Action configureRefine(int state)
     resetBuffer(file,VertBuf);
     enqueShader(Coplane,file,0,renderClient); // get points on plane
     // send Index event to get point subscript corresponding to VertSub
+    *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = layer;
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Index; // get point subscripts for points on plane
     return Continue;}
-    if (state-- == 0) {
     // wait for coplane done and Index event done
-    updateContext(0);
     if (limitBuffer(file,VertBuf) < limitBuffer(file,VertSub)) return Defer;
     if (sizeReint(layer) == 0) return Defer;
     // xfer coplanes to point buffer
@@ -312,7 +317,7 @@ enum Action configureRefine(int state)
     int index = *arrayReint(layer,i,1);
     updateBuffer(file,PointBuf,index,1,point);}
     delocReint(layer,len);
-    return Continue;}
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     // increment file's complete count
     if (plane > share->size) share->size += 1;
     if (plane > share->size) exitErrstr("refine too plane\n");

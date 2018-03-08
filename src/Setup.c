@@ -548,12 +548,11 @@ void updateUniform(enum Server server, int file, enum Shader shader)
             ypoint = yPoint;
             zpoint = zPoint;}
             glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
-        CASE(Adpoint)
-            if (file < 0) exitErrstr("affine too file\n");
-            struct Share *ptr = arrayShare(file,1);
-            Myfloat *base = basisMat+ptr->versor*9;
-            Myfloat xVec[3] = {base[0]+ptr->plane[0],base[1]+ptr->plane[0],base[2]+ptr->plane[0]};
-            glUniform3f(uniform->handle,xVec[0],xVec[1],xVec[2]);
+        CASE(Adpoint) {
+            int versor = *delocReint(layer,1);
+            Myfloat xpoint = *delocRefloat(layer,3);
+            Myfloat *base = basisMat+versor*9;
+            glUniform3f(uniform->handle,base[0]+xpoint,base[1]+xpoint,base[2]+xpoint);}
         DEFAULT(exitErrstr("feather too shader\n");)}
     CASE(Arrow) {
         SWITCH(shader,Perplane) FALL(Perpoint) {
@@ -567,18 +566,20 @@ void updateUniform(enum Server server, int file, enum Shader shader)
             ypoint = yPoint*slope;
             zpoint = 1.0;}
             glUniform3f(uniform->handle,xpoint,ypoint,zpoint);}
-        CASE(Adpoint)
-            if (file < 0) exitErrstr("affine too file\n");
-            struct Share *ptr = arrayShare(file,1);
-            Myfloat *base = basisMat+ptr->versor*9;
-            Myfloat xVec[3] = {base[0]+ptr->plane[0],base[1]+ptr->plane[0],base[2]+ptr->plane[0]};
-            Myfloat yVec[3] = {base[0]+ptr->plane[1],base[1]+ptr->plane[1],base[2]+ptr->plane[1]};
-            Myfloat zVec[3] = {base[0]+ptr->plane[2],base[1]+ptr->plane[2],base[2]+ptr->plane[2]};
+        CASE(Adpoint) {
+            int versor = *delocReint(layer,1);
+            Myfloat xpoint = *delocRefloat(layer,1);
+            Myfloat ypoint = *delocRefloat(layer,1);
+            Myfloat zpoint = *delocRefloat(layer,1);
+            Myfloat *base = basisMat+versor*9;
+            Myfloat xVec[3] = {base[0]+xpoint,base[1]+xpoint,base[2]+xpoint};
+            Myfloat yVec[3] = {base[3]+ypoint,base[4]+ypoint,base[5]+ypoint};
+            Myfloat zVec[3] = {base[6]+zpoint,base[7]+zpoint,base[8]+zpoint};
             Myfloat yDif[3]; plusvec(scalevec(copyvec(yDif,xVec,3),-1.0,3),yVec,3);
             Myfloat zDif[3]; plusvec(scalevec(copyvec(zDif,xVec,3),-1.0,3),zVec,3);
             Myfloat normal[3]; crossvec(copyvec(normal,yDif,3),zDif);
-            if (normal[ptr->versor] < 0.0) scalevec(normal,-1.0,3);
-            glUniform3f(uniform->handle,normal[0],normal[1],normal[2]);
+            if (normal[versor] < 0.0) scalevec(normal,-1.0,3);
+            glUniform3f(uniform->handle,normal[0],normal[1],normal[2]);}
         DEFAULT(exitErrstr("arrow too shader\n");)}
     CASE(Cutoff)
         glUniform1f(uniform->handle,cutoff);

@@ -262,8 +262,6 @@ struct Share { // per file state shared across displays
     int complete; // number of planes added
     Myfloat point[9]; // points collected for construct plane
     int collect; // number of points collected for construct plane
-    Myfloat plane[3]; // new plane
-    int versor; // versor for new plane
     int size; // number of planes per display
     int client[Datas]; // sometimes client data is shared between displays
 };

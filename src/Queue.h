@@ -810,6 +810,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
         if (!src) exitErrstr("enack too src\n");
         TYPE *buf = src->array(from,siz);
         src = 0;
+        if (to+siz > size()) enloc(to+siz - size());
         return (TYPE *)memcpy(array(to,siz),buf,siz);
     }
 };
