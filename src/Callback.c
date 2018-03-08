@@ -47,9 +47,8 @@ void compass(double xdelta, double ydelta)
 }
 
 #define CLICK_ENLOC(STR) \
-    *enlocCmdInt(1) = contextHandle; \
-    *enlocCmdInt(1) = qPoint; \
     *enlocCmdInt(1) = pPoint; \
+    *enlocCmdInt(1) = qPoint; \
     *enlocCmdFloat(1) = xPoint; \
     *enlocCmdFloat(1) = yPoint; \
     *enlocCmdFloat(1) = zPoint; \
@@ -77,7 +76,7 @@ void leftRefine(void)
     basearrow(u,v,&versor,basisMat,3);
     *enlocConfiguree(1) = 0;
     *enlocConfigurer(1) = qPos;
-    msgstrCmdConfigure("plane -1 %d %f %f %f",'\n',versor,u[0],u[1],u[2]);
+    msgstrCmdConfigure("plane _ %d %f %f %f",'\n',versor,u[0],u[1],u[2]);
 }
 
 void leftTransform(void)
