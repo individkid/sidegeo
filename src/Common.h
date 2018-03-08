@@ -262,7 +262,8 @@ struct Share { // per file state shared across displays
     int complete; // number of planes added
     Myfloat point[9]; // points collected for construct plane
     int collect; // number of points collected for construct plane
-    int size; // number of planes per display
+    int planes; // number of planes per display
+    int points; // number of points per display
     int client[Datas]; // sometimes client data is shared between displays
 };
 struct Code { // files use same shader code and server uniforms

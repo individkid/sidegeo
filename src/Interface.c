@@ -248,8 +248,12 @@ enum Action configureRefine(int state)
     // wait for lock on file shared struct
     struct Share *share = arrayShare(file,1);
     if (share->complete+1 < pending) return Defer;
+    if (plane < 0) plane = share->planes;
     updateContext(0);
     if (state-- == 0) {
+    layer = uniqueLayer();
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
+    if (insertRefloat(layer) < 0) exitErrstr("refloat too insert\n");
     // put plane in layer for updateUniform called from shader render
     *enlocReint(layer,1) = *arrayCmdInt(vsr,1);
     useCmdFloat(); copyRefloat(layer,0,vec,3);
@@ -259,25 +263,12 @@ enum Action configureRefine(int state)
     if (state-- == 0) {
     // wait for wrt in layer
     if (sizeReint(layer) == 0) return Defer;
+    if (share->points != sizeReint(layer)) exitErrstr("points too layer\n");
     // append plane to file's planebuf
     updateBuffer(file,VersorBuf,plane,1,arrayCmdInt(vsr,1));
     updateBuffer(file,PlaneBuf,plane,1,arrayCmdFloat(vec,3));
-    // send divide event with proceed response
-    int len = sizeReint(layer);
-    *enlocCmdHsInt(1) = len;
-    for (int i = 0; i < len; i++) *enlocCmdHsInt(1) = *delocReint(layer,1);
-    *enlocCmdHsInt(1) = file;
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = 1; // passthrough size
-    *enlocCmdHsInt(1) = layer;
-    *enlocCmdHsCmd(1) = responseProceed;
-    *enlocCmdEvent(1) = Divide;
-    *enlocReint(layer,1) = 0;
-    return Continue;}
-    if (state-- == 0) {
-    // wait for proceed response
-    if (*arrayReint(layer,0,1) == 0) return Defer;
-    delocReint(layer,1);
+    if (plane > share->planes) exitErrstr("refine too plane\n");
+    if (plane == share->planes) share->planes += 1;
     // send vertex event with layer response
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = plane;
@@ -288,10 +279,10 @@ enum Action configureRefine(int state)
     return Continue;}
     if (state-- == 0) {
     // wait for layer response
-    if (sizeReint(layer) == 0) return Defer;
+    if (sizeReint(layer) == share->points) return Defer;
     // update vertsub client
-    int flat = sizeReint(layer);
-    int *buf = delocReint(0,flat);
+    int flat = sizeReint(layer)-share->points;
+    int *buf = unlocReint(0,flat);
     int todo = bufferUnflat(file,VertSub,flat);
     resetBuffer(file,VertSub);
     updateBuffer(file,VertSub,0,todo,buf);
@@ -306,21 +297,36 @@ enum Action configureRefine(int state)
     *enlocCmdHsCmd(1) = responseLayer;
     *enlocCmdEvent(1) = Index; // get point subscripts for points on plane
     return Continue;}
+    if (state-- == 0) {
     // wait for coplane done and Index event done
     if (limitBuffer(file,VertBuf) < limitBuffer(file,VertSub)) return Defer;
-    if (sizeReint(layer) == 0) return Defer;
+    if (sizeReint(layer) == share->points) return Defer;
     // xfer coplanes to point buffer
-    int len = sizeReint(layer);
+    int len = sizeReint(layer)-share->points;
     for (int i = 0; i < len; i++) {
     // get point from i in client VertBuf
     Myfloat *point = dndateBuffer(file,VertBuf,i,1);
-    int index = *arrayReint(layer,i,1);
+    int index = *arrayReint(layer,share->points+i,1);
     updateBuffer(file,PointBuf,index,1,point);}
-    delocReint(layer,len);
+    unlocReint(layer,len);
+    share->points += len;
+    // send divide event with proceed response
+    len = sizeReint(layer);
+    *enlocCmdHsInt(1) = len;
+    useReint(layer); copyCmdHsInt(0,0,len); delocReint(layer,len);
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = 1; // passthrough size
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseProceed;
+    *enlocCmdEvent(1) = Divide;
+    *enlocReint(layer,1) = 0;}
+    // wait for proceed response
+    if (*arrayReint(layer,0,1) == 0) return Defer;
+    delocReint(layer,1);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
+    if (removeRefloat(layer) < 0) exitErrstr("refloat too insert\n");
     // increment file's complete count
-    if (plane > share->size) share->size += 1;
-    if (plane > share->size) exitErrstr("refine too plane\n");
     share->complete += 1;
     *enlocCmdInt(1) = file;
     *enlocCommand(1) = enqueFilter;
