@@ -77,7 +77,7 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -t run sanity check  
   * -T run thorough tests  
 
-Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Haskell scripts, and activated in Perform/Execute mode.
+Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Perform/Execute mode.
 
   * Additive -- click fills in region over pierce point  
   * Subtractive -- click hollows out region under pierce point  
@@ -86,7 +86,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Tweak -- click tweaks plane possibly holding space fixed  
   * Equalizer -- click opens panel to modifie clicked items  
   * Hyperlink -- click jumps through facet to another space  
-  * Execute -- click calls Haskell function attached to facet  
+  * Execute -- click calls Lua function attached to facet  
   * Move -- click moves pierced target to alternate display  
   * Copy -- click copies pierced target to alternate display  
   * Transform -- modify transform matrix for pierced target  
@@ -136,7 +136,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --metric funtion name, facet specifications for term values  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
-  * --media binds Haskell expression to evaluate when stock changes  
+  * --media binds Lua expression to evaluate when stock changes  
   * --color takes plane subscript and decoration  
   * --graffiti takes plane subscript and stylus type and motions  
   * --bitmap takes plane subscript and texture specification  
@@ -144,20 +144,20 @@ Configuration/history files consist of commands. User input appends to file. App
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
-  * --action attaches Haskell function to boundary to be activated by click  
+  * --action attaches Lua function to boundary to be activated by click  
   * --matrix takes transformation of display, ignored if not -F file  
   * --project takes slope and cutoff, ignored if not -F file  
   * --configure pore, membrane, interpolate, texture, rate  
   * --inject specifies command line option to inject  
   * --menu changes to menu item to inject to console  
-  * --bind binds Haskell function to function key in console  
+  * --bind binds Lua function to function key in console  
   * --jump causes playback to go to location in file  
   * --branch takes file and start stop locations for include  
   * --start goes to a new polytope with optional name for going back  
   * --yield allow other files and command line options to proceed  
   * --delay takes duration for interpolation with next delay 
   * --import takes module name or file path to import for subsequent calls  
-  * --call takes Haskell function of source to replace destination  
+  * --call takes Lua function of source to replace destination  
 
 The constants set by --configure change behaviors by degree.
 

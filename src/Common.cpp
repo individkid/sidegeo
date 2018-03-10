@@ -271,6 +271,10 @@ void consumeConsole(void *arg);
 void produceConsole(void *arg);
 void afterConsole(void);
 
+void beforeLua(void);
+void consumeLua(void *arg);
+void afterLua(void);
+
 void processBefore(void);
 void processConsume(void *arg);
 int processDelay(void);
@@ -310,6 +314,10 @@ DEFINE_STAGE(CmnCmdCmd,Command,CmnCmdByte)
 
 DEFINE_STDIN(CmnOutputs,consumeConsole,produceConsole,beforeConsole,afterConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
+
+DEFINE_COND(CmnLuas,consumeLua,beforeLua,afterLua)
+DEFINE_STAGE(CmnLua,char,CmnLuas)
+DEFINE_STAGE(CmnLuaInt,int,CmnLua)
 
 DEFINE_FDSET(CmnProcesses,int,processConsume,processProduce,processBefore,processAfter,processDelay)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
@@ -413,6 +421,22 @@ DEFINE_LOCAL(Line,enum Menu)
 DEFINE_LOCAL(Match,int)
 DEFINE_META(Echo,char)
 DEFINE_POINTER(CslPtr,char)
+
+
+DEFINE_SOURCE(LuaCommands,CmnCommands,CmnLuas)
+DEFINE_STAGE(LuaCommand,Command,LuaCommands)
+DEFINE_STAGE(LuaCmdInt,int,LuaCommand)
+
+DEFINE_SOURCE(LuaHaskells,CmnHaskells,LuaCommands)
+DEFINE_STAGE(LuaEvent,enum Event,LuaHaskells)
+DEFINE_STAGE(LuaHsCmd,Command,LuaEvent)
+DEFINE_STAGE(LuaHsInt,int,LuaHsCmd)
+
+DEFINE_DEST(Luas,CmnLuas,LuaHaskells)
+DEFINE_STAGE(Lua,char,Luas)
+DEFINE_STAGE(LuaInt,int,Lua)
+
+DEFINE_POOL(Script,lua_State *)
 
 
 DEFINE_DEST(Timewheels,CmnTimewheels,CmnTimewheels)

@@ -58,6 +58,7 @@ executable sculpt
                        src/Configure.c,
                        src/Haskell.c,
                        src/Console.c,
+                       src/Lua.c,
                        src/Timewheel.c,
                        src/Common.cpp,
                        src/Queue.cpp,

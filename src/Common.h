@@ -28,6 +28,7 @@ EXTERNCBEGIN
 #include <fcntl.h>
 #include <sys/stat.h>
 #include "pa_ringbuffer.h"
+#include <lua.h>
 
 #define BRINGUP
 #define PLANE_DIMENSIONS 3
@@ -416,6 +417,10 @@ DECLARE_STAGE(CmnCmdCmd,Command)
 DECLARE_STDIN(CmnOutputs)
 DECLARE_STAGE(CmnOutput,char)
 
+DECLARE_COND(CmnLuas)
+DECLARE_STAGE(CmnLua,char)
+DECLARE_STAGE(CmnLuaInt,int)
+
 DECLARE_FDSET(CmnProcesses,int)
 DECLARE_STAGE(CmnOption,char)
 DECLARE_STAGE(CmnConfigure,char)
@@ -518,6 +523,22 @@ DECLARE_LOCAL(Line,enum Menu)
 DECLARE_LOCAL(Match,int)
 DECLARE_META(Echo,char)
 DECLARE_POINTER(CslPtr,char)
+
+
+DECLARE_SOURCE(LuaCommands)
+DECLARE_STAGE(LuaCommand,Command)
+DECLARE_STAGE(LuaCmdInt,int)
+
+DECLARE_SOURCE(LuaHaskells)
+DECLARE_STAGE(LuaEvent,enum Event)
+DECLARE_STAGE(LuaHsCmd,Command)
+DECLARE_STAGE(LuaHsInt,int)
+
+DECLARE_DEST(Luas)
+DECLARE_STAGE(Lua,char)
+DECLARE_STAGE(LuaInt,int)
+
+DECLARE_POOL(Script,lua_State *)
 
 
 DECLARE_DEST(Timewheels)

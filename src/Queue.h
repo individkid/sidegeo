@@ -154,13 +154,15 @@ EXTERNC void set##NAME(int link, int val); \
 EXTERNC int head##NAME(int pool); \
 EXTERNC int tail##NAME(int pool); \
 EXTERNC int next##NAME(int link); \
-EXTERNC int last##NAME(int link);
+EXTERNC int last##NAME(int link); \
+EXTERNC int pool##NAME(int link);
 
 #define DECLARE_POOL(NAME,TYPE) \
 EXTERNC int alloc##NAME(void); \
 EXTERNC void free##NAME(int sub); \
 EXTERNC TYPE *cast##NAME(int sub); \
-EXTERNC int size##NAME(void);
+EXTERNC int size##NAME(void); \
+EXTERNC int avail##NAME(void);
 
 #define DECLARE_PRIORITY(NAME,TYPE) \
 EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri); \
@@ -928,7 +930,8 @@ extern "C" void refer##NAME(void) {NAME##Inst.refer();} \
 DEFINE_PTR(NAME,TYPE,ptr)
 
 struct Link {
-    int next,last; // links if positive, index into head or tail if negative
+    int pool; // head tail subscript
+    int next,last; // links if positive
     int val; // subscript into a buffer or direct value
 };
 
@@ -942,25 +945,24 @@ struct QueueLink {
         if (pool < 0) pool = head.size();
         while (index >= link.size()) { 
             struct Link empty = {0};
+            empty.pool = pool; empty.next = -1; empty.last = -1;
             *link.enloc(1) = empty;}
         while (pool >= head.size()) { 
-            int init = -1-head.size();
-            *head.enloc(1) = -1-tail.size();
-            *tail.enloc(1) = init;}
+            *head.enloc(1) = -1;
+            *tail.enloc(1) = -1;}
         int next = link.array(index,1)->next;
         int last = link.array(index,1)->last;
-        if ((next == 0) != (last == 0)) exitErrstr("index too different\n");
-        if (next > 0) link.array(next-1,1)->last = last;
-        if (next < 0) *tail.array(next+1,1) = last;
-        if (last > 0) link.array(last-1,1)->next = next;
-        if (last < 0) *head.array(last+1,1) = next;
+        int memb = link.array(index,1)->pool;
+        if (next >= 0) link.array(next,1)->last = last;
+        if (next < 0) *tail.array(memb,1) = last;
+        if (last >= 0) link.array(last,1)->next = next;
+        if (last < 0) *head.array(memb,1) = next;
         int first = *head.array(pool,1);
         int final = *tail.array(pool,1);
-        if (first == 0 || final == 0) exitErrstr("index too zero\n");
         link.array(index,1)->next = first;
-        link.array(index,1)->last = -1-pool;
-        *head.array(pool,1) = 1+index;
-        if (final < 0) *tail.array(pool,1) = 1+index;
+        link.array(index,1)->last = -1;
+        *head.array(pool,1) = index;
+        if (final < 0) *tail.array(pool,1) = index;
     }
     int get(int index)
     {
@@ -974,29 +976,31 @@ struct QueueLink {
     {
         if (pool < 0) return -1;
         if (pool >= head.size()) return -1;
-        if (*head.array(pool,1) < 0) return -1;
-        return *head.array(pool,1)-1;
+        return *head.array(pool,1);
     }
     int rbegin(int pool)
     {
         if (pool < 0) return -1;
         if (pool >= head.size()) return -1;
-        if (*tail.array(pool,1) < 0) return -1;
-        return *tail.array(pool,1)-1;
+        return *tail.array(pool,1);
     }
     int next(int index)
     {
         if (index < 0) return -1;
         if (index >= link.size()) return -1;
-        if (link.array(index,1)->next < 0) return -1;
-        return link.array(index,1)->next-1;
+        return link.array(index,1)->next;
     }
     int last(int index)
     {
         if (index < 0) return -1;
         if (index >= link.size()) return -1;
-        if (link.array(index,1)->last < 0) return -1;
-        return link.array(index,1)->last-1;
+        return link.array(index,1)->last;
+    }
+    int pool(int index)
+    {
+        if (index < 0) return -1;
+        if (index >= link.size()) return -1;
+        return link.array(index,1)->pool;
     }
 };
 
@@ -1008,32 +1012,37 @@ extern "C" void set##NAME(int index, int val) {NAME##Inst.set(index,val);} \
 extern "C" int begin##NAME(int pool) {return NAME##Inst.begin(pool);} \
 extern "C" int rbegin##NAME(int pool) {return NAME##Inst.rbegin(pool);} \
 extern "C" int next##NAME(int index) {return NAME##Inst.next(index);} \
-extern "C" int last##NAME(int index) {return NAME##Inst.last(index);}
+extern "C" int last##NAME(int index) {return NAME##Inst.last(index);} \
+extern "C" int pool##NAME(int index) {return NAME##Inst.pool(index);}
 
 template<class TYPE> struct QueuePool {
     QueueStruct<TYPE> pool;
     QueueLink link;
-    int count;
+    int count0, count1;
     QueuePool()
     {
-        count = 0;
+        count0 = 0;
+        count1 = 0;
     }
     int alloc()
     {
-        int head = link.begin(0);
-        if (head < 0) { 
+        if (count0 == 0) { 
+            count0 += 1;
             link.move(-1,0);
-            head = link.begin(0);
-            link.set(head,pool.size());
+            link.set(link.begin(0),pool.size());
             pool.enloc(1);}
+        int head = link.begin(0);
         link.move(head,1);
-        count += 1;
-        return link.get(head);
+        count1 += 1;
+        count0 -= 1;
+        return head;
     }
     void free(int sub)
     {
-        link.move(0,sub);
-        count -= 1;
+        if (link.pool(sub) == 0) return;
+        link.move(sub,0);
+        count1 -= 1;
+        count0 += 1;
     }
     TYPE *cast(int sub)
     {
@@ -1041,13 +1050,15 @@ template<class TYPE> struct QueuePool {
     }
     int choose()
     {
-        int sub = link.begin(1);
-        if (sub < 0) return -1;
-        return link.get(sub);
+        return link.begin(1);
     }
     int size()
     {
-        return count;
+        return count1;
+    }
+    int avail()
+    {
+        return count0;
     }
 };
 
@@ -1056,7 +1067,8 @@ QueuePool<TYPE> NAME##Inst = QueuePool<TYPE>(); \
 extern "C" int alloc##NAME(void) {return NAME##Inst.alloc();} \
 extern "C" void free##NAME(int sub) {NAME##Inst.free(sub);} \
 extern "C" TYPE *cast##NAME(int sub) {return NAME##Inst.cast(sub);} \
-extern "C" int size##NAME(void) {return NAME##Inst.size();}
+extern "C" int size##NAME(void) {return NAME##Inst.size();} \
+extern "C" int avail##NAME(void) {return NAME##Inst.avail();}
 
 template<class TYPE> struct Pqueue {
     TYPE val; // subscript into a buffer
