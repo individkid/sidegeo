@@ -74,11 +74,13 @@ executable sculpt
                        X11,
                        pthread,
                        portaudio,
+                       lua,
                        stdc++
   if os(osx)
     extra-lib-dirs:    /usr/lib
     extra-libraries:   glfw3,
                        portaudio,
+                       lua,
                        stdc++
     frameworks:        Cocoa,
                        OpenGL,

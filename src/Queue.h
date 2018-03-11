@@ -800,12 +800,11 @@ template<class TYPE> struct QueueStruct : QueueBase {
     {
         int len = 0;
         while (sub+len < size() && *array(sub+len,1) != val) len += 1;
-        if (sub+len >= size()) exitErrstr("no string end\n");
         return len;
     }
     TYPE *string(int sub, TYPE val)
     {
-        return array(sub,length(sub,val));
+        return array(sub,length(sub,val)+1);
     }
     TYPE *copy(int to, int from, int siz)
     {
