@@ -572,7 +572,6 @@ struct QueueXfer : QueueXbase {
     }
     virtual int xfer()
     {
-        if (mutex == 0) exitErrstr("source too mutex\n");
         mutex->lock();
         int retval = 0;
         while (1) {

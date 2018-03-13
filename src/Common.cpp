@@ -304,20 +304,26 @@ inline bool operator!=(const Metric &left, const Metric &right) {return false;}
 inline bool operator!=(const Stream &left, const Stream &right) {return false;}
 inline bool operator!=(const PaUtilRingBuffer &left, const PaUtilRingBuffer &right) {return false;}
 inline bool operator!=(const Header &left, const Header &right) {return false;}
+inline bool operator!=(const Response &left, const Response &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
 DEFINE_STAGE(CmnCmdInt,int,CmnCommand)
 DEFINE_STAGE(CmnCmdFloat,Myfloat,CmnCmdInt)
 DEFINE_STAGE(CmnCmdByte,char,CmnCmdFloat)
-DEFINE_STAGE(CmnCmdCmd,Command,CmnCmdByte)
+DEFINE_STAGE(CmnYield,struct Response,CmnCmdByte)
+DEFINE_STAGE(CmnVoid,Command,CmnYield)
+DEFINE_STAGE(CmnRender,struct Render,CmnVoid)
 
 DEFINE_STDIN(CmnOutputs,consumeConsole,produceConsole,beforeConsole,afterConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
 DEFINE_COND(CmnLuas,consumeLua,beforeLua,afterLua)
-DEFINE_STAGE(CmnLua,char,CmnLuas)
-DEFINE_STAGE(CmnLuaInt,int,CmnLua)
+DEFINE_STAGE(CmnRequest,char,CmnLuas)
+DEFINE_STAGE(CmnResponse,struct Response,CmnRequest)
+DEFINE_STAGE(CmnLuaInt,int,CmnResponse)
+DEFINE_STAGE(CmnLuaFloat,Myfloat,CmnLuaInt)
+DEFINE_STAGE(CmnLuaByte,char,CmnLuaFloat)
 
 DEFINE_FDSET(CmnProcesses,int,processConsume,processProduce,processBefore,processAfter,processDelay)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
@@ -369,7 +375,8 @@ DEFINE_STAGE(Command,Command,Commands)
 DEFINE_EXTRA(CmdInt,int,Command)
 DEFINE_EXTRA(CmdFloat,Myfloat,CmdInt)
 DEFINE_EXTRA(CmdByte,char,CmdFloat)
-DEFINE_EXTRA(Void,Command,CmdByte)
+DEFINE_EXTRA(Yield,struct Response,CmdByte)
+DEFINE_EXTRA(Void,Command,Yield)
 DEFINE_EXTRA(Render,struct Render,Void)
 
 DEFINE_SOURCE(CmdOutputs,CmnOutputs,Commands)
@@ -388,6 +395,13 @@ DEFINE_STAGE(CmdHsInt,int,CmdHsCmd)
 
 DEFINE_SOURCE(CmdTimewheels,CmnTimewheels,CmdHaskells)
 DEFINE_STAGE(CmdChange,struct Change,CmdTimewheels)
+
+DEFINE_SOURCE(CmdLuas,CmnLuas,CmdTimewheels)
+DEFINE_STAGE(CmdRequest,char,CmdLuas)
+DEFINE_STAGE(CmdResponse,struct Response,CmdRequest)
+DEFINE_EXTRA(CmdLuaInt,int,CmdResponse)
+DEFINE_EXTRA(CmdLuaFloat,Myfloat,CmdLuaInt)
+DEFINE_EXTRA(CmdLuaByte,char,CmdLuaFloat)
 
 
 DEFINE_META(Place,int)
@@ -426,15 +440,16 @@ DEFINE_POINTER(CslPtr,char)
 DEFINE_SOURCE(LuaCommands,CmnCommands,CmnLuas)
 DEFINE_STAGE(LuaCommand,Command,LuaCommands)
 DEFINE_STAGE(LuaCmdInt,int,LuaCommand)
+DEFINE_STAGE(LuaCmdFloat,Myfloat,LuaCmdInt)
+DEFINE_STAGE(LuaCmdByte,char,LuaCmdFloat)
+DEFINE_STAGE(LuaYield,struct Response,LuaCmdByte)
 
-DEFINE_SOURCE(LuaHaskells,CmnHaskells,LuaCommands)
-DEFINE_STAGE(LuaEvent,enum Event,LuaHaskells)
-DEFINE_STAGE(LuaHsCmd,Command,LuaEvent)
-DEFINE_STAGE(LuaHsInt,int,LuaHsCmd)
-
-DEFINE_DEST(Luas,CmnLuas,LuaHaskells)
-DEFINE_STAGE(Lua,char,Luas)
-DEFINE_STAGE(LuaInt,int,Lua)
+DEFINE_WAIT(Luas,CmnLuas,LuaCommands)
+DEFINE_STAGE(Request,char,Luas)
+DEFINE_STAGE(Response,struct Response,Request)
+DEFINE_EXTRA(LuaInt,int,Response)
+DEFINE_EXTRA(LuaFloat,Myfloat,LuaInt)
+DEFINE_EXTRA(LuaByte,char,LuaFloat)
 
 DEFINE_POOL(Script,lua_State *)
 
@@ -493,6 +508,9 @@ DEFINE_STAGE(PcsArgument,int,PcsVariable)
 DEFINE_STAGE(PcsState,struct State,PcsArgument)
 DEFINE_STAGE(PcsStream,struct Stream,PcsState)
 DEFINE_STAGE(PcsMetric,struct Metric,PcsStream)
+
+DEFINE_SOURCE(PcsLuas,CmnLuas,PcsTimewheels)
+DEFINE_STAGE(PcsRequest,char,PcsLuas)
 
 DEFINE_LOCAL(PcsInt,int)
 DEFINE_LOCAL(PcsChar,char)

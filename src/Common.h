@@ -348,6 +348,16 @@ struct Header { // information about data appended to files
     int idx; // which fifo to append to
 };
 
+enum Request { // command selector for requests from lua scripts
+    Obstruct, // which kinds of faces intervene between two vertices
+    Distance, // distance between two vertices
+    Requests};
+struct Response {
+    enum Request req;
+    int tag;
+    int nint,nfloat,nbyte;
+};
+
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \
@@ -412,14 +422,18 @@ DECLARE_STAGE(CmnCommand,Command)
 DECLARE_STAGE(CmnCmdInt,int)
 DECLARE_STAGE(CmnCmdFloat,Myfloat)
 DECLARE_STAGE(CmnCmdByte,char)
-DECLARE_STAGE(CmnCmdCmd,Command)
+DECLARE_STAGE(CmnVoid,Command)
+DECLARE_STAGE(CmnRender,struct Render)
 
 DECLARE_STDIN(CmnOutputs)
 DECLARE_STAGE(CmnOutput,char)
 
 DECLARE_COND(CmnLuas)
-DECLARE_STAGE(CmnLua,char)
+DECLARE_STAGE(CmnRequest,char)
+DECLARE_STAGE(CmnResponse,struct Response)
 DECLARE_STAGE(CmnLuaInt,int)
+DECLARE_STAGE(CmnLuaFloat,Myfloat)
+DECLARE_STAGE(CmnLuaByte,char)
 
 DECLARE_FDSET(CmnProcesses,int)
 DECLARE_STAGE(CmnOption,char)
@@ -466,11 +480,13 @@ DECLARE_META(Seqnum,int)
 DECLARE_META(Range,int)
 DECLARE_META(Client,char)
 
+// TODO lockCmnCommands before enloc to xfer queues
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
 DECLARE_EXTRA(CmdInt,int)
 DECLARE_EXTRA(CmdFloat,Myfloat)
 DECLARE_EXTRA(CmdByte,char)
+DECLARE_EXTRA(Yield,struct Response)
 DECLARE_EXTRA(Void,Command)
 DECLARE_EXTRA(Render,struct Render)
 
@@ -490,6 +506,13 @@ DECLARE_STAGE(CmdHsInt,int)
 
 DECLARE_SOURCE(CmdTimewheels)
 DECLARE_STAGE(CmdChange,struct Change)
+
+DECLARE_SOURCE(CmdLuas)
+DECLARE_STAGE(CmdRequest,char)
+DECLARE_STAGE(CmdResponse,struct Response)
+DECLARE_STAGE(CmdLuaInt,int)
+DECLARE_STAGE(CmdLuaFloat,Myfloat)
+DECLARE_STAGE(CmdLuaByte,char)
 
 
 DECLARE_META(Place,int)
@@ -528,15 +551,16 @@ DECLARE_POINTER(CslPtr,char)
 DECLARE_SOURCE(LuaCommands)
 DECLARE_STAGE(LuaCommand,Command)
 DECLARE_STAGE(LuaCmdInt,int)
+DECLARE_STAGE(LuaCmdFloat,Myfloat)
+DECLARE_STAGE(LuaCmdByte,char)
+DECLARE_STAGE(LuaYield,struct Response)
 
-DECLARE_SOURCE(LuaHaskells)
-DECLARE_STAGE(LuaEvent,enum Event)
-DECLARE_STAGE(LuaHsCmd,Command)
-DECLARE_STAGE(LuaHsInt,int)
-
-DECLARE_DEST(Luas)
-DECLARE_STAGE(Lua,char)
-DECLARE_STAGE(LuaInt,int)
+DECLARE_WAIT(Luas)
+DECLARE_STAGE(Request,char)
+DECLARE_STAGE(Response,struct Response)
+DECLARE_EXTRA(LuaInt,int)
+DECLARE_EXTRA(LuaFloat,Myfloat)
+DECLARE_EXTRA(LuaByte,char)
 
 DECLARE_POOL(Script,lua_State *)
 
@@ -595,6 +619,9 @@ DECLARE_STAGE(PcsVariable,int)
 DECLARE_STAGE(PcsState,struct State)
 DECLARE_STAGE(PcsStream,struct Stream)
 DECLARE_STAGE(PcsMetric,struct Metric)
+
+DECLARE_SOURCE(PcsLuas)
+DECLARE_STAGE(PcsRequest,char)
 
 DECLARE_LOCAL(PcsInt,int) // given and/or result
 DECLARE_LOCAL(PcsChar,char) // given and/or result
