@@ -54,7 +54,7 @@ void beforeLua(void)
 
 void consumeLua(void *arg)
 {
-	struct Response response = {0}; response.req = Requests; response.tag = -1;
+	struct Response response = {0};
 	int ret = LUA_OK;
 	if (sizeRequest() > 0) {
 	int len = lengthRequest(0,0);
@@ -69,7 +69,8 @@ void consumeLua(void *arg)
 	for (int i = 0; i < response.nint; i++) lua_pushinteger(lua,*delocLuaInt(1));
 	for (int i = 0; i < response.nfloat; i++) lua_pushnumber(lua,*delocLuaFloat(1));
 	lua_pushlstring(lua,delocLuaByte(response.nbyte),response.nbyte);}
-	if (ret == LUA_OK && response.tag >= 0) {
+	else return;
+	if (ret == LUA_OK) {
 	int narg = response.nint+response.nfloat+response.nbyte;
 	lua_State *thread = *castScript(response.tag);
 	ret = lua_resume(thread,0,narg);}
@@ -77,9 +78,8 @@ void consumeLua(void *arg)
 	lua_State *thread = *castScript(response.tag);
 	response.req = requestLua(lua_tointeger(thread,-1)); lua_pop(thread,1);
 	response.nint = lua_tointeger(thread,-1); lua_pop(thread,1);
-	response.nfloat = lua_tointeger(thread,-1); lua_pop(thread,1);
-	response.nbyte = lua_tointeger(thread,-1); lua_pop(thread,1);
 	for (int i = 0; i < response.nint; i++) {*enlocLuaCmdInt(1) = lua_tointeger(thread,-1); lua_pop(thread,1);}
+	response.nfloat = lua_tointeger(thread,-1); lua_pop(thread,1);
 	for (int i = 0; i < response.nfloat; i++) {*enlocLuaCmdFloat(1) = lua_tonumber(thread,-1); lua_pop(thread,1);}
 	size_t len; const char *buf = lua_tolstring(thread,-1,&len); response.nbyte = len;
 	for (int i = 0; i < response.nbyte; i++) *enlocLuaCmdByte(1) = buf[i];
