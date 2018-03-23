@@ -305,6 +305,7 @@ inline bool operator!=(const Stream &left, const Stream &right) {return false;}
 inline bool operator!=(const PaUtilRingBuffer &left, const PaUtilRingBuffer &right) {return false;}
 inline bool operator!=(const Header &left, const Header &right) {return false;}
 inline bool operator!=(const Response &left, const Response &right) {return false;}
+inline bool operator!=(const Match &left, const Match &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
@@ -513,26 +514,9 @@ DEFINE_SOURCE(PcsLuas,CmnLuas,PcsTimewheels)
 DEFINE_STAGE(PcsRequest,char,PcsLuas)
 
 DEFINE_LOCAL(PcsInt,int)
+DEFINE_LOCAL(PcsFloat,Myfloat)
 DEFINE_LOCAL(PcsChar,char)
-DEFINE_LOCAL(PcsBuf,char)
-DEFINE_TREE(String,int,int)
-DEFINE_TREE(Readier,int,int)
-DEFINE_TREE(Imager,int,int);
-DEFINE_LOCAL(Ready,int)
-DEFINE_META(Image,int)
-DEFINE_POINTER(ForceInt,int)
-DEFINE_TREE(Base,struct QueueBase *,int)
-DEFINE_TREE(Count,int,int)
-
-DEFINE_LOCAL(Format,char)
-DEFINE_TREE(Macro,int,int)
-DEFINE_META(Shadow,int)
-DEFINE_META(Nest,int)
-DEFINE_META(Prefix,char)
-DEFINE_POINTER(ShadowPtr,int)
-DEFINE_POINTER(NestPtr,int)
-DEFINE_POINTER(PrefixPtr,char)
-
+DEFINE_LOCAL(Scan,struct Match)
 DEFINE_LOCAL(Stage,char)
 DEFINE_LOCAL(Header,struct Header)
 DEFINE_LOCAL(Body,char)

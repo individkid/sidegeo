@@ -358,6 +358,22 @@ struct Response {
     int nint,nfloat,nbyte;
 };
 
+enum Scan {
+    Int,
+    Float,
+    String,
+    White,
+    Literal,
+    Repeat,
+    Cond,
+    Close,
+    Scans};
+struct Match {
+    enum Scan tag;
+    const char *str;
+    int idx, alt;
+};
+
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \
@@ -624,26 +640,9 @@ DECLARE_SOURCE(PcsLuas)
 DECLARE_STAGE(PcsRequest,char)
 
 DECLARE_LOCAL(PcsInt,int) // given and/or result
+DECLARE_LOCAL(PcsFloat,Myfloat) // given and/or result
 DECLARE_LOCAL(PcsChar,char) // given and/or result
-DECLARE_LOCAL(PcsBuf,char) // buffer for strings
-DECLARE_TREE(String,int,int) // whether string is in buffer
-DECLARE_TREE(Readier,int,int) // name index to ready index
-DECLARE_TREE(Imager,int,int) // name index to image index
-DECLARE_LOCAL(Ready,int) // per state count of forward uses
-DECLARE_META(Image,int) // per state list of backward users
-DECLARE_POINTER(ForceInt,int) // pointer to int queue to force
-DECLARE_TREE(Base,struct QueueBase *,int) // queue to restore upon mismatch
-DECLARE_TREE(Count,int,int) // location in PcsIntPtr of match count
-
-DECLARE_LOCAL(Format,char) // modifiable copy of format string
-DECLARE_TREE(Macro,int,int) // val to replace key in format
-DECLARE_META(Shadow,int) // vals to restore in macros
-DECLARE_META(Nest,int) // keys for restore in macros
-DECLARE_META(Prefix,char) // modified format portion for restore
-DECLARE_POINTER(ShadowPtr,int)
-DECLARE_POINTER(NestPtr,int)
-DECLARE_POINTER(PrefixPtr,char)
-
+DECLARE_LOCAL(Scan,struct Match) // format specifiers
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(Header,struct Header) // staged fifo headers
 DECLARE_LOCAL(Body,char) // staged fifo data

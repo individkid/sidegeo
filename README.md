@@ -13,37 +13,6 @@ Another module, AffTopo/Sculpt.hs, displays polytopes with OpenGL, and allows a 
   * microcode has two versions of code for each task, one version for if the polygons are represented by 6 planes, and one version for if the polygons are represented by 3 points. the tasks are display, find coplanes/copoints, find sidedness of point/plane, find pierce points, reinterpret plane/point.  
   * common contains mutex queues that are staged to and from thread local queues. command has void function pointer. haskell has event enumeration. console has endline terminated string. process has command lines. Command, Event, Kind, Data, Output, Option, File are unique types. CmdChar, CmdInt, HsChar, HsInt are uniquefied types. the basename identifies the consumer of the queue items. Cmn prefixed queues in common map onto unprefixed queues in threads. Hs prefixed queues in haskell and Cmd prefixed queues in command map into Cmn queues in common.  
 
-The syntax of options and commands is specified by format strings with the following expressions.
-
-  * (exp|exp) is any prefix  
-  * [exp|exp] is any one  
-  * {exp} is any repetition  
-  * \<exp> is matched and not enqued to result  
-  * \\mac|exp/ is named a expression  
-  * ?quot! is literally matched and enqued  
-  * !quot? is literally matched and enqued  
-  * & is whitespace matched and enqued  
-  * \# is numeral matched and enqued  
-  * @ is alphabetic matched and enqued  
-  * . is any one matched and enqued  
-  * % current result length is enqued  
-  * ident (not space special or mac) is enqued to result  
-
-For example, the syntax for --time is the following.
-
-  * \id|@{[@|#]}/\nm|[?+!|?-!]#{#}/\ |\<{&}>/ name:id% (below:id% | middle:id% | above:id%)% (min:nm% | max:nm%)% {coef:nm% (var:id% | var:id%)%}% (\<?/!> {coef:nm% (var:id% | var:id%)%})%  
-
-The BRINGUP file describes in detail what should happen upon some specific inputs. BRINGUP consists of several pipeclean cases; each starts with a name, short description, goal for success, input conditions, and then describes flow as pseudocode, for cherry picked data state upon call and return, with the following features.
-
-  * comma lists data states  
-  * semicolon lists calls  
-  * colon indicates return  
-  * square brackets with vertical bars indicates parallelism  
-  * curly brackets with vertical bars indicates alternation  
-  * parentheses facilitates pseudocode flow  
-  * redo n means go back skipping n open parenteses plus one per close encountered  
-  * done n means go forward skipping n close parantheses plus one per open encountered  
-
 Built in tests include the following, where "linear" refers to any linear space produced by tests run so far. Linear spaces produced by tests are added to a list if not already listed. The results of allSpace are saved for subsequent test runs.
 
   * classify of random planes should be linear  
@@ -64,16 +33,12 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -H print readme  
   * -f \<file> load polytope and append changes  
   * -F \<file> switch to file for perspective  
-  * -o pack out garbage in graphics buffers  
-  * -O \<ext> save minimal commands to produce polytopes  
-  * -s \<ext> prefix commands to save current state  
-  * -S \<ext> overwrite commands to save current state  
   * -e \<config> append to last file  
   * -E \<file> change last file to indicated  
+  * -d \<file> disable reads from file  
+  * -D \<file> enable reads from file  
   * -a \<name> open alternate display  
   * -A \<name> use indicated alternate display  
-  * -c \<file> combine given polytope with current  
-  * -C \<file> drill given polytope with current  
   * -t run sanity check  
   * -T run thorough tests  
 
@@ -125,8 +90,6 @@ Configuration/history files consist of commands. User input appends to file. App
   * --inflate initializes to facets between inside and outside regions  
   * --fill adds faces attached to outside region and removes inside faces  
   * --hollow adds faces attached to inside region and removes outside faces  
-  * --command sends named command with listed arguments  
-  * --event sends named event with listed arguments  
   * --sample takes per-boundary sidedness to sample with similar embed  
   * --dual takes per-region sidedness to sample with similar embed  
   * --embed interprets polyants as regions in polytope  
@@ -138,26 +101,19 @@ Configuration/history files consist of commands. User input appends to file. App
   * --source takes sound file, microphone, or noise as volatile stock  
   * --media binds Lua expression to evaluate when stock changes  
   * --color takes plane subscript and decoration  
-  * --graffiti takes plane subscript and stylus type and motions  
+  * --canvas takes plane subscript and stylus type and motions  
   * --bitmap takes plane subscript and texture specification  
   * --saver takes plane subscript and timewheel value for colors  
   * --window takes plane subscript and file to decorate facets with  
   * --picture is like window except pierce point is fixed  
   * --mirror is like window except tetrahedron is fixed  
   * --action attaches Lua function to boundary to be activated by click  
-  * --matrix takes transformation of display, ignored if not -F file  
-  * --project takes slope and cutoff, ignored if not -F file  
   * --configure pore, membrane, interpolate, texture, rate  
   * --inject specifies command line option to inject  
   * --menu changes to menu item to inject to console  
   * --bind binds Lua function to function key in console  
-  * --jump causes playback to go to location in file  
-  * --branch takes file and start stop locations for include  
-  * --start goes to a new polytope with optional name for going back  
   * --yield allow other files and command line options to proceed  
-  * --delay takes duration for interpolation with next delay 
-  * --import takes module name or file path to import for subsequent calls  
-  * --call takes Lua function of source to replace destination  
+  * --call takes Lua function and arguments to start  
 
 The constants set by --configure change behaviors by degree.
 
@@ -165,15 +121,13 @@ The constants set by --configure change behaviors by degree.
  * Membrane specifies timewheel state for new planes  
  * Interpolate specifies interpolation value for new vertices  
  * Texture specifies interpolation field for new planes  
- * Rate specifies when to record transformations into file  
  * Tweak specifies how much refine points and refine planes change  
  * Canvas specifies drawings captured as bitmaps fine or coarse actions  
  * Close specifies how close cursor must be to curve to drag over it  
  * Snap specifies grid size and rotation to snap endpoints to  
 
-The --call result string may be longer than the destination, and may contain newlines, to anywhere replace zero or more by zero or more. Between successive --delay commands, transformations are made pseudocontinuous, and other commands are distributed evenly in time. The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
+The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 
-  * value for --delay is given by --time value  
   * values for --color are given by --time values  
   * wave for --listen port is piped from --time value  
   * term variables are --time values and --metric values  

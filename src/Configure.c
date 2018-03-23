@@ -22,368 +22,140 @@
 int cofsiz = 0;
 int varsiz = 0;
 
-void parseGlobal(const char *fmt);
-int parse(const char *fmt, int len);
-int parseString(const char *str, int len);
-
 void configurePlane(void);
 void configurePoint(void);
 void configureFill(void);
 void configureHollow(void);
 void configureInflate(void);
 
-int forceInt(int *rslt, int *chrpos, int *intpos)
+int rescan(const char *pattern, int index, int accum)
 {
-	if (*intpos >= sizePcsInt()) return -1;
-	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
-	if (siz == 0) {*intpos += 1; return 0;}
-	char *nptr = arrayPcsChar(*chrpos,siz);
-	char *endptr = nptr;
-	long int val = strtol(nptr,&endptr,10);
-	if (endptr != nptr+siz) return -1;
-	if (val > INT_MAX) return -1;
-	if (val < INT_MIN) return -1;
-	*rslt = val;
-	*chrpos += siz;
-	*intpos += 1;
-	return siz;
-}
-
-int forceArray(int *chrpos, int *intpos)
-{
-	int count = 0;
-	while (*intpos < sizePcsInt() && *arrayPcsInt(*intpos,1) > *chrpos) {
-	if (forceInt(enlocForceInt(1),chrpos,intpos) < 0) return -1;
-	count += 1;}
-	return count;
-}
-
-void timeForward(int key)
-{
-	int sub = sizeReady()-1;
-	int val = -1;
-	if (*arrayReady(sub,1) == 0) {
-		if (insertReadier(key) < 0) exitErrstr("name too ready\n");
-		*castReadier(key) = sub;}
-	if (testImager(key) < 0) {
-		val = usageImage();
-		usedImage(val);
-		if (insertImager(key) < 0) exitErrstr("name too insert\n");
-		*castImager(key) = val;}
-	else {
-		val = *castImager(key);
-		if (sizeImage(val) == 0 && val == sub) exitErrstr("name too assert\n");
-		if (sizeImage(val) == 0) val = -1;}
-	if (val >= 0) {
-		*enlocImage(val,1) = key;
-		*arrayReady(sub,1) += 1;}
-	if (*arrayReady(sub,1) == 0) exitErrstr("name too assert\n");
-}
-
-void timeBackward(int key)
-{
-	int image = *castImager(key);
-	while (sizeImage(image) > 0) {
-	int key = *delocImage(image,1);
-	int ready = *castReadier(key);
-	if (*arrayReady(ready,1) == 1) {
-	*enlocPcsControl(1) = Start;
-	*enlocPcsTwInt(1) = key;}
-	if (*arrayReady(ready,1) > 1) *arrayReady(ready,1) -= 1;}
-}
-
-int timeFloat(Myfloat *rslt, int *chrpos, int *intpos)
-{
-	if (*intpos >= sizePcsInt()) return -1;
-	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
-	if (siz == 0) {*intpos += 1; return 0;}
-	char *nptr = arrayPcsChar(*chrpos,siz);
-	char *endptr = nptr;
-	Myfloat val = strtof(nptr,&endptr);
-	if (endptr != nptr+siz) return -1;
-	*rslt = val;
-	*chrpos += siz;
-	*intpos += 1;
-	return siz;
-}
-
-int timeIdent(int *key, int *chrpos, int *intpos)
-{
-	if (*intpos >= sizePcsInt()) return -1;
-	int siz = *arrayPcsInt(*intpos,1)-*chrpos;
-	if (siz == 0) {*intpos += 1; return 0;}
-	*key = parseString(arrayPcsChar(*chrpos,siz),siz);
-	*chrpos += siz;
-	*intpos += 1;
-	return siz;
-}
-
-int timeName(int *key, int *chrpos, int *intpos)
-{
-	int siz = timeIdent(key,chrpos,intpos);
-	if (siz > 0) timeForward(*key);
-	return siz;
-}
-
-int timeCoef(int *chrpos, int *intpos)
-{
-	Myfloat val;
-	int siz = timeFloat(&val,chrpos,intpos);
-	if (siz < 0) return -1;
-	if (siz > 0) *enlocCoefficient(1) = val;
-	return siz;
-}
-
-int timeVar(int *chrpos, int *intpos)
-{
-	int val;
-	int siz = timeName(&val,chrpos,intpos);
-	if (siz < 0) return -1;
-	if (siz > 0) *enlocVariable(1) = val;
-	return siz;
-}
-
-#define TIME_TERM { \
-	siz = timeCoef(chrpos,intpos); \
-	if (siz < 0) return -1; \
-	if (siz == 0) break;}
-
-#define TIME_FACTOR { \
-	siz = timeVar(chrpos,intpos); \
-	if (siz < 0) return -1; \
-	if (siz == 0) return -1;}
-
-int timePolynomial(struct Nomial *poly, int *chrpos, int *intpos, int cofsiz, int varsiz)
-{
-	poly->num0 = 0;
-	int siz;
-	while (1) {
-		TIME_TERM
-		poly->num0 += 1;}
-	poly->num1 = 0;
-	while (1) {
-		TIME_TERM
-		TIME_FACTOR
-		poly->num1 += 1;}
-	poly->num2 = 0;
-	while (1) {
-		TIME_TERM
-		TIME_FACTOR
-		TIME_FACTOR
-		poly->num2 += 1;}
-	poly->num3 = 0;
-	while (1) {
-		TIME_TERM
-		TIME_FACTOR
-		TIME_FACTOR
-		TIME_FACTOR
-		poly->num3 += 1;}
-	return 0;
-}
-
-int configureVector(int *chrpos, int *intpos)
-{
+	struct Match *match = arrayScan(index,1);
+	int intcount = sizePcsInt();
+	int floatcount = sizePcsFloat();
+	int charcount = sizePcsChar();
+	switch (match->tag) {
+	case (Int): {
+	int pos = 0;
+	int ret = sscanf(pattern," %d%n",enlocPcsInt(1),&pos);
+	if (ret == 2 && (pos = rescan(pattern+pos,index+1,accum+pos))) return pos;
+	break;}
+	case (Float): {
+	int pos = 0;
+	int ret = sscanf(pattern," %f%n",enlocPcsFloat(1),&pos);
+	if (ret == 2 && (pos = rescan(pattern+pos,index+1,accum+pos))) return pos;
+	break;}
+	case (String): {
+	int pos = 0;
+	int len = strlen(pattern);
+	int ret = sscanf(pattern," %s%n",enlocPcsChar(len+1),&pos);
+	if (ret == 2) {
+	unlocPcsChar(len-pos);
+	*arrayPcsChar(sizePcsChar()-1,1) = 0;
+	if ((pos = rescan(pattern+pos,index+1,accum+pos))) return pos;}
+	break;}
+	case (White): {
+	int pos = 0;
+	int ret = sscanf(pattern," %n",&pos);
+	if (ret == 1 && (pos = rescan(pattern+pos,index+1,accum+pos))) return pos;
+	break;}
+	case (Literal): {
+	int pos = strlen(match->str);
+	int ret = strncmp(pattern,match->str,pos);
+	if (ret == 0 && (pos = rescan(pattern+pos,index+1,accum+pos))) return pos;
+	break;}
+	case (Repeat): {
 	int count = sizePcsInt();
 	*enlocPcsInt(1) = 0;
-	while (*intpos < sizePcsInt() && *arrayPcsInt(*intpos,1) > *chrpos) {
-	if (timeFloat(enlocPcsCmdFloat(1),chrpos,intpos) < 0) return -1;
+	int pos = 0;
+	int temp = 0;
+	while ((temp = rescan(pattern+pos,index+1,accum+pos))) {
+	pos += temp;
 	*arrayPcsInt(count,1) += 1;}
+	pos = rescan(pattern+pos,match->idx,accum+pos);
+	if (pos) return pos;
+	break;}
+	case (Cond): {
+	int count = sizePcsInt();
+	*enlocPcsInt(1) = 0;
+	int pos = rescan(pattern,index+1,accum);
+	if (pos) {*arrayPcsInt(count,1) = 1;
+	pos = rescan(pattern+pos,match->idx,accum+pos);}
+	else pos = rescan(pattern,match->alt,accum);
+	if (pos) return pos;}
+	case (Close): return accum;
+	default: exitErrstr("match too tag\n");}
+	unlocPcsInt(sizePcsInt()-intcount);
+	unlocPcsFloat(sizePcsFloat()-floatcount);
+	unlocPcsChar(sizePcsChar()-charcount);
 	return 0;
 }
 
-int configureArray(int *chrpos, int *intpos)
+int myscan(const char *pattern, ...)
 {
-	int count = sizePcsCmdInt(); enlocPcsCmdInt(1);
-	usePcsCmdInt(); referForceInt();
-	int temp; if ((temp = forceArray(chrpos,intpos)) < 0) return -1;
-	*arrayPcsCmdInt(count,1) = temp;
-	return 0;
+	int orig = sizeScan();
+	va_list args;
+	va_start(args,pattern);
+	int index = orig;
+	int max = 0;
+	while (1) {
+	struct Match match = {0};
+	match.tag = va_arg(args,int);
+	if (match.tag == Scans) break;
+	switch (match.tag) {
+	case (Int): case (Float): case (String): break;
+	case (Literal): match.str = va_arg(args,const char *); break;
+	case (Repeat): match.idx = index + va_arg(args,int);
+	if (match.idx < 0) exitErrstr("match too index\n");
+	if (match.idx > max) max = match.idx; break;
+	case (Cond): match.idx = index + va_arg(args,int);
+	match.alt = index + va_arg(args,int);
+	if (match.idx < 0) exitErrstr("match too index\n");
+	if (match.idx > max) max = match.idx;
+	if (match.alt < 0) exitErrstr("match too alter\n");
+	if (match.alt > max) max = match.alt; break;
+	case (Close): break;
+	default: exitErrstr("arg too tag\n");}
+	*enlocScan(1) = match;}
+	if (max >= sizeScan()) exitErrstr("index too match\n");
+	va_end(args);
+	int ret = rescan(pattern,orig,0);
+	unlocScan(sizeScan()-orig);
+	return ret;
 }
-
-void configureFail(int chrsiz, int intsiz)
-{
-	struct QueueBase *ptr;
-	while (chooseBase(&ptr) >= 0) {
-		int siz;
-		siz = *castBase(ptr);
-		unlocQueueBase(ptr,sizeQueueBase(ptr)-siz);
-		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
-	int key;
-	while (chooseCount(&key) >= 0) {
-		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
-	unlocPcsInt(sizePcsInt()-intsiz);
-	unlocPcsChar(sizePcsChar()-chrsiz);
-}
-
-void configurePass(int chrsiz, int intsiz)
-{
-	struct QueueBase *ptr;
-	while (chooseBase(&ptr) >= 0) {
-		if (removeBase(ptr) < 0) exitErrstr("base too remove\n");}
-	int key;
-	while (chooseCount(&key) >= 0) {
-		if (removeCount(key) < 0) exitErrstr("count too remove\n");}
-	unlocPcsInt(sizePcsInt()-intsiz);
-	unlocPcsChar(sizePcsChar()-chrsiz);
-}
-
-int processCompare(const void *left, const void *right)
-{
-	int lft = void2int(left);
-	int rgt = void2int(right);
-	int len = lengthPcsBuf(lft,0);
-	int ren = lengthPcsBuf(rgt,0);
-	if (ren < len) len = ren;
-	return strncmp(arrayPcsBuf(lft,len),arrayPcsBuf(rgt,len),len);
-}
-
-#define TIME_PATTERN \
-	" {fl% <?+!>}%" \
-	" {fl% id% <?+!>}%" \
-	" {fl% id% id% <?+!>}%" \
-	" {fl% id% id% id%"
-
-#define TIME_RATIO \
-	TIME_PATTERN \
-	" <?/!>}%" \
-	TIME_PATTERN
 
 int processConfigure(int index, int len)
-{ // given unlocProChar(len), return -1 error, 0 yield, >0 continue
-	int chrsiz = sizePcsChar()-len;
-	int intsiz = sizePcsInt();
-	initString(processCompare);
-	initMacro(processCompare);
-	parseGlobal("\\id|@{[@|#]}/\\sg|([?+!|?-!])/\\nm|sg#{#}/\\fl|nm(?.!{#})([e|E]sg{#}])/\\ |<{&}>/");
-	if (parse("<?plane!> nm% fl% fl% fl%",len) > 0) { // TODO add optional name
-		int chrpos = chrsiz;
-		int intpos = intsiz;
+{ // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
+	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
+	if (myscan(pattern,White,Literal,"plane",Int,Float,Float,Float,Scans)) { // TODO add optional name
 		*enlocPcsCmdInt(1) = index;
-		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		*enlocPcsCmdInt(1) = *arrayPcsInt(sizePcsInt()-1,1); unlocPcsInt(1); // versor
+		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(sizePcsFloat()-3+i,1); unlocPcsFloat(3);
 		*enlocPcsCmdCmd(1) = configurePlane;
-		configurePass(chrsiz,intsiz);
 		return 1;}
-	if (parse("<?point!> fl% fl% fl%",len) > 0) {
-		int chrpos = chrsiz;
-		int intpos = intsiz;
+	if (myscan(pattern,White,Literal,"point",Float,Float,Float,Scans)) { // TODO add optional name
 		*enlocPcsCmdInt(1) = index;
-		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (timeFloat(enlocPcsCmdFloat(1),&chrpos,&intpos) < 0) {configureFail(chrsiz,intsiz); return -1;}
+		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(sizePcsFloat()-3+i,1); unlocPcsFloat(3);
 		*enlocPcsCmdCmd(1) = configurePoint;
-		configurePass(chrsiz,intsiz);
 		return 1;}
-	if (parse("<?inflate!>",len) > 0) {
+	if (myscan(pattern,White,Literal,"inflate",Scans)) {
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureInflate;
 		return 1;}
-	if (parse("<?fill!> nm% <?-!> {nm%}% <?-!> {nm%}%",len) > 0) {
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		*enlocPcsCmdInt(1) = index/*file*/;
-		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos)/*plane*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos)/*inside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos)/*outside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
+	if (myscan(pattern,White,Literal,"fill",Scans)) {
+		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureFill;
-		configurePass(chrsiz,intsiz);
 		return 1;}
-	if (parse("<?hollow!> nm% <?-!> {nm%}% <?-!> {nm%}%",len) > 0) {
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		*enlocPcsCmdInt(1) = index/*file*/;
-		if (forceInt(enlocPcsCmdInt(1),&chrpos,&intpos)/*plane*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos)/*inside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (configureArray(&chrpos,&intpos)/*outside*/ < 0) {configureFail(chrsiz,intsiz); return -1;}
+	if (myscan(pattern,White,Literal,"hollow",Scans)) {
+		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureHollow;
-		configurePass(chrsiz,intsiz);
 		return 1;}
-	if (parse(
-		"<?time!> id% [<?Start!> 0 |"
-		" <?Read!> <?Shape!> 1 id% |"
-		" <?Write!> <?Shape!> 2 id% |"
-		" <?Read!> <?Sound!> 3 id% nm% |"
-		" <?Write!> <?Sound!> 4 id% nm%]"
-		" (fl)% <?,!> (fl)% <?,!> (fl)% <?,!>"
-		TIME_RATIO
-		TIME_RATIO
-		TIME_RATIO
-		,len) > 0) {
-		struct State state = {0};
-		// map is clear because sub is from name
-		// run is clear to toggle and start
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		int retval;
-		if (insertBase(ptrPcsCoefficient()) < 0) exitErrstr("configure too time\n");
-		*castBase(ptrPcsCoefficient()) = sizePcsCoefficient();
-		if (insertBase(ptrPcsVariable()) < 0) exitErrstr("configure too time\n");
-		*castBase(ptrPcsVariable()) = sizePcsVariable();
-		*enlocReady(1) = 0;
-		retval = timeName(&state.idt,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		char chr = *arrayPcsChar(chrpos,1); chrpos += 1; 
-		SWITCH(chr,'0') state.ctl = Start;
-		CASE('1') {state.typ = Read; state.ctl = Shape;}
-		CASE('2') {state.typ = Write; state.ctl = Shape;}
-		CASE('3') {state.typ = Read; state.ctl = Sound;}
-		CASE('4') {state.typ = Write; state.ctl = Sound;}
-		DEFAULT(exitErrstr("typ too ctl\n");)
-		if (state.ctl == Shape || state.ctl == Sound) {
-		retval = timeName(&state.idx,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}}
-		if (state.ctl == Sound) {
-		retval = forceInt(&state.sub,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}}
-		retval = timeFloat(&state.amt,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval == 0) state.amt = strtof("0",0);
-		retval = timeFloat(&state.min,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval == 0) state.min = strtof("-INF",0);
-		retval = timeFloat(&state.max,&chrpos,&intpos);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		if (retval == 0) state.max = strtof("+INF",0);
-		state.csub = cofsiz + sizePcsCoefficient();
-		state.vsub = varsiz + sizePcsVariable();
-		retval = timePolynomial(&state.upd.n,&chrpos,&intpos,cofsiz,varsiz);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.upd.d,&chrpos,&intpos,cofsiz,varsiz);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.dly.n,&chrpos,&intpos,cofsiz,varsiz);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.dly.d,&chrpos,&intpos,cofsiz,varsiz);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.sch.n,&chrpos,&intpos,cofsiz,varsiz);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		retval = timePolynomial(&state.sch.d,&chrpos,&intpos,cofsiz,varsiz);
-		if (retval < 0) {configureFail(chrsiz,intsiz); return -1;}
-		*enlocPcsState(1) = state;
-		cofsiz += sizePcsCoefficient();
-		varsiz += sizePcsVariable();
-		timeBackward(state.idt);
-		configurePass(chrsiz,intsiz);
+	int pos = 0;
+	if ((pos = myscan(pattern,White,Literal,"inject",Scans))) {
+		int len = strlen(pattern);
+		strncpy(enlocOption(len-pos),pattern+pos,len-pos); *enlocOption(1) = '\n';
 		return 1;}
-	else if (parse("<?change!> id% fl%",len) > 0) {
-		struct Change change = {0}; // map is clear because sub is from name
-		int chrpos = chrsiz;
-		int intpos = intsiz;
-		int siz = timeIdent(&change.sub,&chrpos,&intpos);
-		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
-		siz = timeFloat(&change.val,&chrpos,&intpos);
-		if (siz <= 0) {configureFail(chrsiz,intsiz); return -1;}
-		*enlocPcsChange(1) = change;
-		configurePass(chrsiz,intsiz);
-		return 1;}
-	// TODO command event
-	// TODO metric source listen media
-	else if (parse("<?inject!> {.}%",len) > 0) {
-		usePcsChar(); xferOption(*delocPcsInt(1));
-		return 1;}
-	else if (parse("<?yield!>",len) > 0) {
-		if (intsiz != sizePcsInt() || chrsiz != sizePcsChar()) exitErrstr("configure too size\n");
+	if (myscan(pattern,White,Literal,"yield",Scans)) {
 		return 0;}
     return -1;
 }
