@@ -364,7 +364,6 @@ enum Scan {
     String,
     White,
     Literal,
-    Repeat,
     Cond,
     Close,
     Scans};
@@ -387,6 +386,80 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
     int sub = size##NAME(); \
     memcpy(enloc##NAME(len+1),buf,len+1); \
     return sub; \
+}
+
+#define DECLARE_SCAN(THD) \
+int scan##THD(const char *pattern, ...);
+#define DEFINE_SCAN(THD) \
+int rescan##THD(const char *pattern, int index, int accum) \
+{ \
+    struct Match match = *array##THD##Scan(index,1); \
+    int intpos = size##THD##Int(); \
+    int floatpos = size##THD##Float(); \
+    int charpos = size##THD##Char(); \
+    switch (match.tag) { \
+    case (Int): { \
+    int pos1 = 0, ret = sscanf(pattern," %d%n",enloc##THD##Int(1),&pos1); if (ret == 2) { \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    break;} \
+    case (Float): { \
+    int pos1 = 0, ret = sscanf(pattern," %f%n",enloc##THD##Float(1),&pos1); if (ret == 2) { \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    break;} \
+    case (String): { \
+    int len = strlen(pattern), pos0 = size##THD##Char(); \
+    int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len+1),&pos1); if (ret == 2) { \
+    unloc##THD##Char(len-pos1); *array##THD##Char(pos0+pos1,1) = 0; \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    break;} \
+    case (White): { \
+    int pos1 = 0, ret = sscanf(pattern," %n",&pos1); if (ret == 1) { \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    break;} \
+    case (Literal): { \
+    int pos1 = strlen(match.str), ret = strncmp(pattern,match.str,pos1); if (ret == 0) { \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    break;} \
+    case (Cond): { \
+    int pos0 = size##THD##Int(); *enloc##THD##Int(1) = 0; \
+    int pos1 = rescan##THD(pattern,index+1,accum); if (pos1) { \
+    *array##THD##Int(pos0,1) = 1; \
+    int pos2 = rescan##THD(pattern+pos1,match.idx,accum+pos1); if (pos2) return pos2;} else { \
+    int pos2 = rescan##THD(pattern,match.alt,accum); if (pos2) return pos2;} \
+    break;} \
+    case (Close): return accum; \
+    default: exitErrstr("match too tag\n");} \
+    unloc##THD##Int(size##THD##Int()-intpos); \
+    unloc##THD##Float(size##THD##Float()-floatpos); \
+    unloc##THD##Char(size##THD##Char()-charpos); \
+    return 0; \
+} \
+int scan##THD(const char *pattern, ...) \
+{ \
+    int orig = sizePcsScan(); \
+    va_list args = {0}; va_start(args,pattern); \
+    int index = orig, max = 0; \
+    while (1) { \
+    struct Match match = {0}; \
+    match.tag = va_arg(args,int); \
+    if (match.tag == Scans) break; \
+    switch (match.tag) { \
+    case (Int): case (Float): case (String): case (White): break; \
+    case (Literal): match.str = va_arg(args,const char *); break; \
+    case (Cond): match.idx = index + va_arg(args,int); \
+    match.alt = index + va_arg(args,int); \
+    if (match.idx < orig) exitErrstr("match too index\n"); \
+    if (match.idx > max) max = match.idx; \
+    if (match.alt < orig) exitErrstr("match too alter\n"); \
+    if (match.alt > max) max = match.alt; break; \
+    case (Close): break; \
+    default: exitErrstr("arg too tag\n");} \
+    *enlocPcsScan(1) = match; index += 1;} \
+    if (max >= sizePcsScan()) exitErrstr("index too match\n"); \
+    va_end(args); \
+    int ret = rescan##THD(pattern,orig,0); \
+    unlocPcsScan(sizePcsScan()-orig); \
+    return ret; \
 }
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
@@ -642,7 +715,7 @@ DECLARE_STAGE(PcsRequest,char)
 DECLARE_LOCAL(PcsInt,int) // given and/or result
 DECLARE_LOCAL(PcsFloat,Myfloat) // given and/or result
 DECLARE_LOCAL(PcsChar,char) // given and/or result
-DECLARE_LOCAL(Scan,struct Match) // format specifiers
+DECLARE_LOCAL(PcsScan,struct Match) // format specifiers
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(Header,struct Header) // staged fifo headers
 DECLARE_LOCAL(Body,char) // staged fifo data
