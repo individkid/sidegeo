@@ -422,3 +422,8 @@ void configureHollow(void)
     *enlocCmdHsCmd(1) = enqueFilter;
     *enlocCmdEvent(1) = Hollow;
 }
+
+void luaRequest(void)
+{
+    // TODO delocYield
+}

@@ -511,6 +511,7 @@ DECLARE_STAGE(CmnCommand,Command)
 DECLARE_STAGE(CmnCmdInt,int)
 DECLARE_STAGE(CmnCmdFloat,Myfloat)
 DECLARE_STAGE(CmnCmdByte,char)
+DECLARE_STAGE(Yield,struct Response)
 DECLARE_STAGE(CmnVoid,Command)
 DECLARE_STAGE(CmnRender,struct Render)
 

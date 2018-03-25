@@ -30,18 +30,21 @@ void configureInflate(void);
 
 DEFINE_SCAN(Pcs)
 
+#define UNLOC(POS,TYP,NUM) if (sizePcs##TYP()!=POS##pos+NUM) exitErrstr("typ too pos\n"); unlocPcs##TYP(NUM);
+
 int processConfigure(int index, int len)
 { // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
 	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
+	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
 	if (scanPcs(pattern,Literal,"plane",Int,Float,Float,Float,Scans)) { // TODO add optional name
 		*enlocPcsCmdInt(1) = index;
-		*enlocPcsCmdInt(1) = *arrayPcsInt(sizePcsInt()-1,1); unlocPcsInt(1); // versor
-		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(sizePcsFloat()-3+i,1); unlocPcsFloat(3);
+		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); UNLOC(int,Int,1) // versor
+		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1); UNLOC(float,Float,3)
 		*enlocPcsCmdCmd(1) = configurePlane;
 		return 1;}
 	if (scanPcs(pattern,Literal,"point",Float,Float,Float,Scans)) { // TODO add optional name
 		*enlocPcsCmdInt(1) = index;
-		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(sizePcsFloat()-3+i,1); unlocPcsFloat(3);
+		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1); UNLOC(float,Float,3);
 		*enlocPcsCmdCmd(1) = configurePoint;
 		return 1;}
 	if (scanPcs(pattern,Literal,"inflate",Scans)) {

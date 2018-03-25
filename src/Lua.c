@@ -25,6 +25,8 @@
 lua_State *lua = 0;
 int complain = 0;
 
+void luaRequest(void);
+
 enum Request requestLua(int num)
 {
 	return Requests; // TODO
@@ -56,6 +58,7 @@ void consumeLua(void *arg)
 {
 	struct Response response = {0};
 	int ret = LUA_OK;
+
 	if (sizeRequest() > 0) {
 	int len = lengthRequest(0,0);
 	if (len == sizeRequest()) exitErrstr("lua too size\n");
@@ -64,16 +67,20 @@ void consumeLua(void *arg)
 	response.tag = allocScript();
 	*castScript(response.tag) = thread;
 	ret = luaL_loadstring(thread,buf);}
+
 	else if (sizeResponse() > 0) {
 	response = *delocResponse(1);
 	for (int i = 0; i < response.nint; i++) lua_pushinteger(lua,*delocLuaInt(1));
 	for (int i = 0; i < response.nfloat; i++) lua_pushnumber(lua,*delocLuaFloat(1));
 	lua_pushlstring(lua,delocLuaByte(response.nbyte),response.nbyte);}
+
 	else return;
+
 	if (ret == LUA_OK) {
 	int narg = response.nint+response.nfloat+response.nbyte;
 	lua_State *thread = *castScript(response.tag);
 	ret = lua_resume(thread,0,narg);}
+
 	if (ret == LUA_YIELD) {
 	lua_State *thread = *castScript(response.tag);
 	response.req = requestLua(lua_tointeger(thread,-1)); lua_pop(thread,1);
@@ -81,13 +88,19 @@ void consumeLua(void *arg)
 	for (int i = 0; i < response.nint; i++) {*enlocLuaCmdInt(1) = lua_tointeger(thread,-1); lua_pop(thread,1);}
 	response.nfloat = lua_tointeger(thread,-1); lua_pop(thread,1);
 	for (int i = 0; i < response.nfloat; i++) {*enlocLuaCmdFloat(1) = lua_tonumber(thread,-1); lua_pop(thread,1);}
-	size_t len; const char *buf = lua_tolstring(thread,-1,&len); response.nbyte = len;
-	for (int i = 0; i < response.nbyte; i++) *enlocLuaCmdByte(1) = buf[i];
-	*enlocLuaYield(1) = response;}
+	response.nbyte = lua_tointeger(thread,-1); lua_pop(thread,1);
+	for (int i = 0; i < response.nbyte; i++) {
+	size_t len; const char *buf = lua_tolstring(thread,-1,&len);
+	for (int i = 0; i < len; i++) *enlocLuaCmdByte(1) = buf[i];
+	lua_pop(thread,1);}
+	*enlocLuaYield(1) = response;
+	*enlocLuaCommand(1) = luaRequest;}
+
 	if (ret != LUA_OK) {
 	lua_State *thread = *castScript(response.tag);
 	// TODO send message to LuaOutput
 	lua_pop(thread,1);}
+
 	if (ret != LUA_YIELD) {
 	lua_pop(lua,1);
 	freeScript(response.tag);}
