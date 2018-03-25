@@ -60,11 +60,15 @@ int processConfigure(int index, int len)
 		*enlocPcsCmdCmd(1) = configureHollow;
 		return 1;}
 	int pos = scanPcs(pattern,Literal,"inject",Scans); if (pos) {
-		int len = strlen(pattern);
-		strncpy(enlocOption(len-pos),pattern+pos,len-pos); *enlocOption(1) = '\n';
+		int len = strlen(pattern+pos);
+		strncpy(enlocOption(len),pattern+pos,len); *enlocOption(1) = '\n';
 		return 1;}
 	if (scanPcs(pattern,Literal,"yield",Scans)) {
 		return 0;}
+	pos = scanPcs(pattern,Literal,"call",Scans); if (pos) {
+		int len = strlen(pattern+pos);
+		strncpy(enlocPcsRequest(len),pattern+pos,len); *enlocPcsRequest(1) = 0;
+		return 1;}
     return -1;
 }
 
