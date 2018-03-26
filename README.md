@@ -32,17 +32,15 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -h print usage  
   * -H print readme  
   * -f \<file> load polytope and append changes  
-  * -F \<file> switch to file for perspective  
+  * -F \<file> toggle enable read from file  
   * -e \<config> append to last file  
   * -E \<file> change last file to indicated  
-  * -d \<file> disable reads from file  
-  * -D \<file> enable reads from file  
   * -a \<name> open alternate display  
   * -A \<name> use indicated alternate display  
   * -t run sanity check  
   * -T run thorough tests  
 
-Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Perform/Execute mode.
+Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Execute mode.
 
   * Additive -- click fills in region over pierce point  
   * Subtractive -- click hollows out region under pierce point  
@@ -114,6 +112,8 @@ Configuration/history files consist of commands. User input appends to file. App
   * --bind binds Lua function to function key in console  
   * --yield allow other files and command line options to proceed  
   * --call takes Lua function and arguments to start  
+
+The --call --yield --inject -F commands synchronize actions. To wait for a --call Lua script to complete before proceeding, issue --injectFthis --callLuaScript --yield. The --inject disables the current file after --yield allows injected options to be executed. The --call kicks off the Lua script. A -F injected by the Lua script will be after the one injected by the --inject, because -F is processed by the same thread as the -inject.
 
 The constants set by --configure change behaviors by degree.
 

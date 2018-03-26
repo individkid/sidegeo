@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     int condition = 1<<Not;
     for (int i = 1; i < argc; i++) {
         int len = strlen(argv[i]);
-        const char *set = "hHotT";
+        const char *set = "hHtT";
         char spn[2] = {0};
         if (len > 1) spn[0] = argv[i][1];
         if (len > 1 && argv[i][0] == '-' && strspn(spn,set)) condition |= 1<<One;
