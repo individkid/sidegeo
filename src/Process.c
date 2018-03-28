@@ -274,8 +274,14 @@ void processComplain(int len)
     // TODO xfer from PcsChar to PcsOutput
 }
 
+int processCompare(const void *left, const void *right)
+{
+    return strcmp(stringPcsBuf(void2int(left),0),stringPcsBuf(void2int(right),0));
+}
+
 void processBefore(void)
 {
+    initIdent(processCompare);
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("mutex init failed: %s\n",strerror(errno));
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }

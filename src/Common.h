@@ -434,14 +434,15 @@ int rescan##THD(const char *pattern, int index, int accum) \
     unloc##THD##Char(size##THD##Char()-charpos); \
     return 0; \
 } \
-int scan##THD(const char *pattern, ...) \
+int scan##THD(const char *pattern, int len, ...) \
 { \
     int orig = sizePcsScan(); \
-    va_list args = {0}; va_start(args,pattern); \
+    va_list args = {0}; va_start(args,len); \
     int index = orig, max = 0; \
     while (1) { \
     struct Match match = {0}; \
     match.tag = va_arg(args,int); \
+    if ((index-orig == len) != (match.tag == Scans)) exitErrstr("index too tag\n"); \
     if (match.tag == Scans) break; \
     switch (match.tag) { \
     case (Int): case (Float): case (String): case (White): break; \
@@ -570,7 +571,6 @@ DECLARE_META(Seqnum,int)
 DECLARE_META(Range,int)
 DECLARE_META(Client,char)
 
-// TODO lockCmnCommands before enloc to xfer queues
 DECLARE_DEST(Commands)
 DECLARE_STAGE(Command,Command)
 DECLARE_EXTRA(CmdInt,int)
@@ -717,6 +717,11 @@ DECLARE_LOCAL(PcsInt,int) // given and/or result
 DECLARE_LOCAL(PcsFloat,Myfloat) // given and/or result
 DECLARE_LOCAL(PcsChar,char) // given and/or result
 DECLARE_LOCAL(PcsScan,struct Match) // format specifiers
+DECLARE_LOCAL(PcsBuf,char) // string buffer
+DECLARE_TREE(Ident,int,int) // string index to plane identifier
+DECLARE_LOCAL(Count,int) // per file number of planes
+DECLARE_LOCAL(Name,int) // file name string buffer index
+
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(Header,struct Header) // staged fifo headers
 DECLARE_LOCAL(Body,char) // staged fifo data

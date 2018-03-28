@@ -140,8 +140,6 @@ void file(void)
 void responseLayer(void)
 {
     int len = *delocCmdInt(1);
-    int path = *arrayCmdInt(len,1);
-    if (path != 1) exitErrstr("response too path\n");
     int tag = *arrayCmdInt(1+len,1);
     useCmdInt(); xferReint(tag,len);
     delocCmdInt(1); // tag
@@ -151,8 +149,6 @@ void responseProceed(void)
 {
     int len = *delocCmdInt(1);
     if (len != 0) exitErrstr("response too len\n");
-    int path = *delocCmdInt(1);
-    if (path != 1) exitErrstr("response too path\n");
     int tag = *delocCmdInt(1);
     int size = sizeReint(tag);
     *arrayReint(tag,size-1,1) = 1;
