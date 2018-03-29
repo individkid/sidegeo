@@ -27,6 +27,7 @@ EXTERNCBEGIN
 #include <limits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <time.h>
 #include "pa_ringbuffer.h"
 #include <lua.h>
 
@@ -344,6 +345,7 @@ struct Header { // information about data appended to files
     int siz; // number of bytes appended
     int pos; // filepos indicating when to append sideband
     int pid; // which process sideband belongs to
+    time_t tim; // when process pid started
     int neg; // whether this is sideband data
     int idx; // which fifo to append to
 };

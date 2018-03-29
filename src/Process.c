@@ -48,6 +48,7 @@ struct Helper {
     int sidepos; // location to read
     struct Header header;
 } helper = {0};
+time_t pidtime = 0;
 
 void inithlp(struct Helper *hlp)
 {
@@ -76,7 +77,7 @@ void readside(struct Helper *hlp, sigjmp_buf *env)
         if (retval < sizeof(hlp->header)) {hlp->header.pid = 0; break;}
         hlp->sidepos += sizeof(hlp->header);}
     if (hlp->header.pos > hlp->filepos) break;
-    if (hlp->header.pid == getpid()) {
+    if (hlp->header.pid == getpid() && hlp->header.tim == pidtime) {
         if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
         char buf[hlp->header.siz];
         if (read(hlp->side,buf,hlp->header.siz) != hlp->header.siz) errorinj(hlp,env);
@@ -281,6 +282,7 @@ int processCompare(const void *left, const void *right)
 
 void processBefore(void)
 {
+    pidtime = time(0);
     initIdent(processCompare);
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("mutex init failed: %s\n",strerror(errno));
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
@@ -292,6 +294,7 @@ void processConsume(void *arg)
         struct Header header = {0};
         header.siz = lengthConfigure(0,'\n');
         header.pid = getpid();
+        header.tim = pidtime;
         header.neg = *delocConfiguree(1);
         header.idx = *delocConfigurer(1);
         *enlocHeader(1) = header;
