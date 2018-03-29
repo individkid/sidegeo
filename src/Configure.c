@@ -78,6 +78,7 @@ int processPlane(int *cpos, int *plane, int file)
 	insertIdent(prepos); *castIdent(prepos) = count;
 	*plane = count;}
 
+	*cpos += clen;
 	return 0;
 }
 
