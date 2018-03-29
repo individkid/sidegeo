@@ -49,7 +49,7 @@ int processPlane(int *cpos, int *plane, int file)
 	// named and found: return found as *plane
 	if (named && found) {
 	unlocPcsBuf(sizePcsBuf()-prepos);
-	*plane = key; *cpos += clen+1;}
+	*plane = *castIdent(key); *cpos += clen+1;}
 
 	// named and not found: insert name and count, return count as *plane
 	else if (named && !found) {

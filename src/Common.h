@@ -447,7 +447,7 @@ int rescan##THD(const char *pattern, int index, int accum) \
 } \
 int scan##THD(const char *pattern, int len, ...) \
 { \
-    int orig = sizePcsScan(); \
+    int orig = size##THD##Scan(); \
     va_list args = {0}; va_start(args,len); \
     int index = orig, max = 0; \
     while (1) { \
@@ -466,11 +466,11 @@ int scan##THD(const char *pattern, int len, ...) \
     if (match.alt > max) max = match.alt; break; \
     case (Close): break; \
     default: exitErrstr("arg too tag\n");} \
-    *enlocPcsScan(1) = match; index += 1;} \
-    if (max >= sizePcsScan()) exitErrstr("index too match\n"); \
+    *enloc##THD##Scan(1) = match; index += 1;} \
+    if (max >= size##THD##Scan()) exitErrstr("index too match\n"); \
     va_end(args); \
     int ret = rescan##THD(pattern,orig,0); \
-    unlocPcsScan(sizePcsScan()-orig); \
+    unloc##THD##Scan(size##THD##Scan()-orig); \
     return ret; \
 }
 
