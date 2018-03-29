@@ -362,6 +362,7 @@ enum Scan {
     Int,
     Float,
     String,
+    Token,
     White,
     Literal,
     Cond,
@@ -408,9 +409,19 @@ int rescan##THD(const char *pattern, int index, int accum) \
     break;} \
     case (String): { \
     int len = strlen(pattern), pos0 = size##THD##Char(); \
-    int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len+1),&pos1); if (ret == 2) { \
+    int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len+1),&pos1); if (ret != 2) break; \
     unloc##THD##Char(len-pos1); *array##THD##Char(pos0+pos1,1) = 0; \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2; \
+    break;} \
+    case (Token): { \
+    int len0 = strlen(pattern), pos0 = size##THD##Char(); \
+    int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len0+1),&pos1); if (ret != 2) break; \
+    unloc##THD##Char(len0-pos1); *array##THD##Char(pos0+pos1,1) = 0; \
+    char *str0 = array##THD##Char(pos0,pos1+1); \
+    char *str1 = strstr(str0,match.str); if (str1 == 0) break; \
+    int len1 = str1-str0; unloc##THD##Char(pos1-len1); *array##THD##Char(pos0+len1,1) = 0; \
+    int len2 = len1 + strlen(match.str); \
+    int pos2 = rescan##THD(pattern+len2,index+1,accum+len2); if (pos2) return pos2; \
     break;} \
     case (White): { \
     int pos1 = 0, ret = sscanf(pattern," %n",&pos1); if (ret == 1) { \

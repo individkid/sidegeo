@@ -113,6 +113,7 @@ EXTERNC int enarg##NAME(void); \
 EXTERNC int length##NAME(int sub, TYPE val); \
 EXTERNC TYPE *string##NAME(int sub, TYPE val); \
 EXTERNC TYPE *copy##NAME(int to, int from, int siz); \
+EXTERNC TYPE *over##NAME(int to, int from, int siz); \
 EXTERNC struct QueueBase *ptr##NAME(void);
 
 #define DECLARE_INDEX(NAME,TYPE,INDEX) \
@@ -131,6 +132,7 @@ EXTERNC int enarg##NAME(INDEX idx); \
 EXTERNC int length##NAME(INDEX idx,int sub, TYPE val); \
 EXTERNC TYPE *string##NAME(INDEX idx,int sub, TYPE val); \
 EXTERNC TYPE *copy##NAME(INDEX idx, int to, int from, int siz); \
+EXTERNC TYPE *over##NAME(INDEX idx, int to, int from, int siz); \
 EXTERNC struct QueueBase *ptr##NAME(INDEX idx);
 
 #define DECLARE_STAGE(NAME,TYPE) DECLARE_LOCAL(NAME,TYPE)
@@ -812,6 +814,20 @@ template<class TYPE> struct QueueStruct : QueueBase {
         if (to+siz > size()) enloc(to+siz - size());
         return (TYPE *)memcpy(array(to,siz),buf,siz);
     }
+    TYPE *over(int to, int from, int siz)
+    {
+        if (to < from) {
+            TYPE *dst = array(to,(from-to)+siz);
+            TYPE *src = dst + (from-to);
+            for (int i = 0; i < siz; i += 1, dst += 1, src += 1) *dst = *src;
+            return dst;
+        }
+        if (to+siz > size()) enloc(to+siz - size());
+        TYPE *src = array(from,(to-from)+siz) + siz - 1;
+        TYPE *dst = src + (to-from) + siz - 1;
+        for (int i = 0; i < siz; i += 1, src -= 1, dst -= 1) *dst = *src;
+        return dst;
+    }
 };
 
 template<class TYPE> QueueStruct<TYPE> *QueueStruct<TYPE>::src = 0;
@@ -833,6 +849,7 @@ extern "C" int enarg##NAME(void) {return NAME##Inst.enarg();} \
 extern "C" int length##NAME(int sub, TYPE val) {return NAME##Inst.length(sub,val);} \
 extern "C" TYPE *string##NAME(int sub, TYPE val) {return NAME##Inst.string(sub,val);} \
 extern "C" TYPE *copy##NAME(int to, int from, int siz) {return NAME##Inst.copy(to,from,siz);} \
+extern "C" TYPE *over##NAME(int to, int from, int siz) {return NAME##Inst.over(to,from,siz);} \
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.ptr();}
 
 #define DEFINE_INDEX(NAME,TYPE,INDEX,PTR) \
@@ -851,6 +868,7 @@ extern "C" int enarg##NAME(INDEX idx) {return NAME##Inst.PTR->enarg();} \
 extern "C" int length##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->length(sub,val);} \
 extern "C" TYPE *string##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->string(sub,val);} \
 extern "C" TYPE *copy##NAME(INDEX idx, int to, int from, int siz) {return NAME##Inst.PTR->copy(to,from,siz);} \
+extern "C" TYPE *over##NAME(INDEX idx, int to, int from, int siz) {return NAME##Inst.PTR->over(to,from,siz);} \
 extern "C" QueueBase *ptr##NAME(INDEX idx) {return NAME##Inst.PTR->ptr();}
 
 #define DEFINE_PTR(NAME,TYPE,PTR) \
@@ -869,6 +887,7 @@ extern "C" int enarg##NAME(void) {return NAME##Inst.PTR->enarg();} \
 extern "C" int length##NAME(int sub, TYPE val) {return NAME##Inst.PTR->length(sub,val);} \
 extern "C" TYPE *string##NAME(int sub, TYPE val) {return NAME##Inst.PTR->string(sub,val);} \
 extern "C" TYPE *copy##NAME(int to, int from, int siz) {return NAME##Inst.PTR->copy(to,from,siz);} \
+extern "C" TYPE *over##NAME(int to, int from, int siz) {return NAME##Inst.PTR->over(to,from,siz);} \
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.PTR->ptr();}
 
 #define DEFINE_STAGE(NAME,TYPE,NEXT) DEFINE_LOCAL(NAME,TYPE,&NEXT##Inst,0)

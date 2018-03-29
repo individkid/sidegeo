@@ -29,50 +29,87 @@ void configureHollow(void);
 void configureInflate(void);
 
 DEFINE_SCAN(Pcs)
-DEFINE_MSGSTR(PcsChar)
+DEFINE_MSGSTR(PcsBuf)
 
-int processIdent(int charpos, int *plane, int *file)
+int processPlane(int *cpos, int *plane, int file)
 {
+	int filepos = *arrayName(file,1);
+	int filelen = lengthPcsBuf(filepos,0);
+	int prepos = sizePcsBuf();
+	overPcsBuf(prepos,filepos,filelen);
+	*enlocPcsBuf(1) = ':';
+	int sufpos = sizePcsBuf();
+
+	char *cstr = stringPcsChar(*cpos,0);
+	int clen = strlen(cstr);
+	int named = (cstr[0] != '_' || cstr[1] != 0);
+	int found = 0, key = 0;
+	int count = *arrayCount(file,1);
+
+	if (named) {
+	usePcsChar(); copyPcsBuf(sufpos,*cpos,clen);
+	found = (findIdent(&key) == 0);} else {
+	msgstrPcsBuf("%d",0,count);
+	found = (findIdent(&key) == 0);}
+
+	// named and found: return found as *plane
+	if (named && found) {
+	unlocPcsBuf(sizePcsBuf()-prepos);
+	*plane = key;}
+
+	// named and not found: insert name and count, return count as *plane
+	else if (named && !found) {
 	int pos = sizePcsBuf();
-	int len = sizePcsChar()-charpos;
-	usePcsChar(); copyPcsBuf(pos,charpos,len); unlocPcsChar(len);
-	if (findIdent(&pos)==0) {unlocPcsBuf(len); *plane = *castIdent(pos); return 1;}
-	insertIdent(pos); *castIdent(pos) = *plane;
+	int len = sufpos-prepos;
+	overPcsBuf(pos,prepos,len);
+	msgstrPcsBuf("%d",0,count);
+	if (checkIdent(pos)) unlocPcsBuf(sizePcsBuf()-pos);
+	else {insertIdent(pos); *castIdent(pos) = count;}
+	insertIdent(prepos); *castIdent(prepos) = count;
+	*plane = count;}
+
+	// unnamed and found: return count as *plane
+	else if (!named && found) {
+	unlocPcsBuf(sizePcsBuf()-prepos);
+	*plane = count;}
+
+	// unnamed and not found: insert count, return count as *plane
+	else if (!named && !found) {
+	insertIdent(prepos); *castIdent(prepos) = count;
+	*plane = count;}
+
 	return 0;
 }
 
-int processPlane(int charpos, int *plane, int *file)
+int processFile(int *cpos, int *file)
 {
-	char *str = stringPcsChar(charpos,0);
-	char *colon = strstr(str,":");
-	char *before = (colon ? str : 0);
-	char *after = (colon ? colon+1 : str);
-	if (colon) *colon = 0;
-	if (before && before[0] == '_' && before[1] == 0) before = 0;
-	if (after && after[0] == '_' && after[1] == 0) after = 0;
-	if (before) {int i = 0; while (i < sizeName()) {
+	char *str = stringPcsChar(*cpos,0);
+	if (str[0] == '_' && str[1] == 0) {
+	*cpos += 2; return 0;}
+	int len = strlen(str);
+	for (int i = 0; i < sizeName(); i++) {
 	int pos = *arrayName(i,1);
-	int len = strlen(before);
-	int tot = lengthPcsBuf(pos,0);
-	char *name = stringPcsBuf(pos,0);
-	char *found = strstr(name,before);
-	char *suffix = name+tot-len;
-	if (found == suffix) {*file = i; break;}
-	i += 1;}
-	if (i == sizeName()) return -1;}
-	if (after) packPcsChar(charpos,after-str);
-	*packPcsChar(charpos,-1) = ':';
-	int namebuf = *arrayName(*file,1);
-	int namelen = lengthPcsBuf(namebuf,0);
-	packPcsChar(charpos,namelen);
-	usePcsBuf(); copyPcsChar(charpos,namebuf,namelen);
-	*plane = *arrayCount(*file,1);
-	if (!processIdent(charpos,plane,file)) {
-	msgstrPcsChar("%s:%d",0,stringPcsBuf(namebuf,0),plane);
-	int temp = *plane; processIdent(charpos,&temp,file);
-	if (temp != *plane) exitErrstr("plane too ident\n");
-	*arrayCount(*file,1) += 1;}
-	return 0;
+	char *suf = stringPcsBuf(pos,0);
+	int fix = strlen(suf);
+	if (fix < len) continue;
+	char *suffix = suf + (fix-len);
+	if (strcmp(str,suffix) == 0) {
+	*file = i; *cpos += len+1; return 0;}}
+	return -1;
+}
+
+int processPath(int *ipos, int *cpos, int len, int *plane, int *file)
+{
+	int ret = 0;
+	if (*arrayPcsInt(*ipos,1)) {
+	if (processFile(cpos,file) < 0) return -1;
+	*ipos += 1;}
+	while (len > 0 && *arrayPcsInt(*ipos,1)) {
+	if (processPlane(cpos,plane,*file) < 0) return -1;
+	len -= 1; plane += 1; *ipos += 1; ret += 1;}
+	if (len == 0) return -1;
+	if (processPlane(cpos,plane+1,*file) < 0) return -1;
+	return ret + 1;
 }
 
 #define UNLOC \
@@ -84,12 +121,12 @@ int processConfigure(int index, int len)
 { // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
 	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
-	if (scanPcs(pattern,5,Literal,"plane",String,Int,Float,Float,Float,Scans)) {
-		int plane = 0;
-		if (processPlane(charpos,&plane,&index) < 0) {UNLOC return -1;}
+	if (scanPcs(pattern,10,Literal,"plane",Cond,2,2,Token,":",Cond,0,2,Token,",",String,Int,Float,Float,Float,Scans)) {
+		int plane = 0, ipos = intpos, cpos = charpos;
+		if (processPath(&ipos,&cpos,1,&plane,&index) != 1) {UNLOC return -1;}
 		*enlocPcsCmdInt(1) = plane;
 		*enlocPcsCmdInt(1) = index;
-		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // versor
+		*enlocPcsCmdInt(1) = *arrayPcsInt(ipos,1); // versor
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePlane;
 		UNLOC return 1;}
