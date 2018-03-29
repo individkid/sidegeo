@@ -36,26 +36,20 @@ int processPlane(int *cpos, int *plane, int file)
 	int filepos = *arrayName(file,1);
 	int filelen = lengthPcsBuf(filepos,0);
 	int prepos = sizePcsBuf();
-	overPcsBuf(prepos,filepos,filelen);
-	*enlocPcsBuf(1) = ':';
+	overPcsBuf(prepos,filepos,filelen); *enlocPcsBuf(1) = ':';
 	int sufpos = sizePcsBuf();
-
 	char *cstr = stringPcsChar(*cpos,0);
 	int clen = strlen(cstr);
 	int named = (cstr[0] != '_' || cstr[1] != 0);
-	int found = 0, key = 0;
 	int count = *arrayCount(file,1);
-
-	if (named) {
-	usePcsChar(); copyPcsBuf(sufpos,*cpos,clen);
-	found = (findIdent(&key) == 0);} else {
-	msgstrPcsBuf("%d",0,count);
-	found = (findIdent(&key) == 0);}
+	if (named) {usePcsChar(); copyPcsBuf(sufpos,*cpos,clen+1);}
+	else msgstrPcsBuf("%d",0,count);
+	int key = 0; int found = (findIdent(&key) == 0);
 
 	// named and found: return found as *plane
 	if (named && found) {
 	unlocPcsBuf(sizePcsBuf()-prepos);
-	*plane = key;}
+	*plane = key; *cpos += clen+1;}
 
 	// named and not found: insert name and count, return count as *plane
 	else if (named && !found) {
@@ -66,19 +60,21 @@ int processPlane(int *cpos, int *plane, int file)
 	if (checkIdent(pos)) unlocPcsBuf(sizePcsBuf()-pos);
 	else {insertIdent(pos); *castIdent(pos) = count;}
 	insertIdent(prepos); *castIdent(prepos) = count;
-	*plane = count;}
+	*arrayCount(file,1) += 1;
+	*plane = count; *cpos += clen+1;}
 
 	// unnamed and found: return count as *plane
 	else if (!named && found) {
 	unlocPcsBuf(sizePcsBuf()-prepos);
-	*plane = count;}
+	*arrayCount(file,1) += 1;
+	*plane = count; *cpos += clen+1;}
 
 	// unnamed and not found: insert count, return count as *plane
 	else if (!named && !found) {
 	insertIdent(prepos); *castIdent(prepos) = count;
-	*plane = count;}
+	*arrayCount(file,1) += 1;
+	*plane = count; *cpos += clen+1;}
 
-	*cpos += clen;
 	return 0;
 }
 
