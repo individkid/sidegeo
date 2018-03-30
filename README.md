@@ -47,8 +47,8 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
   * Tweak -- click tweaks plane possibly holding space fixed  
-  * Equalizer -- click opens panel to modifie clicked items  
-  * Hyperlink -- click jumps through facet to another space  
+  * Jump -- click jumps through facet to another space  
+  * Equalizer -- click opens panel to modify clicked items  
   * Execute -- click calls Lua function attached to facet  
   * Move -- click moves pierced target to alternate display  
   * Copy -- click copies pierced target to alternate display  
@@ -76,12 +76,12 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
   * Panel -- which panel opened by Equalizer  
-    * Graffiti -- open panel to draw on facet with styluses  
-    * System -- open panel for stocks flows and attachments  
-    * Markup -- open panel for attached files and commands  
     * Topology -- open panel for classifications to sample  
+    * Decorate -- open panel for bitmap stylus screen saver  
+    * Markup -- open panel for attached files and commands  
+    * System -- open panel for stocks flows and attachments  
 
-Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. The names supplied in --time --start --plane commands have file scope shared by --branch and --jump files.
+Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  
@@ -97,14 +97,9 @@ Configuration/history files consist of commands. User input appends to file. App
   * --metric funtion name, facet specifications for term values  
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
-  * --media binds Lua expression to evaluate when stock changes  
+  * --script binds Lua expression to evaluate when stock changes  
   * --color takes plane subscript and decoration  
-  * --canvas takes plane subscript and stylus type and motions  
-  * --bitmap takes plane subscript and texture specification  
-  * --saver takes plane subscript and timewheel value for colors  
-  * --window takes plane subscript and file to decorate facets with  
-  * --picture is like window except pierce point is fixed  
-  * --mirror is like window except tetrahedron is fixed  
+  * --jump takes plane subscript and fork exec arguments  
   * --action attaches Lua function to boundary to be activated by click  
   * --configure pore, membrane, interpolate, texture, rate  
   * --inject specifies command line option to inject  
