@@ -25,7 +25,9 @@ struct Item item[Menus] = {
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
-    {Sculpts,Sculpt,1,"Perform","click switches to decoration file or opens equalizer panel"},
+    {Sculpts,Sculpt,1,"Equalizer","click opens panel to modifie clicked items"},
+    {Sculpts,Sculpt,1,"Hyperlink","click jumps through facet to another space"},
+    {Sculpts,Sculpt,1,"Execute","click calls Lua function attached to facet"},
     {Sculpts,Sculpt,1,"Move","click moves pierced target to alternate display"},
     {Sculpts,Sculpt,1,"Copy","click copies pierced target to alternate display"},
     {Sculpts,Sculpt,1,"Transform","modify transform matrix for pierced target"},
@@ -51,10 +53,11 @@ struct Item item[Menus] = {
     {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
     {Samples,Sample,2,"Symbolic","classification of space does not change"},
     {Samples,Sample,2,"Numeric","configuration controls amount of change"},
-    {Sculpts,Action,1,"Action","what Perform click does"},
-    {Performs,Action,2,"Configure","open dialog to decorate plane's facets"},
-    {Performs,Action,2,"Hyperlink","jump through facet to another space"},
-    {Performs,Action,2,"Execute","call Haskell function attached to facet"}};
+    {Sculpts,Action,1,"Panel","which panel opened by Equalizer"},
+    {Panels,Action,2,"Graffiti","open panel to draw on facet with styluses"},
+    {Panels,Action,2,"System","open panel for stocks flows and attachments"},
+    {Panels,Action,2,"Markup","open panel for attached files and commands"},
+    {Panels,Action,2,"Topology","open panel for classifications to sample"}};
 
 int esc = 0;
 int inj = 0;

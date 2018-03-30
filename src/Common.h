@@ -61,13 +61,13 @@ EXTERNCBEGIN
 #define SAMPLE_RATE (44100)
 
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Perform,Move,Copy,Transform,
+    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Panel,Link,Execute,Move,Copy,Transform,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Targets,Plane,Polytope,Alternate,Session,
     Classifies,Vector,Graph,Polyant,Place,
     Samples,Symbolic,Numeric,
-    Performs,Configure,Hyperlink,Execute,
+    Panels,Graffiti,System,Markup,Topology,
     Menus};
 enum Mode { // menu and menus; navigate and enter by keys
     Sculpt, // top level
@@ -78,7 +78,7 @@ enum Mode { // menu and menus; navigate and enter by keys
     Sample, // report specification
     Action, // mouse click action
     Modes};
-#define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Configure}
+#define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Topology}
 enum Motion {
     Enter, // enter key
     Back, // backspace key

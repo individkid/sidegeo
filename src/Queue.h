@@ -228,6 +228,7 @@ struct QueueMutex {
     {
         next = 0;
         xptr = 0;
+        done = 0;
         consume = 0;
         produce = 0;
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
@@ -236,6 +237,7 @@ struct QueueMutex {
     {
         next = 0;
         xptr = 0;
+        done = 0;
         consume = fnc3;
         produce = fnc4;
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
