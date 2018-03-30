@@ -25,7 +25,7 @@ struct Item item[Menus] = {
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
-    {Sculpts,Sculpt,1,"Equalizer","click opens panel to modifie clicked items"},
+    {Sculpts,Sculpt,1,"Equalizer","click opens panel to modify clicked items"},
     {Sculpts,Sculpt,1,"Hyperlink","click jumps through facet to another space"},
     {Sculpts,Sculpt,1,"Execute","click calls Lua function attached to facet"},
     {Sculpts,Sculpt,1,"Move","click moves pierced target to alternate display"},
@@ -53,11 +53,11 @@ struct Item item[Menus] = {
     {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
     {Samples,Sample,2,"Symbolic","classification of space does not change"},
     {Samples,Sample,2,"Numeric","configuration controls amount of change"},
-    {Sculpts,Action,1,"Panel","which panel opened by Equalizer"},
-    {Panels,Action,2,"Graffiti","open panel to draw on facet with styluses"},
-    {Panels,Action,2,"System","open panel for stocks flows and attachments"},
-    {Panels,Action,2,"Markup","open panel for attached files and commands"},
-    {Panels,Action,2,"Topology","open panel for classifications to sample"}};
+    {Sculpts,Panel,1,"Panel","which panel opened by Equalizer"},
+    {Panels,Panel,2,"Graffiti","open panel to draw on facet with styluses"},
+    {Panels,Panel,2,"System","open panel for stocks flows and attachments"},
+    {Panels,Panel,2,"Markup","open panel for attached files and commands"},
+    {Panels,Panel,2,"Topology","open panel for classifications to sample"}};
 
 int esc = 0;
 int inj = 0;

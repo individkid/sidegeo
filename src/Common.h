@@ -61,7 +61,7 @@ EXTERNCBEGIN
 #define SAMPLE_RATE (44100)
 
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Panel,Link,Execute,Move,Copy,Transform,
+    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Equalizer,Hyperlink,Execute,Move,Copy,Transform,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Targets,Plane,Polytope,Alternate,Session,
@@ -74,9 +74,9 @@ enum Mode { // menu and menus; navigate and enter by keys
     Mouse, // mouse motion action
     Roller, // mouse roller action
     Target, // target of action
-    Classify, // invariant select
-    Sample, // report specification
-    Action, // mouse click action
+    Classify, // report specification
+    Sample, // invariant select
+    Panel, // equalizer panel type
     Modes};
 #define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Topology}
 enum Motion {
