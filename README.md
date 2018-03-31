@@ -101,7 +101,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --color takes plane subscript and decoration  
   * --jump takes plane subscript and fork exec arguments  
   * --action attaches Lua function to boundary to be activated by click  
-  * --configure pore, membrane, interpolate, texture, rate  
+  * --configure change behaviors by degree  
   * --inject specifies command line option to inject  
   * --menu changes to menu item to inject to console  
   * --bind binds Lua function to function key in console  
@@ -110,27 +110,35 @@ Configuration/history files consist of commands. User input appends to file. App
 
 The --call --yield --inject -F commands synchronize actions. To wait for a --call Lua script to complete before proceeding, issue --injectFthis --callLuaScript --yield. The --inject disables the current file after --yield allows injected options to be executed. The --call kicks off the Lua script. A -F injected by the Lua script will be after the one injected by the --inject, because -F is processed by the same thread as the -inject.
 
-The constants set by --configure change behaviors by degree.
-
- * Pore specifies timewheel state for new vertices  
- * Membrane specifies timewheel state for new planes  
- * Interpolate specifies interpolation value for new vertices  
- * Texture specifies interpolation field for new planes  
- * Tweak specifies how much refine points and refine planes change  
- * Canvas specifies drawings captured as bitmaps fine or coarse actions  
- * Close specifies how close cursor must be to curve to drag over it  
- * Snap specifies grid size and rotation to snap endpoints to  
-
-The --time --color --source --listen commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
+The --time --color --source --listen --metric commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 
   * values for --color are given by --time values  
   * wave for --listen port is piped from --time value  
-  * term variables are --time values and --metric values  
+  * term variables are --time --metric --source values  
   * new --time value comes from term sum quotient and saturation values  
   * value change delay comes from term sum quotient  
   * reschedule delay comes from term sum quotient   
 
 For exmple, a system could consist of --time --source --listen points at the vertices of a polytope constructed with --point, and --metric faces in several overlapping --plane polytopes. Stocks values in --time --source --listen items associated with points could flow along lines of sight. A line of sight metric could be 0 if any impermeable face intervenes between the points, and 1 if no impermeable faces intervene. Then, the --time formula for the stock associated with a point could multiply the metric by the stock associated with the other point.
+
+Functions in Metric.c include sightLine regexPlane inverseSquare, used in stock flow formulae specified by —time and —metric. Metric sightLine does pershader on each file with feather arrow for pierce points on line between vertex in one file and vertex in another file. Then sightLine finds if any planes between the vertices are impermeable. Function regexPlane gets properties such as permeable from name. Metric inverseSquare returns inverse square of distance between vertices.
+
+The development plan is to complete the namesake usage features first, then proceed to more detailed uses.
+
+  * Sculpt: -f -e --plane --point --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric)  
+  * Edit: -h -H -a -A --inject --menu Move Copy Mouse Roller Target  
+  * Analyze: -t Sample Display Classify Equalizer (Topology) --sample --dual --embed --polytope -T  
+  * Synthesize: --call --bind --action Execute --time --change --script --listen --source --metric  
+  * Decorate: -F -E --yield --jump Jump --color --configure Panel  
+
+The code is partitioned to the following files grouped by thread:
+
+  * Memory management: Queue.h Queue.cpp Common.h Common.cpp Wrap.c  
+  * Command thread: Main.h  Main.c Debug.c Interface.c Metric.c Command.c  
+  * Opengl commands: Setup.c Render.c Microcode.c Callback.c  
+  * Process thread: Configure.c Option.c Process.c  
+  * Haskell thread: Sculpt.hs Naive.hs Haskell.c  
+  * Other threads: Timewheel.c Lua.c Console.c  
 
 This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
 
