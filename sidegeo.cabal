@@ -59,6 +59,7 @@ executable sculpt
                        src/Console.c,
                        src/Lua.c,
                        src/Timewheel.c,
+                       src/Convert.c,
                        src/Common.cpp,
                        src/Queue.cpp,
                        src/Wrap.c,
