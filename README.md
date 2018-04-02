@@ -133,7 +133,7 @@ The development plan is to complete the namesake usage features first, then proc
 
 The code is partitioned to the following files grouped by thread:
 
-  * Memory management: Queue.h Queue.cpp Common.h Common.cpp Wrap.c  
+  * Memory management: Queue.h Queue.cpp Common.h Common.cpp Convert.c Wrap.c  
   * Command thread: Main.h  Main.c Debug.c Interface.c Metric.c Command.c  
   * Opengl commands: Setup.c Render.c Microcode.c Callback.c  
   * Process thread: Configure.c Option.c Process.c  
