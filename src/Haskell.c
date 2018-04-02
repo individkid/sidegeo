@@ -32,11 +32,12 @@ void setupEnum(void)
     val = handleEnum("Fill"); if (val < 0 || insertEnum(Fill) < 0) exitErrstr("enum too event\n"); else *castEnum(Fill) = val;
     val = handleEnum("Hollow"); if (val < 0 || insertEnum(Hollow) < 0) exitErrstr("enum too event\n"); else *castEnum(Hollow) = val;
     val = handleEnum("Inflate"); if (val < 0 || insertEnum(Inflate) < 0) exitErrstr("enum too event\n"); else *castEnum(Inflate) = val;
+    val = handleEnum("Faces"); if (val < 0 || insertEnum(Faces) < 0) exitErrstr("enum too event\n"); else *castEnum(Faces) = val;
+    val = handleEnum("Frames"); if (val < 0 || insertEnum(Frames) < 0) exitErrstr("enum too event\n"); else *castEnum(Frames) = val;
     val = handleEnum("Face"); if (val < 0 || insertEnum(Face) < 0) exitErrstr("enum too event\n"); else *castEnum(Face) = val;
     val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame) < 0) exitErrstr("enum too event\n"); else *castEnum(Frame) = val;
-    val = handleEnum("Other"); if (val < 0 || insertEnum(Other) < 0) exitErrstr("enum too event\n"); else *castEnum(Other) = val;
-    val = handleEnum("Both"); if (val < 0 || insertEnum(Both) < 0) exitErrstr("enum too event\n"); else *castEnum(Both) = val;
-    val = handleEnum("Swap"); if (val < 0 || insertEnum(Swap) < 0) exitErrstr("enum too event\n"); else *castEnum(Swap) = val;
+    val = handleEnum("Get"); if (val < 0 || insertEnum(Get) < 0) exitErrstr("enum too event\n"); else *castEnum(Get) = val;
+    val = handleEnum("Set"); if (val < 0 || insertEnum(Set) < 0) exitErrstr("enum too event\n"); else *castEnum(Set) = val;
     val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
     val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
     val = handleEnum("Corner"); if (val < 0 || insertEnum(Corner) < 0) exitErrstr("enum too event\n"); else *castEnum(Corner) = val;

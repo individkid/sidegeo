@@ -105,11 +105,12 @@ enum Event {
     Fill, // inout(polyant), place, embed: embed
     Hollow, // inout(polyant), place, embed: embed
     Inflate, // place: embed
-    Face, // inout(filter), place, embed, tag: inout(face)
-    Frame, // inout(filter), place, embed, tag: inout(frame)
-    Other, // move given plane membership from one context to another context
-    Both, // copy given plane membership from one context to another context
-    Swap, // swap given context membership of one plane with another plane
+    Faces, // inout(filter), place, embed, tag: inout(face)
+    Frames, // inout(filter), place, embed, tag: inout(frame)
+    Face, // inout(boundary), place, embed: inout(face)
+    Frame, // inout(boundary), place, embed: inout(frame)
+    Get, // inout(boundary), tag: inout(mask)
+    Set, // inout(boundary,mask), tag: tag
     Divide, // inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex, // inout(boundary), place: inout(vertex)
     Index, // inout(boundary), place: inout(index)

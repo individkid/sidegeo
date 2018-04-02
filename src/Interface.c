@@ -19,9 +19,13 @@
 #include "Main.h"
 
 #ifdef BRINGUP
-const enum Event event = Face;
+const enum Event event = Faces;
+const enum Event single = Face;
+const int dimen = FACE_DIMENSIONS;
 #else
-const enum Event event = Frame;
+const enum Event event = Frames;
+const enum Event single = Frame;
+const int dimen = FRAME_DIMENSIONS;
 #endif
 
 void inject(void)
@@ -166,17 +170,73 @@ void closeSlot(int slot)
 
 enum Action transformClick(int state)
 {
+    int context = *deargCmdInt(1);
     int plane = *deargCmdInt(1);
     int file = *deargCmdInt(1);
     int slot = *deargCmdInt(1);
+    if (state-- == 0) {
+    layer = uniqueLayer();
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
     // send Face/Frame event with responseLayer to get
     //  PlaneBuf/PointBuf elements referred to by
     //  vector number plane in FaceSub/FrameSub of file number file.
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseLayer;
+    *enlocCmdEvent(1) = single; // Faces or Frames
+    return Continue;}
+    if (state-- == 0) {
+    if (sizeReint(layer) == 0) return Defer;
     // send Face/Frame event with responseLayer to get
-    //  FaceSub/FrameSub vector number slot in plane number zero.
+    //  FaceSub/FrameSub vector number slot in file number zero.
+    *enlocCmdHsInt(1) = 0;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = slot;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseLayer;
+    *enlocCmdEvent(1) = single; // Face or Frame
+    return Continue;}
+    if (state-- == 0) {
+    if (sizeReint(layer) == dimen) return Defer;
     // copy vectors from PlaneBuf/PointBuf in file to preview.
-    // send Swap event to swap visibility of plane and slot.
+    for (int i = 0; i < dimen; i++) {
+    int from = *arrayReint(layer,i,1);
+    Myfloat *vec = dndateBuffer(file,PlaneBuf,from,1);
+    int to = *arrayReint(layer,i+dimen,1);
+    updateBuffer(0,PlaneBuf,to,1,vec);}
+    delocReint(layer,dimen+dimen);
+    // send Get and Set events to swap visibility of plane and slot.
     //  with enqueFilter response.
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = layer;
+    *enlocCmdHsCmd(1) = responseLayer;
+    *enlocCmdEvent(1) = Get;}
+    if (sizeReint(layer) == 0) return Defer;
+    int mask = *delocReint(layer,1);
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
+    *enlocCmdHsInt(1) = 0;
+    *enlocCmdHsInt(1) = 2;
+    *enlocCmdHsInt(1) = slot;
+    *enlocCmdHsInt(1) = mask;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = slot;
+    *enlocCmdHsCmd(1) = enqueFilter;
+    *enlocCmdEvent(1) = Set;
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 2;
+    *enlocCmdHsInt(1) = plane;
+    *enlocCmdHsInt(1) = 0;
+    *enlocCmdHsInt(1) = 1;
+    *enlocCmdHsInt(1) = file;
+    *enlocCmdHsCmd(1) = enqueFilter;
+    *enlocCmdEvent(1) = Set;
     return Advance;
 }
 
@@ -188,8 +248,9 @@ enum Action manipulateClick(int state)
     // TODO msgstr transformed plane, swap filters, update element arrays, and re-render
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
     // closeSlot(rPoint); rPoint = -1;
-    // sideband msgstr --event Swap with pPoint qPoint rPoint and no callback
-    // sideband msgstr --command enqueClient with pPoint
+    // sideband msgstr --command respondProceed and wait
+    // send Get and Set events with pPoint qPoint rPoint
+    //  with enqueFilter response.
     return Advance;
 }
 
@@ -267,6 +328,7 @@ enum Action configureRefine(int state)
     if (plane == share->planes) share->planes += 1;
     // send vertex event with layer response
     *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1;
     *enlocCmdHsInt(1) = plane;
     *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = layer;
@@ -287,6 +349,7 @@ enum Action configureRefine(int state)
     enqueShader(Coplane,file,0,renderClient); // get points on plane
     // send Index event to get point subscript corresponding to VertSub
     *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 1;
     *enlocCmdHsInt(1) = plane;
     *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = layer;
@@ -308,9 +371,9 @@ enum Action configureRefine(int state)
     share->points += len;
     // send divide event with proceed response
     len = sizeReint(layer);
-    *enlocCmdHsInt(1) = len;
-    useReint(layer); copyCmdHsInt(0,0,len); delocReint(layer,len);
     *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = len+1;
+    useReint(layer); copyCmdHsInt(0,0,len); delocReint(layer,len);
     *enlocCmdHsInt(1) = plane;
     *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = layer;
@@ -383,8 +446,8 @@ void configurePoint(void)
 void configureInflate(void)
 {
     int file = *delocCmdInt(1);
-    *enlocCmdHsInt(1) = 1; // inout size
     *enlocCmdHsInt(1) = file;
+    *enlocCmdHsInt(1) = 0; // inout size
     *enlocCmdHsInt(1) = 1; // passthrough size
     *enlocCmdHsInt(1) = file;
     *enlocCmdHsCmd(1) = enqueFilter;
@@ -397,10 +460,10 @@ void configureFill(void)
     int plane = *arrayCmdInt(1,1);
     int inlen = *arrayCmdInt(2,1);
     int outlen = *arrayCmdInt(3+inlen,1);
+    *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = 4+inlen+outlen; // inout size
     useCmdInt(); xferCmdHsInt(4+inlen+outlen);
     *enlocCmdHsInt(1) = 1; // passthrough size
-    *enlocCmdHsInt(1) = file;
     *enlocCmdHsCmd(1) = enqueFilter;
     *enlocCmdEvent(1) = Fill;
 }
@@ -411,10 +474,10 @@ void configureHollow(void)
     int plane = *arrayCmdInt(1,1);
     int inlen = *arrayCmdInt(2,1);
     int outlen = *arrayCmdInt(3+inlen,1);
+    *enlocCmdHsInt(1) = file;
     *enlocCmdHsInt(1) = 4+inlen+outlen; // inout size
     useCmdInt(); xferCmdHsInt(4+inlen+outlen);
     *enlocCmdHsInt(1) = 1; // passthrough size
-    *enlocCmdHsInt(1) = file;
     *enlocCmdHsCmd(1) = enqueFilter;
     *enlocCmdEvent(1) = Hollow;
 }
