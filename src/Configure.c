@@ -27,6 +27,7 @@ void configurePoint(void);
 void configureFill(void);
 void configureHollow(void);
 void configureInflate(void);
+void responseProceed(void);
 
 DEFINE_SCAN(Pcs)
 DEFINE_MSGSTR(PcsBuf)
@@ -154,7 +155,10 @@ int processConfigure(int index, int len)
 		int len = strlen(pattern+pos);
 		strncpy(enlocPcsRequest(len),pattern+pos,len); *enlocPcsRequest(1) = 0;
 		UNLOC return 1;}
-	if (scanPcs(pattern,4,Literal,"side",White,Literal,"response"))
+	if (scanPcs(pattern,4,Literal,"side",White,Literal,"responseProceed",Int,Scans)) {
+		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // layer
+		*enlocPcsCommand(1) = responseProceed;
+		return 1;}
     UNLOC return -1;
 }
 
