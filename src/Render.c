@@ -205,13 +205,10 @@ enum Action dequeFilter(int state)
     int file = *deargCmdInt(1);
     for (int context = 0; context < sizeDisplay(); context++) {
     if (state-- == 0) {
-    *enlocCmdHsInt(1) = file;
-    *enlocCmdHsInt(1) = 1;
     *enlocCmdHsInt(1) = context;
-    *enlocCmdHsInt(1) = 1;
     *enlocCmdHsInt(1) = layer;
-    *enlocCmdHsCmd(1) = responseLayer;
-    *enlocCmdEvent(1) = event; // Faces or Frames
+    // event ctx arg exp rsp command
+    *enlocCmdEvent(1) = (struct Proto){event,file,1,1,1,responseLayer};
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;

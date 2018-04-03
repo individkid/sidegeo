@@ -60,6 +60,11 @@ EXTERNCBEGIN
 #define PORTAUDIO_SIZE (1<<10)
 #define SAMPLE_RATE (44100)
 
+// if char is unsigned and GLchar is signed
+typedef unsigned Myuint;
+typedef float Myfloat;
+typedef void (*Command)(void);
+
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Jump,Equalizer,Execute,Move,Copy,Transform,
     Mouses,Rotate,Translate,Look,
@@ -116,11 +121,14 @@ enum Event {
     Index, // inout(boundary), place: inout(index)
     Corner, // inout(boundary), place: inout(corner)
     Events};
-
-// if char is unsigned and GLchar is signed
-typedef unsigned Myuint;
-typedef float Myfloat;
-typedef void (*Command)(void);
+struct Proto { // event ctx arg exp rsp command
+    enum Event event;
+    int ctx; // which polytope to work on
+    int arg; // how many int args given
+    int exp; // whether sized response expected
+    int rsp; // how many int responses given
+    Command command;
+};
 
 enum Action { // multi command return value
     Reque, // be polite to other commands
@@ -547,8 +555,7 @@ DECLARE_STAGE(CmnConfigurer,int)
 DECLARE_STAGE(CmnConfiguree,int)
 
 DECLARE_COND(CmnHaskells)
-DECLARE_STAGE(CmnEvent,enum Event)
-DECLARE_STAGE(CmnHsCmd,Command)
+DECLARE_STAGE(CmnEvent,struct Proto)
 DECLARE_STAGE(CmnHsInt,int)
 
 DECLARE_TIME(CmnTimewheels)
@@ -604,8 +611,7 @@ DECLARE_STAGE(CmdConfigurer,int)
 DECLARE_STAGE(CmdConfiguree,int)
 
 DECLARE_SOURCE(CmdHaskells)
-DECLARE_STAGE(CmdEvent,enum Event)
-DECLARE_STAGE(CmdHsCmd,Command)
+DECLARE_STAGE(CmdEvent,struct Proto)
 DECLARE_STAGE(CmdHsInt,int)
 
 DECLARE_SOURCE(CmdTimewheels)
@@ -631,8 +637,7 @@ DECLARE_STAGE(HsCommand,Command)
 DECLARE_STAGE(HsCmdInt,int)
 
 DECLARE_WAIT(Haskells)
-DECLARE_STAGE(Event,enum Event)
-DECLARE_STAGE(HsCmd,Command)
+DECLARE_STAGE(Event,struct Proto)
 DECLARE_STAGE(HsInt,int)
 
 
@@ -708,11 +713,6 @@ DECLARE_STAGE(PcsCmdInt,int)
 DECLARE_STAGE(PcsCmdFloat,Myfloat)
 DECLARE_STAGE(PcsCmdByte,char)
 DECLARE_STAGE(PcsCmdCmd,Command)
-
-DECLARE_SOURCE(PcsHaskells)
-DECLARE_STAGE(PcsEvent,enum Event)
-DECLARE_STAGE(PcsHsCmd,Command)
-DECLARE_STAGE(PcsHsInt,int)
 
 DECLARE_SOURCE(PcsTimewheels)
 DECLARE_STAGE(PcsChange,struct Change)

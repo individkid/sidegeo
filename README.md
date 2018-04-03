@@ -107,6 +107,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --bind binds Lua function to function key in console  
   * --yield allow other files and command line options to proceed  
   * --call takes Lua function and arguments to start  
+  * --side enque command for debug and internal use  
 
 The --call --yield --inject -F commands synchronize actions. To wait for a --call Lua script to complete before proceeding, issue --injectFthis --callLuaScript --yield. The --inject disables the current file after --yield allows injected options to be executed. The --call kicks off the Lua script. A -F injected by the Lua script will be after the one injected by the --inject, because -F is processed by the same thread as the -inject.
 

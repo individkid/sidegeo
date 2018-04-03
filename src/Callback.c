@@ -87,7 +87,6 @@ void leftTransform(void)
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     if (mark[Target] == Plane) {
     rPoint = openSlot();
-    *enlocCmdInt(1) = contextHandle;
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;
     *enlocCmdInt(1) = rPoint;
@@ -97,7 +96,6 @@ void leftTransform(void)
 void leftManipulate(void)
 {
     if (mark[Target] == Plane) {
-    *enlocCmdInt(1) = contextHandle;
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;
     *enlocCmdInt(1) = rPoint;

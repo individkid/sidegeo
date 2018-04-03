@@ -68,6 +68,7 @@ inline bool operator!=(const PaUtilRingBuffer &left, const PaUtilRingBuffer &rig
 inline bool operator!=(const Header &left, const Header &right) {return false;}
 inline bool operator!=(const Response &left, const Response &right) {return false;}
 inline bool operator!=(const Match &left, const Match &right) {return false;}
+inline bool operator!=(const Proto &left, const Proto &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
@@ -95,9 +96,8 @@ DEFINE_STAGE(CmnConfigurer,int,CmnConfigure)
 DEFINE_STAGE(CmnConfiguree,int,CmnConfigurer)
 
 DEFINE_COND(CmnHaskells,haskellConsume,haskellBefore,haskellAfter)
-DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
-DEFINE_STAGE(CmnHsCmd,Command,CmnEvent)
-DEFINE_STAGE(CmnHsInt,int,CmnHsCmd)
+DEFINE_STAGE(CmnEvent,struct Proto,CmnHaskells)
+DEFINE_STAGE(CmnHsInt,int,CmnEvent)
 
 DEFINE_TIME(CmnTimewheels,timewheelConsume,timewheelProduce,timewheelBefore,timewheelAfter,timewheelDelay)
 DEFINE_STAGE(CmnChange,struct Change,CmnTimewheels)
@@ -152,9 +152,8 @@ DEFINE_STAGE(CmdConfigurer,int,CmdConfigure)
 DEFINE_STAGE(CmdConfiguree,int,CmdConfigurer)
 
 DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdProcesses)
-DEFINE_STAGE(CmdEvent,enum Event,CmdHaskells)
-DEFINE_STAGE(CmdHsCmd,Command,CmdEvent)
-DEFINE_STAGE(CmdHsInt,int,CmdHsCmd)
+DEFINE_STAGE(CmdEvent,struct Proto,CmdHaskells)
+DEFINE_STAGE(CmdHsInt,int,CmdEvent)
 
 DEFINE_SOURCE(CmdTimewheels,CmnTimewheels,CmdHaskells)
 DEFINE_STAGE(CmdChange,struct Change,CmdTimewheels)
@@ -179,9 +178,8 @@ DEFINE_STAGE(HsCommand,Command,HsCommands)
 DEFINE_STAGE(HsCmdInt,int,HsCommand)
 
 DEFINE_WAIT(Haskells,CmnHaskells,HsCommands) // wait after source
-DEFINE_STAGE(Event,enum Event,Haskells)
-DEFINE_STAGE(HsCmd,Command,Event)
-DEFINE_STAGE(HsInt,int,HsCmd)
+DEFINE_STAGE(Event,struct Proto,Haskells)
+DEFINE_STAGE(HsInt,int,Event)
 
 
 DEFINE_SOURCE(CslCommands,CmnCommands,CmnOutputs)
@@ -256,12 +254,7 @@ DEFINE_STAGE(PcsCmdFloat,Myfloat,PcsCmdInt)
 DEFINE_STAGE(PcsCmdByte,char,PcsCmdFloat)
 DEFINE_STAGE(PcsCmdCmd,Command,PcsCmdByte)
 
-DEFINE_SOURCE(PcsHaskells,CmnHaskells,PcsCommands)
-DEFINE_STAGE(PcsEvent,enum Event,PcsHaskells)
-DEFINE_STAGE(PcsHsCmd,Command,PcsEvent)
-DEFINE_STAGE(PcsHsInt,int,PcsHsCmd)
-
-DEFINE_SOURCE(PcsTimewheels,CmnTimewheels,PcsHaskells)
+DEFINE_SOURCE(PcsTimewheels,CmnTimewheels,PcsCommands)
 DEFINE_STAGE(PcsChange,struct Change,PcsTimewheels)
 DEFINE_STAGE(PcsControl,enum Control,PcsChange)
 DEFINE_STAGE(PcsTwInt,int,PcsControl)

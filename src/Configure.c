@@ -154,6 +154,7 @@ int processConfigure(int index, int len)
 		int len = strlen(pattern+pos);
 		strncpy(enlocPcsRequest(len),pattern+pos,len); *enlocPcsRequest(1) = 0;
 		UNLOC return 1;}
+	if (scanPcs(pattern,4,Literal,"side",White,Literal,"response"))
     UNLOC return -1;
 }
 

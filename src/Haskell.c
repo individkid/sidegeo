@@ -52,19 +52,20 @@ void haskellBefore(void)
 void haskellConsume(void *arg)
 {
     while (sizeEvent() > 0) {
-    filenum = *delocHsInt(1);
-    int size = *delocHsInt(1);
-    useHsInt(); xferInout(size);
-    enum Event event = *delocEvent(1);
-    int num = *castEnum(event);
+    struct Proto event = *delocEvent(1);
+    filenum = event.ctx;
+    useHsInt(); xferInout(event.arg);
+    int num = *castEnum(event.event);
     if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
-    size = sizeInout();
+    int size = sizeInout();
+    if (event.exp) {
     *enlocHsCmdInt(1) = size;
-    useInout(); xferHsCmdInt(size);
-    size = *delocHsInt(1);
-    if  (size >= 0) {
-    useHsInt(); xferHsCmdInt(size);
-    *enlocHsCommand(1) = *delocHsCmd(1);}}
+    useInout(); xferHsCmdInt(size);}
+    else delocInout(size);
+    if (event.command) {
+    useHsInt(); xferHsCmdInt(event.rsp);
+    *enlocHsCommand(1) = event.command;}
+    else delocHsInt(event.rsp);}
 }
 
 void haskellAfter(void)
