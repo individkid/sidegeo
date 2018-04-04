@@ -126,7 +126,7 @@ enum Server uniformGlobal(int i, enum Shader shader)
 enum Server uniformConstant(int i, enum Shader shader)
 {
     if (i >= 4) exitErrstr("uniform too global\n");
-    enum Server server[4] = {Invalid,Basis,Servers}; // TODO some shaders dont use
+    enum Server server[4] = {Invalid,Basis,Servers}; // TODO1 some shaders dont use
     return server[i];
 }
 

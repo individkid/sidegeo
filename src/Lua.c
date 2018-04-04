@@ -29,17 +29,17 @@ void luaRequest(void);
 
 enum Request requestLua(int num)
 {
-	return Requests; // TODO
+	return Requests; // TODO4
 }
 
 int codeLua(enum Request req)
 {
-	return 0; // TODO
+	return 0; // TODO4
 }
 
 const char *nameLua(enum Request req)
 {
-	return 0; // TODO
+	return 0; // TODO4
 }
 
 void beforeLua(void)
@@ -67,7 +67,7 @@ void consumeLua(void *arg)
 	*castScript(response.tag) = thread;
 	int ret = luaL_loadstring(thread,buf);
 	if (ret != LUA_OK) {
-	// TODO send message to LuaOutput
+	// TODO4 send message to LuaOutput
 	lua_pop(lua,1);
 	freeScript(response.tag);
 	return;}}
@@ -104,7 +104,7 @@ void consumeLua(void *arg)
 
 	else {
 	lua_State *thread = *castScript(response.tag);
-	// TODO send message to LuaOutput
+	// TODO4 send message to LuaOutput
 	lua_pop(thread,1);
 	lua_pop(lua,1);
 	freeScript(response.tag);}

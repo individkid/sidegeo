@@ -19,7 +19,7 @@
 #include "Common.h"
 
 int processOption(int len)
-{ // TODO given unlocProChar(len), return 0 or length of filename in enlocProChar
+{ // given unlocProChar(len), return 0 or length of filename in enlocProChar
     return 0;
 }
 

@@ -94,7 +94,7 @@ void metric(void)
     struct Change change = {0};
     change.map = 1; // sub is from timewheel
     change.sub = stock;
-    change.val = 0; // TODO enque machines to calculate change val
+    change.val = 0; // TODO4 enque machines to calculate change val
     *enlocCmdChange(1) = change;
 }
 
@@ -151,8 +151,6 @@ void responseLayer(void)
 
 void responseProceed(void)
 {
-    int len = *delocCmdInt(1);
-    if (len != 0) exitErrstr("response too len\n");
     int tag = *delocCmdInt(1);
     int size = sizeReint(tag);
     *arrayReint(tag,size-1,1) = 1;
@@ -160,12 +158,12 @@ void responseProceed(void)
 
 int openSlot(void)
 {
-    return -1; // TODO
+    return -1; // TODO1
 }
 
 void closeSlot(int slot)
 {
-    // TODO
+    // TODO1
 }
 
 enum Action transformClick(int state)
@@ -199,7 +197,7 @@ enum Action transformClick(int state)
     for (int i = 0; i < dimen; i++) {
     int from = *arrayReint(layer,i,1);
     Myfloat *vec = dndateBuffer(file,PlaneBuf,from,1);
-    // TODO get versor too
+    // TODO1 get versor too
     int to = *arrayReint(layer,i+dimen,1);
     updateBuffer(0,PlaneBuf,to,1,vec);}
     delocReint(layer,dimen+dimen);
@@ -208,7 +206,8 @@ enum Action transformClick(int state)
     *enlocCmdHsInt(1) = plane;
     *enlocCmdHsInt(1) = layer;
     // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Get,file,1,1,1,responseLayer};}
+    *enlocCmdEvent(1) = (struct Proto){Get,file,1,1,1,responseLayer};
+    return Continue;}
     if (sizeReint(layer) == 0) return Defer;
     int mask = *delocReint(layer,1);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
@@ -243,7 +242,7 @@ enum Action manipulateClick(int state)
     int from = *arrayReint(layer,0,1); // base plane is first
     delocReint(layer,dimen);
     Myfloat *vec = dndateBuffer(slot,PlaneBuf,from,1);
-    int ver = 0; // TODO get versor from VersorBuf
+    int ver = 0; // TODO1 get versor from VersorBuf
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
     *enlocCmdConfiguree(1) = 0;
     *enlocCmdConfigurer(1) = file;
@@ -253,7 +252,7 @@ enum Action manipulateClick(int state)
     // sideband msgstr --side responseProceed and wait
     *enlocCmdConfiguree(1) = 1;
     *enlocCmdConfigurer(1) = file;
-    msgstrCmdConfigure("side responseProceed",'\n');
+    msgstrCmdConfigure("side responseProceed %d",'\n',layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
     if (state-- == 0) {
@@ -274,9 +273,8 @@ enum Action manipulateClick(int state)
     // event ctx arg exp rsp command
     *enlocCmdEvent(1) = (struct Proto){Set,0,2,0,1,responseProceed};
     return Continue;}
-    if (*arrayReint(layer,sizeReint(layer)-1,1) == 0) return Defer;
-    unlocReint(layer,1);
-    int mask = *delocReint(layer,1);
+    if (*arrayReint(layer,1,1) == 0) return Defer;
+    int mask = *delocReint(layer,2);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     closeSlot(slot);
     // send enqueFilter for clipboard
@@ -406,7 +404,8 @@ enum Action configureRefine(int state)
     *enlocCmdHsInt(1) = layer;
     // event ctx arg exp rsp command
     *enlocCmdEvent(1) = (struct Proto){Divide,file,1+relen,0,1,responseProceed};
-    *enlocReint(layer,1) = 0;}
+    *enlocReint(layer,1) = 0;
+    return Continue;}
     // wait for proceed response
     if (*arrayReint(layer,0,1) == 0) return Defer;
     delocReint(layer,1);
@@ -503,5 +502,5 @@ void configureHollow(void)
 
 void luaRequest(void)
 {
-    // TODO delocYield
+    // TODO4 delocYield
 }
