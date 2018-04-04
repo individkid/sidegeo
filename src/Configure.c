@@ -110,6 +110,16 @@ int processPath(int *ipos, int *cpos, int len, int *plane, int *file)
 	return ret + 1;
 }
 
+void processPolyant(int pos)
+{
+	int size = 0, len = 0;
+	*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1);
+	size = sizePcsCmdInt(); *enlocPcsCmdInt(1) = len = 0;
+	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(size,1) += 1;}
+	size = sizePcsCmdInt(); *enlocPcsCmdInt(1) = len = 0;
+	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(size,1) += 1;}
+}
+
 #define UNLOC \
 unlocPcsInt(sizePcsInt()-intpos); \
 unlocPcsFloat(sizePcsFloat()-floatpos); \
@@ -137,12 +147,14 @@ int processConfigure(int index, int len)
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureInflate;
 		UNLOC return 1;}
-	if (scanPcs(pattern,1,Literal,"fill",Scans)) {
+	if (scanPcs(pattern,8,Literal,"fill",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans)) {
 		*enlocPcsCmdInt(1) = index;
+		processPolyant(intpos);
 		*enlocPcsCmdCmd(1) = configureFill;
 		UNLOC return 1;}
-	if (scanPcs(pattern,1,Literal,"hollow",Scans)) {
+	if (scanPcs(pattern,1,Literal,"hollow",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans)) {
 		*enlocPcsCmdInt(1) = index;
+		processPolyant(intpos);
 		*enlocPcsCmdCmd(1) = configureHollow;
 		UNLOC return 1;}
 	int pos = scanPcs(pattern,1,Literal,"inject",Scans); if (pos) {
