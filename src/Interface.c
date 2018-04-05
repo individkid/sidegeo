@@ -46,7 +46,7 @@ void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
     for (int j = 0; j < sizeDisplayPoly(i); j++)
-    SWITCH(mark[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0);
+    SWITCH(mode[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0); // TODO2 use ->scratch instead of j>0
     CASE(Polytope) arrayDisplayPoly(i,j,1)->fixed = (j!=qPos);
     CASE(Alternate) arrayDisplayPoly(i,j,1)->fixed = (i!=contextHandle);
     CASE(Session) arrayDisplayPoly(i,j,1)->fixed = 0;
@@ -55,36 +55,20 @@ void target(void)
 
 void init(void)
 {
-    if (click != Init) msgstrCmdOutput("click mode cleared in display %s", '\n', stringCmdBuf(displayName,0));
-    SWITCH(click,Init) /*nop*/
-    CASE(Right) {leftManipulate(); click = Init;}
+    if (click != Init && click != Right) msgstrCmdOutput("click mode cleared in display %s", '\n', stringCmdBuf(displayName,0));
+    SWITCH(click,Init) FALL(Right) /*nop*/
     CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
     CASE(Left) {leftManipulate(); click = Init;}
     DEFAULT(exitErrstr("invalid click mode\n");)
 }
 
-void only(void)
-{
-    struct Display *save = current;
-    for (int i = 0; i < sizeDisplay(); i++) {
-    current = arrayDisplay(i,1);
-    if (i != contextHandle && mark[Sculpt] == Transform) init();}
-    current = save;
-}
-
 void menu(void)
 {
     char chr = *delocCmdInt(1);
-    if (indexof(chr) >= 0) {
+    if (indexof(chr) < 0) exitErrstr("invalid menu index\n");
     enum Menu line = indexof(chr);
-    enum Mode mode = item[line].mode;
-    enum Menu major = mark[Sculpt];
-    enum Menu minor = mark[Target];
-    mark[mode] = line;
-    if (major != Transform && line == Transform) {only(); target();}
-    if (major == Transform && mode == Sculpt && line != Transform) init();
-    if (major == Transform && mode == Target && line != minor) {init(); target();}}
-    else exitErrstr("invalid menu char\n");
+    enum Mode sub = item[line].mode;
+    mode[sub] = line; init(); target();
 }
 
 void metric(void)
@@ -108,7 +92,7 @@ void display(void)
     updateContext(new);
     for (enum Shader shader = 0; shader < Shaders; shader++) setupCode(shader);
     if (new > 0) {
-    struct Display *save = arrayDisplay(0,1);
+    struct Display *save = current;
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
     updateContext(0);
@@ -118,7 +102,8 @@ void display(void)
     int sub = sizePoly();
     setupFile(name);
     updateContext(0);
-    updateFile(new,sub,i);}}
+    updateFile(new,sub,i);}
+    current = save;}
 }
 
 void file(void)
@@ -133,7 +118,7 @@ void file(void)
     int sub = sizePoly();
     setupFile(name);
     struct File *file = arrayPoly(sub,1);
-    SWITCH(mark[Target],Plane) file->fixed = (sub>0);
+    SWITCH(mode[Target],Plane) file->fixed = (sub>0);
     CASE(Polytope) file->fixed = 0;
     CASE(Alternate) file->fixed = (context==save);
     CASE(Session) file->fixed = 0;
@@ -158,12 +143,14 @@ void responseProceed(void)
 
 int openSlot(void)
 {
-    return -1; // TODO1
+    return -1; // TODO1 return unused plane in file 0
+    // TODO2 return enloc Poly in each display with ->scrath = 1
 }
 
 void closeSlot(int slot)
 {
-    // TODO1
+    // TODO1 mode plane in file 0 as unused
+    // TODO2 pack out Poly in each display
 }
 
 enum Action transformClick(int state)

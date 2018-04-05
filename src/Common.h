@@ -246,7 +246,8 @@ struct Display {
     int swap;
     int clear;
     enum Click click; // transform submode controlled by mouse buttons
-    enum Menu mode[Modes]; // sync to mark in Console.c
+    enum Menu mode[Modes]; // save and restore upon right click
+    Myfloat affineMatc[16]; // save and incorporate upon right click
 };
 struct File {
     int name;

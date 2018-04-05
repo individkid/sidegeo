@@ -46,6 +46,16 @@ void compass(double xdelta, double ydelta)
     displayCursor(displayHandle,xwarp,ywarp);
 }
 
+void save(void)
+{
+    // TODO1 save mode and affineMat in context
+}
+
+void restore(void)
+{
+    // TODO1 resstore mode, notifying console, and combine saved with affineMat
+}
+
 #define CLICK_ENLOC(STR) \
     *enlocCmdInt(1) = pPoint; \
     *enlocCmdInt(1) = qPoint; \
@@ -85,7 +95,7 @@ void leftTransform(void)
     pPoint = pPos; qPoint = qPos;
     for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    if (mark[Target] == Plane) {
+    if (mode[Target] == Plane) {
     rPoint = openSlot();
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;
@@ -95,7 +105,7 @@ void leftTransform(void)
 
 void leftManipulate(void)
 {
-    if (mark[Target] == Plane) {
+    if (mode[Target] == Plane) {
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;
     *enlocCmdInt(1) = rPoint;
@@ -107,12 +117,12 @@ void rightRight(void)
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
     double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
     double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
-    warp(xwarp,ywarp);
+    warp(xwarp,ywarp); restore();
 }
 
 void rightLeft(void)
 {
-    wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
+    wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos; save();
 }
 
 void matrixMatrix(void)
@@ -177,7 +187,7 @@ void transformLook(void)
 
 void transformMouse(void)
 {
-    SWITCH(mark[Mouse],Rotate) transformRotate();
+    SWITCH(mode[Mouse],Rotate) transformRotate();
     CASE(Translate) transformTranslate();
     CASE(Look) transformLook();
     DEFAULT(exitErrstr("invalid mouse mode\n");)
@@ -198,7 +208,7 @@ void transformClock(void)
 {
     Myfloat u[16]; Myfloat v[16]; Myfloat w[16];
     Myfloat angle = wPos/ROLLER_GRANULARITY;
-    SWITCH(mark[Mouse],Rotate) matrixRotate(u);
+    SWITCH(mode[Mouse],Rotate) matrixRotate(u);
     CASE(Translate) {identmat(u,3);}
     CASE(Look) {identmat(u,3);}
     DEFAULT(exitErrstr("invalid mouse mode\n");)
@@ -233,7 +243,7 @@ void transformDrive(void)
 
 void transformScroll(void)
 {
-    SWITCH(mark[Roller],Clock) transformClock();
+    SWITCH(mode[Roller],Clock) transformClock();
     CASE(Cylinder) transformCylinder();
     CASE(Scale) transformScale();
     CASE(Drive) transformDrive();
@@ -252,7 +262,7 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
     if (action != GLFW_PRESS) return;
     if (button == GLFW_MOUSE_BUTTON_LEFT && (mods & GLFW_MOD_CONTROL) != 0) button = GLFW_MOUSE_BUTTON_RIGHT;
     SWITCH(button,GLFW_MOUSE_BUTTON_LEFT) {
-        SWITCH(mark[Sculpt],Additive) leftAdditive();
+        SWITCH(mode[Sculpt],Additive) leftAdditive();
         CASE(Subtractive) leftSubtractive();
         CASE(Refine) leftRefine();
         CASE(Transform) {
@@ -261,7 +271,7 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
-        SWITCH(mark[Sculpt],Additive) FALL(Subtractive) FALL(Refine) /*nop*/;
+        SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine) /*nop*/;
         CASE(Transform) {
             SWITCH(click,Init) /*nop*/
             CASE(Right) {rightRight(); click = Left;}
@@ -277,7 +287,7 @@ void displayCursor(GLFWwindow *ptr, double xpos, double ypos)
     if (xpos < 0 || xpos >= xSiz || ypos < 0 || ypos >= ySiz) return;
     xPos = (2.0*xpos/xSiz-1.0)*(zPos*slope+1.0);
     yPos = (-2.0*ypos/ySiz+1.0)*(zPos*slope*aspect+aspect);
-    SWITCH(mark[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) enquePershader();
         CASE(Matrix) {matrixMatrix(); click = Left;} FALL(Left) transformMouse();
@@ -289,7 +299,7 @@ void displayScroll(GLFWwindow *ptr, double xoffset, double yoffset)
 {
     updateDisplay(ptr);
     wPos = wPos + yoffset;
-    SWITCH(mark[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
+    SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right)
         CASE(Left) click = Matrix; FALL(Matrix) transformScroll();

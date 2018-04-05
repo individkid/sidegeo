@@ -18,6 +18,7 @@
 
 #include "Main.h"
 
+enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 int layer = 0; // argument shared by command and commands it schedules
 struct Display *current = 0; // display currently in focus
 Myfloat affineMat[16] = {0}; // transformation state sent to uniform
@@ -41,6 +42,8 @@ int main(int argc, char **argv)
     if (sizeof(GLfloat) != sizeof(Myfloat)) exitErrstr("glfloat too sizeof\n");
     GLchar glchr = -1; char chr = -1; GLchar chr2glchr = chr; char glchr2chr = glchr;
     if (glchr != chr2glchr || chr != glchr2chr) exitErrstr("glchr too chr\n");
+
+    for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");

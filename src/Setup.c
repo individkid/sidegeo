@@ -394,8 +394,6 @@ void setupDisplay(int name)
     struct Display *save = current;
     current = enlocDisplay(1);
     displayName = name;
-    enum Menu init[Modes] = INIT;
-    for (enum Mode i = 0; i < Modes; i++) mark[i] = init[i];
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -445,6 +443,7 @@ void setupDisplay(int name)
     basisMat[i] = (one ? 1.0 : 0.0);}
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    for (int i = 0; i < 16; i++) displayMatc[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     current = save;
     if (current == 0) for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 }
@@ -601,10 +600,8 @@ void updateContext(int sub)
 {
     if (current == 0) exitErrstr("display too current\n");
     if (sub == contextHandle) return;
-    current = arrayDisplay(sub,1);
+    init(); current = arrayDisplay(sub,1);
     if (sub != contextHandle) exitErrstr("display too context\n");
-    for (int i = 0; i < Modes; i++) *enlocCmdOutput(1) = ofindex(mark[i]);
-    if (mark[Sculpt] == Transform) {only(); target();}
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();
     useDisplayPoly(contextHandle); referPoly();

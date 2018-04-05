@@ -73,7 +73,9 @@
 #define renderClear current->clear
 #define click current->click
 #define mark current->mode
+#define displayMatc current->affineMatc
 
+extern enum Menu mode[Modes];
 extern int layer;
 extern struct Display *current;
 extern Myfloat affineMat[16];
@@ -93,7 +95,7 @@ enum Action renderClient(int state);
 enum Action renderLayer(int state);
 
 void target(void);
-void only(void);
+void init(void);
 void display(void);
 void file(void);
 void responseLayer(void);
