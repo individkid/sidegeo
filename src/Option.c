@@ -29,7 +29,7 @@ int processOption(int len)
 		strncpy(enlocPcsChar(len),argument,len);
 		return len;}
 	if (pattern[0] == 'e' && sscanf(pattern," %s",argument) == 1) {
-		*enlocConfigurer(1) = option;
+		*enlocConfigurer(1) = 0; // TODO2 find option in Name
 		*enlocConfiguree(1) = 0;
 		int len = strlen(argument);
 		strncpy(enlocConfigure(len),argument,len);
