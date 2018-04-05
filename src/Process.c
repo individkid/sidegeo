@@ -33,6 +33,7 @@ int processOption(int len);
 
 int toggle = 0;
 int thread = 0;
+int option = 0;
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 struct Helper {
@@ -218,6 +219,9 @@ int processInit(int len)
 {
     int thread = sizeFile();
     *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
+    option = thread;
+    *enlocName(1) = sizePcsBuf();
+    strcpy(enlocPcsBuf(len+1),filename);
     *enlocIgnore(1) = 0;
     *enlocFile(1) = -1; *enlocSide(1) = -1;
     *enlocPipe(1) = -1; *enlocSize(1) = -1;

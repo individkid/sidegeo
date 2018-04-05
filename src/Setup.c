@@ -126,7 +126,7 @@ enum Server uniformGlobal(int i, enum Shader shader)
 enum Server uniformConstant(int i, enum Shader shader)
 {
     if (i >= 4) exitErrstr("uniform too global\n");
-    enum Server server[4] = {Invalid,Basis,Servers}; // TODO1 some shaders dont use
+    enum Server server[4] = {Invalid,Basis,Servers};
     return server[i];
 }
 
@@ -600,7 +600,7 @@ void updateContext(int sub)
 {
     if (current == 0) exitErrstr("display too current\n");
     if (sub == contextHandle) return;
-    init(); current = arrayDisplay(sub,1);
+    init(); current = arrayDisplay(sub,1); target();
     if (sub != contextHandle) exitErrstr("display too context\n");
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();

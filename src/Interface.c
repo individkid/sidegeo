@@ -46,7 +46,7 @@ void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
     for (int j = 0; j < sizeDisplayPoly(i); j++)
-    SWITCH(mode[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0); // TODO2 use ->scratch instead of j>0
+    SWITCH(mode[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0); // TODO2 use !(->scratch && i==contextHandle) instead of (j>0)
     CASE(Polytope) arrayDisplayPoly(i,j,1)->fixed = (j!=qPos);
     CASE(Alternate) arrayDisplayPoly(i,j,1)->fixed = (i!=contextHandle);
     CASE(Session) arrayDisplayPoly(i,j,1)->fixed = 0;
@@ -149,7 +149,7 @@ int openSlot(void)
 
 void closeSlot(int slot)
 {
-    // TODO1 mode plane in file 0 as unused
+    // TODO1 mark plane in file 0 as unused
     // TODO2 pack out Poly in each display
 }
 

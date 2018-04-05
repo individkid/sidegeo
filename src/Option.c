@@ -18,8 +18,22 @@
 
 #include "Common.h"
 
+extern int option;
+
 int processOption(int len)
-{ // given unlocProChar(len), return 0 or length of filename in enlocProChar
+{
+	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
+	char argument[len+1];
+	if (pattern[0] == 'f' && sscanf(pattern," %s",argument) == 1) {
+		int len = strlen(argument);
+		strncpy(enlocPcsChar(len),argument,len);
+		return len;}
+	if (pattern[0] == 'e' && sscanf(pattern," %s",argument) == 1) {
+		*enlocConfigurer(1) = option;
+		*enlocConfiguree(1) = 0;
+		int len = strlen(argument);
+		strncpy(enlocConfigure(len),argument,len);
+		*enlocConfigure(1) = '\n';}
     return 0;
 }
 
