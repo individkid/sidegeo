@@ -46,7 +46,7 @@ void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
     for (int j = 0; j < sizeDisplayPoly(i); j++)
-    SWITCH(mode[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0); // TODO2 use !(->scratch && i==contextHandle) instead of (j>0)
+    SWITCH(mode[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0); // TODO2 use !(->scratch>=0 && i==contextHandle) instead of (j>0)
     CASE(Polytope) arrayDisplayPoly(i,j,1)->fixed = (j!=qPos);
     CASE(Alternate) arrayDisplayPoly(i,j,1)->fixed = (i!=contextHandle);
     CASE(Session) arrayDisplayPoly(i,j,1)->fixed = 0;
@@ -117,8 +117,8 @@ void file(void)
     updateContext(context);
     int sub = sizePoly();
     setupFile(name);
-    struct File *file = arrayPoly(sub,1);
-    SWITCH(mode[Target],Plane) file->fixed = (sub>0);
+    struct File *file = arrayPoly(sub,1); // TODO2 set file->scratch to -1
+    SWITCH(mode[Target],Plane) file->fixed = (sub>0); // TODO2 use !(->scratch>=0 && i==contextHandle) instead of (j>0)
     CASE(Polytope) file->fixed = 0;
     CASE(Alternate) file->fixed = (context==save);
     CASE(Session) file->fixed = 0;
@@ -143,12 +143,24 @@ void responseProceed(void)
 
 int openSlot(void)
 {
-    return -1; // TODO2 return enloc Poly in each display with ->scrath = 1
+    if (availSlot() == 0) {
+        int sub = sizePoly(); file();
+        int key = allocSlot();
+        // TODO2 set ->scratch from key, update ->fixed
+        *castSlot(key) = sub;}
+    return *castSlot(allocSlot());
 }
 
 void closeSlot(int slot)
 {
-    // TODO2 mark Poly unused in each display
+    // TODO2 freeSlot(->scratch)
+}
+
+int countSlot(int file)
+{
+    int ret = 0;
+    // TODO2 foreach Poly < file, if ->scratch>=0 incr ret
+    return ret;
 }
 
 enum Action transformClick(int state)
@@ -208,13 +220,13 @@ enum Action manipulateClick(int state)
     int ver = 0; // TODO1 get versor from VersorBuf
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
     *enlocCmdConfiguree(1) = 0;
-    *enlocCmdConfigurer(1) = file; // TODO2 map to index with clipboard indices packed out
+    *enlocCmdConfigurer(1) = file-countSlot(file);
     msgstrCmdConfigure("plane %d %d,",-1,plane,ver);
     for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,vec[i]);
     msgstrCmdConfigure("",'\n');
     // sideband msgstr --side responseProceed and wait
     *enlocCmdConfiguree(1) = 1;
-    *enlocCmdConfigurer(1) = file; // TODO2 map to index with clipboard indices packed out
+    *enlocCmdConfigurer(1) = file-countSlot(file);
     msgstrCmdConfigure("side responseProceed %d",'\n',layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
@@ -277,7 +289,7 @@ enum Action sculptClick(int state)
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfiguree(1) = 0;
-    *enlocCmdConfigurer(1) = file; // TODO2 map to index with clipboard indices packed out
+    *enlocCmdConfigurer(1) = file-countSlot(file);
     msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);
     for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
