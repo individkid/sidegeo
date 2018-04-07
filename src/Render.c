@@ -18,6 +18,9 @@
 
 #include "Main.h"
 
+DEFINE_FACES(Cmd)
+DEFINE_FRAMES(Cmd)
+
 size_t bufferType(int size)
 {
     size_t retval = 0;

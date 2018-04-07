@@ -495,7 +495,7 @@ void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Comm
 void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = plane; \
     *enloc##THD##HsInt(1) = len; \
-    ptr->use(); xfer##THD##HsInt(len); \
+    useQueueBase(ptr); xfer##THD##HsInt(len); \
     *enloc##THD##HsInt(1) = arg; \
     *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,cmd}; \
 }
@@ -505,9 +505,9 @@ void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase
 void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase *ptr, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = plane; \
     *enloc##THD##HsInt(1) = len0; \
-    ptr->use(); xfer##THD##HsInt(len0); \
+    useQueueBase(ptr); xfer##THD##HsInt(len0); \
     *enloc##THD##HsInt(1) = len1; \
-    ptr->use(); xfer##THD##HsInt(len1); \
+    useQueueBase(ptr); xfer##THD##HsInt(len1); \
     *enloc##THD##HsInt(1) = arg; \
     *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,cmd}; \
 }
@@ -516,7 +516,7 @@ void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Comm
 #define DEFINE_EVENT_1IN_1INS_2OUTS_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = plane; \
-    ptr->use(); xfer##THD##HsInt(len); \
+    useQueueBase(ptr); xfer##THD##HsInt(len); \
     *enloc##THD##HsInt(1) = arg; \
     *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,1,0,2,1,cmd}; \
 }
@@ -625,6 +625,7 @@ Myfloat *invmat(Myfloat *u, int n);
 Myfloat *tweakvec(Myfloat *u, Myfloat a, Myfloat b, int n);
 Myfloat *basearrow(Myfloat *u, Myfloat *v, int *i, Myfloat *b, int n);
 
+/*
 DECLARE_LOCATE(Cmd)
 DECLARE_FILL(Cmd)
 DECLARE_HOLLOW(Cmd)
@@ -639,6 +640,7 @@ DECLARE_FILTER(Cmd)
 DECLARE_DIVIDE(Cmd)
 DECLARE_VERTEX(Cmd)
 DECLARE_INDEX(Cmd)
+*/
 
 EXTERNCEND
 

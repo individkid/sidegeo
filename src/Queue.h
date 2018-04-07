@@ -61,6 +61,7 @@ EXTERNC int sizeQueueBase(struct QueueBase *ptr);
 EXTERNC void redoQueueBase(struct QueueBase *ptr);
 EXTERNC void endoQueueBase(struct QueueBase *ptr);
 EXTERNC void dedoQueueBase(struct QueueBase *ptr);
+EXTERNC void useQueueBase(struct QueueBase *ptr);
 
 #define DECLARE_MUTEX(NAME) \
 EXTERNC void *loop##NAME(void *arg); \

@@ -18,6 +18,19 @@
 
 #include "Main.h"
 
+DEFINE_LOCATE(Cmd)
+DEFINE_FILL(Cmd)
+DEFINE_HOLLOW(Cmd)
+DEFINE_INFLATE(Cmd)
+DEFINE_FACE(Cmd)
+DEFINE_FRAME(Cmd)
+DEFINE_GET(Cmd)
+DEFINE_SET(Cmd)
+DEFINE_FILTER(Cmd)
+DEFINE_DIVIDE(Cmd)
+DEFINE_VERTEX(Cmd)
+DEFINE_INDEX(Cmd)
+
 void inject(void)
 {
     char chr = *delocCmdInt(1);

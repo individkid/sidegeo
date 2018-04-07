@@ -71,5 +71,9 @@ void dedoQueueBase(struct QueueBase *ptr)
 {
     ptr->dedo();
 }
+void useQueueBase(struct QueueBase *ptr)
+{
+    ptr->use();
+}
 
 EXTERNCEND
