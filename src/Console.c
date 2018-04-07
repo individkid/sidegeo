@@ -27,7 +27,6 @@ struct Item item[Menus] = {
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
     {Sculpts,Sculpt,1,"Equalizer","click opens panel to modify clicked items"},
     {Sculpts,Sculpt,1,"Execute","click calls Lua function attached to facet"},
-    {Sculpts,Sculpt,1,"Jump","click jumps through facet to another space"},
     {Sculpts,Sculpt,1,"Move","click moves pierced target to alternate display"},
     {Sculpts,Sculpt,1,"Copy","click copies pierced target to alternate display"},
     {Sculpts,Sculpt,1,"Transform","modify transform matrix for pierced target"},
@@ -55,8 +54,7 @@ struct Item item[Menus] = {
     {Samples,Sample,2,"Numeric","configuration controls amount of change"},
     {Sculpts,Panel,1,"Panel","which panel opened by Equalizer"},
     {Panels,Panel,2,"Topology","open panel for classifications to sample"},
-    {Panels,Panel,2,"Decorate","open panel for bitmap stylus screen saver"},
-    {Panels,Panel,2,"Markup","open panel for attached files and commands"},
+    {Panels,Panel,2,"Decorate","open panel for bitmap, screen saver, rfb"},
     {Panels,Panel,2,"System","open panel for stocks flows and attachments"}};
 
 int esc = 0;
@@ -222,7 +220,7 @@ void backend(char chr)
         delocCslPtr(1); len -= 1;
         if (len > 1 && *arrayCslPtr(1,1) == '-') {
         delocCslPtr(1); len -= 1;
-        msgstrCslOption("-e",' ');}
+        msgstrCslOption("e",' ');}
         useCslPtr(); xferCslOption(len);}
         useEcho(--depth); referCslPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocCslPtr(1) = alphaof(chr);

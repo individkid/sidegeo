@@ -105,6 +105,7 @@ void leftTransform(void)
 
 void leftManipulate(void)
 {
+    // TODO2 in Target Polytope mode msgstrConfigure of --matrix
     if (mode[Target] == Plane) {
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;

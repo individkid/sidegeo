@@ -37,6 +37,8 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -E \<file> change last file to indicated  
   * -a \<name> open alternate display  
   * -A \<name> use indicated alternate display  
+  * -s \<port> serve remote framebuffer clients  
+  * -S \<port> serve sculpt command clients  
   * -t run sanity check  
   * -T run thorough tests  
 
@@ -47,7 +49,6 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
   * Tweak -- click tweaks plane possibly holding space fixed  
-  * Jump -- click jumps through facet to another space  
   * Equalizer -- click opens panel to modify clicked items  
   * Execute -- click calls Lua function attached to facet  
   * Move -- click moves pierced target to alternate display  
@@ -77,8 +78,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Numeric -- configuration controls amount of change  
   * Panel -- which panel opened by Equalizer  
     * Topology -- open panel for classifications to sample  
-    * Decorate -- open panel for bitmap stylus screen saver  
-    * Markup -- open panel for attached files and commands  
+    * Decorate -- open panel for bitmap, screen saver, rfb  
     * System -- open panel for stocks flows and attachments  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
@@ -99,8 +99,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * --listen takes stock for track to record or audit  
   * --source takes sound file, microphone, or noise as volatile stock  
   * --script binds Lua expression to evaluate when stock changes  
-  * --color takes plane subscript and decoration  
-  * --jump takes plane subscript and fork exec arguments  
+  * --color takes plane subscript decoration and transformation  
   * --action attaches Lua function to boundary to be activated by click  
   * --configure change behaviors by degree  
   * --inject specifies command line option to inject  
