@@ -32,6 +32,9 @@ foreign import ccall "filter" filterC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "filters" filtersC :: CInt -> IO CInt
 foreign import ccall "inout" inoutC :: CInt -> IO (Ptr CInt)
 foreign import ccall "inouts" inoutsC :: IO CInt
+foreign import ccall "iobus" iobusC :: CInt -> CInt -> IO (Ptr CInt)
+foreign import ccall "iobuss" iobussC :: CInt -> IO CInt
+foreign import ccall "mapping" mappingC :: CInt -> IO CInt
 foreign export ccall handleEvent :: CInt -> IO Bool
 foreign export ccall handleEnum :: Ptr CChar -> IO CInt
 
@@ -40,14 +43,15 @@ data Event =
     Fill | -- inout(polyant), place, embed: embed
     Hollow | -- inout(polyant), place, embed: embed
     Inflate | -- place: embed
-    Face | -- inout(filter), place, embed, tag: inout(face)
-    Frame |
-    Other |
-    Both |
-    Swap |
+    Faces | -- inout(filter), place, embed, tag: inout(face)
+    Frames | -- inout(filter), place, embed, tag: inout(frame)
+    Face | -- inout(boundary), place, embed: inout(face)
+    Frame | -- inout(boundary), place, embed: inout(frame)
+    Get | -- inout(boundary), tag: inout(mask)
+    Set | -- inout(boundary,mask), tag: tag
     Divide | -- inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
-    Vertex | -- place: inout(vertex)
-    Corner | -- inout(boundary), place: inout(corner)
+    Vertex | -- inout(boundary), place: inout(vertex)
+    Index | -- inout(boundary), place: inout(index)
     Error
 
 eventOf :: Int -> Event
@@ -55,14 +59,15 @@ eventOf 0 = Locate
 eventOf 1 = Fill
 eventOf 2 = Hollow
 eventOf 3 = Inflate
-eventOf 4 = Face
-eventOf 5 = Frame
-eventOf 6 = Other
-eventOf 7 = Both
-eventOf 8 = Swap
-eventOf 9 = Divide
-eventOf 10 = Vertex
-eventOf 11 = Corner
+eventOf 4 = Faces
+eventOf 5 = Frames
+eventOf 6 = Face
+eventOf 7 = Frame
+eventOf 8 = Get
+eventOf 9 = Set
+eventOf 10 = Divide
+eventOf 11 = Vertex
+eventOf 12 = Index
 eventOf _ = Error
 
 ofEvent :: Event -> Int
@@ -70,14 +75,15 @@ ofEvent Locate = 0
 ofEvent Fill = 1
 ofEvent Hollow = 2
 ofEvent Inflate = 3
-ofEvent Face = 4
-ofEvent Frame = 5
-ofEvent Other = 6
-ofEvent Both = 7
-ofEvent Swap = 8
-ofEvent Divide = 9
-ofEvent Vertex = 10
-ofEvent Corner = 11
+ofEvent Faces = 4
+ofEvent Frames = 5
+ofEvent Face = 6
+ofEvent Frame = 7
+ofEvent Get = 8
+ofEvent Set = 9
+ofEvent Divide = 10
+ofEvent Vertex = 11
+ofEvent Index = 12
 ofEvent _ = (-1)
 
 ofString :: [Char] -> Event
@@ -85,14 +91,15 @@ ofString "Locate" = Locate
 ofString "Fill" = Fill
 ofString "Hollow" = Hollow
 ofString "Inflate" = Inflate
+ofString "Faces" = Faces
+ofString "Frames" = Frames
 ofString "Face" = Face
 ofString "Frame" = Frame
-ofString "Other" = Other
-ofString "Both" = Both
-ofString "Swap" = Swap
+ofString "Get" = Get
+ofString "Set" = Set
 ofString "Divide" = Divide
 ofString "Vertex" = Vertex
-ofString "Corner" = Corner
+ofString "Index" = Index
 ofString _ = Error
 
 handleEnum :: Ptr CChar -> IO CInt
@@ -130,12 +137,13 @@ handleEvent event = case (eventOf (fromIntegral event)) of
  Fill -> return False
  Hollow -> return False
  Inflate -> return False
+ Faces -> return False
+ Frames -> return False
  Face -> return False
  Frame -> return False
- Other -> return False
- Both -> return False
- Swap -> return False
+ Get -> return False
+ Set -> return False
  Divide -> return False
  Vertex -> return False
- Corner -> return False
+ Index -> return False
  _ -> return True

@@ -64,6 +64,7 @@ EXTERNCBEGIN
 typedef unsigned Myuint;
 typedef float Myfloat;
 typedef void (*Command)(void);
+typedef int (*Function)(int);
 
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Jump,Equalizer,Execute,Move,Copy,Transform,
@@ -110,22 +111,24 @@ enum Event {
     Fill, // inout(polyant), place, embed: embed
     Hollow, // inout(polyant), place, embed: embed
     Inflate, // place: embed
-    Faces, // inout(filter), place, embed, tag: inout(face)
-    Frames, // inout(filter), place, embed, tag: inout(frame)
+    Faces, // inout(mask), place, embed, tag: inout(face)
+    Frames, // inout(mask), place, embed, tag: inout(frame)
     Face, // inout(boundary), place, embed: inout(face)
     Frame, // inout(boundary), place, embed: inout(frame)
     Get, // inout(boundary), tag: inout(mask)
-    Set, // inout(boundary,mask), tag: tag
-    Divide, // inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
+    Set, // inout(boundary, mask), tag: tag
+    Filter, // tag: tag
+    Divide, // inout(boundary, mask, wrt), place, embed, tag: place, embed, tag
     Vertex, // inout(boundary), place: inout(vertex)
     Index, // inout(boundary), place: inout(index)
-    Corner, // inout(boundary), place: inout(corner)
     Events};
 struct Proto { // event ctx arg exp rsp command
     enum Event event;
     int ctx; // which polytope to work on
     int arg; // how many int args given
-    int exp; // whether sized response expected
+    int ars; // how many int lists given
+    int exp; // how many int responses expected
+    int exs; // how many int list responses expected
     int rsp; // how many int responses given
     Command command;
 };
@@ -486,6 +489,100 @@ int scan##THD(const char *pattern, int len, ...) \
     return ret; \
 }
 
+#define DECLARE_EVENT_1IN_1INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg);
+#define DEFINE_EVENT_1IN_1INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = plane; \
+    *enloc##THD##HsInt(1) = len; \
+    ptr->use(); xfer##THD##HsInt(len); \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,cmd}; \
+}
+#define DECLARE_EVENT_1IN_2INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase *ptr, Command cmd, int arg);
+#define DEFINE_EVENT_1IN_2INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase *ptr, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = plane; \
+    *enloc##THD##HsInt(1) = len0; \
+    ptr->use(); xfer##THD##HsInt(len0); \
+    *enloc##THD##HsInt(1) = len1; \
+    ptr->use(); xfer##THD##HsInt(len1); \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,cmd}; \
+}
+#define DECLARE_EVENT_1IN_1INS_2OUTS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg);
+#define DEFINE_EVENT_1IN_1INS_2OUTS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = plane; \
+    ptr->use(); xfer##THD##HsInt(len); \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,1,0,2,1,cmd}; \
+}
+#define DECLARE_EVENT_1IN_1OUTS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, Command cmd, int arg);
+#define DEFINE_EVENT_1IN_1OUTS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = plane; \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,1,1,cmd}; \
+}
+#define DECLARE_EVENT_1IN_1OUT_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, Command cmd, int arg);
+#define DEFINE_EVENT_1IN_1OUT_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = plane; \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,1,0,1,cmd}; \
+}
+#define DECLARE_EVENT_2IN_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int mask, Command cmd, int arg);
+#define DEFINE_EVENT_2IN_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int mask, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = plane; \
+    *enloc##THD##HsInt(1) = mask; \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,2,0,0,0,1,cmd}; \
+}
+#define DECLARE_EVENT_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, Command cmd, int arg);
+#define DEFINE_EVENT_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,0,0,0,0,1,cmd}; \
+}
+
+#define DECLARE_LOCATE(THD) DECLARE_EVENT_1IN_1INS_2OUTS_1TAG(THD,Locate)
+#define DECLARE_FILL(THD) DECLARE_EVENT_1IN_2INS_1TAG(THD,Fill)
+#define DECLARE_HOLLOW(THD) DECLARE_EVENT_1IN_2INS_1TAG(THD,Hollow)
+#define DECLARE_INFLATE(THD) DECLARE_EVENT_1TAG(THD,Inflate)
+#define DECLARE_FACES(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Faces)
+#define DECLARE_FRAMES(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Frames)
+#define DECLARE_FACE(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Face)
+#define DECLARE_FRAME(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Frame)
+#define DECLARE_GET(THD) DECLARE_EVENT_1IN_1OUT_1TAG(THD,Get)
+#define DECLARE_SET(THD) DECLARE_EVENT_2IN_1TAG(THD,Set)
+#define DECLARE_FILTER(THD) DECLARE_EVENT_1TAG(THD,Filter)
+#define DECLARE_DIVIDE(THD) DECLARE_EVENT_1IN_1INS_1TAG(THD,Divide)
+#define DECLARE_VERTEX(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Vertex)
+#define DECLARE_INDEX(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Index)
+
+#define DEFINE_LOCATE(THD) DEFINE_EVENT_1IN_1INS_2OUTS_1TAG(THD,Locate)
+#define DEFINE_FILL(THD) DEFINE_EVENT_1IN_2INS_1TAG(THD,Fill)
+#define DEFINE_HOLLOW(THD) DEFINE_EVENT_1IN_2INS_1TAG(THD,Hollow)
+#define DEFINE_INFLATE(THD) DEFINE_EVENT_1TAG(THD,Inflate)
+#define DEFINE_FACES(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Faces)
+#define DEFINE_FRAMES(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Frames)
+#define DEFINE_FACE(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Face)
+#define DEFINE_FRAME(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Frame)
+#define DEFINE_GET(THD) DEFINE_EVENT_1IN_1OUT_1TAG(THD,Get)
+#define DEFINE_SET(THD) DEFINE_EVENT_2IN_1TAG(THD,Set)
+#define DEFINE_FILTER(THD) DEFINE_EVENT_1TAG(THD,Filter)
+#define DEFINE_DIVIDE(THD) DEFINE_EVENT_1IN_1INS_1TAG(THD,Divide)
+#define DEFINE_VERTEX(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Vertex)
+#define DEFINE_INDEX(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Index)
+
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):
 #define FALL(VAL) case (VAL):
@@ -528,6 +625,21 @@ Myfloat *invmat(Myfloat *u, int n);
 Myfloat *tweakvec(Myfloat *u, Myfloat a, Myfloat b, int n);
 Myfloat *basearrow(Myfloat *u, Myfloat *v, int *i, Myfloat *b, int n);
 
+DECLARE_LOCATE(Cmd)
+DECLARE_FILL(Cmd)
+DECLARE_HOLLOW(Cmd)
+DECLARE_INFLATE(Cmd)
+DECLARE_FACES(Cmd)
+DECLARE_FRAMES(Cmd)
+DECLARE_FACE(Cmd)
+DECLARE_FRAME(Cmd)
+DECLARE_GET(Cmd)
+DECLARE_SET(Cmd)
+DECLARE_FILTER(Cmd)
+DECLARE_DIVIDE(Cmd)
+DECLARE_VERTEX(Cmd)
+DECLARE_INDEX(Cmd)
+
 EXTERNCEND
 
 DECLARE_FUNC(CmnCommands)
@@ -558,6 +670,7 @@ DECLARE_STAGE(CmnConfiguree,int)
 DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,struct Proto)
 DECLARE_STAGE(CmnHsInt,int)
+DECLARE_STAGE(CmnHsFunc,Function)
 
 DECLARE_TIME(CmnTimewheels)
 DECLARE_STAGE(CmnChange,struct Change)
@@ -615,6 +728,7 @@ DECLARE_STAGE(CmdConfiguree,int)
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,struct Proto)
 DECLARE_STAGE(CmdHsInt,int)
+DECLARE_STAGE(CmdHsFunc,Function)
 
 DECLARE_SOURCE(CmdTimewheels)
 DECLARE_STAGE(CmdChange,struct Change)
@@ -631,6 +745,7 @@ DECLARE_META(Place,int)
 DECLARE_META(Embed,int)
 DECLARE_META(Filter,int)
 DECLARE_LOCAL(Inout,int)
+DECLARE_META(Iobus,int)
 DECLARE_TREE(Enum,enum Event,int)
 DECLARE_POINTER(Meta,int)
 
@@ -640,7 +755,8 @@ DECLARE_STAGE(HsCmdInt,int)
 
 DECLARE_WAIT(Haskells)
 DECLARE_STAGE(Event,struct Proto)
-DECLARE_STAGE(HsInt,int)
+DECLARE_EXTRA(HsInt,int)
+DECLARE_EXTRA(HsFunc,Function)
 
 
 DECLARE_SOURCE(CslCommands)
@@ -679,7 +795,7 @@ DECLARE_POOL(Script,lua_State *)
 DECLARE_DEST(Timewheels)
 DECLARE_STAGE(Change,struct Change)
 DECLARE_STAGE(Control,enum Control)
-DECLARE_STAGE(TwInt,int)
+DECLARE_EXTRA(TwInt,int)
 DECLARE_EXTRA(Coefficient,Myfloat)
 DECLARE_EXTRA(Variable,int)
 DECLARE_EXTRA(Argument,int)
@@ -703,8 +819,8 @@ DECLARE_STAGE(TwCmdFloat,Myfloat)
 DECLARE_DEST(Processes)
 DECLARE_STAGE(Option,char)
 DECLARE_STAGE(Configure,char)
-DECLARE_STAGE(Configurer,int)
-DECLARE_STAGE(Configuree,int)
+DECLARE_EXTRA(Configurer,int)
+DECLARE_EXTRA(Configuree,int)
 
 DECLARE_SOURCE(PcsOutputs)
 DECLARE_STAGE(PcsOutput,char)

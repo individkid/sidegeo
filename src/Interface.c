@@ -18,16 +18,6 @@
 
 #include "Main.h"
 
-#ifdef BRINGUP
-const enum Event event = Faces;
-const enum Event single = Face;
-const int dimen = FACE_DIMENSIONS;
-#else
-const enum Event event = Frames;
-const enum Event single = Frame;
-const int dimen = FRAME_DIMENSIONS;
-#endif
-
 void inject(void)
 {
     char chr = *delocCmdInt(1);
@@ -126,12 +116,28 @@ void file(void)
     invmat(copymat(file->ratio,affineMat,4),4);}
 }
 
-void responseLayer(void)
+void responseLists(void)
+{
+    int len = 1+*arrayCmdInt(0,1);
+    len += 1+*arrayCmdInt(len,1);
+    int tag = *arrayCmdInt(len,1);
+    useCmdInt(); xferReint(tag,len);
+    delocCmdInt(1); // tag
+}
+
+void responseList(void)
 {
     int len = *delocCmdInt(1);
     int tag = *arrayCmdInt(len,1);
     useCmdInt(); xferReint(tag,len);
     delocCmdInt(1); // tag
+}
+
+void responseSingle(void)
+{
+    int val = *delocCmdInt(1);
+    int tag = *delocCmdInt(1);
+    *enlocReint(tag,1) = val;
 }
 
 void responseProceed(void)
@@ -174,39 +180,25 @@ enum Action transformClick(int state)
     // send Face/Frame event with responseLayer to get
     //  PlaneBuf/PointBuf elements referred to by
     //  vector number plane in FaceSub/FrameSub of file number file.
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = layer;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){single,file,1,1,1,responseLayer};
+    enqueCmdSingle(file,plane,responseList,layer);
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;
     // copy vectors from PlaneBuf/PointBuf in file to preview.
-    for (int i = 0; i < dimen; i++) {
+    for (int i = 0; i < enqueCmdDimen; i++) {
     int from = *delocReint(layer,1);
     Myfloat *vec = dndateBuffer(file,PlaneBuf,from,1);
     // TODO1 get versor too
     updateBuffer(slot,PlaneBuf,i,1,vec);}
     // send Get and Set events to swap visibility of plane and slot.
     //  with enqueFilter response.
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = layer;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Get,file,1,1,1,responseLayer};
+    enqueCmdGet(file,plane,responseSingle,layer);
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
     int mask = *delocReint(layer,1);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
-    *enlocCmdHsInt(1) = 0;
-    *enlocCmdHsInt(1) = mask;
-    *enlocCmdHsInt(1) = slot;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Set,slot,2,0,1,enqueFilter};
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = 0;
-    *enlocCmdHsInt(1) = file;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Set,file,2,0,1,enqueFilter};
+    enqueCmdSet(slot,0,mask,enqueFilter,slot);
+    enqueCmdSet(file,plane,0,enqueFilter,file);
     return Advance;
 }
 
@@ -234,33 +226,23 @@ enum Action manipulateClick(int state)
     if (*arrayReint(layer,0,1) == 0) return Defer;
     delocReint(layer,1);
     // send Get event with rPoint responseLayer
-    *enlocCmdHsInt(1) = 0;
-    *enlocCmdHsInt(1) = layer;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Get,slot,1,1,1,responseLayer};
+    enqueCmdGet(slot,0,responseSingle,layer);
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;
     // send Set event with rPoint responseProceed
-    *enlocCmdHsInt(1) = 0;
-    *enlocCmdHsInt(1) = 0;
-    *enlocCmdHsInt(1) = layer;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Set,slot,2,0,1,responseProceed};
+    enqueCmdSet(slot,0,0,responseProceed,layer);
+    *enlocReint(layer,1) = 0;
     return Continue;}
     if (*arrayReint(layer,1,1) == 0) return Defer;
     int mask = *delocReint(layer,2);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     closeSlot(slot);
     // send enqueFilter for clipboard
-    *enlocCmdInt(1) = plane;
+    *enlocCmdInt(1) = slot;
     *enlocCommand(1) = enqueFilter;
     // send Set event with pPoint qPoint enqueFilter
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = mask;
-    *enlocCmdHsInt(1) = plane;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Set,file,2,0,1,enqueFilter};
+    enqueCmdSet(file,plane,mask,enqueFilter,file);
     return Advance;
 }
 
@@ -280,12 +262,7 @@ enum Action sculptClick(int state)
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;
-    *enlocCmdHsInt(1) = plane;
-    int relen = sizeReint(layer);
-    useReint(layer); xferCmdHsInt(relen);
-    *enlocCmdHsInt(1) = layer;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Locate,file,1+relen,1,1,responseLayer};
+    enqueCmdLocate(file,plane,sizeReint(layer),ptrReint(layer),responseLists,layer);
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfiguree(1) = 0;
@@ -334,11 +311,8 @@ enum Action configureRefine(int state)
     if (plane > share->planes) exitErrstr("refine too plane\n");
     if (plane == share->planes) share->planes += 1;
     // send vertex event with layer response
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = layer;
     // get element array for points on plane
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Vertex,file,1,1,1,responseLayer};
+    enqueCmdVertex(file,plane,responseList,layer);
     return Continue;}
     if (state-- == 0) {
     // wait for layer response
@@ -353,11 +327,8 @@ enum Action configureRefine(int state)
     resetBuffer(file,VertBuf);
     enqueShader(Coplane,file,0,renderClient); // get points on plane
     // send Index event to get point subscript corresponding to VertSub
-    *enlocCmdHsInt(1) = plane;
-    *enlocCmdHsInt(1) = layer;
     // get point subscripts for points on plane
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Index,file,1,1,1,responseLayer};
+    enqueCmdIndex(file,plane,responseList,layer);
     return Continue;}
     if (state-- == 0) {
     // wait for coplane done and Index event done
@@ -372,13 +343,7 @@ enum Action configureRefine(int state)
     updateBuffer(file,PointBuf,index,1,point);}
     unlocReint(layer,len);
     share->points += len;
-    // send divide event with proceed response
-    *enlocCmdHsInt(1) = plane;
-    int relen = sizeReint(layer);
-    useReint(layer); xferCmdHsInt(relen);
-    *enlocCmdHsInt(1) = layer;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Divide,file,1+relen,0,1,responseProceed};
+    enqueCmdDivide(file,plane,sizeReint(layer),ptrReint(layer),responseProceed,layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
     // wait for proceed response
@@ -447,32 +412,25 @@ void configurePoint(void)
 void configureInflate(void)
 {
     int file = *delocCmdInt(1);
-    *enlocCmdHsInt(1) = file;
-    *enlocCmdHsInt(1) = file;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){Inflate,file,0,0,1,enqueFilter};
+    enqueCmdInflate(file,enqueFilter,file);
 }
-
-#define CONFIGURE_ENLOC(EVENT) \
-    int file = *delocCmdInt(1); \
-    int plane = *delocCmdInt(1); \
-    int inlen = *delocCmdInt(1); \
-    *enlocCmdHsInt(1) = plane; \
-    *enlocCmdHsInt(1) = inlen; \
-    useCmdInt(); xferCmdHsInt(inlen); \
-    int outlen = *delocCmdInt(1); \
-    useCmdInt(); xferCmdHsInt(outlen); \
-    *enlocCmdHsInt(1) = file; \
-    *enlocCmdEvent(1) = (struct Proto){EVENT,file,2+inlen+outlen,0,1,enqueFilter};
 
 void configureFill(void)
 {
-    CONFIGURE_ENLOC(Fill)
+    int file = *delocCmdInt(1);
+    int plane = *delocCmdInt(1);
+    int inlen = *delocCmdInt(1);
+    int outlen = *delocCmdInt(1);
+    enqueCmdFill(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
 }
 
 void configureHollow(void)
 {
-    CONFIGURE_ENLOC(Hollow)
+    int file = *delocCmdInt(1);
+    int plane = *delocCmdInt(1);
+    int inlen = *delocCmdInt(1);
+    int outlen = *delocCmdInt(1);
+    enqueCmdHollow(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
 }
 
 void luaRequest(void)

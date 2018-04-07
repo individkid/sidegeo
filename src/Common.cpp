@@ -18,6 +18,21 @@
 
 #include "Common.h"
 
+DEFINE_LOCATE(Cmd)
+DEFINE_FILL(Cmd)
+DEFINE_HOLLOW(Cmd)
+DEFINE_INFLATE(Cmd)
+DEFINE_FACES(Cmd)
+DEFINE_FRAMES(Cmd)
+DEFINE_FACE(Cmd)
+DEFINE_FRAME(Cmd)
+DEFINE_GET(Cmd)
+DEFINE_SET(Cmd)
+DEFINE_FILTER(Cmd)
+DEFINE_DIVIDE(Cmd)
+DEFINE_VERTEX(Cmd)
+DEFINE_INDEX(Cmd)
+
 EXTERNCBEGIN
 
 void commandBefore(void);
@@ -98,6 +113,7 @@ DEFINE_STAGE(CmnConfiguree,int,CmnConfigurer)
 DEFINE_COND(CmnHaskells,haskellConsume,haskellBefore,haskellAfter)
 DEFINE_STAGE(CmnEvent,struct Proto,CmnHaskells)
 DEFINE_STAGE(CmnHsInt,int,CmnEvent)
+DEFINE_STAGE(CmnHsFunc,Function,CmnHsInt)
 
 DEFINE_TIME(CmnTimewheels,timewheelConsume,timewheelProduce,timewheelBefore,timewheelAfter,timewheelDelay)
 DEFINE_STAGE(CmnChange,struct Change,CmnTimewheels)
@@ -155,6 +171,7 @@ DEFINE_STAGE(CmdConfiguree,int,CmdConfigurer)
 DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdProcesses)
 DEFINE_STAGE(CmdEvent,struct Proto,CmdHaskells)
 DEFINE_STAGE(CmdHsInt,int,CmdEvent)
+DEFINE_STAGE(CmdHsFunc,Function,CmdHsInt)
 
 DEFINE_SOURCE(CmdTimewheels,CmnTimewheels,CmdHaskells)
 DEFINE_STAGE(CmdChange,struct Change,CmdTimewheels)
@@ -171,6 +188,7 @@ DEFINE_META(Place,int)
 DEFINE_META(Embed,int)
 DEFINE_META(Filter,int)
 DEFINE_LOCAL(Inout,int)
+DEFINE_META(Iobus,int)
 DEFINE_TREE(Enum,enum Event,int)
 DEFINE_POINTER(Meta,int)
 
@@ -180,7 +198,8 @@ DEFINE_STAGE(HsCmdInt,int,HsCommand)
 
 DEFINE_WAIT(Haskells,CmnHaskells,HsCommands) // wait after source
 DEFINE_STAGE(Event,struct Proto,Haskells)
-DEFINE_STAGE(HsInt,int,Event)
+DEFINE_EXTRA(HsInt,int,Event)
+DEFINE_EXTRA(HsFunc,Function,HsInt)
 
 
 DEFINE_SOURCE(CslCommands,CmnCommands,CmnOutputs)
@@ -219,7 +238,7 @@ DEFINE_POOL(Script,lua_State *)
 DEFINE_DEST(Timewheels,CmnTimewheels,CmnTimewheels)
 DEFINE_STAGE(Change,struct Change,Timewheels)
 DEFINE_STAGE(Control,enum Control,Change)
-DEFINE_STAGE(TwInt,int,Control)
+DEFINE_EXTRA(TwInt,int,Control)
 DEFINE_EXTRA(Coefficient,Myfloat,TwInt)
 DEFINE_EXTRA(Variable,int,Coefficient)
 DEFINE_EXTRA(State,struct State,Variable)
@@ -242,8 +261,8 @@ DEFINE_STAGE(TwCmdFloat,Myfloat,TwCmdInt)
 DEFINE_DEST(Processes,CmnProcesses,CmnProcesses)
 DEFINE_STAGE(Option,char,Processes)
 DEFINE_STAGE(Configure,char,Option)
-DEFINE_STAGE(Configurer,int,Configure)
-DEFINE_STAGE(Configuree,int,Configurer)
+DEFINE_EXTRA(Configurer,int,Configure)
+DEFINE_EXTRA(Configuree,int,Configurer)
 
 DEFINE_SOURCE(PcsOutputs,CmnOutputs,Processes)
 DEFINE_STAGE(PcsOutput,char,PcsOutputs)

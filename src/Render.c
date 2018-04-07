@@ -18,16 +18,6 @@
 
 #include "Main.h"
 
-#ifdef BRINGUP
-const enum Shader dishader = Diplane;
-const enum Shader pershader = Perplane;
-const enum Data data = FaceSub;
-#else
-const enum Shader dishader = Dipoint;
-const enum Shader pershader = Perpoint;
-const enum Data data = FrameSub;
-#endif
-
 size_t bufferType(int size)
 {
     size_t retval = 0;
@@ -205,10 +195,8 @@ enum Action dequeFilter(int state)
     int file = *deargCmdInt(1);
     for (int context = 0; context < sizeDisplay(); context++) {
     if (state-- == 0) {
-    *enlocCmdHsInt(1) = context;
-    *enlocCmdHsInt(1) = layer;
-    // event ctx arg exp rsp command
-    *enlocCmdEvent(1) = (struct Proto){event,file,1,1,1,responseLayer};
+    int mask = 1<<context;
+    enqueCmdEvent(file,mask,responseList,layer);
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;

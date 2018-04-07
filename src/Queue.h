@@ -116,7 +116,7 @@ EXTERNC TYPE *copy##NAME(int to, int from, int siz); \
 EXTERNC TYPE *over##NAME(int to, int from, int siz); \
 EXTERNC struct QueueBase *ptr##NAME(void);
 
-#define DECLARE_INDEX(NAME,TYPE,INDEX) \
+#define DECLARE_INDEXED(NAME,TYPE,INDEX) \
 EXTERNC void use##NAME(INDEX idx); \
 EXTERNC int size##NAME(INDEX idx); \
 EXTERNC void xfer##NAME(INDEX idx,int siz); \
@@ -143,7 +143,7 @@ EXTERNC struct QueueBase *ptr##NAME(INDEX idx);
 #define DECLARE_META(NAME,TYPE) \
 EXTERNC int usage##NAME(void); \
 EXTERNC void used##NAME(int idx); \
-DECLARE_INDEX(NAME,TYPE,int)
+DECLARE_INDEXED(NAME,TYPE,int)
 
 #define DECLARE_POINTER(NAME,TYPE) \
 EXTERNC void refer##NAME(void); \
@@ -193,7 +193,7 @@ EXTERNC int find##NAME(KEY *key); \
 EXTERNC int choose##NAME(KEY *key); \
 EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
-DECLARE_INDEX(NAME,VAL,KEY)
+DECLARE_INDEXED(NAME,VAL,KEY)
 
 #ifdef __cplusplus
 
@@ -854,7 +854,7 @@ extern "C" TYPE *copy##NAME(int to, int from, int siz) {return NAME##Inst.copy(t
 extern "C" TYPE *over##NAME(int to, int from, int siz) {return NAME##Inst.over(to,from,siz);} \
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.ptr();}
 
-#define DEFINE_INDEX(NAME,TYPE,INDEX,PTR) \
+#define DEFINE_INDEXED(NAME,TYPE,INDEX,PTR) \
 extern "C" void use##NAME(INDEX idx) {NAME##Inst.PTR->use();} \
 extern "C" int size##NAME(INDEX idx) {return NAME##Inst.PTR->size();} \
 extern "C" void xfer##NAME(INDEX idx, int siz) {NAME##Inst.PTR->xfer(siz);} \
@@ -925,7 +925,7 @@ template<class TYPE> struct QueueMeta {
 QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \
 extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" void used##NAME(int idx) {NAME##Inst.touch(idx);} \
-DEFINE_INDEX(NAME,TYPE,int,meta.array(idx,1))
+DEFINE_INDEXED(NAME,TYPE,int,meta.array(idx,1))
 
 template<class TYPE> struct QueuePointer {
     QueueStruct<TYPE> *ptr;
@@ -1064,7 +1064,7 @@ template<class TYPE> struct QueuePool {
     }
     TYPE *cast(int sub)
     {
-        return pool.array(sub,1);
+        return pool.array(link.get(sub),1);
     }
     int choose()
     {
@@ -1364,7 +1364,7 @@ extern "C" int find##NAME(KEY *key) {return NAME##Inst.find(key);} \
 extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
 extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
-DEFINE_INDEX(NAME,VAL,KEY,tree.cast(idx))
+DEFINE_INDEXED(NAME,VAL,KEY,tree.cast(idx))
 
 // DEFINE_FREE is map and its inverse
 // DEFINE_FALSE is queue of QueueFree

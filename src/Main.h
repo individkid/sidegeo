@@ -79,7 +79,19 @@ extern enum Menu mode[Modes];
 extern int layer;
 extern struct Display *current;
 extern Myfloat affineMat[16];
-extern const enum Event event;
+extern const enum Shader dishader;
+extern const enum Shader pershader;
+extern const enum Data data;
+
+#ifdef BRINGUP
+#define enqueCmdEvent enqueCmdFaces
+#define enqueCmdSingle enqueCmdFace
+#define enqueCmdDimen FACE_DIMENSIONS
+#else
+#define enqueCmdEvent enqueCmdFrames
+#define enqueCmdSingle enqueCmdFrame
+#define enqueCmdDimen FRAME_DIMENSIONS
+#endif
 
 DECLARE_MSGSTR(CmdBuf)
 DECLARE_MSGSTR(CmdOutput)
@@ -98,7 +110,7 @@ void target(void);
 void init(void);
 void display(void);
 void file(void);
-void responseLayer(void);
+void responseList(void);
 int openSlot(void);
 void closeSlot(int slot);
 enum Action transformClick(int state);

@@ -112,12 +112,11 @@ int processPath(int *ipos, int *cpos, int len, int *plane, int *file)
 
 void processPolyant(int pos)
 {
-	int size = 0, len = 0;
 	*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1);
-	size = sizePcsCmdInt(); *enlocPcsCmdInt(1) = len = 0;
-	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(size,1) += 1;}
-	size = sizePcsCmdInt(); *enlocPcsCmdInt(1) = len = 0;
-	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(size,1) += 1;}
+	int inpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
+	int outpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
+	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(inpos,1) += 1;}
+	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(outpos,1) += 1;}
 }
 
 #define UNLOC \

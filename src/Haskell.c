@@ -24,6 +24,7 @@
 #include "Common.h"
 
 int filenum = 0;
+Function function = 0;
 
 void setupEnum(void)
 {
@@ -40,7 +41,7 @@ void setupEnum(void)
     val = handleEnum("Set"); if (val < 0 || insertEnum(Set) < 0) exitErrstr("enum too event\n"); else *castEnum(Set) = val;
     val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
     val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
-    val = handleEnum("Corner"); if (val < 0 || insertEnum(Corner) < 0) exitErrstr("enum too event\n"); else *castEnum(Corner) = val;
+    val = handleEnum("Index"); if (val < 0 || insertEnum(Index) < 0) exitErrstr("enum too event\n"); else *castEnum(Index) = val;
 }
 
 void haskellBefore(void)
@@ -55,17 +56,19 @@ void haskellConsume(void *arg)
     struct Proto event = *delocEvent(1);
     filenum = event.ctx;
     useHsInt(); xferInout(event.arg);
+    for (int i = 0; i < event.ars; i++) {
+    int len = *delocHsInt(1);
+    useHsInt(); xferIobus(i,len);}
     int num = *castEnum(event.event);
     if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
-    int size = sizeInout();
-    if (event.exp) {
-    *enlocHsCmdInt(1) = size;
-    useInout(); xferHsCmdInt(size);}
-    else delocInout(size);
+    useInout(); xferHsCmdInt(event.exp);
+    for (int i = 0; i < event.exs; i++) {
+    int len = sizeIobus(i);
+    *enlocHsCmdInt(1) = len;
+    useIobus(i); xferHsCmdInt(len);}
     if (event.command) {
     useHsInt(); xferHsCmdInt(event.rsp);
-    *enlocHsCommand(1) = event.command;}
-    else delocHsInt(event.rsp);}
+    *enlocHsCommand(1) = event.command;}}
 }
 
 void haskellAfter(void)
@@ -128,4 +131,22 @@ int inouts(void)
 {
     useInout(); referMeta();
     return sizeMeta();
+}
+
+int *iobus(int size, int sub)
+{
+    useIobus(sub); referMeta();
+    return accessInt(size);
+}
+
+int iobuss(int sub)
+{
+    useIobus(sub); referMeta();
+    return sizeMeta();
+}
+
+int mapping(int mask)
+{
+    if (sizeHsFunc() > 0) function = *delocHsFunc(1);
+    return function(mask);
 }

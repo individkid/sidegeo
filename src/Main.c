@@ -23,6 +23,16 @@ int layer = 0; // argument shared by command and commands it schedules
 struct Display *current = 0; // display currently in focus
 Myfloat affineMat[16] = {0}; // transformation state sent to uniform
 
+#ifdef BRINGUP
+const enum Shader dishader = Diplane;
+const enum Shader pershader = Perplane;
+const enum Data data = FaceSub;
+#else
+const enum Shader dishader = Dipoint;
+const enum Shader pershader = Perpoint;
+const enum Data data = FrameSub;
+#endif
+
 enum Cnd {Was,Not,Cmd,Arg,One,Sgl,Mlt};
 enum Act {Aft,Suf,Str,Inj,End,Uni,Wil,Wnt};
 
