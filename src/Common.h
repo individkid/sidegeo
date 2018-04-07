@@ -625,23 +625,6 @@ Myfloat *invmat(Myfloat *u, int n);
 Myfloat *tweakvec(Myfloat *u, Myfloat a, Myfloat b, int n);
 Myfloat *basearrow(Myfloat *u, Myfloat *v, int *i, Myfloat *b, int n);
 
-/*
-DECLARE_LOCATE(Cmd)
-DECLARE_FILL(Cmd)
-DECLARE_HOLLOW(Cmd)
-DECLARE_INFLATE(Cmd)
-DECLARE_FACES(Cmd)
-DECLARE_FRAMES(Cmd)
-DECLARE_FACE(Cmd)
-DECLARE_FRAME(Cmd)
-DECLARE_GET(Cmd)
-DECLARE_SET(Cmd)
-DECLARE_FILTER(Cmd)
-DECLARE_DIVIDE(Cmd)
-DECLARE_VERTEX(Cmd)
-DECLARE_INDEX(Cmd)
-*/
-
 EXTERNCEND
 
 DECLARE_FUNC(CmnCommands)
