@@ -94,8 +94,7 @@ void leftSubtractive(void)
     CASE(Session) for (int i = 0; i < sizePoly(); i++) { \
     *enlocConfiguree(1) = 1; \
     *enlocConfigurer(1) = i; \
-    if (contextHandle) msgstrCmdConfigure("side Filter %d "#STR"Axle enqueFilter %d",'\n',contextHandle,i); \
-    else msgstrCmdConfigure("side Filter alternate "#STR"Rim enqueFilter %d",'\n',i);} \
+    if (contextHandle) msgstrCmdConfigure("side Filter %d "#STR"Wheel enqueFilter %d",'\n',contextHandle,i);} \
     DEFAULT(exitErrstr("target too move\n");)
 
 void leftMove(void)
