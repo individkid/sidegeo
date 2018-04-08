@@ -513,7 +513,7 @@ int copyWheel(int shift, int mask)
     enqueCmdFilter(i,alternate,enqueFilter,i);} \
     CASE(Session) for (int i = 0; i < sizePoly(); i++) { \
     *enlocCmdFunc(1) = STR##Wheel; \
-    enqueCmdFilter(i,context,enqueFilter,i);} \
+    enqueCmdFilter(i,(context?0:alternate),enqueFilter,i);} \
     DEFAULT(exitErrstr("target too move\n");) \
     return Advance;
 
