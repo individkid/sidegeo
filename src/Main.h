@@ -116,6 +116,17 @@ void closeSlot(int slot);
 enum Action transformClick(int state);
 enum Action manipulateClick(int state);
 enum Action sculptClick(int state);
+enum Action moveEdit(int state);
+enum Action copyEdit(int state);
+int moveHub(int shift, int mask);
+int copyHub(int shift, int mask);
+int moveSpoke(int shift, int mask);
+int copySpoke(int shift, int mask);
+int moveAxle(int shift, int mask);
+int copyAxle(int shift, int mask);
+int moveRim(int shift, int mask);
+int copyRim(int shift, int mask);
+
 #ifdef BRINGUP
 void bringupBuiltin(void);
 #endif
@@ -131,7 +142,8 @@ void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
 void setupDisplay(int name);
 void setupCode(enum Shader shader);
 int setupFile();
-void setupShare(int name);
+int setupShare(int name);
+void setupTarget(int sub);
 void updateAffine(struct File *ptr);
 void updateFile(int ctx, int sub, int cpy);
 void updateContext(int sub);

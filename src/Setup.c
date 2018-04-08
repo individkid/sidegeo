@@ -296,7 +296,7 @@ int setupClient(int file, enum Data data)
 {
     struct Share *ptr = arrayShare(file,1);
     int share = ptr->client[data];
-    if (share > 0)
+    if (share >= 0)
     SWITCH(data,PlaneBuf)
     FALL(VersorBuf)
     FALL(PointBuf)
@@ -335,12 +335,33 @@ int setupFile()
     return sub;
 }
 
-void setupShare(int name)
+int setupShare(int name)
 {
+    int sub = sizeShare();
     struct Share *share = enlocShare(1);
     struct Share init = {0};
     *share = init;
     share->name = name;
+    for (enum Data data = 0; data < Datas; data++) share->client[data] = -1;
+    return sub;
+}
+
+void setupTarget(int sub)
+{
+    int save = contextHandle;
+    for (int context = 0; context < sizeDisplay(); context++) {
+    updateContext(context);
+    int sub = setupFile();
+    struct File *file = arrayPoly(sub,1);
+    SWITCH(mode[Target],Plane) {
+    enum Usage usage = arrayShare(sub,1)->usage;
+    file->fixed = !(usage==Scratch&&contextHandle==save);}
+    CASE(Polytope) file->fixed = 1;
+    CASE(Alternate) file->fixed = !(contextHandle==save);
+    CASE(Session) file->fixed = 0;
+    DEFAULT(exitErrstr("target too line\n");)
+    invmat(copymat(file->ratio,affineMat,4),4);}
+    updateContext(save);
 }
 
 void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)

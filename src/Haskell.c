@@ -39,6 +39,7 @@ void setupEnum(void)
     val = handleEnum("Frame"); if (val < 0 || insertEnum(Frame) < 0) exitErrstr("enum too event\n"); else *castEnum(Frame) = val;
     val = handleEnum("Get"); if (val < 0 || insertEnum(Get) < 0) exitErrstr("enum too event\n"); else *castEnum(Get) = val;
     val = handleEnum("Set"); if (val < 0 || insertEnum(Set) < 0) exitErrstr("enum too event\n"); else *castEnum(Set) = val;
+    val = handleEnum("Filter"); if (val < 0 || insertEnum(Filter) < 0) exitErrstr("enum too event\n"); else *castEnum(Filter) = val;
     val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
     val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
     val = handleEnum("Index"); if (val < 0 || insertEnum(Index) < 0) exitErrstr("enum too event\n"); else *castEnum(Index) = val;
@@ -61,6 +62,7 @@ void haskellConsume(void *arg)
     useHsInt(); xferIobus(i,len);}
     int num = *castEnum(event.event);
     if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
+    function = 0;
     useInout(); xferHsCmdInt(event.exp);
     for (int i = 0; i < event.exs; i++) {
     int len = sizeIobus(i);
@@ -145,8 +147,8 @@ int iobuss(int sub)
     return sizeMeta();
 }
 
-int mapping(int mask)
+int mapping(int arg, int mask)
 {
-    if (sizeHsFunc() > 0) function = *delocHsFunc(1);
-    return function(mask);
+    if (function == 0) function = *delocFunc(1);
+    return function(arg,mask);
 }

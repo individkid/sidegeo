@@ -90,8 +90,6 @@ void commandBefore()
     *enlocCmdBuf(1) = 0;
     msgstrCmdByte("Sculpt",0);
     enqueCommand(display); // main display
-    msgstrCmdByte("preview",0);
-    enqueCommand(file); // preview file
 #ifdef BRINGUP
     enqueCommand(&bringupBuiltin);
 #endif

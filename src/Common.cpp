@@ -98,7 +98,7 @@ DEFINE_STAGE(CmnConfiguree,int,CmnConfigurer)
 DEFINE_COND(CmnHaskells,haskellConsume,haskellBefore,haskellAfter)
 DEFINE_STAGE(CmnEvent,struct Proto,CmnHaskells)
 DEFINE_STAGE(CmnHsInt,int,CmnEvent)
-DEFINE_STAGE(CmnHsFunc,Function,CmnHsInt)
+DEFINE_STAGE(CmnFunc,Function,CmnHsInt)
 
 DEFINE_TIME(CmnTimewheels,timewheelConsume,timewheelProduce,timewheelBefore,timewheelAfter,timewheelDelay)
 DEFINE_STAGE(CmnChange,struct Change,CmnTimewheels)
@@ -156,7 +156,7 @@ DEFINE_STAGE(CmdConfiguree,int,CmdConfigurer)
 DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdProcesses)
 DEFINE_STAGE(CmdEvent,struct Proto,CmdHaskells)
 DEFINE_STAGE(CmdHsInt,int,CmdEvent)
-DEFINE_STAGE(CmdHsFunc,Function,CmdHsInt)
+DEFINE_STAGE(CmdFunc,Function,CmdHsInt)
 
 DEFINE_SOURCE(CmdTimewheels,CmnTimewheels,CmdHaskells)
 DEFINE_STAGE(CmdChange,struct Change,CmdTimewheels)
@@ -184,7 +184,7 @@ DEFINE_STAGE(HsCmdInt,int,HsCommand)
 DEFINE_WAIT(Haskells,CmnHaskells,HsCommands) // wait after source
 DEFINE_STAGE(Event,struct Proto,Haskells)
 DEFINE_EXTRA(HsInt,int,Event)
-DEFINE_EXTRA(HsFunc,Function,HsInt)
+DEFINE_EXTRA(Func,Function,HsInt)
 
 
 DEFINE_SOURCE(CslCommands,CmnCommands,CmnOutputs)

@@ -64,7 +64,7 @@ EXTERNCBEGIN
 typedef unsigned Myuint;
 typedef float Myfloat;
 typedef void (*Command)(void);
-typedef int (*Function)(int);
+typedef int (*Function)(int,int);
 
 enum Menu { // lines in the menu; select with enter key
     Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Equalizer,Execute,Move,Copy,Transform,
@@ -252,6 +252,10 @@ struct Display {
     enum Menu mode[Modes]; // save and restore upon right click
     Myfloat affineMatc[16]; // save and incorporate upon right click
 };
+enum Usage {
+    Blank = 0,
+    Scratch,
+    Draft};
 struct File {
     int fixed; // whether object moves opposite to view
     int last; // last value of fixed
@@ -280,6 +284,8 @@ struct Share { // per file state shared across displays
     int planes; // number of planes per display
     int points; // number of points per display
     int client[Datas]; // sometimes client data is shared between displays
+    enum Usage usage; // manipulated single plane or file of planes
+    int ident; // index used by process thread, or pool key
 };
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers]; // uniforms used by program
@@ -545,6 +551,14 @@ void enque##THD##EVENT(int file, int plane, int mask, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = arg; \
     *enloc##THD##Event(1) = (struct Proto){EVENT,file,2,0,0,0,1,cmd}; \
 }
+#define DECLARE_EVENT_1IN_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int mask, Command cmd, int arg);
+#define DEFINE_EVENT_1IN_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int mask, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = mask; \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,0,1,cmd}; \
+}
 #define DECLARE_EVENT_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, Command cmd, int arg);
 #define DEFINE_EVENT_1TAG(THD,EVENT) \
@@ -563,7 +577,7 @@ void enque##THD##EVENT(int file, Command cmd, int arg) { \
 #define DECLARE_FRAME(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Frame)
 #define DECLARE_GET(THD) DECLARE_EVENT_1IN_1OUT_1TAG(THD,Get)
 #define DECLARE_SET(THD) DECLARE_EVENT_2IN_1TAG(THD,Set)
-#define DECLARE_FILTER(THD) DECLARE_EVENT_1TAG(THD,Filter)
+#define DECLARE_FILTER(THD) DECLARE_EVENT_1IN_1TAG(THD,Filter)
 #define DECLARE_DIVIDE(THD) DECLARE_EVENT_1IN_1INS_1TAG(THD,Divide)
 #define DECLARE_VERTEX(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Vertex)
 #define DECLARE_INDEX(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Index)
@@ -578,7 +592,7 @@ void enque##THD##EVENT(int file, Command cmd, int arg) { \
 #define DEFINE_FRAME(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Frame)
 #define DEFINE_GET(THD) DEFINE_EVENT_1IN_1OUT_1TAG(THD,Get)
 #define DEFINE_SET(THD) DEFINE_EVENT_2IN_1TAG(THD,Set)
-#define DEFINE_FILTER(THD) DEFINE_EVENT_1TAG(THD,Filter)
+#define DEFINE_FILTER(THD) DEFINE_EVENT_1IN_1TAG(THD,Filter)
 #define DEFINE_DIVIDE(THD) DEFINE_EVENT_1IN_1INS_1TAG(THD,Divide)
 #define DEFINE_VERTEX(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Vertex)
 #define DEFINE_INDEX(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Index)
@@ -655,7 +669,7 @@ DECLARE_STAGE(CmnConfiguree,int)
 DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,struct Proto)
 DECLARE_STAGE(CmnHsInt,int)
-DECLARE_STAGE(CmnHsFunc,Function)
+DECLARE_STAGE(CmnFunc,Function)
 
 DECLARE_TIME(CmnTimewheels)
 DECLARE_STAGE(CmnChange,struct Change)
@@ -713,7 +727,7 @@ DECLARE_STAGE(CmdConfiguree,int)
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,struct Proto)
 DECLARE_STAGE(CmdHsInt,int)
-DECLARE_STAGE(CmdHsFunc,Function)
+DECLARE_STAGE(CmdFunc,Function)
 
 DECLARE_SOURCE(CmdTimewheels)
 DECLARE_STAGE(CmdChange,struct Change)
@@ -741,7 +755,7 @@ DECLARE_STAGE(HsCmdInt,int)
 DECLARE_WAIT(Haskells)
 DECLARE_STAGE(Event,struct Proto)
 DECLARE_EXTRA(HsInt,int)
-DECLARE_EXTRA(HsFunc,Function)
+DECLARE_EXTRA(Func,Function)
 
 
 DECLARE_SOURCE(CslCommands)

@@ -48,12 +48,15 @@ void inject(void)
 void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
-    for (int j = 0; j < sizeDisplayPoly(i); j++)
-    SWITCH(mode[Target],Plane) arrayDisplayPoly(i,j,1)->fixed = (j>0); // TODO2 use !(->scratch>=0 && i==contextHandle) instead of (j>0)
-    CASE(Polytope) arrayDisplayPoly(i,j,1)->fixed = (j!=qPos);
-    CASE(Alternate) arrayDisplayPoly(i,j,1)->fixed = (i!=contextHandle);
-    CASE(Session) arrayDisplayPoly(i,j,1)->fixed = 0;
-    DEFAULT(exitErrstr("target too line\n");)
+    for (int j = 0; j < sizeDisplayPoly(i); j++) {
+    struct File *file = arrayDisplayPoly(i,j,1);
+    SWITCH(mode[Target],Plane) {
+    enum Usage usage = arrayShare(j,1)->usage;
+    file->fixed = !(usage==Scratch&&i==contextHandle);}
+    CASE(Polytope) file->fixed = !(j==qPos);
+    CASE(Alternate) file->fixed = !(i==contextHandle);
+    CASE(Session) file->fixed = 0;
+    DEFAULT(exitErrstr("target too line\n");)}
 }
 
 void init(void)
@@ -109,22 +112,16 @@ void display(void)
 
 void file(void)
 {
-    int save = contextHandle;
     int name = sizeCmdBuf();
     int len = lengthCmdByte(0,0);
     if (len > 0) {useCmdByte(); xferCmdBuf(len+1);}
     else name = 0;
-    setupShare(name);
-    for (int context = 0; context < sizeDisplay(); context++) {
-    updateContext(context);
-    int sub = setupFile();
-    struct File *file = arrayPoly(sub,1); // TODO2 set file->scratch to -1
-    SWITCH(mode[Target],Plane) file->fixed = (sub>0); // TODO2 use !(->scratch>=0 && i==contextHandle) instead of (j>0)
-    CASE(Polytope) file->fixed = 0;
-    CASE(Alternate) file->fixed = (context==save);
-    CASE(Session) file->fixed = 0;
-    DEFAULT(exitErrstr("target too line\n");)
-    invmat(copymat(file->ratio,affineMat,4),4);}
+    int ident = *delocCmdInt(1);
+    int sub = setupShare(name);
+    struct Share *share = arrayShare(sub,1);
+    share->usage = Draft;
+    share->ident = ident;
+    setupTarget(sub);
 }
 
 void responseLists(void)
@@ -161,22 +158,33 @@ void responseProceed(void)
 int openSlot(void)
 {
     if (availSlot() == 0) {
-        int sub = sizePoly(); file();
-        int key = allocSlot();
-        // TODO2 set ->scratch from key, update ->fixed
-        *castSlot(key) = sub;}
-    return *castSlot(allocSlot());
+    int key = allocSlot();
+    int sub = setupShare(0);
+    struct Share *share = arrayShare(sub,1);
+    share->usage = Scratch;
+    share->ident = key;
+    setupTarget(sub);
+    *castSlot(key) = sub;}
+    int key = allocSlot();
+    int sub = *castSlot(key);
+    struct Share *share = arrayShare(sub,1);
+    share->usage = Scratch;
+    share->ident = key;
 }
 
 void closeSlot(int slot)
 {
-    // TODO2 freeSlot(->scratch)
+    struct Share *share = arrayShare(slot,1);
+    share->usage = Blank;
+    freeSlot(share->ident);
 }
 
 int countSlot(int file)
 {
     int ret = 0;
-    // TODO2 foreach Poly < file, if ->scratch>=0 incr ret
+    for (int i = 0; i < sizeShare(); i++) {
+    struct Share *share = arrayShare(i,1);
+    if (share->usage != Draft) ret += 1;}
     return ret;
 }
 
@@ -442,6 +450,62 @@ void configureHollow(void)
     int inlen = *delocCmdInt(1);
     int outlen = *delocCmdInt(1);
     enqueCmdHollow(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
+}
+
+enum Action moveEdit(int state)
+{
+    int plane = *delocCmdInt(1);
+    int file = *delocCmdInt(1);
+    int context = *delocCmdInt(1);
+    // TODO2 Get Set
+}
+
+enum Action copyEdit(int state)
+{
+    int plane = *delocCmdInt(1);
+    int file = *delocCmdInt(1);
+    int context = *delocCmdInt(1);
+    // TODO2 Get Set
+}
+
+int moveHub(int shift, int mask)
+{
+    // TODO2 return altered mask
+}
+
+int copyHub(int shift, int mask)
+{
+    // TODO2 return altered mask
+}
+
+int moveSpoke(int shift, int mask)
+{
+    // TODO2 return altered mask
+}
+
+int copySpoke(int shift, int mask)
+{
+    // TODO2 return altered mask
+}
+
+int moveAxle(int shift, int mask)
+{
+    // TODO2 return altered mask
+}
+
+int copyAxle(int shift, int mask)
+{
+    // TODO2 return altered mask
+}
+
+int moveRim(int shift, int mask)
+{
+    // TODO2 return altered mask
+}
+
+int copyRim(int shift, int mask)
+{
+    // TODO2 return altered mask
 }
 
 void luaRequest(void)

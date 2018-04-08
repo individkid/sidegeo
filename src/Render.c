@@ -445,12 +445,12 @@ void enqueSwap(void)
     enqueShader(dishader,i,context,0);
 }
 
-void enqueDishader(void)
+void enqueDishader(void) // TODO1 add and use running and pending fields
 {
     for (int i = 0; i < sizeDisplay(); i++) {*enlocCmdInt(1) = i; enqueCommand(enqueSwap);}
 }
 
-void enquePershader(void)
+void enquePershader(void) // TODO1 add and use running and pending fields
 {
     if (layer != 0) exitErrstr("enque too layer\n");
     updateContext(0);
