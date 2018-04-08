@@ -77,7 +77,7 @@ void leftSubtractive(void)
 
 void leftRefine(void)
 {
-    struct File *ptr = arrayPoly(qPos,1);
+    struct Share *ptr = arrayShare(qPos,1);
     Myfloat u[3]; u[0] = xPos; u[1] = yPos; u[2] = zPos;
     tweakvec(u,0,ptr->tweak,3);
     Myfloat v[3] = {0};

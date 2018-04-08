@@ -132,7 +132,7 @@ The development plan is to complete the namesake usage features first, then proc
   * Edit: -h -H -a -A --inject --menu Move Copy Mouse Roller Target --matrix  
   * Analyze: -t Sample Display Classify Equalizer (Topology) --sample --dual --embed --polytope -T  
   * Synthesize: --call --bind --action Execute --time --change --script --listen --source --metric  
-  * Decorate: -F -E --yield --jump Jump --color --configure Panel  
+  * Decorate: -F -E --yield --color --configure -s -S Panel  
 
 The code is partitioned to the following files grouped by thread:
 

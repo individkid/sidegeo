@@ -294,9 +294,6 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn,
 
 int setupClient(int file, enum Data data)
 {
-    while (sizeShare() < file) {
-        struct Share init = {0};
-        *enlocShare(1) = init;}
     struct Share *ptr = arrayShare(file,1);
     int share = ptr->client[data];
     if (share > 0)
@@ -314,13 +311,12 @@ int setupClient(int file, enum Data data)
     return client;
 }
 
-void setupFile(int name)
+int setupFile()
 {
     int sub = sizePoly();
     struct File *file = enlocPoly(1);
     struct File init = {0};
     *file = init;
-    file->name = name;
     identmat(file->saved,4);
     identmat(file->ratio,4);
     setupBuffer(file->buffer+PlaneBuf,"plane",locationBuffer(PlaneBuf),GL_FLOAT,PLANE_DIMENSIONS,setupClient(sub,PlaneBuf));
@@ -336,6 +332,15 @@ void setupFile(int name)
     setupBuffer(file->buffer+FrameSub,"frame",locationBuffer(FrameSub),GL_UNSIGNED_INT,FRAME_DIMENSIONS,setupClient(sub,FrameSub));
     setupBuffer(file->buffer+VertSub,"vertex",locationBuffer(VertSub),GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,setupClient(sub,VertSub));
     setupBuffer(file->buffer+CnstrSub,"construct",locationBuffer(CnstrSub),GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,setupClient(sub,CnstrSub));
+    return sub;
+}
+
+void setupShare(int name)
+{
+    struct Share *share = enlocShare(1);
+    struct Share init = {0};
+    *share = init;
+    share->name = name;
 }
 
 void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
@@ -495,7 +500,6 @@ void updateFile(int ctx, int sub, int cpy)
 {
     struct File *file = arrayDisplayPoly(ctx,sub,1);
     struct File *copy = arrayPoly(cpy,1);
-    file->tweak = copy->tweak;
     file->fixed = copy->fixed;
     file->last = copy->last;
     copymat(file->saved,copy->saved,4);

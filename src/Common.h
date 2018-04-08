@@ -253,8 +253,6 @@ struct Display {
     Myfloat affineMatc[16]; // save and incorporate upon right click
 };
 struct File {
-    int name;
-    Myfloat tweak; // from --configure
     int fixed; // whether object moves opposite to view
     int last; // last value of fixed
     Myfloat saved[16]; // Sp sent to uniform when fixed went to 1
@@ -273,6 +271,8 @@ struct File {
     struct Buffer buffer[Datas]; // only render buffer, and client uniforms are global
 };
 struct Share { // per file state shared across displays
+    int name;
+    Myfloat tweak; // from --configure
     int pending; // number of planes to be added
     int complete; // number of planes added
     Myfloat point[9]; // points collected for construct plane

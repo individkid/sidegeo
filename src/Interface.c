@@ -100,10 +100,8 @@ void display(void)
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
     updateContext(0);
     for (int i = 0; i < sizePoly(); i++) {
-    int name = arrayPoly(i,1)->name;
     updateContext(new);
-    int sub = sizePoly();
-    setupFile(name);
+    int sub = setupFile();
     updateContext(0);
     updateFile(new,sub,i);}
     current = save;}
@@ -116,10 +114,10 @@ void file(void)
     int len = lengthCmdByte(0,0);
     if (len > 0) {useCmdByte(); xferCmdBuf(len+1);}
     else name = 0;
+    setupShare(name);
     for (int context = 0; context < sizeDisplay(); context++) {
     updateContext(context);
-    int sub = sizePoly();
-    setupFile(name);
+    int sub = setupFile();
     struct File *file = arrayPoly(sub,1); // TODO2 set file->scratch to -1
     SWITCH(mode[Target],Plane) file->fixed = (sub>0); // TODO2 use !(->scratch>=0 && i==contextHandle) instead of (j>0)
     CASE(Polytope) file->fixed = 0;
