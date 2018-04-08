@@ -76,26 +76,11 @@ void leftSubtractive(void)
 }
 
 #define EDIT_ENLOC(STR) \
-    SWITCH(mode[Target],Plane) { \
     *enlocCmdInt(1) = pPoint; \
     *enlocCmdInt(1) = qPoint; \
     *enlocCmdInt(1) = contextHandle; \
-    enqueMachine(STR##Edit);} \
-    CASE(Polytope) { \
-    *enlocConfiguree(1) = 1; \
-    *enlocConfigurer(1) = qPoint; \
-    if (contextHandle) msgstrCmdConfigure("side Filter %d "#STR"Hub enqueFilter %d",'\n',contextHandle,qPoint); \
-    else msgstrCmdConfigure("side Filter alternate "#STR"Spoke enqueFilter %d",'\n',qPoint);} \
-    CASE(Alternate) for (int i = 0; i < sizePoly(); i++) { \
-    *enlocConfiguree(1) = 1; \
-    *enlocConfigurer(1) = i; \
-    if (contextHandle) msgstrCmdConfigure("side Filter %d "#STR"Hub enqueFilter %d",'\n',contextHandle,i); \
-    else msgstrCmdConfigure("side Filter alternate "#STR"Spoke enqueFilter %d",'\n',i);} \
-    CASE(Session) for (int i = 0; i < sizePoly(); i++) { \
-    *enlocConfiguree(1) = 1; \
-    *enlocConfigurer(1) = i; \
-    if (contextHandle) msgstrCmdConfigure("side Filter %d "#STR"Wheel enqueFilter %d",'\n',contextHandle,i);} \
-    DEFAULT(exitErrstr("target too move\n");)
+    *enlocCmdInt(1) = mode[Target]; \
+    enqueMachine(STR##Edit);
 
 void leftMove(void)
 {

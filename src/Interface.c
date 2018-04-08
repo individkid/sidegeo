@@ -452,22 +452,6 @@ void configureHollow(void)
     enqueCmdHollow(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
 }
 
-enum Action moveEdit(int state)
-{
-    int plane = *delocCmdInt(1);
-    int file = *delocCmdInt(1);
-    int context = *delocCmdInt(1);
-    // TODO2 Get Set
-}
-
-enum Action copyEdit(int state)
-{
-    int plane = *delocCmdInt(1);
-    int file = *delocCmdInt(1);
-    int context = *delocCmdInt(1);
-    // TODO2 Get Set
-}
-
 int moveHub(int shift, int mask)
 {
     // TODO2 return altered mask
@@ -488,24 +472,59 @@ int copySpoke(int shift, int mask)
     // TODO2 return altered mask
 }
 
-int moveAxle(int shift, int mask)
+int moveWheel(int shift, int mask)
 {
     // TODO2 return altered mask
 }
 
-int copyAxle(int shift, int mask)
+int copyWheel(int shift, int mask)
 {
     // TODO2 return altered mask
 }
 
-int moveRim(int shift, int mask)
+#define DEARG_EDIT(STR) \
+    int plane = *deargCmdInt(1); \
+    int file = *deargCmdInt(1); \
+    int context = *deargCmdInt(1); \
+    int target = *deargCmdInt(1); \
+    SWITCH(target,Plane) { \
+    if (state-- == 0) { \
+    layer = uniqueLayer(); \
+    if (insertReint(layer) < 0) exitErrstr("reint too insert\n"); \
+    /* Get mask for plane in file to layer */ \
+    enqueCmdGet(file,plane,responseSingle,layer); \
+    return Continue;} \
+    if (sizeReint(layer) == 0) return Defer; \
+    int mask = *delocReint(layer,1); \
+    if (context) mask = STR##Hub(context,mask); \
+    else mask = STR##Spoke(alternate,mask); \
+    /* Set mask for plane in file to mask */ \
+    if (removeReint(layer) < 0) exitErrstr("reint too insert\n"); \
+    enqueCmdSet(file,plane,mask,enqueFilter,file);} \
+    CASE(Polytope) if (context) { \
+    *enlocCmdFunc(1) = STR##Hub; \
+    enqueCmdFilter(file,context,enqueFilter,file);} else { \
+    *enlocCmdFunc(1) = STR##Spoke; \
+    enqueCmdFilter(file,alternate,enqueFilter,file);} \
+    CASE(Alternate) for (int i = 0; i < sizePoly(); i++) if (context) { \
+    *enlocCmdFunc(1) = STR##Hub; \
+    enqueCmdFilter(i,context,enqueFilter,i);} else { \
+    *enlocCmdFunc(1) = STR##Spoke; \
+    enqueCmdFilter(i,alternate,enqueFilter,i);} \
+    CASE(Session) for (int i = 0; i < sizePoly(); i++) { \
+    *enlocCmdFunc(1) = STR##Wheel; \
+    enqueCmdFilter(i,context,enqueFilter,i);} \
+    DEFAULT(exitErrstr("target too move\n");) \
+    return Advance;
+
+enum Action moveEdit(int state)
 {
-    // TODO2 return altered mask
+    DEARG_EDIT(move)
 }
 
-int copyRim(int shift, int mask)
+enum Action copyEdit(int state)
 {
-    // TODO2 return altered mask
+    DEARG_EDIT(copy)
 }
 
 void luaRequest(void)

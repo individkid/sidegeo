@@ -76,6 +76,7 @@
 #define displayMatc current->affineMatc
 
 extern enum Menu mode[Modes];
+extern int alternate;
 extern int layer;
 extern struct Display *current;
 extern Myfloat affineMat[16];
@@ -118,14 +119,6 @@ enum Action manipulateClick(int state);
 enum Action sculptClick(int state);
 enum Action moveEdit(int state);
 enum Action copyEdit(int state);
-int moveHub(int shift, int mask);
-int copyHub(int shift, int mask);
-int moveSpoke(int shift, int mask);
-int copySpoke(int shift, int mask);
-int moveAxle(int shift, int mask);
-int copyAxle(int shift, int mask);
-int moveRim(int shift, int mask);
-int copyRim(int shift, int mask);
 
 #ifdef BRINGUP
 void bringupBuiltin(void);

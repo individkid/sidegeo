@@ -19,6 +19,7 @@
 #include "Main.h"
 
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
+int alternate = 0; // TODO2 get updates to this from process thread
 int layer = 0; // argument shared by command and commands it schedules
 struct Display *current = 0; // display currently in focus
 Myfloat affineMat[16] = {0}; // transformation state sent to uniform
