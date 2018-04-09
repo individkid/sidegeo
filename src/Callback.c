@@ -46,16 +46,6 @@ void compass(double xdelta, double ydelta)
     displayCursor(displayHandle,xwarp,ywarp);
 }
 
-void save(void)
-{
-    // TODO2 save mode and affineMat in context
-}
-
-void restore(void)
-{
-    // TODO2 resstore mode, notifying console, and combine saved with affineMat
-}
-
 #define CLICK_ENLOC(STR) \
     *enlocCmdInt(1) = pPoint; \
     *enlocCmdInt(1) = qPoint; \
@@ -135,12 +125,12 @@ void rightRight(void)
     wPos = wWarp; xPos = xWarp; yPos = yWarp; zPos = zWarp;
     double xwarp = (xPos/(zPos*slope+1.0)+1.0)*xSiz/2.0;
     double ywarp = -(yPos/(zPos*slope*aspect+aspect)-1.0)*ySiz/2.0;
-    warp(xwarp,ywarp); restore();
+    warp(xwarp,ywarp);
 }
 
 void rightLeft(void)
 {
-    wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos; save();
+    wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
 }
 
 void matrixMatrix(void)

@@ -145,7 +145,7 @@ void updateUniform(enum Server server, int file, enum Shader shader);
 void updateBuffer(int file, enum Data sub, int done, int todo, void *data);
 void *dndateBuffer(int file, enum Data sub, int done, int todo);
 void resetBuffer(int file, enum Data sub);
-int limitBuffer(int file, enum Data sub);
+int sizeBuffer(int file, enum Data sub);
 
 size_t bufferType(int size);
 int bufferPrimitive(int size);

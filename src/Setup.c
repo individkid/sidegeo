@@ -517,6 +517,34 @@ void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
         memcpy(enlocClient(client,todo),data,todo);}
 }
 
+void *dndateBuffer(int file, enum Data sub, int done, int todo)
+{
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    int client = buffer->client;
+    int base = bufferUntodo(file,sub,done);
+    int size = bufferUntodo(file,sub,todo);
+    return (void *)arrayClient(client,base,size);
+}
+
+void resetBuffer(int file, enum Data sub)
+{
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    int client = buffer->client;
+    int lim = sizeRange(client);
+    int len = sizeClient(client);
+    delocRange(client,lim);
+    delocSeqnum(client,lim);
+    delocClient(client,len);
+}
+
+int sizeBuffer(int file, enum Data sub)
+{
+    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    int client = buffer->client;
+    int size = sizeClient(client);
+    return bufferTodo(file,sub,size);
+}
+
 void updateFile(int ctx, int sub, int cpy)
 {
     struct File *file = arrayDisplayPoly(ctx,sub,1);
@@ -626,7 +654,7 @@ void updateContext(int sub)
     if (current == 0) exitErrstr("display too current\n");
     if (sub == contextHandle) return;
     if (sub == 0) alternate = contextHandle;
-    init(); current = arrayDisplay(sub,1); target();
+    save(); current = arrayDisplay(sub,1); restore(); target();
     if (sub != contextHandle) exitErrstr("display too context\n");
     glfwMakeContextCurrent(displayHandle);
     useDisplayCode(contextHandle); referCode();
@@ -639,32 +667,4 @@ void updateDisplay(GLFWwindow *ptr)
     int sub = 0;
     while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
     updateContext(sub);
-}
-
-void *dndateBuffer(int file, enum Data sub, int done, int todo)
-{
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
-    int client = buffer->client;
-    int base = bufferUntodo(file,sub,done);
-    int size = bufferUntodo(file,sub,todo);
-    return (void *)arrayClient(client,base,size);
-}
-
-void resetBuffer(int file, enum Data sub)
-{
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
-    int client = buffer->client;
-    int lim = sizeRange(client);
-    int len = sizeClient(client);
-    delocRange(client,lim);
-    delocSeqnum(client,lim);
-    delocClient(client,len);
-}
-
-int limitBuffer(int file, enum Data sub)
-{
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
-    int client = buffer->client;
-    int size = sizeClient(client);
-    return bufferTodo(file,sub,size);
 }

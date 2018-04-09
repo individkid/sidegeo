@@ -45,6 +45,28 @@ void inject(void)
     DEFAULT(exitErrstr("invalid inject char\n");)
 }
 
+void save(void)
+{
+    if (click == Init) return;
+    if (mode[Sculpt] != Transform) exitErrstr("mode too click\n");
+    mark[Mouse] = mode[Mouse];
+    mark[Roller] = mode[Roller];
+    copymat(displayMatc,affineMat,4);
+}
+
+void restore(void)
+{
+    if (click == Init) return;
+    mode[Sculpt] = Transform;
+    mode[Mouse] = mark[Mouse];
+    mode[Roller] = mark[Roller];
+    // before save, m = b*a*t
+    // save -> c := t
+    // s = r*t, r = s/t
+    // other context -> m := b*a*r*t
+    // TODO2 to make m = b*a*t again, restore -> a := a*r
+}
+
 void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
@@ -61,8 +83,8 @@ void target(void)
 
 void init(void)
 {
-    if (click != Init && click != Right) msgstrCmdOutput("click mode cleared in display %s", '\n', stringCmdBuf(displayName,0));
-    SWITCH(click,Init) FALL(Right) /*nop*/
+    SWITCH(click,Init) /*nop*/;
+    CASE(Right) {rightRight(); leftManipulate(); click = Init;}
     CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
     CASE(Left) {leftManipulate(); click = Init;}
     DEFAULT(exitErrstr("invalid click mode\n");)
@@ -74,7 +96,11 @@ void menu(void)
     if (indexof(chr) < 0) exitErrstr("invalid menu index\n");
     enum Menu line = indexof(chr);
     enum Mode sub = item[line].mode;
-    mode[sub] = line; init(); target();
+    if (mode[sub] == line) return;
+    if (sub == Sculpt && mode[sub] == Transform) init();
+    if (sub == Mouse || sub == Roller) init();
+    mode[sub] = line;
+    if (sub == Target) target();
 }
 
 void metric(void)
@@ -344,7 +370,7 @@ enum Action configureRefine(int state)
     return Continue;}
     if (state-- == 0) {
     // wait for coplane done and Index event done
-    if (limitBuffer(file,VertBuf) < limitBuffer(file,VertSub)) return Defer;
+    if (sizeBuffer(file,VertBuf) < sizeBuffer(file,VertSub)) return Defer;
     if (sizeReint(layer) == share->points) return Defer;
     // xfer coplanes to point buffer
     int len = sizeReint(layer)-share->points;
