@@ -108,14 +108,14 @@ void display(void)
     updateContext(0);
     updateFile(new,sub,i);}
     current = save;}
+    alternate = new;
 }
 
 void file(void)
 {
     int name = sizeCmdBuf();
     int len = lengthCmdByte(0,0);
-    if (len > 0) {useCmdByte(); xferCmdBuf(len+1);}
-    else name = 0;
+    useCmdByte(); xferCmdBuf(len+1);
     int ident = *delocCmdInt(1);
     int sub = setupShare(name);
     struct Share *share = arrayShare(sub,1);
@@ -179,15 +179,6 @@ void closeSlot(int slot)
     freeSlot(share->ident);
 }
 
-int countSlot(int file)
-{
-    int ret = 0;
-    for (int i = 0; i < sizeShare(); i++) {
-    struct Share *share = arrayShare(i,1);
-    if (share->usage != Draft) ret += 1;}
-    return ret;
-}
-
 enum Action transformClick(int state)
 {
     int plane = *deargCmdInt(1);
@@ -226,18 +217,19 @@ enum Action manipulateClick(int state)
     int plane = *deargCmdInt(1);
     int file = *deargCmdInt(1);
     int slot = *deargCmdInt(1);
+    struct Share *share = arrayShare(file,1);
     if (state-- == 0) {
     Myfloat *vec = dndateBuffer(slot,PlaneBuf,0,1); // base plane is first
     int ver = 0; // TODO1 get versor from VersorBuf
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
     *enlocCmdConfiguree(1) = 0;
-    *enlocCmdConfigurer(1) = file-countSlot(file);
+    *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("plane %d %d,",-1,plane,ver);
     for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,vec[i]);
     msgstrCmdConfigure("",'\n');
     // sideband msgstr --side responseProceed and wait
     *enlocCmdConfiguree(1) = 1;
-    *enlocCmdConfigurer(1) = file-countSlot(file);
+    *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("side responseProceed %d",'\n',layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
@@ -272,6 +264,7 @@ enum Action sculptClick(int state)
     int vec = 0; deargCmdFloat(3); vec -= 3;
     int len = lengthCmdByte(0,0)+1;
     int str = 0; deargCmdByte(len); str -= len;
+    struct Share *share = arrayShare(file,1);
     updateContext(0);
     if (state-- == 0) {
     layer = uniqueLayer();
@@ -285,7 +278,7 @@ enum Action sculptClick(int state)
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfiguree(1) = 0;
-    *enlocCmdConfigurer(1) = file-countSlot(file);
+    *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);
     for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
