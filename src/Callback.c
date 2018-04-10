@@ -133,13 +133,6 @@ void rightLeft(void)
     wWarp = wPos; xWarp = xPos; yWarp = yPos; zWarp = zPos;
 }
 
-void matrixMatrix(void)
-{
-    jumpmat(displayMata,displayMatb,4);
-    identmat(displayMatb,4);
-    wPos = 0.0;
-}
-
 void matrixRotate(Myfloat *u)
 {
     Myfloat v[9]; v[0] = 0.0; v[1] = 0.0; v[2] = -1.0;
@@ -225,8 +218,7 @@ void transformClock(void)
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     jumpmat(u,v,4); timesmat(u,w,4);
     matrixFixed(u);
-    identmat(displayMatb,4);
-    jumpmat(displayMatb,u,4);
+    copymat(displayMatb,u,4);
     transformMouse();
 }
 
@@ -277,16 +269,16 @@ void displayClick(GLFWwindow *ptr, int button, int action, int mods)
         CASE(Copy) leftCopy();
         CASE(Transform) {
             SWITCH(click,Init) FALL(Right) {leftTransform(); click = Left;}
-            CASE(Matrix) matrixMatrix(); FALL(Left) {leftManipulate(); click = Init;}
+            CASE(Left) {leftManipulate(); click = Init;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode");)}
     CASE(GLFW_MOUSE_BUTTON_RIGHT) {
         SWITCH(mode[Sculpt],Additive) FALL(Subtractive) FALL(Refine)
         FALL(Move) FALL(Copy) /*nop*/;
         CASE(Transform) {
-            SWITCH(click,Init) /*nop*/
+            SWITCH(click,Init) /*nop*/;
             CASE(Right) {rightRight(); click = Left;}
-            CASE(Matrix) matrixMatrix(); FALL(Left) {rightLeft(); click = Right;}
+            CASE(Left) {rightLeft(); click = Right;}
             DEFAULT(exitErrstr("invalid click mode\n");)}
         DEFAULT(exitErrstr("invalid sculpt mode\n");)}
     DEFAULT(exitErrstr("displayClick %d\n",button);)
@@ -302,7 +294,7 @@ void displayCursor(GLFWwindow *ptr, double xpos, double ypos)
     FALL(Move) FALL(Copy) /*nop*/;
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right) enquePershader();
-        CASE(Matrix) {matrixMatrix(); click = Left;} FALL(Left) transformMouse();
+        CASE(Left) transformMouse();
         DEFAULT(exitErrstr("invalid click mode\n");)}
     DEFAULT(exitErrstr("invalid sculpt mode\n");)
 }
@@ -315,7 +307,7 @@ void displayScroll(GLFWwindow *ptr, double xoffset, double yoffset)
     FALL(Move) FALL(Copy) /*nop*/;
     CASE(Transform) {
         SWITCH(click,Init) FALL(Right)
-        CASE(Left) click = Matrix; FALL(Matrix) transformScroll();
+        CASE(Left) transformScroll();
         DEFAULT(exitErrstr("invalid click mode\n");)}            
     DEFAULT(exitErrstr("invalid sculpt mode");)
 }

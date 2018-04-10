@@ -180,7 +180,6 @@ enum Server { // one value per uniform
 enum Click { // mode changed by mouse buttons
     Init, // no pierce point; no saved position
     Left, // pierce point calculated; no saved position
-    Matrix, // before matrix in play
     Right, // pierce point calculated; position saved
     Clicks};
 enum Type {
@@ -249,8 +248,8 @@ struct Display {
     int swap;
     int clear;
     enum Click click; // transform submode controlled by mouse buttons
-    enum Menu mode[Modes]; // save and restore upon right click
-    Myfloat affineMatc[16]; // save and incorporate upon right click
+    enum Menu mode[Modes]; // save and restore upon focus change
+    Myfloat affineMatc[16]; // save and incorporate upon focus change
 };
 enum Usage {
     Blank = 0,

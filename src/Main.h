@@ -111,6 +111,8 @@ void target(void);
 void init(void);
 void display(void);
 void file(void);
+void save(void);
+void restore(void);
 void responseList(void);
 int openSlot(void);
 void closeSlot(int slot);

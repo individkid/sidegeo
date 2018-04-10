@@ -60,11 +60,15 @@ void restore(void)
     mode[Sculpt] = Transform;
     mode[Mouse] = mark[Mouse];
     mode[Roller] = mark[Roller];
-    // before save, m = b*a*t
-    // save -> c := t
-    // s = r*t, r = s/t
-    // other context -> m := b*a*r*t
-    // TODO2 to make m = b*a*t again, restore -> a := a*r
+    // A :pierce= T
+    // B :pierce= I
+    // T = M*B*A
+    // C :save= T
+    // T = C*D
+    // A :restore= A*D
+    // Thus, M is I just after pierce,
+    // and M during save is the same as M just after restore
+    timesmat(displayMata,timesmat(invmat(displayMatc,4),affineMat,4),4);
 }
 
 void target(void)
@@ -85,7 +89,6 @@ void init(void)
 {
     SWITCH(click,Init) /*nop*/;
     CASE(Right) {rightRight(); leftManipulate(); click = Init;}
-    CASE(Matrix) {matrixMatrix(); leftManipulate(); click = Init;}
     CASE(Left) {leftManipulate(); click = Init;}
     DEFAULT(exitErrstr("invalid click mode\n");)
 }

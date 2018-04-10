@@ -418,8 +418,10 @@ void setupCode(enum Shader shader)
 void setupDisplay(int name)
 {
     struct Display *save = current;
+    int context = sizeDisplay();
     current = enlocDisplay(1);
     displayName = name;
+    contextHandle = context;
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
