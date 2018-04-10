@@ -202,8 +202,7 @@ void transformCylinder(void)
     Myfloat angle = wPos/ROLLER_GRANULARITY;
     identmat(u,4); u[0] = cos(angle); u[1] = sin(angle); u[4] = -u[1]; u[5] = u[0];
     matrixFixed(u);
-    identmat(displayMatb,4);
-    jumpmat(displayMatb,u,4);
+    copymat(displayMatb,u,4);
     transformMouse();
 }
 

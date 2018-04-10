@@ -199,6 +199,7 @@ int openSlot(void)
     struct Share *share = arrayShare(sub,1);
     share->usage = Scratch;
     share->ident = key;
+    return sub;
 }
 
 void closeSlot(int slot)
@@ -474,34 +475,55 @@ void configureHollow(void)
     enqueCmdHollow(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
 }
 
+#define MOVE_COPY \
+    int setspoke = 1<<shift; \
+    int clearspoke = ~setspoke; \
+    int sethub = 1; \
+    int clearhub = ~sethub; \
+    int spokeset = ((mask&setspoke)!=0); \
+    int hubset = ((mask&sethub)!=0); \
+    int anyset = (mask!=0);
+
 int moveHub(int shift, int mask)
 {
-    // TODO2 return altered mask
+    MOVE_COPY
+    if (!spokeset) return mask;
+    return ((mask&clearspoke)|hubset);
 }
 
 int copyHub(int shift, int mask)
 {
-    // TODO2 return altered mask
+    MOVE_COPY
+    if (!spokeset) return mask;
+    return (mask|hubset);
 }
 
 int moveSpoke(int shift, int mask)
 {
-    // TODO2 return altered mask
+    MOVE_COPY
+    if (!hubset) return mask;
+    return ((mask&clearhub)|setspoke);
 }
 
 int copySpoke(int shift, int mask)
 {
-    // TODO2 return altered mask
+    MOVE_COPY
+    if (hubset) return mask;
+    return (mask|spokeset);
 }
 
 int moveWheel(int shift, int mask)
 {
-    // TODO2 return altered mask
+    MOVE_COPY
+    if (!anyset) return mask;
+    return setspoke;
 }
 
 int copyWheel(int shift, int mask)
 {
-    // TODO2 return altered mask
+    MOVE_COPY
+    if (!anyset) return mask;
+    return (mask|setspoke);
 }
 
 #define DEARG_EDIT(STR) \
