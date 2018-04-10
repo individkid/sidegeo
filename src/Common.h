@@ -565,6 +565,13 @@ void enque##THD##EVENT(int file, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = arg; \
     *enloc##THD##Event(1) = (struct Proto){EVENT,file,0,0,0,0,1,cmd}; \
 }
+#define DECLARE_EVENT_1IN(THD,EVENT,NAME) \
+void enque##THD##NAME(int file, int mask);
+#define DEFINE_EVENT_1IN(THD,EVENT,NAME) \
+void enque##THD##NAME(int file, int mask) { \
+    *enloc##THD##HsInt(1) = mask; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,0,0,0}; \
+}
 
 #define DECLARE_LOCATE(THD) DECLARE_EVENT_1IN_1INS_2OUTS_1TAG(THD,Locate)
 #define DECLARE_FILL(THD) DECLARE_EVENT_1IN_2INS_1TAG(THD,Fill)
@@ -580,6 +587,7 @@ void enque##THD##EVENT(int file, Command cmd, int arg) { \
 #define DECLARE_DIVIDE(THD) DECLARE_EVENT_1IN_1INS_1TAG(THD,Divide)
 #define DECLARE_VERTEX(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Vertex)
 #define DECLARE_INDEX(THD) DECLARE_EVENT_1IN_1OUTS_1TAG(THD,Index)
+#define DECLARE_CLOSE(THD) DECLARE_EVENT_1IN(THD,Filter,Close)
 
 #define DEFINE_LOCATE(THD) DEFINE_EVENT_1IN_1INS_2OUTS_1TAG(THD,Locate)
 #define DEFINE_FILL(THD) DEFINE_EVENT_1IN_2INS_1TAG(THD,Fill)
@@ -595,6 +603,7 @@ void enque##THD##EVENT(int file, Command cmd, int arg) { \
 #define DEFINE_DIVIDE(THD) DEFINE_EVENT_1IN_1INS_1TAG(THD,Divide)
 #define DEFINE_VERTEX(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Vertex)
 #define DEFINE_INDEX(THD) DEFINE_EVENT_1IN_1OUTS_1TAG(THD,Index)
+#define DEFINE_CLOSE(THD) DEFINE_EVENT_1IN(THD,Filter,Close)
 
 #define SWITCH(EXP,VAL) while (1) {switch (EXP) {case (VAL):
 #define CASE(VAL) break; case (VAL):

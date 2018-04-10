@@ -121,6 +121,7 @@ enum Action manipulateClick(int state);
 enum Action sculptClick(int state);
 enum Action moveEdit(int state);
 enum Action copyEdit(int state);
+int moveHub(int shift, int mask);
 
 #ifdef BRINGUP
 void bringupBuiltin(void);

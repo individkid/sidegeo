@@ -21,6 +21,8 @@
 int escape = 0; // escape sequence from OpenGL key callback
 int dash = 0; // inject sequence from OpenGL key callback
 
+DEFINE_CLOSE(Cmd)
+
 void warp(double xwarp, double ywarp)
 {
 #ifdef __linux__
@@ -253,7 +255,13 @@ void transformScroll(void)
 void displayClose(GLFWwindow* ptr)
 {
     updateDisplay(ptr);
-    if (contextHandle == 0) enqueCommand(0);
+    if (contextHandle == 0) {
+    enqueCommand(0); return;}
+    alternate = 0;
+    displayHandle = 0;
+    for (int file = 0; file < sizeShare(); file++) {
+    *enlocCmdFunc(1) = moveHub;
+    enqueCmdClose(file,contextHandle);}
 }
 
 void displayClick(GLFWwindow *ptr, int button, int action, int mods)

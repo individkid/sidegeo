@@ -438,7 +438,8 @@ void enqueSwap(void)
 {
     int context = *delocCmdInt(1);
     updateContext(context);
-    if (renderSwap > 0 || renderClear > 0) {*enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
+    if (renderSwap > 0 || renderClear > 0) {
+    *enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
     renderSwap = sizeFile();
     renderClear = 1;
     for (int i = 0; i < sizeFile(); i++)
@@ -447,7 +448,9 @@ void enqueSwap(void)
 
 void enqueDishader(void) // TODO1 add and use running and pending fields
 {
-    for (int i = 0; i < sizeDisplay(); i++) {*enlocCmdInt(1) = i; enqueCommand(enqueSwap);}
+    for (int i = 0; i < sizeDisplay(); i++)
+    if (arrayDisplay(i,1)->handle) {
+    *enlocCmdInt(1) = i; enqueCommand(enqueSwap);}
 }
 
 void enquePershader(void) // TODO1 add and use running and pending fields

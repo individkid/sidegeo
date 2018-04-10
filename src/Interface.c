@@ -131,7 +131,7 @@ void display(void)
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
     updateContext(0);
-    for (int i = 0; i < sizePoly(); i++) {
+    for (int i = 0; i < sizeShare(); i++) {
     updateContext(new);
     int sub = setupFile();
     updateContext(0);
