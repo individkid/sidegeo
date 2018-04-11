@@ -228,8 +228,9 @@ enum Action transformClick(int state)
     for (int i = 0; i < enqueCmdDimen; i++) {
     int from = *delocReint(layer,1);
     Myfloat *vec = dndateBuffer(file,PlaneBuf,from,1);
-    // TODO1 get versor too
-    updateBuffer(slot,PlaneBuf,i,1,vec);}
+    int *ver = dndateBuffer(file,VersorBuf,from,1);
+    updateBuffer(slot,PlaneBuf,i,1,vec);
+    updateBuffer(slot,VersorBuf,i,1,ver);}
     // send Get and Set events to swap visibility of plane and slot.
     //  with enqueFilter response.
     enqueCmdGet(file,plane,responseSingle,layer);
@@ -250,11 +251,11 @@ enum Action manipulateClick(int state)
     struct Share *share = arrayShare(file,1);
     if (state-- == 0) {
     Myfloat *vec = dndateBuffer(slot,PlaneBuf,0,1); // base plane is first
-    int ver = 0; // TODO1 get versor from VersorBuf
+    int *ver = dndateBuffer(slot,VersorBuf,0,1);
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
     *enlocCmdConfiguree(1) = 0;
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("plane %d %d,",-1,plane,ver);
+    msgstrCmdConfigure("plane %d %d,",-1,plane,ver[0]);
     for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,vec[i]);
     msgstrCmdConfigure("",'\n');
     // sideband msgstr --side responseProceed and wait
@@ -457,22 +458,21 @@ void configureInflate(void)
     enqueCmdInflate(file,enqueFilter,file);
 }
 
+#define DEARG_CLICK(EVENT) \
+    int file = *delocCmdInt(1); \
+    int plane = *delocCmdInt(1); \
+    int inlen = *delocCmdInt(1); \
+    int outlen = *delocCmdInt(1); \
+    enqueCmd##EVENT(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
+
 void configureFill(void)
 {
-    int file = *delocCmdInt(1);
-    int plane = *delocCmdInt(1);
-    int inlen = *delocCmdInt(1);
-    int outlen = *delocCmdInt(1);
-    enqueCmdFill(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
+    DEARG_CLICK(Fill)
 }
 
 void configureHollow(void)
 {
-    int file = *delocCmdInt(1);
-    int plane = *delocCmdInt(1);
-    int inlen = *delocCmdInt(1);
-    int outlen = *delocCmdInt(1);
-    enqueCmdHollow(file,plane,inlen,outlen,ptrCmdInt(),enqueFilter,file);
+    DEARG_CLICK(Hollow)
 }
 
 #define MOVE_COPY \
