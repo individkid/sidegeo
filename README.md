@@ -42,14 +42,14 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -t run sanity check  
   * -T run thorough tests  
 
-Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Execute mode.
+Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Execute mode. The -a option opens a display over the main display with same size and position. In Panel mode, a left mouse click over the main, or an alternate display, opens a widget panel with same size and position.
 
   * Additive -- click fills in region over pierce point  
   * Subtractive -- click hollows out region under pierce point  
   * Refine -- click adds random plane through pierce point  
   * Display -- click explains pierced plane facet polytope space  
   * Tweak -- click tweaks plane possibly holding space fixed  
-  * Equalizer -- click opens panel to modify clicked items  
+  * Panel -- click opens panel to modify clicked items  
   * Execute -- click calls Lua function attached to facet  
   * Move -- click moves pierced target to alternate display  
   * Copy -- click copies pierced target to alternate display  
@@ -76,10 +76,13 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Sample -- whether space fixed in Tweak mode  
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
-  * Panel -- which panel opened by Equalizer  
+  * Widget -- which panel opened by Equalizer  
     * Topology -- open panel for classifications to sample  
     * Decorate -- open panel for bitmap, screen saver, rfb  
     * System -- open panel for stocks flows and attachments  
+  * Virtual -- whether cursor is captured or forwarded  
+    * Surface -- cursor controls facet in polytope  
+    * Content -- cursor controls decoration on facet  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
 

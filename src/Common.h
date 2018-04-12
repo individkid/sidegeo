@@ -67,13 +67,14 @@ typedef void (*Command)(void);
 typedef int (*Function)(int,int);
 
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Equalizer,Execute,Move,Copy,Transform,
+    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Panel,Execute,Move,Copy,Transform,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Targets,Plane,Polytope,Alternate,Session,
     Classifies,Vector,Graph,Polyant,Place,
     Samples,Symbolic,Numeric,
-    Panels,Topology,Decorate,System,
+    Widgets,Topology,Decorate,System,
+    Virtuals,Surface,Content,
     Menus};
 enum Mode { // menu and menus; navigate and enter by keys
     Sculpt, // top level
@@ -82,9 +83,10 @@ enum Mode { // menu and menus; navigate and enter by keys
     Target, // target of action
     Classify, // report specification
     Sample, // invariant select
-    Panel, // equalizer panel type
+    Widget, // panel type
+    Virtual, // cursor handler
     Modes};
-#define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Topology}
+#define INIT {Transform,Rotate,Cylinder,Session,Vector,Symbolic,Topology,Surface}
 enum Motion {
     Enter, // enter key
     Back, // backspace key

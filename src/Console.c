@@ -25,7 +25,7 @@ struct Item item[Menus] = {
     {Sculpts,Sculpt,1,"Refine","click adds random plane through pierce point"},
     {Sculpts,Sculpt,1,"Display","click explains pierced plane facet polytope space"},
     {Sculpts,Sculpt,1,"Tweak","click tweaks plane possibly holding space fixed"},
-    {Sculpts,Sculpt,1,"Equalizer","click opens panel to modify clicked items"},
+    {Sculpts,Sculpt,1,"Panel","click opens panel to modify clicked items"},
     {Sculpts,Sculpt,1,"Execute","click calls Lua function attached to facet"},
     {Sculpts,Sculpt,1,"Move","click moves pierced target to alternate display"},
     {Sculpts,Sculpt,1,"Copy","click copies pierced target to alternate display"},
@@ -52,10 +52,13 @@ struct Item item[Menus] = {
     {Sculpts,Sample,1,"Sample","whether space fixed in Tweak mode"},
     {Samples,Sample,2,"Symbolic","classification of space does not change"},
     {Samples,Sample,2,"Numeric","configuration controls amount of change"},
-    {Sculpts,Panel,1,"Panel","which panel opened by Equalizer"},
-    {Panels,Panel,2,"Topology","open panel for classifications to sample"},
-    {Panels,Panel,2,"Decorate","open panel for bitmap, screen saver, rfb"},
-    {Panels,Panel,2,"System","open panel for stocks flows and attachments"}};
+    {Sculpts,Widget,1,"Widget","which panel opened by Equalizer"},
+    {Widgets,Widget,2,"Topology","open panel for classifications to sample"},
+    {Widgets,Widget,2,"Decorate","open panel for bitmap, screen saver, rfb"},
+    {Widgets,Widget,2,"System","open panel for stocks flows and attachments"},
+    {Sculpts,Virtual,1,"Virtual","whether cursor is captured or forwarded"},
+    {Virtuals,Virtual,2,"Surface","cursor controls facet in polytope"},
+    {Virtuals,Virtual,2,"Content","cursor controls decoration on facet"}};
 
 int esc = 0;
 int inj = 0;
