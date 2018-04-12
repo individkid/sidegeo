@@ -57,6 +57,7 @@ executable sculpt
                        src/Option.c,
                        src/Configure.c,
                        src/Haskell.c,
+                       src/Fltk.cpp,
                        src/Console.c,
                        src/Lua.c,
                        src/Timewheel.c,
