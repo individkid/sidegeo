@@ -63,14 +63,11 @@ void haskellConsume(void *arg)
     int num = *castEnum(event.event);
     if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
     function = 0;
-    useInout(); xferHsCmdInt(event.exp);
+    useInout(); xferQueueBase(event.ptr,event.exp);
     for (int i = 0; i < event.exs; i++) {
-    int len = sizeIobus(i);
-    *enlocHsCmdInt(1) = len;
-    useIobus(i); xferHsCmdInt(len);}
-    if (event.command) {
-    useHsInt(); xferHsCmdInt(event.rsp);
-    *enlocHsCommand(1) = event.command;}}
+    useIobus(i); xsizeQueueBase(event.ptr);}
+    useHsInt(); xferQueueBase(event.ptr,event.rsp);
+    if (event.command) *enlocHsCommand(1) = event.command;}
 }
 
 void haskellAfter(void)

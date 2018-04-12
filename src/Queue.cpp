@@ -49,14 +49,9 @@ void handler(int sig)
 	if (sig == SIGUSR2) sigusr2 = 1;
 }
 
-void unlocQueueBase(QueueBase *ptr, int siz)
+void undoQueueBase(QueueBase *ptr, int siz)
 {
     ptr->undo(siz);
-}
-
-int sizeQueueBase(struct QueueBase *ptr)
-{
-    return ptr->size();
 }
 
 void redoQueueBase(struct QueueBase *ptr)
@@ -74,6 +69,26 @@ void dedoQueueBase(struct QueueBase *ptr)
 void useQueueBase(struct QueueBase *ptr)
 {
     ptr->use();
+}
+
+int sizeQueueBase(struct QueueBase *ptr)
+{
+    return ptr->size();
+}
+
+void xferQueueBase(struct QueueBase *ptr, int siz)
+{
+    return ptr->xfer(siz);
+}
+
+void xsizeQueueBase(struct QueueBase *ptr)
+{
+    QueueStruct<int> *cast = dynamic_cast<QueueStruct<int>*>(ptr);
+    if (!cast) exitErrstr("xsize too cast\n");
+    if (!cast->src) exitErrstr("xsize too src\n");
+    int len = cast->src->size();
+    *cast->enloc(1) = len;
+    cast->xfer(len);
 }
 
 EXTERNCEND

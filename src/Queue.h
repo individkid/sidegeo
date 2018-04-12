@@ -56,12 +56,14 @@ EXTERNC void *int2void(int val);
 EXTERNC int void2int(const void *val);
 EXTERNC void exitErrstr(const char *fmt, ...);
 EXTERNC void handler(int sig);
-EXTERNC void unlocQueueBase(struct QueueBase *ptr, int siz);
-EXTERNC int sizeQueueBase(struct QueueBase *ptr);
+EXTERNC void undoQueueBase(struct QueueBase *ptr, int siz);
 EXTERNC void redoQueueBase(struct QueueBase *ptr);
 EXTERNC void endoQueueBase(struct QueueBase *ptr);
 EXTERNC void dedoQueueBase(struct QueueBase *ptr);
 EXTERNC void useQueueBase(struct QueueBase *ptr);
+EXTERNC int sizeQueueBase(struct QueueBase *ptr);
+EXTERNC void xferQueueBase(struct QueueBase *ptr, int siz);
+EXTERNC void xsizeQueueBase(struct QueueBase *ptr);
 
 #define DECLARE_MUTEX(NAME) \
 EXTERNC void *loop##NAME(void *arg); \
@@ -209,7 +211,7 @@ struct QueueBase {
     virtual void use() = 0;
     virtual int size() = 0;
     virtual void xfer(int siz) = 0;
-    QueueBase *ptr(void) {return this;}
+    QueueBase *ptr() {return this;}
 };
 
 struct QueueXbase {

@@ -132,6 +132,7 @@ struct Proto { // event ctx arg exp rsp command
     int exp; // how many int responses expected
     int exs; // how many int list responses expected
     int rsp; // how many int responses given
+    struct QueueBase *ptr;
     Command command;
 };
 
@@ -504,7 +505,7 @@ void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Comm
     *enloc##THD##HsInt(1) = len; \
     useQueueBase(ptr); xfer##THD##HsInt(len); \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_1IN_2INS_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase *ptr, Command cmd, int arg);
@@ -516,7 +517,7 @@ void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase
     *enloc##THD##HsInt(1) = len1; \
     useQueueBase(ptr); xfer##THD##HsInt(len1); \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,2,0,0,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_1IN_1INS_2OUTS_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg);
@@ -525,7 +526,7 @@ void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Comm
     *enloc##THD##HsInt(1) = plane; \
     useQueueBase(ptr); xfer##THD##HsInt(len); \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,1,0,2,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,1,0,2,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_1IN_1OUTS_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, Command cmd, int arg);
@@ -533,7 +534,7 @@ void enque##THD##EVENT(int file, int plane, Command cmd, int arg);
 void enque##THD##EVENT(int file, int plane, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = plane; \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,1,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,1,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_1IN_1OUT_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, Command cmd, int arg);
@@ -541,7 +542,7 @@ void enque##THD##EVENT(int file, int plane, Command cmd, int arg);
 void enque##THD##EVENT(int file, int plane, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = plane; \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,1,0,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,1,0,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_2IN_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, int mask, Command cmd, int arg);
@@ -550,7 +551,7 @@ void enque##THD##EVENT(int file, int plane, int mask, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = plane; \
     *enloc##THD##HsInt(1) = mask; \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,2,0,0,0,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,2,0,0,0,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_1IN_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int mask, Command cmd, int arg);
@@ -558,21 +559,21 @@ void enque##THD##EVENT(int file, int mask, Command cmd, int arg);
 void enque##THD##EVENT(int file, int mask, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = mask; \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,0,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,0,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, Command cmd, int arg);
 #define DEFINE_EVENT_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = arg; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,0,0,0,0,1,cmd}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,0,0,0,0,1,ptrHs##THD##Int(),cmd}; \
 }
 #define DECLARE_EVENT_1IN(THD,EVENT,NAME) \
 void enque##THD##NAME(int file, int mask);
 #define DEFINE_EVENT_1IN(THD,EVENT,NAME) \
 void enque##THD##NAME(int file, int mask) { \
     *enloc##THD##HsInt(1) = mask; \
-    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,0,0,0}; \
+    *enloc##THD##Event(1) = (struct Proto){EVENT,file,1,0,0,0,0,0,0}; \
 }
 
 #define DECLARE_LOCATE(THD) DECLARE_EVENT_1IN_1INS_2OUTS_1TAG(THD,Locate)
