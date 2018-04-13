@@ -20,7 +20,7 @@ author:              Paul Coelho
 maintainer:          paulrrco@gmail.com
 copyright:           2016, Paul Coelho
 category:            Math
-build-type:          Simple
+build-type:          Custom
 cabal-version:       >=1.10
 
 library
@@ -57,6 +57,7 @@ executable sculpt
                        src/Option.c,
                        src/Configure.c,
                        src/Haskell.c,
+                       src/Topology.cpp,
                        src/Fltk.cpp,
                        src/Console.c,
                        src/Lua.c,
