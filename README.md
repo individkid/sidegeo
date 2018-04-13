@@ -37,8 +37,8 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -E \<file> change last file to indicated  
   * -a \<name> open alternate display  
   * -A \<name> use indicated alternate display  
-  * -s \<port> serve remote framebuffer clients  
-  * -S \<port> serve sculpt command clients  
+  * -s \<name> serve remote framebuffer clients  
+  * -S \<file> serve sculpt command clients  
   * -t run sanity check  
   * -T run thorough tests  
 
@@ -78,7 +78,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Numeric -- configuration controls amount of change  
   * Widget -- which panel opened by Equalizer  
     * Topology -- open panel for classifications to sample  
-    * Decorate -- open panel for bitmap, screen saver, rfb  
+    * Decorate -- open panel for bitmap, screen saver, RFB  
     * System -- open panel for stocks flows and attachments  
   * Virtual -- whether cursor is captured or forwarded  
     * Surface -- cursor controls facet in polytope  
@@ -129,6 +129,13 @@ Functions in Metric.c include sightLine regexPlane inverseSquare, used in stock 
 
 Functions in Callback.c allow user action like mouse motion to transform displayed polytopes. There is a global matrix, affineMat, that is applied to all polytopes. And there are compensating matrices per polytope per display to allow any polytopes to appear fixed even as affineMat transforms any unfixed polytopes. When a display loses focus, affineMat is saved in the display's context, so changes to affineMat by other displays can be incorporated into a display's context when focus returns to it. For example, if the mode is Transform, and the right mouse button is clicked, the transformation is suspended while the mouse is moved to another display. If transformation continues in the other display, in the same or in a different Transformation mode, affineMat changes. Now, if the mouse moves back to the original display, and the right button is pressed, transformation resumes in the original mode fixed point and mouse position, but transformations from the other display are incorporated and not lost. Transforming individual planes is accomplished by moving them to a special polytope, transforming them, and then moving them back as altered planes. Altering planes through the Transform Plane mode, or changing the polytope with the Additive or Subtractive Sculpt modes, updates the representation of the topology of the polytope by calling functions in Interface.c to send events to the Haskell.c thread. Commands in Configure.c executed from files read by Process.c also change polytope topology by scheduling functions from Interface.c in the Command.c thread.
 
+The remote framebuffer protocol (RFB) is used to communicate through sockets. Sculpt is an RFB client through --color commands, and a server through -s and -S options. The --color command can configure facets to display remote desktops, and if Virtual mode is Content, control the remote cursor when the local cursor is over the facet. The --listen command may specify speaker mp3 bwf aiff or -S file. In case --listen specifies -S file, it sends the wave buffer pipelined from --time value to the -S client as a framebuffer. The -s option presents the indicated display, main or alternate, to remote RFB clients. The -S option appends commands to the given file, or responds to query or callback requests from remote clients. Query or callback requests come from the client as cutbuffer text, and responses go as framebuffers or cutbuffer text. Queries and callbacks to the Haskell thread for topology info and changes, and to Command thread for numerical info and changes, come from -S clients, Lua scripts, Display clicks, and Panel widgets. The following queries and callbacks are supported.
+
+  * map from boundary to halfspace  
+  * contents of waveform pipeline  
+  * list of stock values and formulae  
+  * contents of render plane point element feedback buffer  
+
 The development plan is to complete the namesake usage features first, then proceed to more detailed uses.
 
   * Sculpt: -f -e --plane --point --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric)  
@@ -144,7 +151,8 @@ The code is partitioned to the following files grouped by thread:
   * Opengl commands: Setup.c Render.c Microcode.c Callback.c  
   * Process thread: Configure.c Option.c Process.c  
   * Haskell thread: Sculpt.hs Naive.hs Haskell.c  
-  * Other threads: Timewheel.c Lua.c Console.c  
+  * Panel thread: Topology.fl Decorate.fl System.fl Fltk.cpp Panel.c
+  * Other threads: Timewheel.c Lua.c Console.c Server.c  
 
 This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
 
