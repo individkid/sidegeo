@@ -76,7 +76,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Sample -- whether space fixed in Tweak mode  
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
-  * Widget -- which panel opened by Equalizer  
+  * Widget -- which panel opened by Panel  
     * Topology -- open panel for classifications to sample  
     * Decorate -- open panel for bitmap, screen saver, RFB  
     * System -- open panel for stocks flows and attachments  
@@ -140,7 +140,7 @@ The development plan is to complete the namesake usage features first, then proc
 
   * Sculpt: -f -e --plane --point --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric)  
   * Edit: -h -H -a -A --inject --menu Move Copy Mouse Roller Target --matrix  
-  * Analyze: -t Sample Display Classify Equalizer (Topology) --sample --dual --embed --polytope -T  
+  * Analyze: -t Sample Display Classify Panel (Topology) --sample --dual --embed --polytope -T  
   * Synthesize: --call --bind --action Execute --time --change --script --listen --source --metric  
   * Decorate: -F -E --yield --color --configure -s -S Panel  
 
