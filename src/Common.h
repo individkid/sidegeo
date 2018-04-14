@@ -397,6 +397,13 @@ struct Match {
     int idx, alt;
 };
 
+struct Pack {
+    enum Menu type; // Topology,Decorate,System,
+    int context;
+    int file;
+    int plane;
+};
+
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \
@@ -693,6 +700,10 @@ DECLARE_STAGE(CmnState,struct State)
 DECLARE_STAGE(CmnMetric,struct Metric)
 DECLARE_STAGE(CmnStream,struct Stream)
 
+DECLARE_FUNC(CmnPanels)
+DECLARE_STAGE(CmnWidget,struct Pack)
+DECLARE_STAGE(CmnPnlInt,int)
+
 
 DECLARE_LOCAL(Argument,int)
 DECLARE_LOCAL(Cluster,int)
@@ -874,5 +885,10 @@ DECLARE_LOCAL(Pipe,int) // data pipe handles
 DECLARE_LOCAL(Size,int) // size pipe handles
 DECLARE_LOCAL(Ignore,int) // ignored error count
 DECLARE_LOCAL(Helper,pthread_t) // thread handle
+
+
+DECLARE_DEST(Panels)
+DECLARE_STAGE(Panel,struct Pack)
+DECLARE_STAGE(PnlInt,int)
 
 #endif

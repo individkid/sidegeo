@@ -1,5 +1,5 @@
 /*
-*    Fltk.cpp extern "C: wrappers around FL:: member functions
+*    Panal.c thread for opening and polling fltk windows
 *    Copyright (C) 2016  Paul Coelho
 *
 *    This program is free software: you can redistribute it and/or modify
@@ -16,25 +16,43 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <FL/Fl.H>
+#include "Common.h"
 
-extern "C" {
-	void fltkLock()
-	{
-		Fl::lock();
-	}
-	void fltkWait(void)
-	{
-		Fl::wait();
-	}
-	void fltkPoll(void)
-	{
-		Fl::wait(0);
-	}
-	void fltkAwake(void)
-	{
-		Fl::awake();
-	}
+void fltkLock();
+void fltkWait(void);
+void fltkPoll(void);
+void fltkAwake(void);
+
+void panelBefore()
+{
+    fltkLock();
 }
 
+void panelAfter()
+{
+}
 
+void panelSignal()
+{
+    fltkAwake();    
+}
+
+void panelConsume(void *arg)
+{
+}
+
+int panelDelay()
+{
+    if (sizePanel() == 0 && sizePnlInt() == 0) fltkWait(); else fltkPoll();
+    return (sizePanel() == 0 && sizePnlInt() == 0);
+}
+
+int panelNodelay()
+{
+    fltkPoll();
+    return (sizePanel() == 0 && sizePnlInt() == 0);
+}
+
+void panelProduce(void *arg)
+{
+}

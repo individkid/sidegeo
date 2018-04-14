@@ -59,6 +59,7 @@ executable sculpt
                        src/Haskell.c,
                        src/Topology.cpp,
                        src/Fltk.cpp,
+                       src/Panel.c,
                        src/Console.c,
                        src/Lua.c,
                        src/Timewheel.c,
@@ -78,6 +79,7 @@ executable sculpt
                        pthread,
                        portaudio,
                        lua,
+                       fltk,
                        stdc++
   if os(osx)
     extra-lib-dirs:    /usr/lib

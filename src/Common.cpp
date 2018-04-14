@@ -53,6 +53,14 @@ void timewheelProduce(void *arg);
 void timewheelAfter(void);
 long long timewheelDelay(void);
 
+void panelBefore(void);
+void panelAfter(void);
+void panelSignal(void);
+void panelConsume(void *arg);
+int panelDelay(void);
+int panelNodelay(void);
+void panelProduce(void *arg);
+
 EXTERNCEND
 
 inline bool operator!=(const Share &left, const Share &right) {return false;}
@@ -69,6 +77,7 @@ inline bool operator!=(const Header &left, const Header &right) {return false;}
 inline bool operator!=(const Response &left, const Response &right) {return false;}
 inline bool operator!=(const Match &left, const Match &right) {return false;}
 inline bool operator!=(const Proto &left, const Proto &right) {return false;}
+inline bool operator!=(const Pack &left, const Pack &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
@@ -110,6 +119,10 @@ DEFINE_STAGE(CmnArgument,int,CmnVariable)
 DEFINE_STAGE(CmnState,struct State,CmnArgument)
 DEFINE_STAGE(CmnMetric,struct Metric,CmnState)
 DEFINE_STAGE(CmnStream,struct Stream,CmnMetric)
+
+DEFINE_FUNC(CmnPanels,panelConsume,panelProduce,panelSignal,panelBefore,panelAfter,panelDelay,panelNodelay)
+DEFINE_STAGE(CmnPanel,struct Pack,CmnPanels)
+DEFINE_STAGE(CmnPnlInt,int,CmnPanel)
 
 
 DEFINE_LOCAL(Argument,int)
@@ -292,3 +305,8 @@ DEFINE_LOCAL(Pipe,int)
 DEFINE_LOCAL(Size,int)
 DEFINE_LOCAL(Ignore,int)
 DEFINE_LOCAL(Helper,pthread_t)
+
+
+DEFINE_DEST(Panels,CmnPanels,CmnPanels)
+DEFINE_STAGE(Panel,struct Pack,Panels)
+DEFINE_STAGE(PnlInt,int,Panel)
