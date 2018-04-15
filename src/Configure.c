@@ -124,11 +124,15 @@ unlocPcsInt(sizePcsInt()-intpos); \
 unlocPcsFloat(sizePcsFloat()-floatpos); \
 unlocPcsChar(sizePcsChar()-charpos);
 
-int processConfigure(int index, int len)
-{ // given unlocPcsChar(len), return -1 error, 0 yield, >0 continue
-	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
+#define DELOC(POS) \
+unlocRemain(index,1); \
+delocRemain(index,POS);
+
+int processConfigure(int index)
+{ // given Remain, return -1 nomatch, 0 yield, >0 continue
+	int len = sizeRemain(index); *enlocRemain(index,1) = 0; char *pattern = arrayRemain(index,0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
-	if (scanPcs(pattern,10,Literal,"plane",Cond,2,2,Token,":",Cond,0,2,Token,",",String,Int,Float,Float,Float,Scans)) {
+	int pos = scanPcs(pattern,10,Literal,"plane",Cond,2,2,Token,":",Cond,0,2,Token,",",String,Int,Float,Float,Float,Scans); if (pos) {
 		int plane = 0, ipos = intpos, cpos = charpos;
 		if (processPath(&ipos,&cpos,1,&plane,&index) != 1) {UNLOC return -1;}
 		*enlocPcsCmdInt(1) = plane;
@@ -136,40 +140,41 @@ int processConfigure(int index, int len)
 		*enlocPcsCmdInt(1) = *arrayPcsInt(ipos,1); // versor
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePlane;
-		UNLOC return 1;}
-	if (scanPcs(pattern,4,Literal,"point",Float,Float,Float,Scans)) { // TODO add optional name
+		UNLOC DELOC(pos) return 1;}
+	pos = scanPcs(pattern,4,Literal,"point",Float,Float,Float,Scans); if (pos) { // TODO add optional name
 		*enlocPcsCmdInt(1) = index;
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePoint;
-		UNLOC return 1;}
-	if (scanPcs(pattern,1,Literal,"inflate",Scans)) {
+		UNLOC DELOC(pos) return 1;}
+	pos = scanPcs(pattern,1,Literal,"inflate",Scans); if (pos) {
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureInflate;
-		UNLOC return 1;}
-	if (scanPcs(pattern,8,Literal,"fill",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans)) {
+		UNLOC DELOC(pos) return 1;}
+	pos = scanPcs(pattern,8,Literal,"fill",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos) {
 		*enlocPcsCmdInt(1) = index;
 		processPolyant(intpos);
 		*enlocPcsCmdCmd(1) = configureFill;
-		UNLOC return 1;}
-	if (scanPcs(pattern,1,Literal,"hollow",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans)) {
+		UNLOC DELOC(pos) return 1;}
+	pos = scanPcs(pattern,1,Literal,"hollow",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos) {
 		*enlocPcsCmdInt(1) = index;
 		processPolyant(intpos);
 		*enlocPcsCmdCmd(1) = configureHollow;
-		UNLOC return 1;}
-	int pos = scanPcs(pattern,1,Literal,"inject",Scans); if (pos) {
+		UNLOC DELOC(pos) return 1;}
+	pos = scanPcs(pattern,1,Literal,"inject",Scans); if (pos) {
 		int len = strlen(pattern+pos);
 		strncpy(enlocOption(len),pattern+pos,len); *enlocOption(1) = '\n';
-		UNLOC return 1;}
-	if (scanPcs(pattern,1,Literal,"yield",Scans)) {
-		return 0;}
+		UNLOC DELOC(pos) return 1;}
+	pos = scanPcs(pattern,1,Literal,"yield",Scans); if (pos) {
+		UNLOC DELOC(pos) return 0;}
 	pos = scanPcs(pattern,1,Literal,"call",Scans); if (pos) {
 		int len = strlen(pattern+pos);
 		strncpy(enlocPcsRequest(len),pattern+pos,len); *enlocPcsRequest(1) = 0;
-		UNLOC return 1;}
-	if (scanPcs(pattern,4,Literal,"side",White,Literal,"responseProceed",Int,Scans)) {
+		UNLOC DELOC(pos) return 1;}
+	pos = scanPcs(pattern,4,Literal,"side",White,Literal,"responseProceed",Int,Scans); if (pos) {
 		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // layer
 		*enlocPcsCommand(1) = responseProceed;
-		return 1;}
-    UNLOC return -1;
+		UNLOC DELOC(pos) return 1;}
+	// TODO1 skip over first '--[^ \t\n][ \t\n]' as nop
+    UNLOC unlocRemain(index,1); return -1;
 }
 

@@ -22,6 +22,7 @@ extern int option;
 
 int processOption(int len)
 {
+	// TODO1 append PcsChar to Complete, and use Complete instead of pattern
 	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
 	char argument[len+1];
 	if (pattern[0] == 'f' && sscanf(pattern," %s",argument) == 1) {
@@ -34,6 +35,7 @@ int processOption(int len)
 		int len = strlen(argument);
 		strncpy(enlocConfigure(len),argument,len);
 		*enlocConfigure(1) = '\n';}
+	// TODO1 deloc match length from Complete
     return 0;
 }
 

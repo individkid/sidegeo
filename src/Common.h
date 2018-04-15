@@ -870,6 +870,8 @@ DECLARE_LOCAL(PcsInt,int) // given and/or result
 DECLARE_LOCAL(PcsFloat,Myfloat) // given and/or result
 DECLARE_LOCAL(PcsChar,char) // given and/or result
 DECLARE_LOCAL(PcsScan,struct Match) // format specifiers
+DECLARE_META(Remain,char) // configuration pattern
+DECLARE_LOCAL(Complete,char) // option pattern
 DECLARE_LOCAL(PcsBuf,char) // string buffer
 DECLARE_TREE(Ident,int,int) // string index to plane identifier
 DECLARE_LOCAL(Count,int) // per file number of planes

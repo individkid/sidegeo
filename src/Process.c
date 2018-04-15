@@ -25,8 +25,6 @@
 #define PROCESS_STEP 20
 #define PROCESS_IGNORE 3
 #define PROCESS_LEN INT_MAX
-#define PROCESS_END "\n--"
-#define PROCESS_ENDS 3
 
 int processConfigure(int index, int len);
 int processOption(int len);
@@ -41,10 +39,6 @@ struct Helper {
     int side; // pos pid siz command
     int fifo; // data to append
     int pipe; // helper side of pipe
-    int size; // helper side of sizes
-    int endlen; // progress through terminator
-    int cmdlen; // written to pipe
-    int cmdnum; // written to size
     int filepos; // read and scanned
     int sidepos; // location to read
     struct Header header;
@@ -55,7 +49,6 @@ void inithlp(struct Helper *hlp)
 {
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     *hlp = helper;
-    hlp->endlen = 1;
     if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 }
@@ -63,29 +56,9 @@ void inithlp(struct Helper *hlp)
 void errorinj(struct Helper *hlp, sigjmp_buf *env)
 {
     int help = -1;
-    if (write(hlp->size,&help,sizeof(help)) != sizeof(help))
+    // TODO if (write(hlp->size,&help,sizeof(help)) != sizeof(help))
     exitErrstr("helper too pipe\n");
     longjmp(*env,-1);
-}
-
-void readside(struct Helper *hlp, sigjmp_buf *env)
-{
-    while (1) {
-    if (hlp->header.pid == 0) {
-        if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
-        int retval = read(hlp->side,&hlp->header,sizeof(hlp->header));
-        if (retval < 0) errorinj(hlp,env);
-        if (retval < sizeof(hlp->header)) {hlp->header.pid = 0; break;}
-        hlp->sidepos += sizeof(hlp->header);}
-    if (hlp->header.pos > hlp->filepos) break;
-    if (hlp->header.pid == getpid() && hlp->header.tim == pidtime) {
-        if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
-        char buf[hlp->header.siz];
-        if (read(hlp->side,buf,hlp->header.siz) != hlp->header.siz) errorinj(hlp,env);
-        if (write(hlp->pipe,buf,hlp->header.siz) != hlp->header.siz) exitErrstr("pipe too write\n");
-        if (write(hlp->size,&hlp->header.siz,sizeof(hlp->header.siz)) != sizeof(hlp->header.siz)) exitErrstr("size too write\n");
-        hlp->header.pid = 0;}
-    hlp->sidepos += hlp->header.siz;}
 }
 
 void readbuf(struct Helper *hlp, sigjmp_buf *env)
@@ -97,27 +70,22 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
     if (retlen < 0) errorinj(hlp,env);
     int offset = 0;
     for (int i = 0; i < retlen; i++) {
-        int match = (buffer[i] == PROCESS_END[hlp->endlen]);
-        if (match && hlp->endlen == 0) {
-            int len = i-offset;
-            if (hlp->cmdnum > 0 && write(hlp->pipe,buffer+offset,len) != len) exitErrstr("pipe too end\n");
-            hlp->cmdlen += len; offset = i;}
-        if (!match && hlp->endlen > 0) {
-            int len = hlp->endlen;
-            if (hlp->cmdnum > 0 && write(hlp->pipe,PROCESS_END,len) != len) exitErrstr("pipe too end\n");
-            hlp->cmdlen += len; hlp->endlen = 0;}
-        if (match) {hlp->endlen += 1; offset += 1;}
-        else hlp->cmdlen += 1;
-        hlp->filepos += 1;
-        if (hlp->endlen == PROCESS_ENDS) {
-            int len = sizeof(hlp->cmdlen);
-            if (hlp->cmdnum > 0 && write(hlp->size,&hlp->cmdlen,len) != len) exitErrstr("size too length");
-            hlp->cmdlen = 0; hlp->endlen = 0; hlp->cmdnum += 1;
-            readside(hlp,env);}}
-    if (retlen > offset+hlp->endlen) {
-        int len = retlen-offset-hlp->endlen;
-        if (hlp->cmdnum > 0 && write(hlp->pipe,buffer+offset,len) != len) exitErrstr("pipe too len\n");}
-    if (retlen < PROCESS_STEP) break;}
+    if (hlp->header.pid == 0) {
+        if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
+        int retval = read(hlp->side,&hlp->header,sizeof(hlp->header));
+        if (retval < 0) errorinj(hlp,env);
+        if (retval < sizeof(hlp->header)) hlp->header.pid = 0; else hlp->sidepos += sizeof(hlp->header);}
+    if (hlp->header.pid == getpid() && hlp->header.tim == pidtime && hlp->header.pos == hlp->filepos+i) {
+        char buf[hlp->header.siz];
+        if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
+        if (read(hlp->side,buf,hlp->header.siz) != hlp->header.siz) errorinj(hlp,env);
+        if (write(hlp->pipe,buffer+offset,i-offset) != i-offset) exitErrstr("pipe too write\n");
+        if (write(hlp->pipe,buf,hlp->header.siz) != hlp->header.siz) exitErrstr("pipe too write\n");
+        offset = i; hlp->header.pid = 0; hlp->sidepos += hlp->header.siz;}}
+    if (offset < retlen) {
+        int len = retlen-offset;
+        if (write(hlp->pipe,buffer+offset,len) != len) exitErrstr("pipe too write\n");
+    hlp->filepos += retlen;}
 }
 
 int setlock(int fd, int pos, int len, int type, int wait)
@@ -191,8 +159,7 @@ void *processHelper(void *arg)
     if (retval == 0) {
         if (setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}
     if (retval < 0) {
-        if (hlp->cmdlen != 0) exitErrstr("command too atomic\n");
-        if (write(hlp->size,&hlp->cmdlen,sizeof(hlp->cmdlen)) != sizeof(hlp->cmdlen)) exitErrstr("size too write\n");
+        // TODO1 send --yield
         if (setlock(hlp->file,hlp->filepos,1,F_RDLCK,F_SETLKW) < 0) errorinj(hlp,env);
         if (setlock(hlp->file,hlp->filepos,1,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}}
     return 0;
@@ -234,12 +201,10 @@ int processInit(int len)
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("read pipe failed: %s\n",strerror(errno));
     int flags = fcntl(pipefd[0],F_GETFL); if (flags < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
     if (fcntl(pipefd[0],F_SETFL,flags|O_NONBLOCK) < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
-    int sizefd[2]; if (pipe(sizefd) != 0) exitErrstr("size pipe failed: %s\n",strerror(errno));
     *arrayFile(thread,1) = file; helper.file = file;
     *arraySide(thread,1) = side; helper.side = side;
     *arrayFifo(thread,1) = datw; helper.fifo = datr;
     *arrayPipe(thread,1) = pipefd[0]; helper.pipe = pipefd[1];
-    *arraySize(thread,1) = sizefd[0]; helper.size = sizefd[1];
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     if (pthread_create(enlocHelper(1),0,processHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
@@ -247,14 +212,13 @@ int processInit(int len)
     return thread;
 }
 
-int processRead(int pipe, int size)
+int processRead(int pipe)
 {
-    int len; char *buf;
-    if (read(size,&len,sizeof(len)) != sizeof(len)) return -1;
-    if (len <= 0) return len;
-    buf = enlocPcsChar(len);
-    if (read(pipe,buf,len) != len) {unlocPcsChar(len); return -1;}
-    return len;
+    char *buf = enlocRemain(PROCESS_STEP);
+    int retval = read(pipe,buf,PROCESS_STEP);
+    if (retval < 0) {unlocRemain(PROCESS_STEP); return -1;}
+    if (retval < PROCESS_STEP) unlocRemain(PROCESS_STEP-retval);
+    return retval;
 }
 
 void processError(int index)
@@ -326,9 +290,8 @@ void processProduce(void *arg)
         if (*arraySize(thread,1) < 0) exitErrstr("thread too size\n");
         if (readableCmnProcesses(*arrayPipe(thread,1)) == 0) exitErrstr("thread too readable\n");
         int len = processRead(*arrayPipe(thread,1),*arraySize(thread,1));
-        if (len >= 0) len = processConfigure(thread,len);
-        if (len < 0) processError(thread);
-        if (len <= 0) {
+        while (len > 0) len = processConfigure(thread);
+        if (len < 0) {
         for (int i = 0; i < sizeSize(); i++)
         if (i != thread && *arraySize(i,1) >= 0)
         insertCmnProcesses(*arraySize(i,1));
