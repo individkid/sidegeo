@@ -20,9 +20,9 @@
 
 extern int option;
 
-int processOption(int len)
-{
-	// TODO1 append PcsChar to Complete, and use Complete instead of pattern
+int processOption()
+{ // given Complete, return <0 error, 0 continue, >0 file
+	int len = 0; // TODO1 use Complete
 	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
 	char argument[len+1];
 	if (pattern[0] == 'f' && sscanf(pattern," %s",argument) == 1) {
