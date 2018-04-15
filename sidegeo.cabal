@@ -86,6 +86,7 @@ executable sculpt
     extra-libraries:   glfw3,
                        portaudio,
                        lua,
+                       fltk,
                        stdc++
     frameworks:        Cocoa,
                        OpenGL,
