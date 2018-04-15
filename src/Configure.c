@@ -129,7 +129,7 @@ unlocRemain(index,1); \
 delocRemain(index,POS);
 
 int processConfigure(int index)
-{ // given Remain, return -1 nomatch, 0 yield, >0 continue
+{ // given Remain, return -1 yield, 0 nomatch, >0 continue
 	int len = sizeRemain(index); *enlocRemain(index,1) = 0; char *pattern = arrayRemain(index,0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
 	int pos = scanPcs(pattern,10,Literal,"plane",Cond,2,2,Token,":",Cond,0,2,Token,",",String,Int,Float,Float,Float,Scans); if (pos) {
@@ -165,7 +165,7 @@ int processConfigure(int index)
 		strncpy(enlocOption(len),pattern+pos,len); *enlocOption(1) = '\n';
 		UNLOC DELOC(pos) return 1;}
 	pos = scanPcs(pattern,1,Literal,"yield",Scans); if (pos) {
-		UNLOC DELOC(pos) return 0;}
+		UNLOC DELOC(pos) return -1;}
 	pos = scanPcs(pattern,1,Literal,"call",Scans); if (pos) {
 		int len = strlen(pattern+pos);
 		strncpy(enlocPcsRequest(len),pattern+pos,len); *enlocPcsRequest(1) = 0;
@@ -175,6 +175,6 @@ int processConfigure(int index)
 		*enlocPcsCommand(1) = responseProceed;
 		UNLOC DELOC(pos) return 1;}
 	// TODO1 skip over first '--[^ \t\n][ \t\n]' as nop
-    UNLOC unlocRemain(index,1); return -1;
+    UNLOC unlocRemain(index,1); return 0;
 }
 

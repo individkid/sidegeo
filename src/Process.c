@@ -26,7 +26,7 @@
 #define PROCESS_IGNORE 3
 #define PROCESS_LEN INT_MAX
 
-int processConfigure(int index, int len);
+int processConfigure(int index);
 int processOption(int len);
 
 int toggle = 0;
@@ -55,8 +55,7 @@ void inithlp(struct Helper *hlp)
 
 void errorinj(struct Helper *hlp, sigjmp_buf *env)
 {
-    int help = -1;
-    // TODO if (write(hlp->size,&help,sizeof(help)) != sizeof(help))
+    // TODO1 write --error to pipe
     exitErrstr("helper too pipe\n");
     longjmp(*env,-1);
 }
@@ -85,7 +84,7 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
     if (offset < retlen) {
         int len = retlen-offset;
         if (write(hlp->pipe,buffer+offset,len) != len) exitErrstr("pipe too write\n");
-    hlp->filepos += retlen;}
+    hlp->filepos += retlen;}}
 }
 
 int setlock(int fd, int pos, int len, int type, int wait)
@@ -190,8 +189,9 @@ int processInit(int len)
     *enlocName(1) = sizePcsBuf();
     strcpy(enlocPcsBuf(len+1),filename);
     *enlocIgnore(1) = 0;
-    *enlocFile(1) = -1; *enlocSide(1) = -1;
-    *enlocPipe(1) = -1; *enlocSize(1) = -1;
+    *enlocFile(1) = -1;
+    *enlocSide(1) = -1;
+    *enlocPipe(1) = -1;
     mode_t mode = 00660;
     int file = openfile(filename,"", "",         O_RDWR|O_CREAT,     mode,0,&mode);
     int side = openfile(filename,"",PROCESS_SIDE,O_RDWR|O_CREAT,     mode,0,0);
@@ -212,21 +212,20 @@ int processInit(int len)
     return thread;
 }
 
-int processRead(int pipe)
+int processRead(int thread)
 {
-    char *buf = enlocRemain(PROCESS_STEP);
-    int retval = read(pipe,buf,PROCESS_STEP);
-    if (retval < 0) {unlocRemain(PROCESS_STEP); return -1;}
-    if (retval < PROCESS_STEP) unlocRemain(PROCESS_STEP-retval);
+    char *buf = enlocRemain(thread,PROCESS_STEP);
+    int retval = read(*arrayPipe(thread,1),buf,PROCESS_STEP);
+    if (retval < 0) {unlocRemain(thread,PROCESS_STEP); return -1;}
+    if (retval < PROCESS_STEP) unlocRemain(thread,PROCESS_STEP-retval);
     return retval;
 }
 
 void processError(int index)
 {
     if (pthread_cancel(*arrayHelper(index,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
-    if (*arraySize(index,1) >= 0) removeCmnProcesses(*arraySize(index,1));
-    *arrayFile(index,1) = *arraySide(index,1) = -1; *arrayFifo(index,1) = -1;
-    *arrayPipe(index,1) = *arraySize(index,1) = -1;
+    if (*arrayPipe(index,1) >= 0) removeCmnProcesses(*arrayPipe(index,1));
+    *arrayFile(index,1) = *arraySide(index,1) = -1; *arrayFifo(index,1) = *arrayPipe(index,1) = -1;
 }
 
 DEFINE_MSGSTR(PcsOutput)
@@ -287,14 +286,14 @@ then prioritize writing
 void processProduce(void *arg)
 {
     if (toggle == 0) {
-        if (*arraySize(thread,1) < 0) exitErrstr("thread too size\n");
+        if (*arrayPipe(thread,1) < 0) exitErrstr("thread too size\n");
         if (readableCmnProcesses(*arrayPipe(thread,1)) == 0) exitErrstr("thread too readable\n");
-        int len = processRead(*arrayPipe(thread,1),*arraySize(thread,1));
+        int len = processRead(thread);
         while (len > 0) len = processConfigure(thread);
         if (len < 0) {
-        for (int i = 0; i < sizeSize(); i++)
-        if (i != thread && *arraySize(i,1) >= 0)
-        insertCmnProcesses(*arraySize(i,1));
+        for (int i = 0; i < sizePipe(); i++)
+        if (i != thread && *arrayPipe(i,1) >= 0)
+        insertCmnProcesses(*arrayPipe(i,1));
         toggle = 1;}}
     else if (toggle == 1 && sizeStage() > 0) {
         int len = lengthStage(0,'\n');
@@ -304,20 +303,20 @@ void processProduce(void *arg)
         if (len > 0) len = processInit(len);
         if (len < 0) processError(thread);
         else {
-        for (int i = 0; i < sizeSize(); i++)
-        if (i != len && *arraySize(i,1) >= 0)
-        removeCmnProcesses(*arraySize(i,1));
-        insertCmnProcesses(*arraySize(len,1));
+        for (int i = 0; i < sizePipe(); i++)
+        if (i != len && *arrayPipe(i,1) >= 0)
+        removeCmnProcesses(*arrayPipe(i,1));
+        insertCmnProcesses(*arrayPipe(len,1));
         thread = len; toggle = 0;}}
     else if (toggle == 1) {
         toggle = 2;
-        for (int i = 0; i < sizeSize(); i++) {
-        int j = (thread+i)%sizeSize();
-        if (*arraySize(j,1) >= 0 && readableCmnProcesses(*arraySize(j,1))) {
+        for (int i = 0; i < sizePipe(); i++) {
+        int j = (thread+i)%sizePipe();
+        if (*arrayPipe(j,1) >= 0 && readableCmnProcesses(*arrayPipe(j,1))) {
         thread = j; toggle = 0;
-        for (int k = 0; k < sizeSize(); k++)
-        if (k != thread && *arraySize(k,1) >= 0)
-        removeCmnProcesses(*arraySize(k,1));
+        for (int k = 0; k < sizePipe(); k++)
+        if (k != thread && *arrayPipe(k,1) >= 0)
+        removeCmnProcesses(*arrayPipe(k,1));
         break;}}}
     else if (sizeHeader() > 0) {
         struct Header *header = delocHeader(1);
