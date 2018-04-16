@@ -389,7 +389,11 @@ enum Scan {
     White,
     Literal,
     Cond,
-    Close,
+    Peek,
+    Goto,
+    Char,
+    Pass,
+    Fail,
     Scans};
 struct Match {
     enum Scan tag;
@@ -431,17 +435,17 @@ int rescan##THD(const char *pattern, int index, int accum) \
     switch (match.tag) { \
     case (Int): { \
     int pos1 = 0, ret = sscanf(pattern," %d%n",enloc##THD##Int(1),&pos1); if (ret == 2) { \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2;} \
     break;} \
     case (Float): { \
     int pos1 = 0, ret = sscanf(pattern," %f%n",enloc##THD##Float(1),&pos1); if (ret == 2) { \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2;} \
     break;} \
     case (String): { \
     int len = strlen(pattern), pos0 = size##THD##Char(); \
     int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len+1),&pos1); if (ret != 2) break; \
     unloc##THD##Char(len-pos1); *array##THD##Char(pos0+pos1,1) = 0; \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2; \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2; \
     break;} \
     case (Token): { \
     int len0 = strlen(pattern), pos0 = size##THD##Char(); \
@@ -451,29 +455,43 @@ int rescan##THD(const char *pattern, int index, int accum) \
     char *str1 = strstr(str0,match.str); if (str1 == 0) break; \
     int len1 = str1-str0; unloc##THD##Char(pos1-len1); *array##THD##Char(pos0+len1,1) = 0; \
     int len2 = len1 + strlen(match.str); \
-    int pos2 = rescan##THD(pattern+len2,index+1,accum+len2); if (pos2) return pos2; \
+    int pos2 = rescan##THD(pattern+len2,index+1,accum+len2); if (pos2>=0) return pos2; \
     break;} \
     case (White): { \
     int pos1 = 0, ret = sscanf(pattern," %n",&pos1); if (ret == 1) { \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2;} \
     break;} \
     case (Literal): { \
     int pos1 = strlen(match.str), ret = strncmp(pattern,match.str,pos1); if (ret == 0) { \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2) return pos2;} \
+    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2;} \
     break;} \
     case (Cond): { \
     int pos0 = size##THD##Int(); *enloc##THD##Int(1) = 0; \
     int pos1 = rescan##THD(pattern,index+1,accum); if (pos1) { \
     *array##THD##Int(pos0,1) = 1; \
-    int pos2 = rescan##THD(pattern+pos1,match.idx,accum+pos1); if (pos2) return pos2;} else { \
-    int pos2 = rescan##THD(pattern,match.alt,accum); if (pos2) return pos2;} \
+    int pos2 = rescan##THD(pattern+pos1,match.idx,accum+pos1); if (pos2>=0) return pos2;} else { \
+    int pos2 = rescan##THD(pattern,match.alt,accum); if (pos2>=0) return pos2;} \
     break;} \
-    case (Close): return accum; \
+    case (Peek): { \
+    int pos0 = size##THD##Int(); *enloc##THD##Int(1) = 0; \
+    int pos1 = rescan##THD(pattern,index+1,accum); if (pos1) { \
+    *array##THD##Int(pos0,1) = 1; \
+    int pos2 = rescan##THD(pattern,match.idx,accum); if (pos2>=0) return pos2;} else { \
+    int pos2 = rescan##THD(pattern,match.alt,accum); if (pos2>=0) return pos2;} \
+    break;} \
+    case (Goto): { \
+    int pos2 = rescan##THD(pattern,match.idx,accum); if (pos2>=0) return pos2; \
+    break;} \
+    case (Char): { \
+    if (pattern[0]) return accum+1; \
+    break;} \
+    case (Pass): return accum; \
+    case (Fail): break; \
     default: exitErrstr("match too tag\n");} \
     unloc##THD##Int(size##THD##Int()-intpos); \
     unloc##THD##Float(size##THD##Float()-floatpos); \
     unloc##THD##Char(size##THD##Char()-charpos); \
-    return 0; \
+    return -1; \
 } \
 int scan##THD(const char *pattern, int len, ...) \
 { \
@@ -494,7 +512,16 @@ int scan##THD(const char *pattern, int len, ...) \
     if (match.idx > max) max = match.idx; \
     if (match.alt < orig) exitErrstr("match too alter\n"); \
     if (match.alt > max) max = match.alt; break; \
-    case (Close): break; \
+    case (Peek): match.idx = index + va_arg(args,int); \
+    match.alt = index + va_arg(args,int); \
+    if (match.idx < orig) exitErrstr("match too index\n"); \
+    if (match.idx > max) max = match.idx; \
+    if (match.alt < orig) exitErrstr("match too alter\n"); \
+    if (match.alt > max) max = match.alt; break; \
+    case (Goto): match.idx = index + va_arg(args,int); \
+    if (match.idx < orig) exitErrstr("match too index\n"); \
+    if (match.idx > max) max = match.idx; break; \
+    case (Char): case (Pass): case (Fail): break; \
     default: exitErrstr("arg too tag\n");} \
     *enloc##THD##Scan(1) = match; index += 1;} \
     if (max >= size##THD##Scan()) exitErrstr("index too match\n"); \

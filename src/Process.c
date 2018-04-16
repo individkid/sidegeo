@@ -296,8 +296,8 @@ void processProduce(void *arg)
         insertCmnProcesses(*arrayPipe(i,1));
         toggle = 1;}}
     else if (toggle == 1 && sizeStage() > 0) {
-        int len = sizeStage(); useStage(); xferComplete(len);
-        len = processOption(len);
+        useStage(); xferComplete(sizeStage());
+        int len = 0; while (len == 0) len = processOption(len);
         if (len < 0) processComplain(-len);
         if (len > 0) len = processInit(len);
         if (len < 0) processError(thread);
