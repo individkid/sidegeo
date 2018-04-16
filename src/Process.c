@@ -22,6 +22,7 @@
 
 #define PROCESS_SIDE ".side"
 #define PROCESS_FIFO ".fifo"
+#define PROCESS_YIELD "--yield"
 #define PROCESS_STEP 20
 #define PROCESS_IGNORE 3
 #define PROCESS_LEN INT_MAX
@@ -67,6 +68,10 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
     char buffer[PROCESS_STEP];
     int retlen = read(hlp->file,buffer,PROCESS_STEP);
     if (retlen < 0) errorinj(hlp,env);
+    if (retlen == 0) {
+    int len = strlen(PROCESS_YIELD);
+    if (write(hlp->pipe,PROCESS_YIELD,len) != len) exitErrstr("pipe too write\n");
+    break;}
     int offset = 0;
     for (int i = 0; i < retlen; i++) {
     if (hlp->header.pid == 0) {
@@ -158,7 +163,6 @@ void *processHelper(void *arg)
     if (retval == 0) {
         if (setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}
     if (retval < 0) {
-        // TODO1 send --yield
         if (setlock(hlp->file,hlp->filepos,1,F_RDLCK,F_SETLKW) < 0) errorinj(hlp,env);
         if (setlock(hlp->file,hlp->filepos,1,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}}
     return 0;
