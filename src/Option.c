@@ -20,22 +20,11 @@
 
 extern int option;
 
-int processOption()
-{ // given Complete, return <0 error, 0 continue, >0 file
-	int len = 0; // TODO1 use Complete
-	char pattern[len+1]; strncpy(pattern,unlocPcsChar(len),len); pattern[len] = 0;
-	char argument[len+1];
-	if (pattern[0] == 'f' && sscanf(pattern," %s",argument) == 1) {
-		int len = strlen(argument);
-		strncpy(enlocPcsChar(len),argument,len);
-		return len;}
-	if (pattern[0] == 'e' && sscanf(pattern," %s",argument) == 1) {
-		*enlocConfigurer(1) = 0; // TODO2 find option in Name
-		*enlocConfiguree(1) = 0;
-		int len = strlen(argument);
-		strncpy(enlocConfigure(len),argument,len);
-		*enlocConfigure(1) = '\n';}
-	// TODO1 deloc match length from Complete
+int processInit(int len);
+void processComplain(void);
+
+int processOption(void)
+{ // given Complete, <0 yield, 0 wait, >0 continue
     return 0;
 }
 

@@ -28,7 +28,7 @@
 #define PROCESS_LEN INT_MAX
 
 int processConfigure(int index);
-int processOption(int len);
+int processOption();
 
 int toggle = 0;
 int thread = 0;
@@ -229,21 +229,16 @@ void processError(int index)
 {
     if (pthread_cancel(*arrayHelper(index,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
     if (*arrayPipe(index,1) >= 0) removeCmnProcesses(*arrayPipe(index,1));
-    *arrayFile(index,1) = *arraySide(index,1) = -1; *arrayFifo(index,1) = *arrayPipe(index,1) = -1;
+    *arrayFile(index,1) = *arraySide(index,1) = *arrayFifo(index,1) = *arrayPipe(index,1) = -1;
 }
 
-DEFINE_MSGSTR(PcsOutput)
-
-void processIgnore(int index)
-{
-    if (*arrayIgnore(index,1) >= PROCESS_IGNORE) return;
-    *arrayIgnore(index,1) += 1;
-    msgstrPcsOutput("syntax error in file number %d",'\n',index);
+int processIgnore(int index, int noneg) {
+    // TODO1 ignore several times, then error
 }
 
-void processComplain(int len)
+void processComplain(void)
 {
-    // TODO3 xfer from PcsChar to PcsOutput
+    // TODO1 msgstrPcsOutput
 }
 
 int processCompare(const void *left, const void *right)
@@ -293,24 +288,23 @@ void processProduce(void *arg)
         if (*arrayPipe(thread,1) < 0) exitErrstr("thread too size\n");
         if (readableCmnProcesses(*arrayPipe(thread,1)) == 0) exitErrstr("thread too readable\n");
         int len = processRead(thread);
-        while (len > 0) len = processConfigure(thread);
-        if (len < 0) {
+        while (len > 0 /*nop or non-yield consumed*/) len = processConfigure(thread);
+        // (len == 0) nothing consumed, so wait for more from processRead
+        if (len < 0) { // yield or error consumed
         for (int i = 0; i < sizePipe(); i++)
         if (i != thread && *arrayPipe(i,1) >= 0)
         insertCmnProcesses(*arrayPipe(i,1));
         toggle = 1;}}
     else if (toggle == 1 && sizeStage() > 0) {
-        useStage(); xferComplete(sizeStage());
-        int len = 0; while (len == 0) len = processOption(len);
-        if (len < 0) processComplain(-len);
-        if (len > 0) len = processInit(len);
-        if (len < 0) processError(thread);
-        else {
+        int len = sizeStage(); useStage(); xferComplete(len);
+        while (len > 0 /* process nop */) len = processOption();
+        // (len == 0) nothing consumed, so wait for any file
+        if (len < 0) { // -f consumed, so wait for single file
         for (int i = 0; i < sizePipe(); i++)
-        if (i != len && *arrayPipe(i,1) >= 0)
+        if (i != thread && *arrayPipe(i,1) >= 0)
         removeCmnProcesses(*arrayPipe(i,1));
-        insertCmnProcesses(*arrayPipe(len,1));
-        thread = len; toggle = 0;}}
+        insertCmnProcesses(*arrayPipe(thread,1));
+        toggle = 0;}}
     else if (toggle == 1) {
         toggle = 2;
         for (int i = 0; i < sizePipe(); i++) {
