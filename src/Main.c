@@ -34,9 +34,6 @@ const enum Shader pershader = Perpoint;
 const enum Data data = FrameSub;
 #endif
 
-enum Cnd {Was,Not,Cmd,Arg,One,Sgl,Mlt};
-enum Act {Aft,Suf,Str,Inj,End,Uni,Wil,Wnt};
-
 DEFINE_MSGSTR(CmdBuf)
 DEFINE_MSGSTR(CmdOutput)
 DEFINE_MSGSTR(CmdByte)
@@ -65,46 +62,10 @@ int main(int argc, char **argv)
         exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
 #endif
 
-    int condition = 1<<Not;
     for (int i = 1; i < argc; i++) {
-        int len = strlen(argv[i]);
-        const char *set = "hHtT";
-        char spn[2] = {0};
-        if (len > 1) spn[0] = argv[i][1];
-        if (len > 1 && argv[i][0] == '-' && strspn(spn,set)) condition |= 1<<One;
-        else if (len > 1 && argv[i][0] == '-') condition |= 1<<Cmd;
-        else condition |= 1<<Arg;
-        if (len == 2 && argv[i][0] == '-') condition |= 1<<Sgl;
-        else condition |= 1<<Mlt;
-        enum Act action[9] = {Wnt};
-        switch (condition) {
-        case ((1<<Was)|(1<<Cmd)|(1<<Sgl)): {enum Act temp[] = {Uni,End,Aft,Wil}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Was)|(1<<Cmd)|(1<<Mlt)): {enum Act temp[] = {Uni,End,Aft,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Was)|(1<<Arg)|(1<<Sgl)): {enum Act temp[] = {Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Was)|(1<<Arg)|(1<<Mlt)): {enum Act temp[] = {Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Was)|(1<<One)|(1<<Sgl)): {enum Act temp[] = {Uni,End,Aft,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Was)|(1<<One)|(1<<Mlt)): {enum Act temp[] = {Uni,End,Aft,End,Inj,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Not)|(1<<Cmd)|(1<<Sgl)): {enum Act temp[] = {Aft,Wil}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Not)|(1<<Cmd)|(1<<Mlt)): {enum Act temp[] = {Aft,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Not)|(1<<Arg)|(1<<Sgl)): {enum Act temp[] = {Inj,Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Not)|(1<<Arg)|(1<<Mlt)): {enum Act temp[] = {Inj,Str,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Not)|(1<<One)|(1<<Sgl)): {enum Act temp[] = {Aft,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        case ((1<<Not)|(1<<One)|(1<<Mlt)): {enum Act temp[] = {Aft,End,Inj,Suf,End,Wnt}; memcpy(action,temp,sizeof(temp)); break;}
-        default: exitErrstr("impossible condition\n");}
-        condition = 0;
-        for (int j = 0; j < 9 && condition == 0; j++) {
-        switch (action[j]) {
-        case (Aft): *enlocOption(1) = argv[i][1]; break;
-        case (Suf): memcpy(enlocOption(len-2),argv[i]+2,len-2); break;
-        case (Str): memcpy(enlocOption(len),argv[i],len); break;
-        case (Inj): *enlocOption(1) = 'f'; break;
-        case (End): *enlocOption(1) = '\n'; break;
-        case (Uni): memcpy(enlocOption(4),"oops",4); break;
-        case (Wil): if (i == argc-1) {
-        enum Act temp[] = {Uni,End,Wnt}; memcpy(action+j,temp,sizeof(temp)); j--;}
-        else condition = 1<<Was; break;
-        case (Wnt): condition = 1<<Not; break;
-        default: exitErrstr("unknown action\n");}}}
+    for (char *j = argv[i]; *j; j++)
+    *enlocOption(1) = *j;
+    if (i < argc-1) *enlocOption(1) = ' ';}
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
