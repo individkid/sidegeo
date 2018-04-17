@@ -84,7 +84,15 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Surface -- cursor controls facet in polytope  
     * Content -- cursor controls decoration on facet  
 
-Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location.
+Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. Incorrectly formatted commands are treated as intervening text. Correctly formatted commands with incorrect arguments from files cause warnings the first few times, then cause the remainder of the file to be ignored. Incorrect arguments on the command line cause warnings only. Command formats are specified by lists of the following subexpressions.
+
+  * Int matches integer as in %d format  
+  * Float matches as in %f format  
+  * String matches whitespace delimited string  
+  * Literal after whitespace must match exactly  
+  * Cond matches the next and goes on to indicated, or just goes on to alternate indicated  
+
+For example, configurePlane from Interface.c is scheduled by processConfigure in Configure.c if —plane is followed by optional file name and colon, followed by one or more comma separated plane names, followed by integer indicating which coordinate plane is the base plane, followed by three distances above the base plane, specified by Literal,”—plane”,String,Cond,2,3,Literal,”:”,String,Cond,-1,2,Literal,”,”,Int,Float,Float,Float.
 
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  

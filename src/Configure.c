@@ -128,11 +128,7 @@ unlocPcsChar(sizePcsChar()-charpos); \
 unlocRemain(index,1);
 
 #define DELOC(POS) \
-unlocPcsInt(sizePcsInt()-intpos); \
-unlocPcsFloat(sizePcsFloat()-floatpos); \
-unlocPcsChar(sizePcsChar()-charpos); \
-unlocRemain(index,1); \
-delocRemain(index,POS);
+UNLOC delocRemain(index,POS);
 
 int processConfigure(int index)
 { // given Remain, <0 yield, 0 wait, >0 continue

@@ -18,13 +18,36 @@
 
 #include "Common.h"
 
-extern int option;
+extern int thread;
 
-int processInit(int len);
+DECLARE_SCAN(Pcs)
+int processInit(int pos);
 void processComplain(void);
+
+#define UNLOC \
+unlocPcsInt(sizePcsInt()-intpos); \
+unlocPcsFloat(sizePcsFloat()-floatpos); \
+unlocPcsChar(sizePcsChar()-charpos); \
+unlocComplete(1);
+
+#define DELOC(POS) \
+UNLOC delocComplete(POS);
 
 int processOption(void)
 { // given Complete, <0 yield, 0 wait, >0 continue
-    return 0;
+	int len = sizeComplete(); *enlocComplete(1) = 0; char *pattern = arrayComplete(0,len+1);
+	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
+	int pos = scanPcs(pattern,1,Literal,"-h",Scans); if (pos) {
+		// TODO2 msgsndPcsOutput usage
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,1,Literal,"-H",Scans); if (pos) {
+		// TODO2 msgsndPcsOutput readme
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,2,Literal,"-f",String,Scans); if (pos) {
+		thread = processInit(charpos);
+		DELOC(pos) return -pos;}
+	pos = scanPcs(pattern,1,String,Scans); if (pos) {
+		DELOC(pos) return pos;}
+    UNLOC return 0;
 }
 

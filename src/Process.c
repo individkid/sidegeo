@@ -32,7 +32,6 @@ int processOption();
 
 int toggle = 0;
 int thread = 0;
-int option = 0;
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 struct Helper {
@@ -185,17 +184,18 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
     return fd;
 }
 
-int processInit(int len)
+int processInit(int pos)
 {
+    char *filename = stringPcsChar(pos,0);
+    int len = strlen(filename);
     int thread = sizeFile();
-    *enlocPcsChar(1) = 0; char *filename = unlocPcsChar(len+1);
-    option = thread;
     *enlocName(1) = sizePcsBuf();
     strcpy(enlocPcsBuf(len+1),filename);
     *enlocIgnore(1) = 0;
     *enlocFile(1) = -1;
     *enlocSide(1) = -1;
     *enlocPipe(1) = -1;
+    usedRemain(thread);
     mode_t mode = 00660;
     int file = openfile(filename,"", "",         O_RDWR|O_CREAT,     mode,0,&mode);
     int side = openfile(filename,"",PROCESS_SIDE,O_RDWR|O_CREAT,     mode,0,0);
@@ -290,14 +290,14 @@ void processProduce(void *arg)
         int len = processRead(thread);
         while (len > 0 /*nop or non-yield consumed*/) len = processConfigure(thread);
         // (len == 0) nothing consumed, so wait for more from processRead
-        if (len < 0) { // yield or error consumed
+        if (len < 0) { // yield or error consumed, so process options and wait for any file
         for (int i = 0; i < sizePipe(); i++)
         if (i != thread && *arrayPipe(i,1) >= 0)
         insertCmnProcesses(*arrayPipe(i,1));
         toggle = 1;}}
     else if (toggle == 1 && sizeStage() > 0) {
         int len = sizeStage(); useStage(); xferComplete(len);
-        while (len > 0 /* process nop */) len = processOption();
+        while (len > 0 /*nop or non-f consumed*/) len = processOption();
         // (len == 0) nothing consumed, so wait for any file
         if (len < 0) { // -f consumed, so wait for single file
         for (int i = 0; i < sizePipe(); i++)
