@@ -28,6 +28,7 @@ EXTERNCBEGIN
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <ctype.h>
 #include "pa_ringbuffer.h"
 #include <lua.h>
 
@@ -441,8 +442,9 @@ int rescan##THD(const char *pattern, int index, int accum) \
     int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2; \
     break;} \
     case (Literal): { /*TODO1 skip whitespace before strncmp*/ \
-    int pos1 = strlen(match.str), ret = strncmp(pattern,match.str,pos1); if (ret == 0) { \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2;} \
+    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
+    int pos1 = strlen(match.str), ret = strncmp(pattern+pos0,match.str,pos1); if (ret == 0) { \
+    int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2>=0) return pos2;} \
     break;} \
     case (Cond): { \
     int pos0 = size##THD##Int(); *enloc##THD##Int(1) = 0; \

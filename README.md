@@ -92,7 +92,7 @@ Configuration/history files consist of commands. User input appends to file. App
   * Literal after whitespace must match exactly  
   * Cond matches the next and goes on to indicated, or just goes on to alternate indicated  
 
-For example, configurePlane from Interface.c is scheduled by processConfigure in Configure.c if —plane is followed by optional file name and colon, followed by one or more comma separated plane names, followed by integer indicating which coordinate plane is the base plane, followed by three distances above the base plane, specified by Literal,”—plane”,String,Cond,2,3,Literal,”:”,String,Cond,-1,2,Literal,”,”,Int,Float,Float,Float.
+For example, configurePlane from Interface.c is scheduled by processConfigure in Configure.c if --plane is followed by optional file name and colon, followed by one or more comma separated plane names, followed by integer indicating which coordinate plane is the base plane, followed by three distances above the base plane, specified by Literal,”--plane”,String,Cond,2,3,Literal,”:”,String,Cond,-1,2,Literal,”,”,Int,Float,Float,Float.
 
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  

@@ -255,13 +255,13 @@ enum Action manipulateClick(int state)
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
     *enlocCmdConfiguree(1) = 0;
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("plane %d %d,",-1,plane,ver[0]);
+    msgstrCmdConfigure("--plane %d %d,",-1,plane,ver[0]);
     for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,vec[i]);
     msgstrCmdConfigure("",'\n');
     // sideband msgstr --side responseProceed and wait
     *enlocCmdConfiguree(1) = 1;
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("side responseProceed %d",'\n',layer);
+    msgstrCmdConfigure("--side responseProceed %d",'\n',layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
     if (state-- == 0) {
@@ -310,7 +310,7 @@ enum Action sculptClick(int state)
     if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfiguree(1) = 0;
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("%s %d,",-1,stringCmdByte(str,0),plane);
+    msgstrCmdConfigure("--%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);
     for (int i = 0; i < inlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
     msgstrCmdConfigure(",",-1);

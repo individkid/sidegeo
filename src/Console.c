@@ -220,11 +220,8 @@ void backend(char chr)
         int len = sizeCslPtr();
         writestr(arrayCslPtr(0,len));
         if (*arrayCslPtr(0,1) == '-') {
-        delocCslPtr(1); len -= 1;
-        if (len > 1 && *arrayCslPtr(1,1) == '-') {
-        delocCslPtr(1); len -= 1;
-        msgstrCslOption("e",' ');}
         useCslPtr(); xferCslOption(len);}
+        else delocCslPtr(len);
         useEcho(--depth); referCslPtr();}
     else if (alphaof(chr) > 0 && depth > 0) *enlocCslPtr(1) = alphaof(chr);
     else if (alphaof(chr) > 0) writematch(alphaof(chr));

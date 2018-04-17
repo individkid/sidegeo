@@ -234,6 +234,7 @@ void processError(int index)
 
 int processIgnore(int index, int noneg) {
     // TODO1 ignore several times, then error
+    return noneg;
 }
 
 void processComplain(void)
