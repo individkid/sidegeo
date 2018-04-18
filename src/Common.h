@@ -863,6 +863,7 @@ DECLARE_LOCAL(Name,int) // file name string buffer index
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(Header,struct Header) // staged fifo headers
 DECLARE_LOCAL(Body,char) // staged fifo data
+DECLARE_LOCAL(Able,int) // toggle disable
 DECLARE_LOCAL(File,int) // file handles
 DECLARE_LOCAL(Side,int) // sideband handles
 DECLARE_LOCAL(Fifo,int) // fifo handles

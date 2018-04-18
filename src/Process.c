@@ -191,6 +191,7 @@ int processInit(int pos)
     int thread = sizeFile();
     *enlocName(1) = sizePcsBuf();
     strcpy(enlocPcsBuf(len+1),filename);
+    *enlocAble(1) = 1;
     *enlocIgnore(1) = 0;
     *enlocFile(1) = -1;
     *enlocSide(1) = -1;
@@ -209,6 +210,7 @@ int processInit(int pos)
     *arraySide(thread,1) = side; helper.side = side;
     *arrayFifo(thread,1) = datw; helper.fifo = datr;
     *arrayPipe(thread,1) = pipefd[0]; helper.pipe = pipefd[1];
+    insertCmnProcesses(*arrayPipe(thread,1));
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
     if (pthread_create(enlocHelper(1),0,processHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
     if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
@@ -228,7 +230,7 @@ int processRead(int thread)
 void processError(int index)
 {
     if (pthread_cancel(*arrayHelper(index,1)) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
-    if (*arrayPipe(index,1) >= 0) removeCmnProcesses(*arrayPipe(index,1));
+    if (*arrayPipe(index,1) >= 0 && *arrayAble(index,1)) removeCmnProcesses(*arrayPipe(index,1));
     *arrayFile(index,1) = *arraySide(index,1) = *arrayFifo(index,1) = *arrayPipe(index,1) = -1;
 }
 
@@ -259,13 +261,13 @@ void processConsume(void *arg)
 {
     while (sizeConfigurer() > 0) {
         struct Header header = {0};
-        header.siz = lengthConfigure(0,'\n');
+        header.siz = lengthConfigure(0,'\n')+1;
         header.pid = getpid();
         header.tim = pidtime;
         header.neg = *delocConfiguree(1);
         header.idx = *delocConfigurer(1);
         *enlocHeader(1) = header;
-        useConfigure(); xferBody(header.siz); delocConfigure(1);}
+        useConfigure(); xferBody(header.siz);}
     useOption(); xferStage(sizeOption());
 }
 
@@ -287,13 +289,14 @@ void processProduce(void *arg)
 {
     if (toggle == 0) {
         if (*arrayPipe(thread,1) < 0) exitErrstr("thread too size\n");
+        if (!*arrayAble(thread,1)) exitErrstr("thread too able\n");
         if (readableCmnProcesses(*arrayPipe(thread,1)) == 0) exitErrstr("thread too readable\n");
         int len = processRead(thread);
         while (len > 0 /*nop or non-yield consumed*/) len = processConfigure(thread);
         // (len == 0) nothing consumed, so wait for more from processRead
         if (len < 0) { // yield or error consumed, so process options and wait for any file
         for (int i = 0; i < sizePipe(); i++)
-        if (i != thread && *arrayPipe(i,1) >= 0)
+        if (i != thread && *arrayPipe(i,1) >= 0 && *arrayAble(i,1))
         insertCmnProcesses(*arrayPipe(i,1));
         toggle = 1;}}
     else if (toggle == 1 && sizeStage() > 0) {
@@ -302,7 +305,7 @@ void processProduce(void *arg)
         // (len == 0) nothing consumed, so wait for any file
         if (len < 0) { // -f consumed, so wait for single file
         for (int i = 0; i < sizePipe(); i++)
-        if (i != thread && *arrayPipe(i,1) >= 0)
+        if (i != thread && *arrayPipe(i,1) >= 0 && *arrayAble(i,1))
         removeCmnProcesses(*arrayPipe(i,1));
         insertCmnProcesses(*arrayPipe(thread,1));
         toggle = 0;}}
@@ -310,10 +313,10 @@ void processProduce(void *arg)
         toggle = 2;
         for (int i = 0; i < sizePipe(); i++) {
         int j = (thread+i)%sizePipe();
-        if (*arrayPipe(j,1) >= 0 && readableCmnProcesses(*arrayPipe(j,1))) {
+        if (*arrayPipe(j,1) >= 0 && *arrayAble(j,1) && readableCmnProcesses(*arrayPipe(j,1))) {
         thread = j; toggle = 0;
         for (int k = 0; k < sizePipe(); k++)
-        if (k != thread && *arrayPipe(k,1) >= 0)
+        if (k != thread && *arrayPipe(k,1) >= 0 && *arrayAble(k,1))
         removeCmnProcesses(*arrayPipe(k,1));
         break;}}}
     else if (sizeHeader() > 0) {
