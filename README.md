@@ -31,16 +31,14 @@ The main display window is a hub from which parts or collections of polytopes ca
 
   * -h print usage  
   * -H print readme  
-  * -f \<file> open polytope file and/or enable  
-  * -F \<file> open polytope file and/or disable  
-  * -e \<config> append to last file  
-  * -E \<file> change last file to indicated  
-  * -a \<name> open alternate display  
-  * -A \<name> use indicated alternate display  
+  * -o \<file> open or toggle polytope file  
+  * -O \<name> open or select alternate display  
+  * -a \<config> append to last file  
+  * -A \<file> change last file to indicated  
   * -s \<name> serve remote framebuffer clients  
   * -S \<file> serve sculpt command clients  
-  * -t run sanity check  
-  * -T run thorough tests  
+  * -r run sanity check  
+  * -R run thorough tests  
 
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Execute mode. The -a option opens a display over the main display with same size and position. In Panel mode, a left mouse click over the main, or an alternate display, opens a widget panel with same size and position.
 
@@ -120,7 +118,7 @@ For example, configurePlane from Interface.c is scheduled by processConfigure in
   * --call takes Lua function and arguments to start  
   * --side enque command for debug and internal use  
 
-The --call --yield --inject -F commands synchronize actions. To wait for a --call Lua script to complete before proceeding, issue --injectFthis --callLuaScript --yield. The --inject disables the current file after --yield allows injected options to be executed. The --call kicks off the Lua script. A -F injected by the Lua script will be after the one injected by the --inject, because -F is processed by the same thread as the -inject.
+The --call --yield --inject -o commands synchronize actions. To wait for a --call Lua script to complete before proceeding, issue --inject-o_ --callLuaScript --yield. The --inject disables the current file after --yield allows injected options to be executed. The --call kicks off the Lua script. A -o injected by the Lua script will be after the one injected by the --inject, because -o is processed by the same thread as the --inject.
 
 The --time --color --source --listen --metric commands work together with polytope shape, orientation, and juxtaposition to produce nonlinear sound and shade from simple equations. The simple equations are quotients of sums of terms of one coefficient and up to two variables. Each --time has a value used as variables and for other purposes.
 

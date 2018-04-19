@@ -81,6 +81,8 @@ int processPlane(int *cpos, int file)
 }
 
 #define SUFFIX(NAME) \
+	if (*arrayPcsChar(*cpos,1) == '_' && *arrayPcsChar(*cpos+1,1) == 0) { \
+	*cpos += 2; return dflt;} \
 	int len = lengthPcsChar(*cpos,0); \
 	for (int i = 0; i < size##NAME(); i++) { \
 	int pos = *array##NAME(i,1); \
@@ -92,15 +94,12 @@ int processPlane(int *cpos, int file)
 	*cpos += len+1; return i;}} \
 	return -1;
 
-int processFile(int *cpos, int file)
+int processFile(int *cpos, int dflt)
 { // finds first file with given suffix
-	char *str = stringPcsChar(*cpos,0);
-	if (*arrayPcsChar(*cpos,1) == '_' && *arrayPcsChar(*cpos+1,1) == 0) {
-	*cpos += 2; return file;}
 	SUFFIX(Name)
 }
 
-int processAlter(int *cpos)
+int processAlter(int *cpos, int dflt)
 { // finds first alternate display with given suffix
 	SUFFIX(Alter)
 }

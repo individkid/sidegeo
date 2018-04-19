@@ -186,11 +186,10 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
 
 int processInit(int pos)
 {
-    char *filename = stringPcsChar(pos,0);
-    int len = strlen(filename);
+    int name = *enlocName(1) = sizePcsBuf();
+    int len = lengthPcsChar(pos,0);
+    char *filename = (usePcsChar(),copyPcsBuf(name,pos,len+1));
     int thread = sizeFile();
-    *enlocName(1) = sizePcsBuf();
-    strcpy(enlocPcsBuf(len+1),filename);
     *enlocAble(1) = 1;
     *enlocIgnore(1) = 0;
     *enlocFile(1) = -1;

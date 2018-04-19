@@ -23,6 +23,9 @@ extern int thread;
 DECLARE_SCAN(Pcs)
 int processInit(int pos);
 void processComplain(void);
+int processFile(int *cpos, int dflt);
+int processAlter(int *cpos, int dflt);
+void display(void);
 
 #define UNLOC \
 unlocPcsInt(sizePcsInt()-intpos); \
@@ -43,9 +46,30 @@ int processOption(void)
 	pos = scanPcs(pattern,1,Literal,"-H",Scans); if (pos) {
 		// TODO2 msgsndPcsOutput readme
 		DELOC(pos) return pos;}
-	pos = scanPcs(pattern,2,Literal,"-f",String,Scans); if (pos) {
+	pos = scanPcs(pattern,2,Literal,"-o",String,Scans); if (pos) {
+		int cpos = charpos;
+		int file = processFile(&cpos,thread);
+		if (file < 0) {
 		thread = processInit(charpos);
 		DELOC(pos) return -pos;}
+		*arrayAble(file,1) ^= 1;
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,2,Literal,"-O",String,Scans); if (pos) {
+		int cpos = charpos;
+		int alter = processAlter(&cpos,sizeAlter());
+		if (alter < 0) {
+	    int name = *enlocAlter(1) = sizePcsBuf();
+	    int len = lengthPcsChar(pos,0);
+	    usePcsChar(); copyPcsBuf(name,pos,len+1);
+	    usePcsChar(); copyPcsCmdByte(sizePcsCmdByte(),pos,len+1);
+	    *enlocPcsCommand(1) = display;}
+		else if (alter < sizeAlter()) {
+		// TODO send optionAlter of alter+1
+		}
+		else {
+		// TODO send optionAlter of 0
+		}
+		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,1,String,Scans); if (pos) {
 		DELOC(pos) return pos;}
     UNLOC return 0;
