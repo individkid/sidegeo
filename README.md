@@ -31,8 +31,8 @@ The main display window is a hub from which parts or collections of polytopes ca
 
   * -h print usage  
   * -H print readme  
-  * -f \<file> load polytope and append changes  
-  * -F \<file> toggle enable read from file  
+  * -f \<file> open polytope file and/or enable  
+  * -F \<file> open polytope file and/or disable  
   * -e \<config> append to last file  
   * -E \<file> change last file to indicated  
   * -a \<name> open alternate display  

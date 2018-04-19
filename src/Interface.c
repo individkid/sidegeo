@@ -205,6 +205,7 @@ int openSlot(void)
 void closeSlot(int slot)
 {
     struct Share *share = arrayShare(slot,1);
+    if (share->usage != Scratch) exitErrstr("usage too scratch\n");
     share->usage = Blank;
     freeSlot(share->ident);
 }
@@ -325,12 +326,16 @@ enum Action sculptClick(int state)
 enum Action configureRefine(int state)
 {
     int plane = *deargCmdInt(1);
-    int file = *deargCmdInt(1);
+    int ident = *deargCmdInt(1);
     int vsr = 0; deargCmdInt(1); vsr -= 1; // versor
     int vec = 0; deargCmdFloat(1); vec -= 3; // plane
     int pending = *deargCmdInt(1); vsr -= 1;
+    int file = 0; struct Share *share = 0;
+    while (file < sizeShare()) { // TODO do this once (state-- == 0) by replacing ident by file in CmdInt and/or by declaring tree
+    share = arrayShare(file,1);
+    if (share->ident == ident) break;}
+    if (share == 0) exitErrstr("file too share\n");
     // wait for lock on file shared struct
-    struct Share *share = arrayShare(file,1);
     if (share->complete+1 < pending) return Defer;
     if (plane < 0) plane = share->planes;
     updateContext(0);

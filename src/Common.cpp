@@ -296,6 +296,7 @@ DEFINE_LOCAL(PcsBuf,char)
 DEFINE_TREE(Ident,int,int)
 DEFINE_LOCAL(Count,int)
 DEFINE_LOCAL(Name,int)
+DEFINE_LOCAL(Alter,int)
 
 DEFINE_LOCAL(Stage,char)
 DEFINE_LOCAL(Header,struct Header)

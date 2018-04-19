@@ -856,9 +856,10 @@ DECLARE_LOCAL(PcsScan,struct Match) // format specifiers
 DECLARE_META(Remain,char) // configuration pattern
 DECLARE_LOCAL(Complete,char) // option pattern
 DECLARE_LOCAL(PcsBuf,char) // string buffer
-DECLARE_TREE(Ident,int,int) // string index to plane identifier
+DECLARE_TREE(Ident,int,int) // buffer to plane index
 DECLARE_LOCAL(Count,int) // per file number of planes
-DECLARE_LOCAL(Name,int) // file name string buffer index
+DECLARE_LOCAL(Name,int) // file to buffer index
+DECLARE_LOCAL(Alter,int) // window to buffer index
 
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(Header,struct Header) // staged fifo headers

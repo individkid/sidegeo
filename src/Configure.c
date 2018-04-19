@@ -34,16 +34,15 @@ int processIgnore(int index, int noneg);
 DEFINE_SCAN(Pcs)
 DEFINE_MSGSTR(PcsBuf)
 
-int processPlane(int *cpos, int *plane, int file)
+int processPlane(int *cpos, int file)
 {
 	int filepos = *arrayName(file,1);
 	int filelen = lengthPcsBuf(filepos,0);
 	int prepos = sizePcsBuf();
-	overPcsBuf(prepos,filepos,filelen); *enlocPcsBuf(1) = ':';
+	overPcsBuf(prepos,filepos,filelen); *enlocPcsBuf(1) = ':'; // TODO optimize by making Ident a queue of trees
 	int sufpos = sizePcsBuf();
-	char *cstr = stringPcsChar(*cpos,0);
-	int clen = strlen(cstr);
-	int named = (cstr[0] != '_' || cstr[1] != 0);
+	int clen = lengthPcsChar(*cpos,0);
+	int named = (*arrayPcsChar(*cpos,1) != '_' || *arrayPcsChar(*cpos+1,1) != 0);
 	int count = *arrayCount(file,1);
 	if (named) {usePcsChar(); copyPcsBuf(sufpos,*cpos,clen+1);}
 	else msgstrPcsBuf("%d",0,count);
@@ -52,7 +51,7 @@ int processPlane(int *cpos, int *plane, int file)
 	// named and found: return found as *plane
 	if (named && found) {
 	unlocPcsBuf(sizePcsBuf()-prepos);
-	*plane = *castIdent(key); *cpos += clen+1;}
+	*cpos += clen+1; return *castIdent(key);}
 
 	// named and not found: insert name and count, return count as *plane
 	else if (named && !found) {
@@ -64,56 +63,67 @@ int processPlane(int *cpos, int *plane, int file)
 	else {insertIdent(pos); *castIdent(pos) = count;}
 	insertIdent(prepos); *castIdent(prepos) = count;
 	*arrayCount(file,1) += 1;
-	*plane = count; *cpos += clen+1;}
+	*cpos += clen+1; return count;}
 
 	// unnamed and found: return count as *plane
 	else if (!named && found) {
 	unlocPcsBuf(sizePcsBuf()-prepos);
 	*arrayCount(file,1) += 1;
-	*plane = count; *cpos += clen+1;}
+	*cpos += clen+1; return count;}
 
 	// unnamed and not found: insert count, return count as *plane
 	else if (!named && !found) {
 	insertIdent(prepos); *castIdent(prepos) = count;
 	*arrayCount(file,1) += 1;
-	*plane = count; *cpos += clen+1;}
+	*cpos += clen+1; return count;}
 
-	return 0;
-}
-
-int processFile(int *cpos, int *file)
-{
-	char *str = stringPcsChar(*cpos,0);
-	if (str[0] == '_' && str[1] == 0) {
-	*cpos += 2; return 0;}
-	int len = strlen(str);
-	for (int i = 0; i < sizeName(); i++) {
-	int pos = *arrayName(i,1);
-	char *suf = stringPcsBuf(pos,0);
-	int fix = strlen(suf);
-	if (fix < len) continue;
-	char *suffix = suf + (fix-len);
-	if (strcmp(str,suffix) == 0) {
-	*file = i; *cpos += len+1; return 0;}}
 	return -1;
 }
 
-int processPath(int *ipos, int *cpos, int len, int *plane, int *file)
-{
+#define SUFFIX(NAME) \
+	int len = lengthPcsChar(*cpos,0); \
+	for (int i = 0; i < size##NAME(); i++) { \
+	int pos = *array##NAME(i,1); \
+	char *suf = stringPcsBuf(pos,0); \
+	int fix = strlen(suf); \
+	if (fix < len) continue; \
+	char *suffix = suf + (fix-len); \
+	if (strcmp(arrayPcsChar(*cpos,0),suffix) == 0) { \
+	*cpos += len+1; return i;}} \
+	return -1;
+
+int processFile(int *cpos, int file)
+{ // finds first file with given suffix
+	char *str = stringPcsChar(*cpos,0);
+	if (*arrayPcsChar(*cpos,1) == '_' && *arrayPcsChar(*cpos+1,1) == 0) {
+	*cpos += 2; return file;}
+	SUFFIX(Name)
+}
+
+int processAlter(int *cpos)
+{ // finds first alternate display with given suffix
+	SUFFIX(Alter)
+}
+
+int processVertex(int *ipos, int *cpos, int len, int *plane, int *file, int index)
+{ // len is typically 3
 	int ret = 0;
 	if (*arrayPcsInt(*ipos,1)) {
-	if (processFile(cpos,file) < 0) return -1;
+	*file = processFile(cpos,index);
+	if (*file < 0) return -1;
 	*ipos += 1;}
-	while (len > 0 && *arrayPcsInt(*ipos,1)) {
-	if (processPlane(cpos,plane,*file) < 0) return -1;
+	while (len > 1 && *arrayPcsInt(*ipos,1)) {
+	*plane = processPlane(cpos,*file);
+	if (*plane < 0) return -1;
 	len -= 1; plane += 1; *ipos += 1; ret += 1;}
 	if (len == 0) return -1;
-	if (processPlane(cpos,plane+1,*file) < 0) return -1;
+	*(plane+1) = processPlane(cpos,*file);
+	if (*(plane+1) < 0) return -1;
 	return ret + 1;
 }
 
 void processPolyant(int pos)
-{
+{ // TODO use names instead of numbers
 	*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1);
 	int inpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
 	int outpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
@@ -134,13 +144,14 @@ int processConfigure(int index)
 { // given Remain, <0 yield, 0 wait, >0 continue
 	int len = sizeRemain(index); *enlocRemain(index,1) = 0; char *pattern = arrayRemain(index,0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
-	int pos = scanPcs(pattern,11,Literal,"--plane",String,Cond,2,3,Literal,":",String,Cond,-1,2,Literal,",",Int,Float,Float,Float,Scans); if (pos) {
-		int plane = 0, ipos = intpos, cpos = charpos;
-		if (processPath(&ipos,&cpos,1,&plane,&index) != 1) {
+	int pos = scanPcs(pattern,11,Literal,"--plane",String,Int,Float,Float,Float,Scans); if (pos) {
+		int cpos = charpos;
+		int plane = processPlane(&cpos,index);
+		if (plane < 0) {
 		DELOC(pos) return processIgnore(index,pos);}
 		*enlocPcsCmdInt(1) = plane;
 		*enlocPcsCmdInt(1) = index;
-		*enlocPcsCmdInt(1) = *arrayPcsInt(ipos,1); // versor
+		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // versor
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePlane;
 		DELOC(pos) return pos;}
