@@ -153,6 +153,12 @@ void file(void)
     setupTarget(sub);
 }
 
+void focus(void)
+{
+    int context = *delocCmdInt(1);
+    updateContext(context);
+}
+
 void responseLists(void)
 {
     int len = 1+*arrayCmdInt(0,1);
@@ -326,15 +332,11 @@ enum Action sculptClick(int state)
 enum Action configureRefine(int state)
 {
     int plane = *deargCmdInt(1);
-    int ident = *deargCmdInt(1);
+    int file = *deargCmdInt(1);
     int vsr = 0; deargCmdInt(1); vsr -= 1; // versor
     int vec = 0; deargCmdFloat(1); vec -= 3; // plane
     int pending = *deargCmdInt(1); vsr -= 1;
-    int file = 0; struct Share *share = 0;
-    while (file < sizeShare()) { // TODO do this once (state-- == 0) by replacing ident by file in CmdInt and/or by declaring tree
-    share = arrayShare(file,1);
-    if (share->ident == ident) break;}
-    if (share == 0) exitErrstr("file too share\n");
+    struct Share *share = arrayShare(file,1);
     // wait for lock on file shared struct
     if (share->complete+1 < pending) return Defer;
     if (plane < 0) plane = share->planes;
@@ -409,7 +411,11 @@ enum Action configureRefine(int state)
 void configurePlane(void)
 {
     relocCmdInt(1); // plane subscript
-    int file = *relocCmdInt(1);
+    int *ident = relocCmdInt(1);
+    int file = -1; while (++file < sizeShare())
+    if (arrayShare(file,1)->ident == *ident) break;
+    if (file < 0) exitErrstr("file too ident\n");
+    *ident = file;
     relocCmdInt(1); // versor
     relocCmdFloat(3); // plane vector
     *enlocCmdInt(1) = arrayShare(file,1)->pending;
@@ -420,7 +426,9 @@ void configurePlane(void)
 
 void configurePoint(void)
 {
-    int file = *delocCmdInt(1);
+    int ident = *delocCmdInt(1);
+    int file = -1; while (++file < sizeShare())
+    if (arrayShare(file,1)->ident == ident) break;
     struct Share *share = arrayShare(file,1);
     for (int i = 0; i < 3; i++)
     share->point[share->collect*3+i] = *delocCmdFloat(1);
@@ -451,7 +459,7 @@ void configurePoint(void)
     plane[j] = dotvec(share->point,share->point+3,3);
     for (int i = 0; i < 3; i++) if (i != versor) plane[j] += base[j*3+i]*share->point[3+i];
     plane[j] /= -share->point[3+versor];}
-    *enlocCmdInt(1) = file;
+    *enlocCmdInt(1) = ident;
     *enlocCmdInt(1) = versor;
     for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = plane[i];
     enqueCommand(configurePlane);}
@@ -459,7 +467,9 @@ void configurePoint(void)
 
 void configureInflate(void)
 {
-    int file = *delocCmdInt(1);
+    int ident = *delocCmdInt(1);
+    int file = -1; while (++file < sizeShare())
+    if (arrayShare(file,1)->ident == ident) break;
     enqueCmdInflate(file,enqueFilter,file);
 }
 

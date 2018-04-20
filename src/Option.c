@@ -27,6 +27,7 @@ int processFile(int *cpos, int dflt);
 int processAlter(int *cpos, int dflt);
 char *processName(int pos, int *name);
 void display(void);
+void focus(void);
 
 #define UNLOC \
 unlocPcsInt(sizePcsInt()-intpos); \
@@ -53,6 +54,8 @@ int processOption(void)
 		if (file < 0) {
 		thread = processInit(charpos);
 		DELOC(pos) return -pos;}
+		if (*arrayPipe(file,1) >= 0 && *arrayAble(file,1)) removeCmnProcesses(*arrayPipe(file,1));
+		else if (*arrayPipe(file,1) >= 0) insertCmnProcesses(*arrayPipe(file,1));
 		*arrayAble(file,1) ^= 1;
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,2,Literal,"-O",String,Scans); if (pos) {
@@ -63,11 +66,11 @@ int processOption(void)
 	    usePcsChar(); copyPcsCmdByte(sizePcsCmdByte(),pos,len+1);
 	    *enlocPcsCommand(1) = display;}
 		else if (alter < sizeAlter()) {
-		// TODO send optionAlter of alter+1
-		}
+		*enlocPcsCmdInt(1) = alter+1;
+		*enlocPcsCommand(1) = focus;}
 		else {
-		// TODO send optionAlter of 0
-		}
+		*enlocPcsCmdInt(1) = 0;
+		*enlocPcsCommand(1) = focus;}
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,1,String,Scans); if (pos) {
 		DELOC(pos) return pos;}

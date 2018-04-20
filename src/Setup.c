@@ -666,7 +666,7 @@ void updateContext(int sub)
 void updateDisplay(GLFWwindow *ptr)
 {
     if (ptr == displayHandle) return;
-    int sub = 0;
-    while (sub < sizeDisplay() && arrayDisplay(sub,1)->handle != ptr) sub += 1;
+    int sub = -1; while (++sub < sizeDisplay())
+    if (arrayDisplay(sub,1)->handle == ptr) break;
     updateContext(sub);
 }
