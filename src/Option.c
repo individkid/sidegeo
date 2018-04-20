@@ -25,6 +25,7 @@ int processInit(int pos);
 void processComplain(void);
 int processFile(int *cpos, int dflt);
 int processAlter(int *cpos, int dflt);
+char *processName(int pos, int *name);
 void display(void);
 
 #define UNLOC \
@@ -58,9 +59,7 @@ int processOption(void)
 		int cpos = charpos;
 		int alter = processAlter(&cpos,sizeAlter());
 		if (alter < 0) {
-	    int name = *enlocAlter(1) = sizePcsBuf();
-	    int len = lengthPcsChar(pos,0);
-	    usePcsChar(); copyPcsBuf(name,pos,len+1);
+		processName(pos,enlocAlter(1));
 	    usePcsChar(); copyPcsCmdByte(sizePcsCmdByte(),pos,len+1);
 	    *enlocPcsCommand(1) = display;}
 		else if (alter < sizeAlter()) {

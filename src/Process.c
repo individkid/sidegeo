@@ -184,11 +184,16 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
     return fd;
 }
 
+char *processName(int pos, int *name)
+{
+    int len = lengthPcsChar(pos,0);
+    *name = sizePcsBuf();
+    return (usePcsChar(), copyPcsBuf(*name,pos,len+1));
+}
+
 int processInit(int pos)
 {
-    int name = *enlocName(1) = sizePcsBuf();
-    int len = lengthPcsChar(pos,0);
-    char *filename = (usePcsChar(),copyPcsBuf(name,pos,len+1));
+    char *filename = processName(pos,enlocName(1));
     int thread = sizeFile();
     *enlocAble(1) = 1;
     *enlocIgnore(1) = 0;
