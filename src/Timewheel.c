@@ -20,7 +20,7 @@
 #include "portaudio.h"
 #include <sys/time.h>
 
-struct Region{ // for random access to circular buffer
+struct Region { // for random access to circular buffer
     void *ptr0;
     void *ptr1;
     ring_buffer_size_t siz0;
@@ -223,23 +223,24 @@ void startMetric(void)
     enlocArgBuf(metric->siz);
 }
 
-void startVariable(int sub, int num)
+void startVariable(int *sub, int num)
 {
-    int *var = arrayVariable(sub,1);
+    int *var = arrayVariable(*sub,num);
+    *sub += num;
     while (num) {
     *var = *castPack(*var);
     var += 1;
     num -= 1;}
 }
 
-void startNomial(int sub, struct Nomial *nom)
+void startNomial(int *sub, struct Nomial *nom)
 {
     startVariable(sub,nom->num1*1);
     startVariable(sub,nom->num2*2);
     startVariable(sub,nom->num3*3);
 }
 
-void startRatio(int sub, struct Ratio *rat)
+void startRatio(int *sub, struct Ratio *rat)
 {
     startNomial(sub,&rat->n);
     startNomial(sub,&rat->d);
@@ -254,9 +255,9 @@ void startState(void)
         state->map = 1;
         if (state->ctl == Sound || state->ctl == Shape) state->idx = *castPack(state->idx);
         int var = state->vsub;
-        startRatio(var,&state->upd);
-        startRatio(var,&state->dly);
-        startRatio(var,&state->sch);}
+        startRatio(&var,&state->upd);
+        startRatio(&var,&state->dly);
+        startRatio(&var,&state->sch);}
     state->run = !state->run;
     if (state->run) *scheduleTime(ofTime(getTime())) = sub;
 }

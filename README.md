@@ -45,13 +45,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Additive -- click fills in region over pierce point  
   * Subtractive -- click hollows out region under pierce point  
   * Refine -- click adds random plane through pierce point  
-  * Display -- click explains pierced plane facet polytope space  
-  * Tweak -- click tweaks plane possibly holding space fixed  
-  * Panel -- click opens panel to modify clicked items  
   * Execute -- click calls Lua function attached to facet  
-  * Move -- click moves pierced target to alternate display  
-  * Copy -- click copies pierced target to alternate display  
-  * Transform -- modify transform matrix for pierced target  
   * Mouse -- action of mouse motion in Transform mode  
     * Rotate -- tilt polytope(s)/plane around pierce point  
     * Translate -- slide polytope(s)/plane from pierce point  
@@ -66,21 +60,27 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
     * Polytope -- target is the pierced polytope  
     * Alternate -- target is planes in focused display  
     * Session -- target is all displayed polytopes  
+  * Transform -- modify transform matrix for pierced target  
+  * Move -- click moves pierced target to alternate display  
+  * Copy -- click copies pierced target to alternate display  
+  * Sample -- whether space fixed in Tweak mode  
+    * Symbolic -- classification of space does not change  
+    * Numeric -- configuration controls amount of change  
+  * Tweak -- click tweaks plane possibly holding space fixed  
   * Classify -- type of thing displayed in Display mode  
     * Vector -- display pierce point and coplane  
     * Graph -- display relation of facets  
     * Polyant -- display polyant representation  
     * Place -- display map from boundary to halfspaces  
-  * Sample -- whether space fixed in Tweak mode  
-    * Symbolic -- classification of space does not change  
-    * Numeric -- configuration controls amount of change  
+  * Display -- click explains pierced plane facet polytope space  
+  * Virtual -- whether cursor is captured or forwarded  
+    * Surface -- cursor controls facet in polytope  
+    * Content -- cursor controls decoration on facet  
   * Widget -- which panel opened by Panel  
     * Topology -- open panel for classifications to sample  
     * Decorate -- open panel for bitmap, screen saver, rfb  
     * System -- open panel for stocks flows and attachments  
-  * Virtual -- whether cursor is captured or forwarded  
-    * Surface -- cursor controls facet in polytope  
-    * Content -- cursor controls decoration on facet  
+  * Panel -- click opens panel to modify clicked items  
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. Incorrectly formatted commands are treated as intervening text. Correctly formatted commands with incorrect arguments from files cause warnings the first few times, then cause the remainder of the file to be ignored. Incorrect arguments on the command line cause warnings only. Command formats are specified by lists of the following subexpressions.
 

@@ -68,14 +68,15 @@ typedef void (*Command)(void);
 typedef int (*Function)(int,int);
 
 enum Menu { // lines in the menu; select with enter key
-    Sculpts,Additive,Subtractive,Refine,Describe,Tweak,Panel,Execute,Move,Copy,Transform,
+    Sculpts,Additive,Subtractive,Refine,Execute,
     Mouses,Rotate,Translate,Look,
     Rollers,Cylinder,Clock,Scale,Drive,
     Targets,Plane,Polytope,Alternate,Session,
-    Classifies,Vector,Graph,Polyant,Place,
-    Samples,Symbolic,Numeric,
-    Widgets,Topology,Decorate,System,
+    Transform,Move,Copy,
+    Samples,Symbolic,Numeric,Tweak,
+    Classifies,Vector,Graph,Polyant,Place,Describe,
     Virtuals,Surface,Content,
+    Widgets,Topology,Decorate,System,Panel,
     Menus};
 enum Mode { // menu and menus; navigate and enter by keys
     Sculpt, // top level
@@ -441,7 +442,7 @@ int rescan##THD(const char *pattern, int index, int accum) \
     unloc##THD##Char(len-pos1); *array##THD##Char(pos0+pos1,1) = 0; \
     int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2>=0) return pos2; \
     break;} \
-    case (Literal): { /*TODO1 skip whitespace before strncmp*/ \
+    case (Literal): { \
     int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
     int pos1 = strlen(match.str), ret = strncmp(pattern+pos0,match.str,pos1); if (ret == 0) { \
     int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2>=0) return pos2;} \
