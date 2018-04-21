@@ -448,6 +448,8 @@ void enqueSwap(void)
 
 void enqueDishader(void) // TODO1 add and use running and pending fields
 {
+    if (glfwGetTime() < RENDER_DELAY) return;
+    glfwSetTime(0.0);
     for (int i = 0; i < sizeDisplay(); i++)
     if (arrayDisplay(i,1)->handle) {
     *enlocCmdInt(1) = i; enqueCommand(enqueSwap);}
@@ -456,6 +458,8 @@ void enqueDishader(void) // TODO1 add and use running and pending fields
 void enquePershader(void) // TODO1 add and use running and pending fields
 {
     if (layer != 0) exitErrstr("enque too layer\n");
+    if (glfwGetTime() < RENDER_DELAY) return;
+    glfwSetTime(0.0);
     updateContext(0);
     for (int i = 0; i < sizeFile(); i++)
     enqueShader(pershader,i,0,renderPierce);

@@ -50,25 +50,6 @@ long long getTime(void)
     return (tv.tv_sec-timeBase)*MICRO_SECONDS+tv.tv_usec;
 }
 
-void startCount(void)
-{
-    while (sourceCount < sizeStream()) {
-        int key = arrayStream(sourceCount,1)->idt;
-        if (insertPack(key) < 0) exitErrstr("stream too pack\n");
-        *castPack(key) = sourceCount;
-        sourceCount += 1;}
-    while (metricCount < sizeMetric()) {
-        int key = arrayMetric(metricCount,1)->idt;
-        if (insertPack(key) < 0) exitErrstr("metric too pack\n");
-        *castPack(key) = metricCount;
-        metricCount += 1;}
-    while (stateCount < sizeState()) {
-        int key = arrayState(stateCount,1)->idt;
-        if (insertPack(key) < 0) exitErrstr("state too pack\n");
-        *castPack(key) = stateCount;
-        stateCount += 1;}
-}
-
 int audioBuffer(struct Region *region, int sub)
 {
     if (region->siz0 < sub+1) return *((int *)region->ptr1+sub-region->siz0);
@@ -159,7 +140,7 @@ void audioStop(void)
     if (Pa_AbortStream(stream->ptr) != paNoError) exitErrstr("stream too abort\n");}
 }
 
-void audioRestart(void)
+void audioStart(void)
 {
     for (int i = 0; i < sizeStream(); i++) {
     struct Stream *stream = arrayStream(i,1);
@@ -199,6 +180,25 @@ void audioOpen(int sub, struct Stream *stream)
         != paNoError) exitErrstr("stream too open\n");
 }
 
+void startCount(void)
+{
+    while (sourceCount < sizeStream()) {
+        int key = arrayStream(sourceCount,1)->idt;
+        if (insertPack(key) < 0) exitErrstr("stream too pack\n");
+        *castPack(key) = sourceCount;
+        sourceCount += 1;}
+    while (metricCount < sizeMetric()) {
+        int key = arrayMetric(metricCount,1)->idt;
+        if (insertPack(key) < 0) exitErrstr("metric too pack\n");
+        *castPack(key) = metricCount;
+        metricCount += 1;}
+    while (stateCount < sizeState()) {
+        int key = arrayState(stateCount,1)->idt;
+        if (insertPack(key) < 0) exitErrstr("state too pack\n");
+        *castPack(key) = stateCount;
+        stateCount += 1;}
+}
+
 void startStream(void)
 {
     startCount();
@@ -207,7 +207,7 @@ void startStream(void)
     if (!stream->map) {
         audioStop();
         audioOpen(sub,stream);
-        audioRestart();
+        audioStart();
         stream->map = 1;}
     stream->run = !stream->run;
     if (stream->run) {if (Pa_StartStream(stream->ptr) != paNoError) exitErrstr("stream too start\n");}
@@ -280,7 +280,7 @@ void pipeWrite(int wave, int sub, Myfloat value)
     if (siz > 0) {if (PaUtil_WriteRingBuffer(channel,&value,1) != paNoError) exitErrstr("stream too write\n");}
 }
 
-void requestMetric(int index, int response)
+void metricRead(int index, int response)
 {
     struct Metric *metric = arrayMetric(index,1);
     int to = sizeTwCmdInt();
@@ -290,7 +290,7 @@ void requestMetric(int index, int response)
     *enlocTwCommand(1) = metric->cmd;
 }
 
-void presentMetric(int index, Myfloat value)
+void metricWrite(int index, Myfloat value)
 {
     struct Metric *metric = arrayMetric(index,1);
     int to = sizeTwCmdInt();
@@ -312,7 +312,7 @@ Myfloat amount(int sub)
     struct State *state = arrayState(sub,1);
     if (state->typ == Read) {
     if (state->ctl == Sound) pipeRead(state->idx,state->sub,&state->amt);
-    if (state->ctl == Shape) requestMetric(state->idx,sub);}
+    if (state->ctl == Shape) metricRead(state->idx,sub);}
     return state->amt;
 }
 
@@ -353,6 +353,7 @@ double evaluate(int *csub, int *vsub, struct Ratio *ratio)
 
 void timewheelBefore(void)
 {
+    if (sizeof(paFloat32) != sizeof(Myfloat)) exitErrstr("pafloat too sizeof\n");
     struct timeval tv;
     if (gettimeofday(&tv,NULL) < 0) exitErrstr("time too get\n");
     timeBase = tv.tv_sec;
@@ -375,7 +376,7 @@ void timewheelConsume(void *arg)
         if (state->typ == Write) {
         if (change->map) exitErrstr("change too map\n");
         if (state->ctl == Sound) pipeWrite(state->idx,state->sub,state->amt);
-        if (state->ctl == Shape) presentMetric(state->idx,state->amt);}}
+        if (state->ctl == Shape) metricWrite(state->idx,state->amt);}}
 }
 
 long long timewheelDelay(void)
@@ -409,7 +410,7 @@ void timewheelProduce(void *arg)
         state->amt = change.val;
         if (state->typ == Write) {
         if (state->ctl == Sound) pipeWrite(state->idx,state->sub,state->amt);
-        if (state->ctl == Shape) presentMetric(state->idx,state->amt);}}
+        if (state->ctl == Shape) metricWrite(state->idx,state->amt);}}
 }
 
 void timewheelAfter(void)

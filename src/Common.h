@@ -59,7 +59,8 @@ EXTERNCBEGIN
 #define INVALID0 1.0e38
 #define INVALID1 1.0e37
 #define PORTAUDIO_SIZE (1<<10)
-#define SAMPLE_RATE (44100)
+#define SAMPLE_RATE 44100
+#define RENDER_DELAY 0.01
 
 // if char is unsigned and GLchar is signed
 typedef unsigned Myuint;
@@ -328,7 +329,7 @@ enum Control {
     Shape};
 struct State {
     int idt; // how other states will refer to this one
-    int map; // indices are not packed
+    int map; // indices are packed
     int run; // whether to schedule toggled by control
     enum Control ctl; // none stream metric
     enum Type typ; // read or write stream or metric
@@ -344,12 +345,12 @@ struct State {
 };
 struct Stream { // for opening and maintaining stream
     int idt; // how other states will refer to this one
-    int map; // indices are not packed
+    int map; // indices are packed
     int run; // callback is scheduled
     int otp; // number of output channels
     int inp; // number of input channels
     int siz; // size of ring buffer per channel
-    int num; // intrnal use total channels
+    int num; // internal use total channels
     int loc; // internal use stream buffer size
     void *ptr; // internal use stream handle
 };
@@ -364,14 +365,6 @@ struct Change {
     int sub; // index of stock for value
     int map; // whether sub is packed or not
 };
-struct Header { // information about data appended to files
-    int siz; // number of bytes appended
-    int pos; // filepos indicating when to append sideband
-    int pid; // which process sideband belongs to
-    time_t tim; // when process pid started
-    int neg; // whether this is sideband data
-    int idx; // which fifo to append to
-};
 
 enum Request { // command selector for requests from lua scripts
     Obstruct, // which kinds of faces intervene between two vertices
@@ -383,6 +376,14 @@ struct Response {
     int nint,nfloat,nbyte;
 };
 
+struct Header { // information about data appended to files
+    int siz; // number of bytes appended
+    int pos; // filepos indicating when to append sideband
+    int pid; // which process sideband belongs to
+    time_t tim; // when process pid started
+    int neg; // whether this is sideband data
+    int idx; // which fifo to append to
+};
 enum Scan {
     Int,
     Float,

@@ -1,3 +1,5 @@
+all : clean build
+
 src/%.cpp : src/%.fl
 	cp $< $@
 
