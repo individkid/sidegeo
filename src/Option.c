@@ -73,6 +73,7 @@ int processOption(void)
 		*enlocPcsCommand(1) = focus;}
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,1,String,Scans); if (pos>=0) {
+		processComplain();
 		DELOC(pos) return pos;}
     UNLOC return 0;
 }
