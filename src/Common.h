@@ -464,7 +464,7 @@ int rescan##THD(const char *pattern, int index, int accum) \
     int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2 < 0) break; \
     return pos2;} \
     case (White): { \
-    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
+    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; if (pos0 == 0) break; \
     int pos2 = rescan##THD(pattern+pos0,index+1,accum+pos0); if (pos2 < 0) break; \
     return pos2;} \
     case (Here): { \
