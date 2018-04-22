@@ -376,12 +376,15 @@ struct Response {
     int nint,nfloat,nbyte;
 };
 
+enum Band { // whether command is recorder
+    Main,
+    Side};
 struct Header { // information about data appended to files
     int siz; // number of bytes appended
     int pos; // filepos indicating when to append sideband
     int pid; // which process sideband belongs to
     time_t tim; // when process pid started
-    int neg; // whether this is sideband data
+    enum Band neg; // whether this is sideband data
     int idx; // which fifo to append to
 };
 enum Scan {
@@ -859,13 +862,15 @@ DECLARE_META(Remain,char) // configuration pattern
 DECLARE_LOCAL(Complete,char) // option pattern
 DECLARE_LOCAL(PcsBuf,char) // string buffer
 DECLARE_TREE(Ident,int,int) // buffer to plane index
-DECLARE_LOCAL(Count,int) // per file number of planes
 DECLARE_LOCAL(Name,int) // file to buffer index
 DECLARE_LOCAL(Alter,int) // window to buffer index
 
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(Header,struct Header) // staged fifo headers
 DECLARE_LOCAL(Body,char) // staged fifo data
+
+DECLARE_LOCAL(Skip,int) // per file skip next command
+DECLARE_LOCAL(Count,int) // per file number of planes
 DECLARE_LOCAL(Able,int) // toggle disable
 DECLARE_LOCAL(File,int) // file handles
 DECLARE_LOCAL(Side,int) // sideband handles

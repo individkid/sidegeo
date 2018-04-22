@@ -77,8 +77,9 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
         if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
         int retval = read(hlp->side,&hlp->header,sizeof(hlp->header));
         if (retval < 0) errorinj(hlp,env);
-        if (retval < sizeof(hlp->header)) hlp->header.pid = 0; else hlp->sidepos += sizeof(hlp->header);}
-    if (hlp->header.pid == getpid() && hlp->header.tim == pidtime && hlp->header.pos == hlp->filepos+i) {
+        if (retval < sizeof(hlp->header)) hlp->header.pid = 0; else hlp->sidepos += sizeof(hlp->header);
+        if (hlp->header.pid != getpid() || hlp->header.tim != pidtime) hlp->header.pid = 0;}
+    if (hlp->header.pid != 0 && hlp->header.pos == hlp->filepos+i) {
         char buf[hlp->header.siz];
         if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
         if (read(hlp->side,buf,hlp->header.siz) != hlp->header.siz) errorinj(hlp,env);
@@ -149,16 +150,14 @@ void *processHelper(void *arg)
         if (read(hlp->fifo,&header,sizeof(header)) != sizeof(header)) errorinj(hlp,env);
         char buf[header.siz];
         if (read(hlp->fifo,buf,header.siz) != header.siz) errorinj(hlp,env);
-        if (header.neg) {
+        if (header.neg == Side) {
         header.pos = hlp->filepos;
         if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
         if (write(hlp->side,&header,sizeof(header)) != sizeof(header)) errorinj(hlp,env);
         if (write(hlp->side,buf,header.siz) != header.siz) errorinj(hlp,env);}
         else {
         if (lseek(hlp->file,hlp->filepos,SEEK_SET) < 0) errorinj(hlp,env);
-        if (hlp->filepos == 0 && write(hlp->file,"--",2) != 2) errorinj(hlp,env);
-        if (write(hlp->file,buf,header.siz) != header.siz) errorinj(hlp,env);
-        if (write(hlp->file,"\n--",3) != 3) errorinj(hlp,env);}}
+        if (write(hlp->file,buf,header.siz) != header.siz) errorinj(hlp,env);}}
     if (retval == 0) {
         if (setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}
     if (retval < 0) {
@@ -195,6 +194,8 @@ int processInit(int pos)
 {
     char *filename = processName(pos,enlocName(1));
     int thread = sizeFile();
+    *enlocSkip(1) = 0;
+    *enlocCount(1) = 0;
     *enlocAble(1) = 1;
     *enlocIgnore(1) = 0;
     *enlocFile(1) = -1;

@@ -116,7 +116,7 @@ For example, configureFill from Interface.c is scheduled by processConfigure in 
   * --bind binds Lua function to function key in console  
   * --yield allow other files and command line options to proceed  
   * --call takes Lua function and arguments to start  
-  * --suppress in sideband to append already applied command  
+  * --skip in sideband to append already applied command  
   * --side enque command for debug and internal use  
 
 The --call --yield --inject -o commands synchronize actions. To wait for a --call Lua script to complete before proceeding, issue --inject-o_ --callLuaScript --yield. The --inject disables the current file after --yield allows injected options to be executed. The --call kicks off the Lua script. A -o injected by the Lua script will be after the one injected by the --inject, because -o is processed by the same thread as the --inject.

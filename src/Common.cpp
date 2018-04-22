@@ -290,17 +290,19 @@ DEFINE_LOCAL(PcsInt,int)
 DEFINE_LOCAL(PcsFloat,Myfloat)
 DEFINE_LOCAL(PcsChar,char)
 DEFINE_LOCAL(PcsScan,struct Match)
-DEFINE_META(Remain,char) // configuration pattern
-DEFINE_LOCAL(Complete,char) // option pattern
+DEFINE_META(Remain,char)
+DEFINE_LOCAL(Complete,char)
 DEFINE_LOCAL(PcsBuf,char)
 DEFINE_TREE(Ident,int,int)
-DEFINE_LOCAL(Count,int)
 DEFINE_LOCAL(Name,int)
 DEFINE_LOCAL(Alter,int)
 
 DEFINE_LOCAL(Stage,char)
 DEFINE_LOCAL(Header,struct Header)
 DEFINE_LOCAL(Body,char)
+
+DEFINE_LOCAL(Skip,int)
+DEFINE_LOCAL(Count,int)
 DEFINE_LOCAL(Able,int)
 DEFINE_LOCAL(File,int)
 DEFINE_LOCAL(Side,int)
