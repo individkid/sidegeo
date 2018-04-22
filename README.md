@@ -114,6 +114,7 @@ For example, configureFill from Interface.c is scheduled by processConfigure in 
   * --bind binds Lua function to function key in console  
   * --yield allow other files and command line options to proceed  
   * --call takes Lua function and arguments to start  
+  * --nop may be used to terminate multiline commands at eof  
   * --skip in sideband to append already applied command  
   * --side enque command for debug and internal use  
 

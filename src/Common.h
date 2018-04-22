@@ -392,6 +392,11 @@ enum Scan {
     Float,
     String,
     Literal,
+    White,
+    Here,
+    Retry,
+    Fail,
+    Goto,
     Loop,
     Cond,
     Scans};
@@ -424,8 +429,14 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
 }
 
 #define DECLARE_SCAN(THD) \
+extern int intcheck##THD; \
+extern int floatcheck##THD; \
+extern int charcheck##THD; \
 int scan##THD(const char *pattern, ...);
 #define DEFINE_SCAN(THD) \
+int intcheck##THD = 0; \
+int floatcheck##THD = 0; \
+int charcheck##THD = 0; \
 int rescan##THD(const char *pattern, int index, int accum) \
 { \
     if (index == size##THD##Scan()) return accum; \
@@ -444,7 +455,7 @@ int rescan##THD(const char *pattern, int index, int accum) \
     return pos2;} \
     case (String): { \
     int len = strlen(pattern), pos0 = size##THD##Char(); \
-    int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len+1),&pos1); if (ret != 2) break; \
+    int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len+1),&pos1); if (ret != 2 || !*array##THD##Char(pos0,1)) break; \
     unloc##THD##Char(len-pos1); *array##THD##Char(pos0+pos1,1) = 0; \
     int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2 < 0) break; \
     return pos2;} \
@@ -452,6 +463,29 @@ int rescan##THD(const char *pattern, int index, int accum) \
     int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
     int pos1 = strlen(match.str), ret = strncmp(pattern+pos0,match.str,pos1); if (ret != 0) break; \
     int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2 < 0) break; \
+    return pos2;} \
+    case (White): { \
+    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
+    int pos2 = rescan##THD(pattern+pos0,index+1,accum+pos0); if (pos2 < 0) break; \
+    return pos2;} \
+    case (Here): { \
+    intcheck##THD = intpos; \
+    floatcheck##THD = floatpos; \
+    charcheck##THD = charpos; \
+    int pos2 = rescan##THD(pattern,index+1,accum); if (pos2 < 0) break; \
+    return pos2;} \
+    case (Retry): { \
+    unloc##THD##Int(size##THD##Int()-intcheck##THD); \
+    unloc##THD##Float(size##THD##Float()-floatcheck##THD); \
+    unloc##THD##Char(size##THD##Char()-charcheck##THD); \
+    intpos = size##THD##Int(); \
+    floatpos = size##THD##Float(); \
+    charpos = size##THD##Char(); \
+    int pos2 = rescan##THD(pattern,index+1,accum); if (pos2 < 0) break; \
+    return pos2;} \
+    case (Fail): break; \
+    case (Goto): { \
+    int pos2 = rescan##THD(pattern,match.idx,accum); if (pos2 < 0) break; \
     return pos2;} \
     case (Loop): { \
     int pos1 = 0; for (int i = 0; i < match.idx; i++) { \
@@ -486,6 +520,8 @@ int scan##THD(const char *pattern, int len, ...) \
     switch (match.tag) { \
     case (Int): case (Float): case (String): break; \
     case (Literal): match.str = va_arg(args,const char *); break; \
+    case (White): case (Here): case (Retry): case (Fail): break; \
+    case (Goto): match.idx = index + va_arg(args,int); break; \
     case (Loop): match.idx = va_arg(args,int); break; \
     case (Cond): match.idx = index + va_arg(args,int); \
     match.alt = index + va_arg(args,int); \

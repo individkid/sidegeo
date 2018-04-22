@@ -162,7 +162,7 @@ int processConfigure(int index)
 { // given Remain, <0 yield, 0 wait, >0 continue
 	int len = sizeRemain(index); *enlocRemain(index,1) = 0; char *pattern = arrayRemain(index,0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
-	int pos = scanPcs(pattern,11,Literal,"--plane",String,Int,Float,Float,Float,Scans); if (pos) {
+	int pos = scanPcs(pattern,11,Literal,"--plane",String,Int,Float,Float,Float,Scans); if (pos>=0) {
 		SKIP
 		int cpos = charpos;
 		int plane = processPlane(&cpos,index);
@@ -173,58 +173,62 @@ int processConfigure(int index)
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePlane;
 		DELOC}
-	pos = scanPcs(pattern,4,Literal,"--point",Float,Float,Float,Scans); if (pos) { // TODO add optional name
+	pos = scanPcs(pattern,4,Literal,"--point",Float,Float,Float,Scans); if (pos>=0) { // TODO add optional name
 		SKIP
 		*enlocPcsCmdInt(1) = index;
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePoint;
 		DELOC}
-	pos = scanPcs(pattern,1,Literal,"--inflate",Scans); if (pos) {
+	pos = scanPcs(pattern,1,Literal,"--inflate",Scans); if (pos>=0) {
 		SKIP
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureInflate;
 		DELOC}
-	pos = scanPcs(pattern,8,Literal,"--fill",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos) {
+	pos = scanPcs(pattern,8,Literal,"--fill",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos>=0) {
 		SKIP
 		*enlocPcsCmdInt(1) = index;
 		processPolyant(intpos);
 		*enlocPcsCmdCmd(1) = configureFill;
 		DELOC}
-	pos = scanPcs(pattern,1,Literal,"--hollow",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos) {
+	pos = scanPcs(pattern,1,Literal,"--hollow",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos>=0) {
 		SKIP
 		*enlocPcsCmdInt(1) = index;
 		processPolyant(intpos);
 		*enlocPcsCmdCmd(1) = configureHollow;
 		DELOC}
-	pos = scanPcs(pattern,3,Literal,"--matrix",Loop,16,Float,Scans); if (pos) {
+	pos = scanPcs(pattern,3,Literal,"--matrix",Loop,16,Float,Scans); if (pos>=0) {
 		SKIP
 		*enlocPcsCmdInt(1) = index;
 		usePcsFloat(); copyPcsCmdFloat(sizePcsCmdFloat(),floatpos,16);
 		*enlocPcsCommand(1) = configureMatrix;
 		DELOC}
-	pos = scanPcs(pattern,2,Literal,"--inject",String,Scans); if (pos) {
+	pos = scanPcs(pattern,2,Literal,"--inject",String,Scans); if (pos>=0) {
 		SKIP
 		usePcsChar(); copyOption(sizeOption(),charpos,sizePcsChar()-charpos);
 		*enlocPcsRequest(1) = '\n';
 		DELOC}
-	pos = scanPcs(pattern,1,Literal,"--yield",Scans); if (pos) {
+	pos = scanPcs(pattern,1,Literal,"--yield",Scans); if (pos>=0) {
 		SKIP
 		YIELD}
-	pos = scanPcs(pattern,2,Literal,"--call",String,Scans); if (pos) {
+	pos = scanPcs(pattern,10,Literal,"--call",Here,Cond,2,4,Literal,"--",Cond,2,5,White,Retry,String,Goto,-7,Retry,Scans); if (pos>=0) {
 		SKIP
+		for (int i = charpos; i < sizePcsChar()-1; i++)
+		if (*arrayPcsChar(i,1) == 0) *arrayPcsChar(i,1) = ' ';
 		usePcsChar(); copyPcsRequest(sizePcsRequest(),charpos,sizePcsChar()-charpos);
 		*enlocPcsRequest(1) = 0;
 		DELOC}
-	pos = scanPcs(pattern,1,Literal,"--yield",Scans); if (pos) {
+	pos = scanPcs(pattern,1,Literal,"--nop",Scans); if (pos>=0) {
+		DELOC}
+	pos = scanPcs(pattern,1,Literal,"--yield",Scans); if (pos>=0) {
 		SKIP
 		*arraySkip(index,1) = 1;
 		DELOC}
-	pos = scanPcs(pattern,3,Literal,"--side",Literal,"responseProceed",Int,Scans); if (pos) {
+	pos = scanPcs(pattern,3,Literal,"--side",Literal,"responseProceed",Int,Scans); if (pos>=0) {
 		SKIP
 		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // layer
 		*enlocPcsCommand(1) = responseProceed;
 		DELOC}
-	pos = scanPcs(pattern,1,String,Scans); if (pos) {
+	pos = scanPcs(pattern,4,Cond,2,3,Literal,"--",Fail,String,Scans); if (pos>=0) {
 		DELOC}
     WAIT
 }
