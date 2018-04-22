@@ -46,7 +46,7 @@ int processOption(void)
 		// TODO2 msgsndPcsOutput usage
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,1,Literal,"-H",Scans); if (pos) {
-		// TODO2 msgsndPcsOutput readme
+		// TODO2 run tests
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,2,Literal,"-o",String,Scans); if (pos) {
 		int cpos = charpos;

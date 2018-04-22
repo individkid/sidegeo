@@ -30,15 +30,13 @@ Built in tests include the following, where "linear" refers to any linear space 
 The main display window is a hub from which parts or collections of polytopes can be moved to various alternate displays. But from alternate displays, things can only move back to the main display. The following command line arguments are processed in order.
 
   * -h print usage  
-  * -H print readme  
+  * -H run tests  
   * -o \<file> open or toggle polytope file  
   * -O \<name> open or select alternate display  
   * -a \<config> append to last file  
   * -A \<file> change last file to indicated  
   * -s \<name> serve remote framebuffer clients  
   * -S \<file> serve sculpt command clients  
-  * -r run sanity check  
-  * -R run thorough tests  
 
 Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Execute mode. The -a option opens a display over the main display with same size and position. In Panel mode, a left mouse click over the main, or an alternate display, opens a widget panel with same size and position.
 
