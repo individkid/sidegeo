@@ -454,10 +454,9 @@ int rescan##THD(const char *pattern, int index, int accum) \
     int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2 < 0) break; \
     return pos2;} \
     case (String): { \
-    int len = strlen(pattern), pos0 = size##THD##Char(); \
-    int pos1 = 0, ret = sscanf(pattern," %s%n",enloc##THD##Char(len+1),&pos1); if (ret != 2 || !*array##THD##Char(pos0,1)) break; \
-    unloc##THD##Char(len-pos1); *array##THD##Char(pos0+pos1,1) = 0; \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2 < 0) break; \
+    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
+    int pos1 = 0; while (pattern[pos0+pos1] && !isspace(pattern[pos0+pos1])) pos1 += 1; if (pos1 == 0) break; \
+    int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2 < 0) break; \
     return pos2;} \
     case (Literal): { \
     int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
