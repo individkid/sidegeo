@@ -490,6 +490,13 @@ void configureHollow(void)
     DEARG_CLICK(Hollow)
 }
 
+void configureMatrix(void)
+{
+    int plane = *delocCmdInt(1);
+    Myfloat matrix[16] = {0}; for (int i = 0; i < 16; i++) matrix[i] = *delocCmdFloat(1);
+    // TODO2 transform indicated file
+}
+
 #define MOVE_COPY \
     int setspoke = 1<<shift; \
     int clearspoke = ~setspoke; \

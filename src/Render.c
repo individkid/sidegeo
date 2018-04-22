@@ -446,7 +446,7 @@ void enqueSwap(void)
     enqueShader(dishader,i,context,0);
 }
 
-void enqueDishader(void) // TODO1 add and use running and pending fields
+void enqueDishader(void)
 {
     if (glfwGetTime() < RENDER_DELAY) return;
     glfwSetTime(0.0);
@@ -455,7 +455,7 @@ void enqueDishader(void) // TODO1 add and use running and pending fields
     *enlocCmdInt(1) = i; enqueCommand(enqueSwap);}
 }
 
-void enquePershader(void) // TODO1 add and use running and pending fields
+void enquePershader(void)
 {
     if (layer != 0) exitErrstr("enque too layer\n");
     if (glfwGetTime() < RENDER_DELAY) return;

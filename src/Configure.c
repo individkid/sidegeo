@@ -27,6 +27,7 @@ void configurePoint(void);
 void configureFill(void);
 void configureHollow(void);
 void configureInflate(void);
+void configureMatrix(void);
 void responseProceed(void);
 
 int processIgnore(int index, int noneg);
@@ -195,17 +196,23 @@ int processConfigure(int index)
 		processPolyant(intpos);
 		*enlocPcsCmdCmd(1) = configureHollow;
 		DELOC}
-	pos = scanPcs(pattern,1,Literal,"--inject",Scans); if (pos) {
+	pos = scanPcs(pattern,3,Literal,"--matrix",Loop,16,Float,Scans); if (pos) {
 		SKIP
-		int len = strlen(pattern+pos);
-		strncpy(enlocOption(len),pattern+pos,len); *enlocOption(1) = '\n';
+		*enlocPcsCmdInt(1) = index;
+		usePcsFloat(); copyPcsCmdFloat(sizePcsCmdFloat(),floatpos,16);
+		*enlocPcsCommand(1) = configureMatrix;
+		DELOC}
+	pos = scanPcs(pattern,2,Literal,"--inject",String,Scans); if (pos) {
+		SKIP
+		usePcsChar(); copyOption(sizeOption(),charpos,sizePcsChar()-charpos);
+		*enlocPcsRequest(1) = '\n';
 		DELOC}
 	pos = scanPcs(pattern,1,Literal,"--yield",Scans); if (pos) {
 		SKIP
 		YIELD}
 	pos = scanPcs(pattern,2,Literal,"--call",String,Scans); if (pos) {
 		SKIP
-		copyPcsRequest(sizePcsRequest(),charpos,sizePcsChar()-charpos);
+		usePcsChar(); copyPcsRequest(sizePcsRequest(),charpos,sizePcsChar()-charpos);
 		*enlocPcsRequest(1) = 0;
 		DELOC}
 	pos = scanPcs(pattern,1,Literal,"--yield",Scans); if (pos) {
