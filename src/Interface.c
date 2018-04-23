@@ -260,13 +260,13 @@ enum Action manipulateClick(int state)
     Myfloat *vec = dndateBuffer(slot,PlaneBuf,0,1); // base plane is first
     int *ver = dndateBuffer(slot,VersorBuf,0,1);
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
-    *enlocCmdConfiguree(1) = 0;
+    *enlocCmdConfiguree(1) = Main;
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--plane %d %d,",-1,plane,ver[0]);
     for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,vec[i]);
     msgstrCmdConfigure("",'\n');
     // sideband msgstr --side responseProceed and wait
-    *enlocCmdConfiguree(1) = 1;
+    *enlocCmdConfiguree(1) = Side;
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--side responseProceed %d",'\n',layer);
     *enlocReint(layer,1) = 0;
@@ -315,7 +315,7 @@ enum Action sculptClick(int state)
     enqueCmdLocate(file,plane,sizeReint(layer),ptrReint(layer),responseLists,layer);
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
-    *enlocCmdConfiguree(1) = 0;
+    *enlocCmdConfiguree(1) = Main;
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);
@@ -492,9 +492,18 @@ void configureHollow(void)
 
 void configureMatrix(void)
 {
-    int plane = *delocCmdInt(1);
+    int file = *delocCmdInt(1);
     Myfloat matrix[16] = {0}; for (int i = 0; i < 16; i++) matrix[i] = *delocCmdFloat(1);
-    // TODO2 transform indicated file
+    // upon open transform polytope, save affineMat in polytope shared struct
+    // upon close transform polytope, send side:--skip main:--matrix of changes since open transform polytope.
+    // upon read of --matrix not preceded by --skip, apply change to every plane of polytope in every display.
+    enum Menu menu = mode[Target]; int qpos = qPos;
+    mode[Target] = Polytope; qPos = file; target();
+    timesmat(affineMat,matrix,4);
+    for (int i = 0; i < sizeDisplay(); i++)
+    for (int j = 0; j < sizeDisplayPoly(i); j++)
+    updateAffine(arrayDisplayPoly(i,j,1));
+    mode[Target] = menu; qPos = qpos; target();
 }
 
 #define MOVE_COPY \

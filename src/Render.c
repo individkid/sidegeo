@@ -440,9 +440,9 @@ void enqueSwap(void)
     updateContext(context);
     if (renderSwap > 0 || renderClear > 0) {
     *enlocCmdInt(1) = context; deferCommand(enqueSwap); return;}
-    renderSwap = sizeFile();
+    renderSwap = sizeShare();
     renderClear = 1;
-    for (int i = 0; i < sizeFile(); i++)
+    for (int i = 0; i < sizeShare(); i++)
     enqueShader(dishader,i,context,0);
 }
 
@@ -461,7 +461,7 @@ void enquePershader(void)
     if (glfwGetTime() < RENDER_DELAY) return;
     glfwSetTime(0.0);
     updateContext(0);
-    for (int i = 0; i < sizeFile(); i++)
+    for (int i = 0; i < sizeShare(); i++)
     enqueShader(pershader,i,0,renderPierce);
 }
 

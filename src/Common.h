@@ -281,6 +281,7 @@ struct File {
 };
 struct Share { // per file state shared across displays
     int name;
+    int ident; // index used by process thread, or pool key
     Myfloat tweak; // from --configure
     int pending; // number of planes to be added
     int complete; // number of planes added
@@ -290,7 +291,7 @@ struct Share { // per file state shared across displays
     int points; // number of points per display
     int client[Datas]; // sometimes client data is shared between displays
     enum Usage usage; // manipulated single plane or file of planes
-    int ident; // index used by process thread, or pool key
+    Myfloat saved[16]; // affineMat when mode changed to Polytope
 };
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers]; // uniforms used by program
@@ -715,7 +716,7 @@ DECLARE_FDSET(CmnProcesses,int)
 DECLARE_STAGE(CmnOption,char)
 DECLARE_STAGE(CmnConfigure,char)
 DECLARE_STAGE(CmnConfigurer,int)
-DECLARE_STAGE(CmnConfiguree,int)
+DECLARE_STAGE(CmnConfiguree,enum Band)
 
 DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,struct Proto)
@@ -777,7 +778,7 @@ DECLARE_SOURCE(CmdProcesses)
 DECLARE_STAGE(CmdOption,char)
 DECLARE_STAGE(CmdConfigure,char)
 DECLARE_STAGE(CmdConfigurer,int)
-DECLARE_STAGE(CmdConfiguree,int)
+DECLARE_STAGE(CmdConfiguree,enum Band)
 
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,struct Proto)
@@ -874,7 +875,7 @@ DECLARE_DEST(Processes)
 DECLARE_STAGE(Option,char)
 DECLARE_STAGE(Configure,char)
 DECLARE_EXTRA(Configurer,int)
-DECLARE_EXTRA(Configuree,int)
+DECLARE_EXTRA(Configuree,enum Band)
 
 DECLARE_SOURCE(PcsOutputs)
 DECLARE_STAGE(PcsOutput,char)

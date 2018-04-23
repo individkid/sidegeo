@@ -93,9 +93,9 @@ void leftRefine(void)
     tweakvec(v,1.0,1.0,3);
     int versor;
     basearrow(u,v,&versor,basisMat,3);
-    *enlocConfiguree(1) = 0;
-    *enlocConfigurer(1) = qPos;
-    msgstrCmdConfigure("plane _ %d %f %f %f",'\n',versor,u[0],u[1],u[2]);
+    *enlocCmdConfiguree(1) = Main;
+    *enlocCmdConfigurer(1) = qPos;
+    msgstrCmdConfigure("--plane _ %d %f %f %f",'\n',versor,u[0],u[1],u[2]);
 }
 
 void leftTransform(void)
@@ -104,22 +104,35 @@ void leftTransform(void)
     pPoint = pPos; qPoint = qPos;
     for (int i = 0; i < 16; i++) displayMata[i] = affineMat[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
-    if (mode[Target] == Plane) {
+    SWITCH(mode[Target],Plane) {
     rPoint = openSlot();
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;
     *enlocCmdInt(1) = rPoint;
     enqueMachine(transformClick);}
+    CASE(Polytope) copymat(arrayShare(qPoint,1)->saved,affineMat,4);
+    DEFAULT()
 }
 
 void leftManipulate(void)
 {
-    // TODO2 in Target Polytope mode msgstrConfigure of --matrix
-    if (mode[Target] == Plane) {
+    SWITCH(mode[Target],Plane) {
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;
     *enlocCmdInt(1) = rPoint;
     enqueMachine(manipulateClick);}
+    CASE(Polytope) {
+    Myfloat matrix[16];
+    timesmat(invmat(copymat(matrix,arrayShare(qPoint,1)->saved,4),4),affineMat,4);
+    *enlocCmdConfiguree(1) = Side;
+    *enlocCmdConfigurer(1) = qPoint;
+    msgstrCmdConfigure("--skip",'\n');
+    *enlocCmdConfiguree(1) = Main;
+    *enlocCmdConfigurer(1) = qPoint;
+    msgstrCmdConfigure("--matrix",-1);
+    for (int i = 0; i < 16; i++) msgstrCmdConfigure(" %f",matrix[i]);
+    msgstrCmdConfigure("",'\n');}
+    DEFAULT()
 }
 
 void rightRight(void)
