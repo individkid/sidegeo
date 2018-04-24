@@ -118,13 +118,19 @@ int processVertex(int *ipos, int *cpos, int len, int *plane, int *file, int inde
 	return ret + 1;
 }
 
-void processPolyant(int pos)
-{ // TODO1 use names instead of numbers
-	*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1);
+int processPolyant(int cond, int name, int file)
+{
+	int pos = sizePcsCmdInt();
+	*enlocPcsCmdInt(1) = file;
+	*enlocPcsCmdInt(1) = processPlane(&name,file);;
 	int inpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
 	int outpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
-	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(inpos,1) += 1;}
-	while (*arrayPcsInt(pos++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(outpos,1) += 1;}
+	while (*arrayPcsInt(cond++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(inpos,1) += 1;}
+	while (*arrayPcsInt(cond++,1)) {*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1); *arrayPcsCmdInt(outpos,1) += 1;}
+	if (*arrayPcsCmdInt(pos+1,1) < 0) {unlocPcsCmdInt(sizePcsCmdInt()-pos); return -1;}
+	for (int i = pos+4; i < sizePcsCmdInt(); i++)
+	if (*arrayPcsCmdInt(i,1) < 0) {unlocPcsCmdInt(sizePcsCmdInt()-pos); return -1;}
+	return 0;
 }
 
 #define UNLOC \
@@ -180,16 +186,14 @@ int processConfigure(int index)
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureInflate;
 		DELOC}
-	pos = scanPcs(pattern,8,Literal,"--fill",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos>=0) {
+	pos = scanPcs(pattern,8,Literal,"--fill",String,Literal,",",Cond,0,2,String,Literal,",",Cond,0,2,String,Scans); if (pos>=0) {
 		SKIP
-		*enlocPcsCmdInt(1) = index;
-		processPolyant(intpos);
+		if (processPolyant(intpos,charpos,index) < 0) {IGNORE}
 		*enlocPcsCmdCmd(1) = configureFill;
 		DELOC}
-	pos = scanPcs(pattern,1,Literal,"--hollow",Int,Literal,",",Cond,0,2,Int,Literal,",",Cond,0,2,Int,Scans); if (pos>=0) {
+	pos = scanPcs(pattern,1,Literal,"--hollow",String,Literal,",",Cond,0,2,String,Literal,",",Cond,0,2,String,Scans); if (pos>=0) {
 		SKIP
-		*enlocPcsCmdInt(1) = index;
-		processPolyant(intpos);
+		if (processPolyant(intpos,charpos,index) < 0) {IGNORE}
 		*enlocPcsCmdCmd(1) = configureHollow;
 		DELOC}
 	pos = scanPcs(pattern,3,Literal,"--matrix",Loop,16,Float,Scans); if (pos>=0) {
