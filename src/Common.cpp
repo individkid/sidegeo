@@ -293,7 +293,7 @@ DEFINE_LOCAL(PcsScan,struct Match)
 DEFINE_META(Remain,char)
 DEFINE_LOCAL(Complete,char)
 DEFINE_LOCAL(PcsBuf,char)
-DEFINE_TREE(Ident,int,int)
+DEFINE_QUEE(Ident,int,int)
 DEFINE_LOCAL(Name,int)
 DEFINE_LOCAL(Alter,int)
 

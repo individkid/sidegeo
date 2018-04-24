@@ -39,42 +39,38 @@ int processPlane(int *cpos, int file)
 {
 	int filepos = *arrayName(file,1);
 	int filelen = lengthPcsBuf(filepos,0);
-	int prepos = sizePcsBuf();
-	overPcsBuf(prepos,filepos,filelen); *enlocPcsBuf(1) = ':'; // TODO optimize by making Ident a queue of trees
-	int sufpos = sizePcsBuf();
+	int planepos = sizePcsBuf();
 	int clen = lengthPcsChar(*cpos,0);
 	int named = (*arrayPcsChar(*cpos,1) != '_' || *arrayPcsChar(*cpos+1,1) != 0);
 	int count = *arrayCount(file,1);
-	if (named) {usePcsChar(); copyPcsBuf(sufpos,*cpos,clen+1);}
+	if (named) {usePcsChar(); copyPcsBuf(planepos,*cpos,clen+1);}
 	else msgstrPcsBuf("%d",0,count);
-	int key = 0; int found = (findIdent(&key) == 0);
+	int key = 0; int found = (findIdent(file,&key) == 0);
 
 	// named and found: return found as *plane
 	if (named && found) {
-	unlocPcsBuf(sizePcsBuf()-prepos);
-	*cpos += clen+1; return *castIdent(key);}
+	unlocPcsBuf(sizePcsBuf()-planepos);
+	*cpos += clen+1; return *castIdent(file,key);}
 
 	// named and not found: insert name and count, return count as *plane
 	else if (named && !found) {
 	int pos = sizePcsBuf();
-	int len = sufpos-prepos;
-	overPcsBuf(pos,prepos,len);
 	msgstrPcsBuf("%d",0,count);
-	if (checkIdent(pos)) unlocPcsBuf(sizePcsBuf()-pos);
-	else {insertIdent(pos); *castIdent(pos) = count;}
-	insertIdent(prepos); *castIdent(prepos) = count;
+	if (checkIdent(file,pos)) unlocPcsBuf(sizePcsBuf()-pos);
+	else {insertIdent(file,pos); *castIdent(file,pos) = count;}
+	insertIdent(file,planepos); *castIdent(file,planepos) = count;
 	*arrayCount(file,1) += 1;
 	*cpos += clen+1; return count;}
 
 	// unnamed and found: return count as *plane
 	else if (!named && found) {
-	unlocPcsBuf(sizePcsBuf()-prepos);
+	unlocPcsBuf(sizePcsBuf()-planepos);
 	*arrayCount(file,1) += 1;
 	*cpos += clen+1; return count;}
 
 	// unnamed and not found: insert count, return count as *plane
 	else if (!named && !found) {
-	insertIdent(prepos); *castIdent(prepos) = count;
+	insertIdent(file,planepos); *castIdent(file,planepos) = count;
 	*arrayCount(file,1) += 1;
 	*cpos += clen+1; return count;}
 
@@ -123,7 +119,7 @@ int processVertex(int *ipos, int *cpos, int len, int *plane, int *file, int inde
 }
 
 void processPolyant(int pos)
-{ // TODO use names instead of numbers
+{ // TODO1 use names instead of numbers
 	*enlocPcsCmdInt(1) = *arrayPcsInt(pos++,1);
 	int inpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
 	int outpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
@@ -173,7 +169,7 @@ int processConfigure(int index)
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePlane;
 		DELOC}
-	pos = scanPcs(pattern,4,Literal,"--point",Float,Float,Float,Scans); if (pos>=0) { // TODO add optional name
+	pos = scanPcs(pattern,4,Literal,"--point",Float,Float,Float,Scans); if (pos>=0) { // TODO2 add optional name
 		SKIP
 		*enlocPcsCmdInt(1) = index;
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);

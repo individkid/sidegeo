@@ -198,6 +198,19 @@ EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
 DECLARE_INDEXED(NAME,VAL,KEY)
 
+#define DECLARE_QUEE(NAME,KEY,VAL) \
+EXTERNC int usage##NAME(void); \
+EXTERNC void used##NAME(int idx); \
+EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
+EXTERNC int size##NAME(int idx); \
+EXTERNC int test##NAME(int idx,KEY key); \
+EXTERNC int check##NAME(int idx,KEY key); \
+EXTERNC int find##NAME(int idx,KEY *key); \
+EXTERNC int choose##NAME(int idx,KEY *key); \
+EXTERNC int insert##NAME(int idx,KEY key); \
+EXTERNC int remove##NAME(int idx,KEY key); \
+EXTERNC VAL *cast##NAME(int idx,KEY key);
+
 #ifdef __cplusplus
 
 struct QueueBase {
@@ -1192,109 +1205,120 @@ template<class KEY, class VAL> struct Rbtree {
     VAL val;
 };
 
+template<class KEY, class VAL> static int treeComp(const void *ai, const void *bi) {
+    const Rbtree<KEY,VAL> *a = (Rbtree<KEY,VAL> *)ai;
+    const Rbtree<KEY,VAL> *b = (Rbtree<KEY,VAL> *)bi;
+    return a->key - b->key;
+}
+
+template<class KEY, class VAL> Rbtree<KEY,VAL> treeNil = {0};
+
 template<class KEY, class VAL> struct QueueTree {
-    QueuePool<Rbtree<KEY,VAL> > pool;
+    Rbtree<KEY,VAL> *base;
+    Rbtree<KEY,VAL> **pool;
+    int room;
+    int uses;
+    int hole;
     rbop_t rbop;
     void *top;
-    QueueTree(int (*cmp)(const void *, const void *))
+    QueueTree()
     {
-        top = int2void(-1);
         Rbtree<KEY,VAL> temp;
-        rbop.cmp = cmp;
+        rbop.cmp = treeComp<KEY,VAL>;
         rbop.coff = (char*)&temp.left-(char*)&temp;
         rbop.boff = (char*)&temp.mask-(char*)&temp;
         rbop.mask = (unsigned char)1;
-        rbop.nil = int2void(-1);
+        rbop.nil = &treeNil<KEY,VAL>;
+        top = rbop.nil;
+        base = new Rbtree<KEY,VAL>[QUEUE_STEP];
+        pool = new Rbtree<KEY,VAL>*[QUEUE_STEP];
+        room = QUEUE_STEP;
+        uses = 0;
+        hole = 0;
     }
     void init(int (*cmp)(const void *, const void *))
     {
         rbop.cmp = cmp;
     }
-    int comp(const void *left, const void *right)
-    {
-        int lft = void2int(left);
-        int rgt = void2int(right);
-        if (pool.cast(lft)->key < pool.cast(rgt)->key) return -1;
-        if (pool.cast(rgt)->key < pool.cast(lft)->key) return 1;
-        return 0;
-    }
     int size()
     {
-        return pool.size();
+        return uses;
     }
     int test(KEY key) // return 0 if found with same key
     {
-        int tofind = pool.alloc();
-        pool.cast(tofind)->key = key;
-        void *found = lookup_node(top,int2void(tofind),&rbop);
-        pool.free(tofind);
-        if (void2int(found) < 0) return -1;
-        if (pool.cast(void2int(found))->key != key) return -1;
+        Rbtree<KEY,VAL> temp = {0,0,0,key};
+        Rbtree<KEY,VAL> *found = (Rbtree<KEY,VAL> *)lookup_node(top,&temp,&rbop);
+        if (found == rbop.nil) return -1;
+        if (found->key != key) return -1;
         return 0;
     }
     int check(KEY key) // return 0 if found with any key
     {
-        int tofind = pool.alloc();
-        pool.cast(tofind)->key = key;
-        void *found = lookup_node(top,int2void(tofind),&rbop);
-        pool.free(tofind);
-        if (void2int(found) < 0) return -1;
+        Rbtree<KEY,VAL> temp = {0,0,0,key};
+        Rbtree<KEY,VAL> *found = (Rbtree<KEY,VAL> *)lookup_node(top,&temp,&rbop);
+        if (found == rbop.nil) return -1;
         return 0;
     }
-    int find(KEY *key) // return 0 if found, and change key
+    int find(KEY *key) // return 0 if found, and return key
     {
-        int tofind = pool.alloc();
-        pool.cast(tofind)->key = *key;
-        void *found = lookup_node(top,int2void(tofind),&rbop);
-        pool.free(tofind);
-        if (void2int(found) < 0) return -1;
-        *key = pool.cast(void2int(found))->key;
+        Rbtree<KEY,VAL> temp = {0,0,0,*key};
+        Rbtree<KEY,VAL> *found = (Rbtree<KEY,VAL> *)lookup_node(top,&temp,&rbop);
+        if (found == rbop.nil) return -1;
+        *key = found->key;
         return 0;
     }
     int choose(KEY *key)
     {
-        int sub = pool.choose();
-        if (sub < 0) return -1;
-        *key = pool.cast(sub)->key;
+        if (uses == 0) return -1;
+        *key = base->key;
         return 0;
     }
     int insert(KEY key)
     {
-        if (test(key) >= 0) return -1;
-        int node = pool.alloc();
-        pool.cast(node)->key = key;
-        add_node(&top,int2void(node),&rbop);
+        if (check(key) >= 0) return -1;
+        if (uses == room) {
+        if (hole) exitErrstr("hole too room\n");
+        void *t = rbop.nil;
+        Rbtree<KEY,VAL> *b = new Rbtree<KEY,VAL>[room*2];
+        Rbtree<KEY,VAL> **p = new Rbtree<KEY,VAL>*[room*2];
+        for (int i = 0; i < room; i++) {
+        b[i].key = base[i].key;
+        b[i].val = base[i].val;
+        add_node(&t,b+i,&rbop);}
+        delete[] base; base = b;
+        delete[] pool; pool = p;
+        top = t; room *= 2;}
+        Rbtree<KEY,VAL> *found = 0;
+        if (hole) {hole -= 1; found = pool[hole];}
+        else found = base+uses;
+        add_node(&top,found,&rbop);
+        uses += 1;
         return 0;
     }
     int remove(KEY key)
     {
-        if (test(key) < 0) return -1;
-        int tofind = pool.alloc();
-        pool.cast(tofind)->key = key;
-        void *found = lookup_node(top,int2void(tofind),&rbop);
-        pool.free(tofind);
-        int node = void2int(found);
-        if (node < 0) return -1;
-        del_node(&top,int2void(node),&rbop);
-        pool.free(node);
+        Rbtree<KEY,VAL> temp = {0,0,0,key};
+        Rbtree<KEY,VAL> *found = (Rbtree<KEY,VAL> *)lookup_node(top,&temp,&rbop);
+        if (found == rbop.nil) return -1;
+        del_node(&top,found,&rbop);
+        pool[hole] = found;
+        hole += 1;
+        uses -= 1;
         return 0;
     }
     VAL *cast(KEY key)
     {
-        int tofind = pool.alloc();
-        pool.cast(tofind)->key = key;
-        void *found = lookup_node(top,int2void(tofind),&rbop);
-        pool.free(tofind);
-        if (void2int(found) < 0) exitErrstr("cast too found\n");
-        return &pool.cast(void2int(found))->val;
+        Rbtree<KEY,VAL> temp = {0,0,0,key};
+        Rbtree<KEY,VAL> *found = (Rbtree<KEY,VAL> *)lookup_node(top,&temp,&rbop);
+        if (found == rbop.nil) exitErrstr("cast too found\n");
+        return &found->val;
     }
 };
 
 #define DEFINE_TREE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
-QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(comp##NAME); \
+QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
-extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
 extern "C" int size##NAME(void) {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int check##NAME(KEY key) {return NAME##Inst.check(key);} \
@@ -1306,14 +1330,10 @@ extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
 
 template<class KEY, class VAL> struct QueueTrue {
     QueueTree<KEY,QueueStruct<VAL> > tree;
-    QueueTrue(int (*cmp)(const void *, const void *)) : tree(cmp) {}
+    QueueTrue() {}
     void init(int (*cmp)(const void *, const void *))
     {
         tree.init(cmp);
-    }
-    int comp(const void *left, const void *right)
-    {
-        return tree.comp(left,right);
     }
     int size()
     {
@@ -1357,9 +1377,8 @@ template<class KEY, class VAL> struct QueueTrue {
 
 #define DEFINE_TRUE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
-QueueTrue<KEY,VAL> NAME##Inst = QueueTrue<KEY,VAL>(comp##NAME); \
+QueueTrue<KEY,VAL> NAME##Inst = QueueTrue<KEY,VAL>(); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
-extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
 extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
 extern "C" int check##NAME(KEY key) {return NAME##Inst.check(key);} \
@@ -1369,7 +1388,40 @@ extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 DEFINE_INDEXED(NAME,VAL,KEY,tree.cast(idx))
 
-// DEFINE_QUEE is queue of QueueTree
+template<class KEY, class VAL> struct QueueQuee {
+    int (*func)(const void *, const void *);
+    QueueStruct<QueueTree<KEY,VAL> > meta;
+    QueueQuee() : func(0) {}
+    void init(int (*cmp)(const void *, const void *))
+    {
+        func = cmp;
+    }
+    int size()
+    {
+        return meta.size();
+    }
+    void touch(int idx)
+    {
+        while (idx >= meta.size()) {
+            QueueTree<KEY,VAL> inst = QueueTree<KEY,VAL>();
+            if (func) inst.init(func);
+            *meta.enloc(1) = inst;}
+    }
+};
+
+#define DEFINE_QUEE(NAME,KEY,VAL) \
+QueueQuee<KEY,VAL> NAME##Inst = QueueQuee<KEY,VAL>(); \
+extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
+extern "C" void used##NAME(int idx) {NAME##Inst.touch(idx);} \
+extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
+extern "C" int size##NAME(int idx) {return NAME##Inst.size();} \
+extern "C" int test##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->test(key);} \
+extern "C" int check##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->check(key);} \
+extern "C" int find##NAME(int idx,KEY *key) {return NAME##Inst.meta.array(idx,1)->find(key);} \
+extern "C" int choose##NAME(int idx,KEY *key) {return NAME##Inst.meta.array(idx,1)->choose(key);} \
+extern "C" int insert##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->insert(key);} \
+extern "C" int remove##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->remove(key);} \
+extern "C" VAL *cast##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->cast(key);}
 
 #endif // __cplusplus
 

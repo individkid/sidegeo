@@ -55,7 +55,7 @@ void inithlp(struct Helper *hlp)
 
 void errorinj(struct Helper *hlp, sigjmp_buf *env)
 {
-    // TODO1 write --error to pipe
+    // TODO3 write --error to pipe
     exitErrstr("helper too pipe\n");
     longjmp(*env,-1);
 }
@@ -240,13 +240,13 @@ void processError(int index)
 }
 
 int processIgnore(int index, int noneg) {
-    // TODO1 ignore several times, then error
+    // TODO3 ignore several times, then error
     return noneg;
 }
 
 void processComplain(void)
 {
-    // TODO1 msgstrPcsOutput
+    // TODO3 msgstrPcsOutput
 }
 
 int processCompare(const void *left, const void *right)

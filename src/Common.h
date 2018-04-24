@@ -907,7 +907,7 @@ DECLARE_LOCAL(PcsScan,struct Match) // format specifiers
 DECLARE_META(Remain,char) // configuration pattern
 DECLARE_LOCAL(Complete,char) // option pattern
 DECLARE_LOCAL(PcsBuf,char) // string buffer
-DECLARE_TREE(Ident,int,int) // buffer to plane index
+DECLARE_QUEE(Ident,int,int) // perfile buffer to plane index
 DECLARE_LOCAL(Name,int) // file to buffer index
 DECLARE_LOCAL(Alter,int) // window to buffer index
 
