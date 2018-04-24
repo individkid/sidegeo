@@ -201,12 +201,12 @@ int processConfigure(int index)
 	pos = scanPcs(pattern,2,Literal,"--inject",String,Scans); if (pos>=0) {
 		SKIP
 		usePcsChar(); copyOption(sizeOption(),charpos,sizePcsChar()-charpos);
-		*enlocPcsRequest(1) = '\n';
+		*enlocOption(1) = '\n';
 		DELOC}
 	pos = scanPcs(pattern,1,Literal,"--yield",Scans); if (pos>=0) {
 		SKIP
 		YIELD}
-	pos = scanPcs(pattern,10,Literal,"--call",Here,Cond,2,4,Literal,"--",Cond,2,5,White,Retry,String,Goto,-7,Retry,Scans); if (pos>=0) {
+	pos = scanPcs(pattern,10,Literal,"--call",Here,Cond,2,4,Literal,"--",Cond,2,5,White,Retry,Char,Goto,-7,Retry,Scans); if (pos>=0) {
 		SKIP
 		for (int i = charpos; i < sizePcsChar()-1; i++)
 		if (*arrayPcsChar(i,1) == 0) *arrayPcsChar(i,1) = ' ';

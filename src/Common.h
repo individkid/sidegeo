@@ -391,6 +391,7 @@ struct Header { // information about data appended to files
     int idx; // which fifo to append to
 };
 enum Scan {
+    Char,
     Int,
     Float,
     String,
@@ -448,6 +449,10 @@ int rescan##THD(const char *pattern, int index, int accum) \
     int floatpos = size##THD##Float(); \
     int charpos = size##THD##Char(); \
     switch (match.tag) { \
+    case (Char): { \
+    *enloc##THD##Char(1) = *pattern; if (*pattern == 0) break; \
+    int pos2 = rescan##THD(pattern+1,index+1,accum+1); if (pos2 < 0) break; \
+    return pos2;} \
     case (Int): { \
     int pos1 = 0, ret = sscanf(pattern," %d%n",enloc##THD##Int(1),&pos1); if (ret != 2) break; \
     int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2 < 0) break; \
@@ -458,7 +463,9 @@ int rescan##THD(const char *pattern, int index, int accum) \
     return pos2;} \
     case (String): { \
     int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
-    int pos1 = 0; while (pattern[pos0+pos1] && !isspace(pattern[pos0+pos1])) pos1 += 1; if (pos1 == 0) break; \
+    int pos1 = 0; while (pattern[pos0+pos1] && !isspace(pattern[pos0+pos1])) { \
+    *enloc##THD##Char(1) = pattern[pos0+pos1]; pos1 += 1;} if (pos1 == 0) break; \
+    *enloc##THD##Char(1) = 0; pos1 += 1; \
     int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2 < 0) break; \
     return pos2;} \
     case (Literal): { \
@@ -520,7 +527,7 @@ int scan##THD(const char *pattern, int len, ...) \
     if ((index-orig == len) != (match.tag == Scans)) exitErrstr("index too tag\n"); \
     if (match.tag == Scans) break; \
     switch (match.tag) { \
-    case (Int): case (Float): case (String): break; \
+    case (Char): case (Int): case (Float): case (String): break; \
     case (Literal): match.str = va_arg(args,const char *); break; \
     case (White): case (Here): case (Retry): case (Fail): break; \
     case (Goto): match.idx = index + va_arg(args,int); break; \
