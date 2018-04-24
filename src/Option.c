@@ -43,10 +43,10 @@ int processOption(void)
 	int len = sizeComplete(); *enlocComplete(1) = 0; char *pattern = arrayComplete(0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
 	int pos = scanPcs(pattern,1,Literal,"-h",Scans); if (pos>=0) {
-		// TODO2 msgsndPcsOutput usage
+		// TODO3 msgsndPcsOutput usage
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,1,Literal,"-H",Scans); if (pos>=0) {
-		// TODO2 run tests
+		// TODO3 run tests
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,2,Literal,"-o",String,Scans); if (pos>=0) {
 		int cpos = charpos;
