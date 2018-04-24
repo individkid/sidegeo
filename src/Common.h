@@ -379,7 +379,9 @@ struct Response {
 
 enum Band { // whether command is recorder
     Main,
-    Side};
+    Side,
+    Skip,
+    Done};
 struct Header { // information about data appended to files
     int siz; // number of bytes appended
     int pos; // filepos indicating when to append sideband

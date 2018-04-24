@@ -78,7 +78,8 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
         int retval = read(hlp->side,&hlp->header,sizeof(hlp->header));
         if (retval < 0) errorinj(hlp,env);
         if (retval < sizeof(hlp->header)) hlp->header.pid = 0; else hlp->sidepos += sizeof(hlp->header);
-        if (hlp->header.pid != getpid() || hlp->header.tim != pidtime) hlp->header.pid = 0;}
+        if (hlp->header.pid != getpid() || hlp->header.tim != pidtime) hlp->header.pid = 0;
+        if (hlp->header.neg == Done) longjmp(*env,1);}
     if (hlp->header.pid != 0 && hlp->header.pos == hlp->filepos+i) {
         char buf[hlp->header.siz];
         if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
@@ -150,14 +151,14 @@ void *processHelper(void *arg)
         if (read(hlp->fifo,&header,sizeof(header)) != sizeof(header)) errorinj(hlp,env);
         char buf[header.siz];
         if (read(hlp->fifo,buf,header.siz) != header.siz) errorinj(hlp,env);
-        if (header.neg == Side) {
+        if (header.neg == Main) {
+        if (lseek(hlp->file,hlp->filepos,SEEK_SET) < 0) errorinj(hlp,env);
+        if (write(hlp->file,buf,header.siz) != header.siz) errorinj(hlp,env);}
+        else {
         header.pos = hlp->filepos;
         if (lseek(hlp->side,hlp->sidepos,SEEK_SET) < 0) errorinj(hlp,env);
         if (write(hlp->side,&header,sizeof(header)) != sizeof(header)) errorinj(hlp,env);
-        if (write(hlp->side,buf,header.siz) != header.siz) errorinj(hlp,env);}
-        else {
-        if (lseek(hlp->file,hlp->filepos,SEEK_SET) < 0) errorinj(hlp,env);
-        if (write(hlp->file,buf,header.siz) != header.siz) errorinj(hlp,env);}}
+        if (write(hlp->side,buf,header.siz) != header.siz) errorinj(hlp,env);}}
     if (retval == 0) {
         if (setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}
     if (retval < 0) {
@@ -326,8 +327,12 @@ void processProduce(void *arg)
         break;}}}
     else if (sizeHeader() > 0) {
         struct Header *header = delocHeader(1);
-        if (write(*arrayFifo(header->idx,1),header,sizeof(struct Header)) != sizeof(struct Header)) processError(header->idx);
-        if (write(*arrayFifo(header->idx,1),delocBody(header->siz),header->siz) != header->siz) processError(header->idx);}
+        struct Header *skip = 0; if (header->neg == Skip) {skip = delocHeader(1); header->neg = Side;}
+        int head = sizeof(struct Header); int len = head+header->siz; if (skip) len += head+skip->siz;
+        char buf[len]; memcpy(buf,header,head); memcpy(buf+head,delocBody(header->siz),header->siz);
+        if (skip) {memcpy(buf+head+header->siz,skip,head); memcpy(buf+head+header->siz+head,delocBody(skip->siz),skip->siz);}
+        if (skip && skip->idx != header->idx) processError(header->idx);
+        if (write(*arrayFifo(header->idx,1),buf,len) != len) processError(header->idx);}
     else toggle = 1;
 }
 
@@ -335,8 +340,9 @@ void processAfter(void)
 {
     if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("mutex destroy failed: %s\n",strerror(errno));
     if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
-    for (int i = 0; i < sizeHelper(); i++) {
-        int retval = pthread_cancel(*arrayHelper(i,1));
-        if (retval < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
-        if (retval == 0 && pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
+    for (int i = 0; i < sizeFile(); i++)
+    if (*arrayFile(i,1) >= 0) {
+    struct Header header = {0}; header.neg = Done;
+    if (write(*arrayFifo(i,1),&header,sizeof(struct Header)) != sizeof(struct Header)) exitErrstr("cannot kill thread\n");
+    if (pthread_join(*arrayHelper(i,1),0) < 0) exitErrstr("cannot join thread\n");}
 }
