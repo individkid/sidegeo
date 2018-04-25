@@ -82,14 +82,14 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. Incorrectly formatted commands are treated as intervening text. Correctly formatted commands with incorrect arguments from files cause warnings the first few times, then cause the remainder of the file to be ignored. Incorrect arguments on the command line cause warnings only. Command formats are specified by lists of the following subexpressions.
 
-  * Skip - match and discard to pass, or mismatch and rewind to fail
-  * Not - mismatch and rewind to pass, or match and rewind to fail
-  * While - match consume repeat, or mismatch rewind, to pass
-  * Loop - match consume repeat to pass
-  * Char White Text Int Float - match and consume to pass
+  * Dis - match and discard to pass, or mismatch to fail
+  * Not - mismatch discard and rewind to pass, or match to fail
+  * While - match repeat, or mismatch discard and rewind, to pass
+  * Loop - match repeat to pass
+  * Char White Text Int Float - match to pass
   * Term - produce to pass
 
-For example, a whitespace delimited nonempty string optionally preceded by whitespace is matched by Skip,2,While,1,White,Char,While,3,Not,1,White,Char.
+For example, a whitespace delimited nonempty string optionally preceded by whitespace is matched by Dis,2,While,1,White,Char,While,3,Not,1,White,Char.
 
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  
@@ -135,7 +135,7 @@ Functions in Metric.c include sightLine regexPlane inverseSquare, used in stock 
 
 Functions in Callback.c allow user action like mouse motion to transform displayed polytopes. There is a global matrix, affineMat, that is applied to all polytopes. And there are compensating matrices per polytope per display to allow any polytopes to appear fixed even as affineMat transforms any unfixed polytopes. When a display loses focus, affineMat is saved in the display's context, so changes to affineMat by other displays can be incorporated into a display's context when focus returns to it. For example, if the mode is Transform, and the right mouse button is clicked, the transformation is suspended while the mouse is moved to another display. If transformation continues in the other display, in the same or in a different Transformation mode, affineMat changes. Now, if the mouse moves back to the original display, and the right button is pressed, transformation resumes in the original mode fixed point and mouse position, but transformations from the other display are incorporated and not lost. Transforming individual planes is accomplished by moving them to a special polytope, transforming them, and then moving them back as altered planes. Altering planes through the Transform Plane mode, or changing the polytope with the Additive or Subtractive Sculpt modes, updates the representation of the topology of the polytope by calling functions in Interface.c to send events to the Haskell.c thread. Commands in Configure.c executed from files read by Process.c also change polytope topology by scheduling functions from Interface.c in the Command.c thread.
 
-The --color command may specify jpeg, png, wave buffer piped from --time value, or remote framebuffer from Socket.c as the texture on a facet. If Virtual mode is Content, the cursor controls the remote cursor when it is over the a remote framebuffer facet. The --listen command may specify speaker mp3 bwf aiff or -S file. In case --listen specifies -S file, it sends the wave buffer pipelined from --time value to the -S clients as a framebuffer. The -s option presents the indicated display, main or alternate, to remote framebuffer clients. The -S option appends commands to the given file, or responds to query or callback requests from remote clients. Query or callback requests come from the client as cutbuffer text, and responses go as framebuffers or cutbuffer text. Queries and callbacks to the Haskell thread for topology info and changes, and to Command thread for numerical info and changes, come from -S clients, Lua scripts, Display clicks, and Panel widgets. The following queries and callbacks are supported.
+The --color command may specify builtin pattern, wave buffer piped from --time value, or remote framebuffer from Socket.c as the texture on a facet. If Virtual mode is Content, the cursor controls the remote cursor when it is over the a remote framebuffer facet. The --listen command may specify speaker, -S file, or libsndfile file. In case --listen specifies -S file, it sends the wave buffer pipelined from --time value to the -S clients as a framebuffer. The -s option presents the indicated display, main or alternate, to remote framebuffer clients. The -S option appends commands to the given file, or responds to query or callback requests from remote clients. Query or callback requests come from the client as cutbuffer text, and responses go as framebuffers or cutbuffer text. Queries and callbacks to the Haskell thread for topology info and changes, and to Command thread for numerical info and changes, come from -S clients, Lua scripts, Display clicks, and Panel widgets. The following queries and callbacks are supported.
 
   * map from boundary to halfspace  
   * contents of waveform pipeline  

@@ -391,15 +391,15 @@ struct Header { // information about data appended to files
     int idx; // which fifo to append to
 };
 enum Scan {
-    Dis, // match and discard to pass, or mismatch and rewind to fail
-    Not, // mismatch and rewind to pass, or match and rewind to fail
-    While, // match consume repeat, or mismatch rewind, to pass
-    Loop, // match consume repeat to pass
-    Char, // match and consume to pass
-    White, // match and consume to pass
-    Text, // match and consume to pass
-    Int, // match and consume to pass
-    Float, // match and consume to pass
+    Dis, // match and discard to pass, or mismatch to fail
+    Not, // mismatch discard and rewind to pass, or match to fail
+    While, // match repeat, or mismatch discard and rewind, to pass
+    Loop, // match repeat to pass
+    Char, // match to pass
+    White, // match to pass
+    Text, // match to pass
+    Int, // match to pass
+    Float, // match to pass
     Term, // produce to pass
     Scans};
 struct Match {
@@ -430,21 +430,24 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
     return sub; \
 }
 
-#define WHITE3 Dis,2,While,1,White
-#define TEXT4(STR) WHITE3,Text,STR
-#define STRING5 Char,While,3,Not,1,White,Char
-#define STRING9 WHITE3,STRING5,Term,'\0'
-#define INT4 WHITE3,Int
-#define FLOAT4 WHITE3,Float
-#define VECTOR5(CNT) Loop,4,CNT,FLOAT4
-#define WHITE2 Not,1,White
-#define NOT2(SEP) Not,1,Text,SEP
-#define CHAR3(SEP) NOT2(SEP),Char
-#define SKIP2(SEP) Dis,1,Text,SEP
-#define TOKEN13(SEP) WHITE3,CHAR3(SEP),While,5,WHITE2,CHAR3(SEP),Term,'\0'
-#define TOKEN18(SEP) TOKEN13(SEP),WHITE3,SKIP2(SEP)
-#define LIST17(SEP) While,12,NOT2(SEP),TOKEN13(SEP),Term,'\0'
-#define FILLER6 While,5,Not,3,Text,"--",Not,1,White,Char
+#define WHITE3 Dis,2,While,1,White /*discard whitespace*/
+#define TEXT4(STR) WHITE3,Text,STR /*discard whitespace and match text*/
+#define STRING5 Char,While,3,Not,1,White,Char /*match nonempty upto whitespace*/
+#define STRING9 WHITE3,STRING5,Term,'\0' /*discard whitespace, match nonempty upto whitespace, and delimit result*/
+#define INT4 WHITE3,Int /*discard whitespace and match int*/
+#define FLOAT4 WHITE3,Float /*discard whitespace and match float*/
+#define VECTOR5(CNT) Loop,4,CNT,FLOAT4 /*discard whitespace, match number of whitespace separated float*/
+#define WHITE2 Not,1,White /*match nothing if followed by nonwhitespace*/
+#define NOT2(SEP) Not,1,Text,SEP /*match noting if followed by text*/
+#define CHAR3(SEP) NOT2(SEP),Char /*match nonwhitespace char*/
+#define SKIP2(SEP) Dis,1,Text,SEP /*discard text*/
+#define TOKEN16(SEP) WHITE3,CHAR3(SEP),While,5,WHITE2,CHAR3(SEP),WHITE3,Term,'\0'
+/*discard whitespace, match nonempty upto whitespace or text, discard whitespace, and delimit result*/
+#define TOKEN18(SEP) TOKEN16(SEP),SKIP2(SEP)
+/*discard whitespace, match nonempty upto whitespace or text, discard whitespace, delimit result, match and discard text*/
+#define LIST22(SEP) While,12,NOT2(SEP),TOKEN16(SEP),SKIP2(SEP),Term,'\0'
+/*discard whitespace, match any number of whitespace separated delimited upto text, match and discar text, and add extra delimiter*/
+#define FILLER6 While,5,Not,3,Text,"--",Not,1,White,Char /*discard upto double dash nonwhitespace*/
 
 #define DECLARE_SCAN(THD) \
 extern int intcheck##THD; \
@@ -455,29 +458,74 @@ int scan##THD(const char *pattern, ...);
 int intcheck##THD = 0; \
 int floatcheck##THD = 0; \
 int charcheck##THD = 0; \
-int rescan##THD(const char *pattern, int index, int accum) \
+int rescan##THD(const char *pattern, int *index, int accum) \
 { \
-    if (index == size##THD##Scan()) return accum; \
-    struct Match match = *array##THD##Scan(index,1); \
+    if (*index == size##THD##Scan()) return accum; \
+    struct Match match = *array##THD##Scan(*index,1); \
     int intpos = size##THD##Int(); \
     int floatpos = size##THD##Float(); \
     int charpos = size##THD##Char(); \
-    switch (match.tag) { \
-    case (Dis): break; \
-    case (Not): break; \
-    case (While): break; \
-    case (Loop): break; \
-    case (Char): break; \
-    case (White): break; \
-    case (Text): break; \
-    case (Int): break; \
-    case (Float): break; \
-    case (Term): break; \
+    int pos = accum; switch (match.tag) { \
+    case (Dis): { /*match and discard to pass, or mismatch and rewind to fail*/ \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos); \
+    break;} \
+    case (Not): { /*mismatch and rewind to pass, or match and rewind to fail*/ \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos); \
+    if (pos>=0) {pos = -1; break;} \
+    *index = match.idx; \
+    pos = accum; \
+    break;} \
+    case (While): { /*match consume repeat, or mismatch rewind, to pass*/ \
+    int sofar = pos; int idx = *index; while (pos>=0) { \
+    sofar = pos; *index = idx; \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos);} \
+    *index = match.idx; \
+    return sofar;} \
+    case (Loop): { /*match consume repeat to pass*/ \
+    int idx = *index; for (int i = 0; i < match.alt; i++) { \
+    *index = idx; \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos);} \
+    if (pos>=0) return pos; \
+    break;} \
+    case (Char): { /*match and consume to pass*/ \
+    if (*pattern) pos += 1; \
+    else {pos = -1; break;} \
+    *index += 1; \
+    return pos;} \
+    case (White): { /*match and consume to pass*/ \
+    if (*pattern && isspace(*pattern)) pos += 1; \
+    else {pos = -1; break;} \
+    *index += 1; \
+    return pos;} \
+    case (Text): { /*match and consume to pass*/ \
+    int i = 0; while (match.str[i] && *pattern && pattern[i]==match.str[i]) {i += 1; pos += 1;} \
+    if (match.str[i]) {pos = -1; break;} \
+    *index += 1; \
+    return pos;} \
+    case (Int): { /*match and consume to pass*/ \
+    const char *ptr = pattern; if (*pattern && !isspace(*pattern)) \
+    *enloc##THD##Int(1) = strtol(pattern,(char **)&ptr,10); \
+    if (ptr==pattern) {pos = -1; break;} \
+    *index += 1; \
+    pos += ptr-pattern; \
+    return pos;} \
+    case (Float): { /*match and consume to pass*/ \
+    const char *ptr = pattern; if (*pattern && !isspace(*pattern)) \
+    *enloc##THD##Float(1) = strtof(pattern,(char **)&ptr); \
+    if (ptr==pattern) {pos = -1; break;} \
+    *index += 1; \
+    pos += ptr-pattern; \
+    return pos;} \
+    case (Term): { /*produce to pass*/ \
+    int len = strlen(match.str); \
+    memcpy(enloc##THD##Char(len),match.str,len); \
+    *index += 1; \
+    return pos;} \
     default: exitErrstr("match too tag\n");} \
     unloc##THD##Int(size##THD##Int()-intpos); \
     unloc##THD##Float(size##THD##Float()-floatpos); \
     unloc##THD##Char(size##THD##Char()-charpos); \
-    return -1; \
+    return pos; \
 } \
 int scan##THD(const char *pattern, int len, ...) \
 { \
@@ -490,21 +538,21 @@ int scan##THD(const char *pattern, int len, ...) \
     if ((index-orig == len) != (match.tag == Scans)) exitErrstr("index too tag\n"); \
     if (match.tag == Scans) break; \
     switch (match.tag) { \
-    case (Dis): break; \
-    case (Not): break; \
-    case (While): break; \
-    case (Loop): break; \
+    case (Dis): match.idx = index + va_arg(args,int); break; \
+    case (Not): match.idx = index + va_arg(args,int); break; \
+    case (While): match.idx = index + va_arg(args,int); break; \
+    case (Loop): match.idx = index + va_arg(args,int); match.alt = index + va_arg(args,int); break; \
     case (Char): break; \
     case (White): break; \
-    case (Text): break; \
+    case (Text): match.str = va_arg(args,const char *); break; \
     case (Int): break; \
     case (Float): break; \
-    case (Term): break; \
+    case (Term): match.str = va_arg(args,const char *); break; \
     default: exitErrstr("arg too tag\n");} \
     *enloc##THD##Scan(1) = match; index += 1;} \
     if (max >= size##THD##Scan()) exitErrstr("index too match\n"); \
-    va_end(args); \
-    int ret = rescan##THD(pattern,orig,0); \
+    va_end(args); index = orig; \
+    int ret = rescan##THD(pattern,&index,0); \
     unloc##THD##Scan(size##THD##Scan()-orig); \
     return ret; \
 }

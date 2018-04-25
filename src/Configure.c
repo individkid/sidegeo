@@ -186,12 +186,12 @@ int processConfigure(int index)
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdCmd(1) = configureInflate;
 		DELOC}
-	pos = scanPcs(pattern,56,TEXT4("--fill"),TOKEN18(","),LIST17(","),LIST17("."),Scans); if (pos>=0) {
+	pos = scanPcs(pattern,56,TEXT4("--fill"),TOKEN18(","),LIST22(","),LIST22("."),Scans); if (pos>=0) {
 		SKIP
 		if (processPolyant(charpos,index) < 0) {IGNORE}
 		*enlocPcsCmdCmd(1) = configureFill;
 		DELOC}
-	pos = scanPcs(pattern,56,TEXT4("--hollow"),TOKEN18(","),LIST17(","),LIST17("."),Scans); if (pos>=0) {
+	pos = scanPcs(pattern,56,TEXT4("--hollow"),TOKEN18(","),LIST22(","),LIST22("."),Scans); if (pos>=0) {
 		SKIP
 		if (processPolyant(charpos,index) < 0) {IGNORE}
 		*enlocPcsCmdCmd(1) = configureHollow;
