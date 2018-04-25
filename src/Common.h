@@ -391,18 +391,16 @@ struct Header { // information about data appended to files
     int idx; // which fifo to append to
 };
 enum Scan {
-    Char,
-    Int,
-    Float,
-    String,
-    Literal,
-    White,
-    Here,
-    Retry,
-    Fail,
-    Goto,
-    Loop,
-    Cond,
+    Dis, // match and discard to pass, or mismatch and rewind to fail
+    Not, // mismatch and rewind to pass, or match and rewind to fail
+    While, // match consume repeat, or mismatch rewind, to pass
+    Loop, // match consume repeat to pass
+    Char, // match and consume to pass
+    White, // match and consume to pass
+    Text, // match and consume to pass
+    Int, // match and consume to pass
+    Float, // match and consume to pass
+    Term, // produce to pass
     Scans};
 struct Match {
     enum Scan tag;
@@ -432,6 +430,22 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
     return sub; \
 }
 
+#define WHITE3 Dis,2,While,1,White
+#define TEXT4(STR) WHITE3,Text,STR
+#define STRING5 Char,While,3,Not,1,White,Char
+#define STRING9 WHITE3,STRING5,Term,'\0'
+#define INT4 WHITE3,Int
+#define FLOAT4 WHITE3,Float
+#define VECTOR5(CNT) Loop,4,CNT,FLOAT4
+#define WHITE2 Not,1,White
+#define NOT2(SEP) Not,1,Text,SEP
+#define CHAR3(SEP) NOT2(SEP),Char
+#define SKIP2(SEP) Dis,1,Text,SEP
+#define TOKEN13(SEP) WHITE3,CHAR3(SEP),While,5,WHITE2,CHAR3(SEP),Term,'\0'
+#define TOKEN18(SEP) TOKEN13(SEP),WHITE3,SKIP2(SEP)
+#define LIST17(SEP) While,12,NOT2(SEP),TOKEN13(SEP),Term,'\0'
+#define FILLER6 While,5,Not,3,Text,"--",Not,1,White,Char
+
 #define DECLARE_SCAN(THD) \
 extern int intcheck##THD; \
 extern int floatcheck##THD; \
@@ -449,67 +463,16 @@ int rescan##THD(const char *pattern, int index, int accum) \
     int floatpos = size##THD##Float(); \
     int charpos = size##THD##Char(); \
     switch (match.tag) { \
-    case (Char): { \
-    *enloc##THD##Char(1) = *pattern; if (*pattern == 0) break; \
-    int pos2 = rescan##THD(pattern+1,index+1,accum+1); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Int): { \
-    int pos1 = 0, ret = sscanf(pattern," %d%n",enloc##THD##Int(1),&pos1); if (ret != 2) break; \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Float): { \
-    int pos1 = 0, ret = sscanf(pattern," %f%n",enloc##THD##Float(1),&pos1); if (ret != 2) break; \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); if (pos2 < 0) break; \
-    return pos2;} \
-    case (String): { \
-    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
-    int pos1 = 0; while (pattern[pos0+pos1] && !isspace(pattern[pos0+pos1])) { \
-    *enloc##THD##Char(1) = pattern[pos0+pos1]; pos1 += 1;} if (pos1 == 0) break; \
-    *enloc##THD##Char(1) = 0; pos1 += 1; \
-    int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Literal): { \
-    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; \
-    int pos1 = strlen(match.str), ret = strncmp(pattern+pos0,match.str,pos1); if (ret != 0) break; \
-    int pos2 = rescan##THD(pattern+pos0+pos1,index+1,accum+pos0+pos1); if (pos2 < 0) break; \
-    return pos2;} \
-    case (White): { \
-    int pos0 = 0; while (isspace(pattern[pos0])) pos0 += 1; if (pos0 == 0) break; \
-    int pos2 = rescan##THD(pattern+pos0,index+1,accum+pos0); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Here): { \
-    intcheck##THD = intpos; \
-    floatcheck##THD = floatpos; \
-    charcheck##THD = charpos; \
-    int pos2 = rescan##THD(pattern,index+1,accum); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Retry): { \
-    unloc##THD##Int(size##THD##Int()-intcheck##THD); \
-    unloc##THD##Float(size##THD##Float()-floatcheck##THD); \
-    unloc##THD##Char(size##THD##Char()-charcheck##THD); \
-    intpos = size##THD##Int(); \
-    floatpos = size##THD##Float(); \
-    charpos = size##THD##Char(); \
-    int pos2 = rescan##THD(pattern,index+1,accum); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Fail): break; \
-    case (Goto): { \
-    int pos2 = rescan##THD(pattern,match.idx,accum); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Loop): { \
-    int pos1 = 0; for (int i = 0; i < match.idx; i++) { \
-    int pos2 = rescan##THD(pattern+pos1,index+1,accum+pos1); \
-    if (pos2 < 0) {pos1 = -1; break;}} if (pos1 < 0) break; \
-    int pos2 = rescan##THD(pattern+pos1,index+2,accum+pos1); if (pos2 < 0) break; \
-    return pos2;} \
-    case (Cond): { \
-    int pos0 = size##THD##Int(); *enloc##THD##Int(1) = 0; \
-    int pos1 = rescan##THD(pattern,index+1,accum); \
-    int pos2 = 0; if (pos1 >= 0) { \
-    *array##THD##Int(pos0,1) = 1; \
-    pos2 = rescan##THD(pattern+pos1,match.idx,accum+pos1); if (pos2 < 0) break;} else { \
-    pos2 = rescan##THD(pattern,match.alt,accum); if (pos2 < 0) break;} \
-    return pos2;} \
+    case (Dis): break; \
+    case (Not): break; \
+    case (While): break; \
+    case (Loop): break; \
+    case (Char): break; \
+    case (White): break; \
+    case (Text): break; \
+    case (Int): break; \
+    case (Float): break; \
+    case (Term): break; \
     default: exitErrstr("match too tag\n");} \
     unloc##THD##Int(size##THD##Int()-intpos); \
     unloc##THD##Float(size##THD##Float()-floatpos); \
@@ -527,17 +490,16 @@ int scan##THD(const char *pattern, int len, ...) \
     if ((index-orig == len) != (match.tag == Scans)) exitErrstr("index too tag\n"); \
     if (match.tag == Scans) break; \
     switch (match.tag) { \
-    case (Char): case (Int): case (Float): case (String): break; \
-    case (Literal): match.str = va_arg(args,const char *); break; \
-    case (White): case (Here): case (Retry): case (Fail): break; \
-    case (Goto): match.idx = index + va_arg(args,int); break; \
-    case (Loop): match.idx = va_arg(args,int); break; \
-    case (Cond): match.idx = index + va_arg(args,int); \
-    match.alt = index + va_arg(args,int); \
-    if (match.idx < orig) exitErrstr("match too index\n"); \
-    if (match.idx > max) max = match.idx; \
-    if (match.alt < orig) exitErrstr("match too alter\n"); \
-    if (match.alt > max) max = match.alt; break; \
+    case (Dis): break; \
+    case (Not): break; \
+    case (While): break; \
+    case (Loop): break; \
+    case (Char): break; \
+    case (White): break; \
+    case (Text): break; \
+    case (Int): break; \
+    case (Float): break; \
+    case (Term): break; \
     default: exitErrstr("arg too tag\n");} \
     *enloc##THD##Scan(1) = match; index += 1;} \
     if (max >= size##THD##Scan()) exitErrstr("index too match\n"); \

@@ -82,13 +82,14 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
 
 Configuration/history files consist of commands. User input appends to file. Appended commands immediately control display only when playback is at end of file; otherwise display is controlled from playback location. Incorrectly formatted commands are treated as intervening text. Correctly formatted commands with incorrect arguments from files cause warnings the first few times, then cause the remainder of the file to be ignored. Incorrect arguments on the command line cause warnings only. Command formats are specified by lists of the following subexpressions.
 
-  * Int matches integer as in %d format  
-  * Float matches as in %f format  
-  * String matches whitespace delimited string  
-  * Literal after whitespace must match exactly  
-  * Cond matches the next and goes on to indicated, or just goes on to alternate indicated  
+  * Skip - match and discard to pass, or mismatch and rewind to fail
+  * Not - mismatch and rewind to pass, or match and rewind to fail
+  * While - match consume repeat, or mismatch rewind, to pass
+  * Loop - match consume repeat to pass
+  * Char White Text Int Float - match and consume to pass
+  * Term - produce to pass
 
-For example, configureFill from Interface.c is scheduled by processConfigure in Configure.c if --fill is followed by a plane int and two plane int lists, separated by commas. This pattern is specified by subformats Literal,"--fill", Int, Literal,",", Cond,0,2, Int, Literal,",", Cond,0,2, Int.
+For example, a whitespace delimited nonempty string optionally preceded by whitespace is matched by Skip,2,While,1,White,Char,While,3,Not,1,White,Char.
 
   * --plane takes three scalars to set up for classify  
   * --point takes vector for construct and classify  
@@ -114,7 +115,6 @@ For example, configureFill from Interface.c is scheduled by processConfigure in 
   * --bind binds Lua function to function key in console  
   * --yield allow other files and command line options to proceed  
   * --call takes Lua function and arguments to start  
-  * --nop may be used to terminate multiline commands at eof  
   * --skip in sideband to append already applied command  
   * --side enque command for debug and internal use  
 
