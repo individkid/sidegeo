@@ -445,7 +445,7 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
 /*discard whitespace, match nonempty upto whitespace or text, discard whitespace, and delimit result*/
 #define TOKEN18(SEP) TOKEN16(SEP),SKIP2(SEP)
 /*discard whitespace, match nonempty upto whitespace or text, discard whitespace, delimit result, match and discard text*/
-#define LIST22(SEP) While,12,NOT2(SEP),TOKEN16(SEP),SKIP2(SEP),Term,'\0'
+#define LIST22(SEP) While,18,NOT2(SEP),TOKEN16(SEP),SKIP2(SEP),Term,'\0'
 /*discard whitespace, match any number of whitespace separated delimited upto text, match and discar text, and add extra delimiter*/
 #define FILLER6 While,5,Not,3,Text,"--",Not,1,White,Char /*discard upto double dash nonwhitespace*/
 
