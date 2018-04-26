@@ -144,11 +144,11 @@ The --color command may specify builtin pattern, wave buffer piped from --time v
 
 The development plan is to complete the namesake usage features first, then proceed to more detailed uses.
 
-  * Sculpt: -f -e --plane --point --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric)  
-  * Edit: -h -H -a -A --inject --menu Move Copy Mouse Roller Target --matrix  
-  * Analyze: -t Sample Display Classify Panel (Topology) --sample --dual --embed --polytope -T  
+  * Sculpt: -o --plane --point --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric)  
+  * Edit: -h -O -a --inject --menu Move Copy Mouse Roller Target --matrix  
+  * Analyze: Sample Display Classify Panel (Topology) --sample --dual --embed --polytope -H  
   * Synthesize: --call --bind --action Execute --time --change --script --listen --source --metric  
-  * Decorate: -F -E --yield --color --configure -s -S Panel  
+  * Decorate: -A --yield --color --configure -s -S Panel  
 
 The code is partitioned to the following files grouped by thread:
 

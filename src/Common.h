@@ -439,7 +439,7 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
 #define VECTOR5(CNT) Loop,4,CNT,FLOAT4 /*discard whitespace, match number of whitespace separated float*/
 #define WHITE2 Not,1,White /*match nothing if followed by nonwhitespace*/
 #define NOT2(SEP) Not,1,Text,SEP /*match noting if followed by text*/
-#define CHAR3(SEP) NOT2(SEP),Char /*match nonwhitespace char*/
+#define CHAR3(SEP) NOT2(SEP),Char /*match nongiven char*/
 #define SKIP2(SEP) Dis,1,Text,SEP /*discard text*/
 #define TOKEN16(SEP) WHITE3,CHAR3(SEP),While,5,WHITE2,CHAR3(SEP),WHITE3,Term,'\0'
 /*discard whitespace, match nonempty upto whitespace or text, discard whitespace, and delimit result*/

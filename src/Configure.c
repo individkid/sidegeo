@@ -215,7 +215,7 @@ int processConfigure(int index)
 		usePcsChar(); copyPcsRequest(sizePcsRequest(),charpos,sizePcsChar()-charpos);
 		*enlocPcsRequest(1) = 0;
 		DELOC}
-	pos = scanPcs(pattern,4,TEXT4("--yield"),Scans); if (pos>=0) {
+	pos = scanPcs(pattern,4,TEXT4("--skip"),Scans); if (pos>=0) {
 		SKIP
 		*arraySkip(index,1) = 1;
 		DELOC}
