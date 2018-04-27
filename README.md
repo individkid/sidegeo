@@ -38,7 +38,7 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -s \<name> serve remote framebuffer clients  
   * -S \<file> serve sculpt command clients  
 
-Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Execute mode. The -a option opens a display over the main display with same size and position. In Panel mode, a left mouse click over the main, or an alternate display, opens a widget panel with same size and position.
+Left mouse button selects pierce point, and activates menu selected action. Right mouse button toggle suspends action. Keyboard enter selects, and letter moves to menu item in console. Keyboard is effective if display or console in focus. Exit by pressing \<esc>\<enter>. Arrow keys act like mouse motion. \<pgup> and \<pgdn> act like roller. \<home> and \<end> act like left and right buttons. Macros may be bound to planes as Lua scripts, and activated in Execute mode. The -O option opens a display over the main display with same size and position. In Panel mode, a left mouse click over the main, or an alternate display, opens a widget panel with same size and position.
 
   * Additive -- click fills in region over pierce point  
   * Subtractive -- click hollows out region under pierce point  
@@ -137,11 +137,9 @@ Functions in Callback.c allow user action like mouse motion to transform display
 
 The --color command may specify builtin pattern, wave buffer piped from --time value, or remote framebuffer from Socket.c as the texture on a facet. If Virtual mode is Content, the cursor controls the remote cursor when it is over the a remote framebuffer facet. The --listen command may specify speaker, -S file, or libsndfile file. In case --listen specifies -S file, it sends the wave buffer pipelined from --time value to the -S clients as a framebuffer. The -s option presents the indicated display, main or alternate, to remote framebuffer clients. The -S option appends commands to the given file, or responds to query or callback requests from remote clients. Query or callback requests come from the client as cutbuffer text, and responses go as framebuffers or cutbuffer text. Queries and callbacks to the Haskell thread for topology info and changes, and to Command thread for numerical info and changes, come from the following.
 
- -S clients, Lua scripts, Display clicks, and Panel widgets.
-
   * -S clients  
   * Lua scripts  
-  * --side configureTest commands  
+  * --side commands  
   * Fltk displays  
 
 The following queries and callbacks are supported.
@@ -154,7 +152,7 @@ The following queries and callbacks are supported.
 The development plan is to complete the namesake usage features first, then proceed to more detailed uses.
 
   * Sculpt: -o --plane --point --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric)  
-  * Edit: -h -O -a --inject --menu Move Copy Mouse Roller Target --matrix  
+  * Edit: -h -O -a --inject --menu Move Copy Mouse Roller Target  
   * Analyze: Sample Display Classify Panel (Topology) --sample --dual --embed --polytope -H  
   * Synthesize: --call --bind --action Execute --time --change --listen (speaker)  
   * Decorate: -A --yield libsndfile --script --source --metric --color --configure -s -S Panel  
