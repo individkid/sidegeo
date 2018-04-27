@@ -581,7 +581,7 @@ int scan##THD(const char *pattern, int len, ...) \
     *enloc##THD##Scan(1) = match; index += 1;} \
     if (max >= size##THD##Scan()) exitErrstr("index too match\n"); \
     va_end(args); index = orig; \
-    int ret = rescan##THD(pattern,&index,0); \
+    int ret = 0; while (index < max && ret >= 0) rescan##THD(pattern,&index,ret); \
     unloc##THD##Scan(size##THD##Scan()-orig); \
     return ret; \
 }
