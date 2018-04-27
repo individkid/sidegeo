@@ -415,6 +415,35 @@ struct Pack {
     int plane;
 };
 
+enum When {
+    Setv,
+    Getv,
+    Call,
+    Test};
+enum What {
+    Map, // from Haskell
+    Signal, // from Wave
+    Value, // from State
+    Element}; // from Buffer
+enum Where {
+    Skt,
+    Lua,
+    Cmd,
+    Pnl};
+struct Query {
+    enum When when;
+    int ival;
+    Myfloat fval;
+    enum What what;
+    enum Data data;
+    int context;
+    int index;
+    int sub;
+    int siz;
+    enum Where where;
+    int tag;
+};
+
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \
