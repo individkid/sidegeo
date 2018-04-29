@@ -224,6 +224,8 @@ int processConfigure(int index)
 		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // layer
 		*enlocPcsCommand(1) = responseProceed;
 		DELOC}
+	pos = scanPcs(pattern,4,TEXT4("-"),Scans); if (pos>=0) {
+		DELOC}
 	pos = scanPcs(pattern,6,FILLER6,Scans); if (pos>=0) {
 		DELOC}
     WAIT
