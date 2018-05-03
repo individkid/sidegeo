@@ -78,6 +78,7 @@ inline bool operator!=(const Response &left, const Response &right) {return fals
 inline bool operator!=(const Match &left, const Match &right) {return false;}
 inline bool operator!=(const Proto &left, const Proto &right) {return false;}
 inline bool operator!=(const Pack &left, const Pack &right) {return false;}
+inline bool operator!=(const Thread &left, const Thread &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
@@ -293,24 +294,12 @@ DEFINE_LOCAL(PcsScan,struct Match)
 DEFINE_META(Remain,char)
 DEFINE_LOCAL(Complete,char)
 DEFINE_LOCAL(PcsBuf,char)
-DEFINE_QUEE(Ident,int,int)
-DEFINE_LOCAL(Name,int)
-DEFINE_LOCAL(Alter,int)
+DEFINE_TUPLE(Ident,struct Ident)
+DEFINE_LOCAL(Thread,struct Thread)
 
 DEFINE_LOCAL(Stage,char)
 DEFINE_LOCAL(Header,struct Header)
 DEFINE_LOCAL(Body,char)
-
-DEFINE_LOCAL(Skip,int)
-DEFINE_LOCAL(Count,int)
-DEFINE_LOCAL(Able,int)
-DEFINE_LOCAL(File,int)
-DEFINE_LOCAL(Side,int)
-DEFINE_LOCAL(Fifo,int)
-DEFINE_LOCAL(Pipe,int)
-DEFINE_LOCAL(Size,int)
-DEFINE_LOCAL(Ignore,int)
-DEFINE_LOCAL(Helper,pthread_t)
 
 
 DEFINE_DEST(Panels,CmnPanels,CmnPanels)

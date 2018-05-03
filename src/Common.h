@@ -407,17 +407,36 @@ struct Match {
     const char *str;
     int idx, alt;
 };
-enum Queue {
+enum Queue { // index of queue in QueueTuple Ident
     Files,
     Planes,
     Windows,
-    States};
+    States,
+    Queues};
+enum Func { // ways to compare Ident tuples
+    Name,
+    Suffix,
+    Super,
+    Funcs};
 struct Ident {
-    enum Queue sup;
-    int sub;
+    int pos; // name index
+    int sup; // file index
+    int sub; // index into queue
+};
+struct Thread {
+    int count; // per file number of planes
+    int state; // per file number of states
+    int skip; // per file skip next command
+    int able; // toggle disable
+    int file; // file handle
+    int side; // sideband handle
+    int fifo; // fifo handle
+    int pipe; // data pipe handle
+    int ignore; // ignored error count
+    pthread_t helper; // thread handle
 };
 
-struct Pack {
+struct Pack { // for Panel configuration
     enum Menu type; // Topology,Decorate,System,
     int context;
     int file;
@@ -964,9 +983,8 @@ DECLARE_LOCAL(PcsScan,struct Match) // format specifiers
 DECLARE_META(Remain,char) // configuration pattern
 DECLARE_LOCAL(Complete,char) // option pattern
 DECLARE_LOCAL(PcsBuf,char) // string buffer
-DECLARE_QUEE(Ident,int,int) // perfile buffer to plane index
-DECLARE_LOCAL(Name,int) // file to buffer index
-DECLARE_LOCAL(Alter,int) // window to buffer index
+DECLARE_TUPLE(Ident,struct Ident) // per buffer string
+DECLARE_LOCAL(Thread,struct Thread) // per file thread
 
 DECLARE_LOCAL(Stage,char) // copy of options for process
 DECLARE_LOCAL(Header,struct Header) // staged fifo headers

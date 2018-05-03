@@ -186,6 +186,18 @@ EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
 EXTERNC VAL *cast##NAME(KEY key);
 
+#define DECLARE_TUPLE(NAME,VAL) \
+EXTERNC void init##NAME(int (*cmp)(const VAL *, const VAL *)); \
+EXTERNC int usage##NAME(void); \
+EXTERNC void used##NAME(int idx, int msk); \
+EXTERNC int size##NAME(int idx); \
+EXTERNC int test##NAME(int idx, const VAL *val); \
+EXTERNC int check##NAME(int idx, const VAL *val); \
+EXTERNC int find##NAME(int idx, const VAL **val); \
+EXTERNC int choose##NAME(int idx, const VAL **val); \
+EXTERNC int insert##NAME(int idx, const VAL *val); \
+EXTERNC const VAL *cast##NAME(int idx, const VAL *val);
+
 #define DECLARE_TRUE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int comp##NAME(const void *left, const void *right); \
@@ -1316,7 +1328,6 @@ template<class KEY, class VAL> struct QueueTree {
 };
 
 #define DEFINE_TREE(NAME,KEY,VAL) \
-extern "C" int comp##NAME(const void *left, const void *right); \
 QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int size##NAME(void) {return NAME##Inst.size();} \
@@ -1327,6 +1338,129 @@ extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
 extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
+
+template<class VAL> struct QueueTuple {
+    QueueStruct<VAL> tuple;
+    QueueStruct<QueueTree<int,int> > set; // domain only; range is ignored
+    QueueStruct<int (*)(const VAL *, const VAL *)> func;
+    QueueStruct<int> mask;
+    int index;
+    const VAL *given;
+    int (*share)(const void *, const void *);
+    QueueTuple(int (*cmp)(const void *, const void *))
+    {
+        share = cmp;
+    }
+    void init(int (*cmp)(const VAL *, const VAL *))
+    {
+        *func.enloc(1) = cmp;
+    }
+    int comp(const void *left, const void *right)
+    {
+        int lpos = void2int(left);
+        int rpos = void2int(right);
+        const VAL *lptr = (lpos < tuple.size() ? tuple.array(lpos,1) : given);
+        const VAL *rptr = (rpos < tuple.size() ? tuple.array(rpos,1) : given);
+        int shift = *mask.array(index,1);
+        int idx = 0;
+        while (shift) {if ((shift&1) != 0) {
+        int (*cmp)(const VAL *, const VAL *) = *func.array(idx,1);
+        int ret = cmp(lptr,rptr);
+        if (ret != 0) return ret;}
+        shift >>= 1;
+        idx += 1;}
+        return 0;
+    }
+    int size()
+    {
+        return set.size();
+    }
+    void touch(int idx, int msk)
+    {
+        while (idx >= set.size()) {
+        QueueTree<int,int> tree = QueueTree<int,int>();
+        tree.init(share);
+        *set.enloc(1) = tree;
+        *mask.enloc(1) = msk;}
+        *mask.array(idx,1) = msk;
+        index = idx;
+    }
+    int size(int idx)
+    {
+        return set.array(idx,2)->size();
+    }
+    int test(int idx, const VAL *val) // return 0 if found with same val
+    {
+        index = idx;
+        given = val;
+        int pos = tuple.size();
+        int ret = set.array(idx,1)->find(&pos);
+        if (ret < 0) return -1;
+        for (int i = 0; i < func.size(); i++) {
+        int (*cmp)(const VAL *, const VAL *) = *func.array(i,1);
+        if (cmp(val,tuple.array(pos,1)) != 0) return -1;}
+        return 0;
+    }
+    int check(int idx, const VAL *val) // return 0 if found with any val
+    {
+        index = idx;
+        given = val;
+        int pos = tuple.size();
+        int ret = set.array(idx,1)->find(&pos);
+        if (ret < 0) return -1;
+        return 0;
+    }
+    int find(int idx, const VAL **val)
+    {
+        index = idx;
+        given = *val;
+        int pos = tuple.size();
+        int ret = set.array(idx,1)->find(&pos);
+        if (ret < 0) return -1;
+        *val = tuple.array(pos,1);
+        return 0;
+    }
+    int choose(int idx, const VAL **val)
+    {
+        int pos = 0; int ret = set.array(idx,1)->choose(&pos);
+        if (ret < 0) return -1;
+        *val = tuple.array(pos,1);
+        return 0;
+    }
+    int insert(int idx, const VAL *val)
+    {
+        int pos = tuple.size();
+        *tuple.enloc(1) = *val;
+        index = idx;
+        int ret = set.array(idx,1)->insert(pos);
+        if (ret < 0) tuple.unloc(1);
+        return ret;
+    }
+    const VAL *cast(int idx, const VAL *val)
+    {
+        index = idx;
+        given = val;
+        int pos = tuple.size();
+        int ret = set.array(idx,1)->find(&pos);
+        if (ret < 0) return 0;
+        return tuple.array(pos,1);
+    }
+};
+
+#define DEFINE_TUPLE(NAME,VAL) \
+extern "C" int comp##NAME(const void *left, const void *right); \
+QueueTuple<VAL> NAME##Inst = QueueTuple<VAL>(comp##NAME); \
+extern "C" void init##NAME(int (*cmp)(const VAL *, const VAL *)) {NAME##Inst.init(cmp);} \
+extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
+extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
+extern "C" void used##NAME(int idx, int msk) {NAME##Inst.touch(idx,msk);} \
+extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);} \
+extern "C" int test##NAME(int idx, const VAL *val) {return NAME##Inst.test(idx,val);} \
+extern "C" int check##NAME(int idx, const VAL *val) {return NAME##Inst.check(idx,val);} \
+extern "C" int find##NAME(int idx, const VAL **val) {return NAME##Inst.find(idx,val);} \
+extern "C" int choose##NAME(int idx, const VAL **val) {return NAME##Inst.choose(idx,val);} \
+extern "C" int insert##NAME(int idx, const VAL *val) {return NAME##Inst.insert(idx,val);} \
+extern "C" const VAL *cast##NAME(int idx, const VAL *val) {return NAME##Inst.cast(idx,val);}
 
 template<class KEY, class VAL> struct QueueTrue {
     QueueTree<KEY,QueueStruct<VAL> > tree;

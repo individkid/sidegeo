@@ -29,93 +29,31 @@ void configureHollow(void);
 void configureInflate(void);
 void configureMatrix(void);
 void responseProceed(void);
-
 int processIgnore(int index, int noneg);
+int processAlias(int pos, enum Queue base, int sup, struct Ident *ident);
+int processIdent(int pos, enum Queue base, int sup, struct Ident *ident);
+DECLARE_MSGSTR(PcsChar)
 
 DEFINE_SCAN(Pcs)
-DEFINE_MSGSTR(PcsBuf)
 
 int processPlane(int *cpos, int file)
 {
-	int filepos = *arrayName(file,1);
-	int filelen = lengthPcsBuf(filepos,0);
-	int planepos = sizePcsBuf();
 	int clen = lengthPcsChar(*cpos,0);
-	int named = (*arrayPcsChar(*cpos,1) != '_' || *arrayPcsChar(*cpos+1,1) != 0);
-	int count = *arrayCount(file,1);
-	if (named) {usePcsChar(); copyPcsBuf(planepos,*cpos,clen+1);}
-	else msgstrPcsBuf("%d",0,count);
-	int key = 0; int found = (findIdent(file,&key) == 0);
-
-	// named and found: return found as *plane
-	if (named && found) {
-	unlocPcsBuf(sizePcsBuf()-planepos);
-	*cpos += clen+1; return *castIdent(file,key);}
-
-	// named and not found: insert name and count, return count as *plane
-	else if (named && !found) {
-	int pos = sizePcsBuf();
-	msgstrPcsBuf("%d",0,count);
-	if (checkIdent(file,pos)) unlocPcsBuf(sizePcsBuf()-pos);
-	else {insertIdent(file,pos); *castIdent(file,pos) = count;}
-	insertIdent(file,planepos); *castIdent(file,planepos) = count;
-	*arrayCount(file,1) += 1;
-	*cpos += clen+1; return count;}
-
-	// unnamed and found: return count as *plane
-	else if (!named && found) {
-	unlocPcsBuf(sizePcsBuf()-planepos);
-	*arrayCount(file,1) += 1;
-	*cpos += clen+1; return count;}
-
-	// unnamed and not found: insert count, return count as *plane
-	else if (!named && !found) {
-	insertIdent(file,planepos); *castIdent(file,planepos) = count;
-	*arrayCount(file,1) += 1;
-	*cpos += clen+1; return count;}
-
-	return -1;
-}
-
-#define SUFFIX(NAME) \
-	if (*arrayPcsChar(*cpos,1) == '_' && *arrayPcsChar(*cpos+1,1) == 0) { \
-	*cpos += 2; return dflt;} \
-	int len = lengthPcsChar(*cpos,0); \
-	for (int i = 0; i < size##NAME(); i++) { \
-	int pos = *array##NAME(i,1); \
-	char *suf = stringPcsBuf(pos,0); \
-	int fix = strlen(suf); \
-	if (fix < len) continue; \
-	char *suffix = suf + (fix-len); \
-	if (strcmp(arrayPcsChar(*cpos,0),suffix) == 0) { \
-	*cpos += len+1; return i;}} \
-	return -1;
-
-int processFile(int *cpos, int dflt)
-{ // finds first file with given suffix
-	SUFFIX(Name)
-}
-
-int processAlter(int *cpos, int dflt)
-{ // finds first alternate display with given suffix
-	SUFFIX(Alter)
-}
-
-int processVertex(int *ipos, int *cpos, int len, int *plane, int *file, int index)
-{ // len is typically 3
-	int ret = 0;
-	if (*arrayPcsInt(*ipos,1)) {
-	*file = processFile(cpos,index);
-	if (*file < 0) return -1;
-	*ipos += 1;}
-	while (len > 1 && *arrayPcsInt(*ipos,1)) {
-	*plane = processPlane(cpos,*file);
-	if (*plane < 0) return -1;
-	len -= 1; plane += 1; *ipos += 1; ret += 1;}
-	if (len == 0) return -1;
-	*(plane+1) = processPlane(cpos,*file);
-	if (*(plane+1) < 0) return -1;
-	return ret + 1;
+	struct Ident ident = {0};
+	if (*arrayPcsChar(*cpos,1) == '_' && *arrayPcsChar(*cpos+1,1) == 0) { // not named
+	int sub = sizeThread();
+	int pos = sizePcsChar(); msgstrPcsChar("%d",0,sub);
+	if (processIdent(*cpos,Planes,file,&ident) < 0) { // number not used as name
+	if (ident.sub != sub) exitErrstr("ident too sub\n");}
+	else ident.sub = sub; // number already used as name
+	unlocPcsChar(sizePcsChar()-pos);} else { // named
+	if (processIdent(*cpos,Planes,file,&ident) < 0) { // named was inserted
+	int pos = sizePcsChar(); msgstrPcsChar("%d",0,ident.sub);
+	struct Ident alias = ident;
+	processAlias(pos,Planes,file,&alias);
+	unlocPcsChar(sizePcsChar()-pos);}}
+	*cpos += clen+1;
+	return ident.sub;
 }
 
 int processPolyant(int name, int file)
@@ -156,8 +94,8 @@ UNLOC delocRemain(index,pos); \
 return processIgnore(index,pos);
 
 #define SKIP \
-if (*arraySkip(index,1)) { \
-*arraySkip(index,1) = 0; \
+if (arrayThread(index,1)->skip) { \
+arrayThread(index,1)->skip = 0; \
 DELOC}
 
 int processConfigure(int index)
@@ -217,7 +155,7 @@ int processConfigure(int index)
 		DELOC}
 	pos = scanPcs(pattern,4,TEXT4("--skip"),Scans); if (pos>=0) {
 		SKIP
-		*arraySkip(index,1) = 1;
+		arrayThread(index,1)->skip = 1;
 		DELOC}
 	pos = scanPcs(pattern,12,TEXT4("--side"),TEXT4("responseProceed"),INT4,Scans); if (pos>=0) {
 		SKIP

@@ -23,9 +23,7 @@ extern int thread;
 DECLARE_SCAN(Pcs)
 int processInit(int pos);
 void processComplain(void);
-int processFile(int *cpos, int dflt);
-int processAlter(int *cpos, int dflt);
-char *processName(int pos, int *name);
+int processIdent(int pos, enum Queue base, int sup, struct Ident *ident);
 void display(void);
 void focus(void);
 
@@ -49,28 +47,23 @@ int processOption(void)
 		// TODO3 run tests
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-o"),STRING9,Scans); if (pos>=0) {
-		int cpos = charpos;
-		int file = processFile(&cpos,thread);
-		if (file < 0) {
-		thread = processInit(charpos);
+		struct Ident ident = {0};
+		if (processIdent(charpos,Files,0,&ident) < 0) {
 		DELOC(pos) return -pos;}
-		if (*arrayPipe(file,1) >= 0 && *arrayAble(file,1)) removeCmnProcesses(*arrayPipe(file,1));
-		else if (*arrayPipe(file,1) >= 0) insertCmnProcesses(*arrayPipe(file,1));
-		*arrayAble(file,1) ^= 1;
+		struct Thread *thread = arrayThread(ident.sub,1);
+		if (thread->pipe >= 0 && thread->able) removeCmnProcesses(thread->pipe);
+		else if (thread->pipe >= 0) insertCmnProcesses(thread->pipe);
+		thread->able ^= 1;
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-O"),STRING9,Scans); if (pos>=0) {
-		int cpos = charpos;
-		int alter = processAlter(&cpos,sizeAlter());
-		if (alter < 0) {
-		processName(pos,enlocAlter(1));
-	    usePcsChar(); copyPcsCmdByte(sizePcsCmdByte(),pos,len+1);
-	    *enlocPcsCommand(1) = display;}
-		else if (alter < sizeAlter()) {
-		*enlocPcsCmdInt(1) = alter+1;
-		*enlocPcsCommand(1) = focus;}
-		else {
-		*enlocPcsCmdInt(1) = 0;
-		*enlocPcsCommand(1) = focus;}
+		struct Ident ident = {0};
+		if (processIdent(charpos,Windows,0,&ident) < 0) {
+		int len = lengthPcsBuf(ident.pos,0);
+	    usePcsBuf(); copyPcsCmdByte(sizePcsCmdByte(),ident.pos,len+1);
+	    *enlocPcsCommand(1) = display;
+		DELOC(pos) return pos;}
+		*enlocPcsCmdInt(1) = ident.sub;
+		*enlocPcsCommand(1) = focus;
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,9,STRING9,Scans); if (pos>=0) {
 		processComplain();
