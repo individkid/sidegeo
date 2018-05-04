@@ -1345,6 +1345,7 @@ extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
 template<class VAL> struct QueueTuple {
     QueueLink link; // 0 unused links; 1 unused tuple entries; 2 used tuple entries; >2 per tree entry list
     QueueStruct<VAL> tuple; // database entries
+    QueueStruct<int> back; // index of entry in link
     QueueStruct<QueueTree<int,int> > tree; // each is map from tuple index to link pool
     QueueStruct<int (*)(const VAL *, const VAL *)> func;
     QueueStruct<int> mask; // per tree mask of func
@@ -1455,16 +1456,24 @@ template<class VAL> struct QueueTuple {
     {
         index = idx;
         given = val;
-        int pos = tuple.size(); *tuple.enloc(1) = *val;
+        int pos = tuple.size(); *tuple.enloc(1) = *val; 
         if (link.begin(0) < 0) link.move(-1,0);
         if (link.begin(1) < 0) link.move(-1,1);
-        int lnk1 = link.begin(1); link.move(lnk1,2); link.set(lnk1,pos);
+        int lnk1 = link.begin(1); link.move(lnk1,2); link.set(lnk1,pos); *back.enloc(1) = lnk1;
         int lnk0 = link.begin(0); link.set(lnk0,pos);
         int ret = tree.array(idx,1)->find(&pos);
         if (ret < 0) {
         if (tree.array(idx,1)->insert(pos) < 0) exitErrstr("tree too insert\n");
         link.move(lnk0,-1); *tree.array(idx,1)->cast(pos) = link.pool(lnk0);}
         else link.move(lnk0,*tree.array(idx,1)->cast(pos));
+    }
+    void remove(int lnk)
+    {
+        int pos = link.get(lnk); link.move(lnk,0);
+        int found = 0; for (int i = 0; i < tree.size(); i++) {
+        QueueTree<int,int> *ptr = tree.array(i,1); index = i;
+        if (ptr->check(pos) >= 0 && link.begin(*ptr->cast(pos)) >= 0) found = 1;}
+        if (!found) {int lnk = *back.array(pos,1); link.move(lnk,1);}
     }
     const VAL *cast(int lnk)
     {
