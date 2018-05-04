@@ -299,6 +299,11 @@ int processSuffix(const struct Ident *left, const struct Ident *right)
     return strcmp(stringPcsBuf(left->pos+(llen-len),0),stringPcsBuf(right->pos+(rlen-len),0));
 }
 
+int processBase(const struct Ident *left, const struct Ident *right)
+{
+    return left->base-right->base;
+}
+
 int processSuper(const struct Ident *left, const struct Ident *right)
 {
     return left->sup-right->sup;
@@ -309,11 +314,12 @@ void processBefore(void)
     int count = 0;
     initIdent(processName); shift[Name] = count++;
     initIdent(processSuffix); shift[Suffix] = count++;
+    initIdent(processBase); shift[Base] = count++;
     initIdent(processSuper); shift[Super] = count++;
-    usedIdent(Files,1<<shift[Suffix]);
-    usedIdent(Planes,1<<shift[Name]|1<<shift[Super]);
-    usedIdent(Windows,1<<shift[Name]);
-    usedIdent(States,1<<shift[Name]|1<<shift[Super]);
+    usedIdent(Files,1<<shift[Suffix]|1<<shift[Base]);
+    usedIdent(Planes,1<<shift[Name]|1<<shift[Base]|1<<shift[Super]);
+    usedIdent(Windows,1<<shift[Name]|1<<shift[Base]);
+    usedIdent(States,1<<shift[Name]|1<<shift[Base]|1<<shift[Super]);
     pidtime = time(0);
     int pos = sizePcsChar(); msgstrPcsChar("_",0); struct Ident ident = {0};
     int ret = processIdent(pos,Windows,0,&ident); delocPcsChar(sizePcsChar()-pos);

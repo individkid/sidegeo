@@ -416,10 +416,12 @@ enum Queue { // index of queue in QueueTuple Ident
 enum Func { // ways to compare Ident tuples
     Name,
     Suffix,
+    Base,
     Super,
     Funcs};
 struct Ident {
     int pos; // name index
+    enum Queue base;
     int sup; // file index
     int sub; // index into queue
 };
