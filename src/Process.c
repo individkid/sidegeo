@@ -256,9 +256,9 @@ int processAlias(int pos, enum Queue base, int sup, struct Ident *ident)
     ident->pos = sizePcsBuf(); ident->sup = sup;
     int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(ident->pos,pos,len+1);
     if (checkIdent(base,ident) < 0) {
-    if (insertIdent(base,ident) < 0) exitErrstr("insert too name\n");
+    insertIdent(base,ident);
     return -1;}
-    const struct Ident *found = castIdent(base,ident);
+    const struct Ident *found = castIdent(beginIdent(base,ident));
     unlocPcsBuf(sizePcsBuf()-ident->pos);
     ident->pos = found->pos;
     ident->sub = found->sub;
@@ -277,9 +277,9 @@ int processIdent(int pos, enum Queue base, int sup, struct Ident *ident)
     CASE(Windows) ident->sub = altersub++;
     CASE(States) ident->sub = arrayThread(sup,1)->state++;
     DEFAULT(exitErrstr("base too switch\n");)
-    if (insertIdent(base,ident) < 0) exitErrstr("insert too name\n");
+    insertIdent(base,ident);
     return -1;}
-    const struct Ident *found = castIdent(base,ident);
+    const struct Ident *found = castIdent(beginIdent(base,ident));
     unlocPcsBuf(sizePcsBuf()-ident->pos);
     ident->pos = found->pos;
     ident->sub = found->sub;

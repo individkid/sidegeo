@@ -79,6 +79,7 @@ inline bool operator!=(const Match &left, const Match &right) {return false;}
 inline bool operator!=(const Proto &left, const Proto &right) {return false;}
 inline bool operator!=(const Pack &left, const Pack &right) {return false;}
 inline bool operator!=(const Thread &left, const Thread &right) {return false;}
+inline bool operator!=(const Ident &left, const Ident &right) {return false;}
 
 DEFINE_FUNC(CmnCommands,commandConsume,commandProduce,commandSignal,commandBefore,commandAfter,commandDelay,commandNodelay)
 DEFINE_STAGE(CmnCommand,Command,CmnCommands)
