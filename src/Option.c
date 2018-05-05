@@ -23,7 +23,7 @@ extern int thread;
 DECLARE_SCAN(Pcs)
 int processInit(int pos);
 void processComplain(void);
-int processIdent(int pos, enum Queue base, int sup, struct Ident *ident);
+int processIdent(int pos, enum Queue base, int sup, int *sub);
 void display(void);
 void focus(void);
 
@@ -47,22 +47,20 @@ int processOption(void)
 		// TODO3 run tests
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-o"),STRING9,Scans); if (pos>=0) {
-		struct Ident ident = {0};
-		if (processIdent(charpos,Files,0,&ident) < 0) {
+		int sub = 0; if (processIdent(charpos,Files,0,&sub) < 0) {
 		DELOC(pos) return -pos;}
-		struct Thread *thread = arrayThread(ident.sub,1);
+		struct Thread *thread = arrayThread(sub,1);
 		if (thread->pipe >= 0 && thread->able) removeCmnProcesses(thread->pipe);
 		else if (thread->pipe >= 0) insertCmnProcesses(thread->pipe);
 		thread->able ^= 1;
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-O"),STRING9,Scans); if (pos>=0) {
-		struct Ident ident = {0};
-		if (processIdent(charpos,Windows,0,&ident) < 0) {
-		int len = lengthPcsBuf(ident.pos,0);
-	    usePcsBuf(); copyPcsCmdByte(sizePcsCmdByte(),ident.pos,len+1);
+		int sub = 0; if (processIdent(charpos,Windows,0,&sub) < 0) {
+		int len = lengthPcsChar(charpos,0);
+	    usePcsChar(); copyPcsCmdByte(sizePcsCmdByte(),charpos,len+1);
 	    *enlocPcsCommand(1) = display;
 		DELOC(pos) return pos;}
-		*enlocPcsCmdInt(1) = ident.sub;
+		*enlocPcsCmdInt(1) = sub;
 		*enlocPcsCommand(1) = focus;
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,9,STRING9,Scans); if (pos>=0) {

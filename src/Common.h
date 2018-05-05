@@ -407,23 +407,15 @@ struct Match {
     const char *str;
     int idx, alt;
 };
-enum Queue { // index of queue in QueueTuple Ident
+enum Queue { // index into queue of name trees
     Files,
     Planes,
     Windows,
     States,
     Queues};
-enum Func { // ways to compare Ident tuples
-    Name,
-    Suffix,
-    Base,
-    Super,
-    Funcs};
 struct Ident {
     int pos; // name index
-    enum Queue base;
-    int sup; // file index
-    int sub; // index into queue
+    int idx; // file index
 };
 struct Thread {
     int count; // per file number of planes
@@ -985,7 +977,8 @@ DECLARE_LOCAL(PcsScan,struct Match) // format specifiers
 DECLARE_META(Remain,char) // configuration pattern
 DECLARE_LOCAL(Complete,char) // option pattern
 DECLARE_LOCAL(PcsBuf,char) // string buffer
-DECLARE_TUPLE(Ident,struct Ident) // per buffer string
+DECLARE_LOCAL(Ident,struct Ident) // info for perfile names
+DECLARE_FALSE(Name,int,int) // buffer string to queue index
 DECLARE_LOCAL(Thread,struct Thread) // per file thread
 
 DECLARE_LOCAL(Stage,char) // copy of options for process

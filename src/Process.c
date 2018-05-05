@@ -47,7 +47,6 @@ struct Helper {
 } helper = {0};
 time_t pidtime = 0;
 int altersub = 0;
-int shift[Funcs] = {0};
 void inithlp(struct Helper *hlp)
 {
     if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
@@ -187,51 +186,6 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
     return fd;
 }
 
-int processInit(const struct Ident *ident)
-{
-    char *filename = stringPcsBuf(ident->pos,0);
-    struct Thread *thread = arrayThread(ident->sub,1);
-    thread->skip = 0;
-    thread->count = 0;
-    thread->able = 1;
-    thread->ignore = 0;
-    thread->file = -1;
-    thread->side = -1;
-    thread->pipe = -1;
-    mode_t mode = 00660;
-    int file = openfile(filename,"", "",         O_RDWR|O_CREAT,     mode,0,&mode);
-    int side = openfile(filename,"",PROCESS_SIDE,O_RDWR|O_CREAT,     mode,0,0);
-    int datr = openfile(filename,"",PROCESS_FIFO,O_RDONLY|O_NONBLOCK,mode,O_RDONLY,0);
-    int datw = openfile(filename,"",PROCESS_FIFO,O_WRONLY,           mode,0,0);
-    if (file < 0 || side < 0 || datr < 0 || datw < 0) return -1;
-    int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("read pipe failed: %s\n",strerror(errno));
-    int flags = fcntl(pipefd[0],F_GETFL); if (flags < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
-    if (fcntl(pipefd[0],F_SETFL,flags|O_NONBLOCK) < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
-    thread->file = file; helper.file = file;
-    thread->side = side; helper.side = side;
-    thread->fifo = datw; helper.fifo = datr;
-    thread->pipe = pipefd[0]; helper.pipe = pipefd[1];
-    insertCmnProcesses(thread->pipe);
-    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
-    if (pthread_create(&thread->helper,0,processHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
-    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
-    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-    // int pos = sizePcsChar(); *enlocPcsChar(1) = '_'; *enlocPcsChar(1) = 0;
-    // int key = 0; int ret = processIdent(pos,Planes,ident->sub,&key);
-    // if (ret >= 0) exitErrstr("ident too underscore\n");
-    // ident = arrayIdent(key,1); arrayThread(ident->sup,1)->count--; ident->sub = -1;
-    return 0;
-}
-
-int processRead(int thread)
-{
-    char *buf = enlocRemain(thread,PROCESS_STEP);
-    int retval = read(arrayThread(thread,1)->pipe,buf,PROCESS_STEP);
-    if (retval < 0) {unlocRemain(thread,PROCESS_STEP); return -1;}
-    if (retval < PROCESS_STEP) unlocRemain(thread,PROCESS_STEP-retval);
-    return retval;
-}
-
 void processError(int index)
 {
     struct Thread *thread = arrayThread(index,1);
@@ -251,78 +205,135 @@ void processComplain(void)
     // TODO3 msgstrPcsOutput
 }
 
-int processAlias(int pos, enum Queue base, int sup, struct Ident *ident)
+int processRead(int thread)
 {
-    ident->pos = sizePcsBuf(); ident->sup = sup;
-    int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(ident->pos,pos,len+1);
-    if (checkIdent(base,ident) < 0) {
-    insertIdent(base,ident);
-    return -1;}
-    const struct Ident *found = castIdent(beginIdent(base,ident));
-    unlocPcsBuf(sizePcsBuf()-ident->pos);
-    ident->pos = found->pos;
-    ident->sub = found->sub;
-    return 0;
+    char *buf = enlocRemain(thread,PROCESS_STEP);
+    int retval = read(arrayThread(thread,1)->pipe,buf,PROCESS_STEP);
+    if (retval < 0) {unlocRemain(thread,PROCESS_STEP); return -1;}
+    if (retval < PROCESS_STEP) unlocRemain(thread,PROCESS_STEP-retval);
+    return retval;
 }
 
-int processIdent(int pos, enum Queue base, int sup, struct Ident *ident)
+int processInit(int pos)
 {
-    ident->pos = sizePcsBuf(); ident->sup = sup;
-    int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(ident->pos,pos,len+1);
-    if (checkIdent(base,ident) < 0) {
-    SWITCH(base,Files) {ident->sub = sizeThread();
+    int sub = sizeThread();
     struct Thread init = {0}; *enlocThread(1) = init;
-    if (processInit(ident) < 0) processComplain();}
-    CASE(Planes) ident->sub = arrayThread(sup,1)->count++;
-    CASE(Windows) ident->sub = altersub++;
-    CASE(States) ident->sub = arrayThread(sup,1)->state++;
+    char *filename = stringPcsBuf(pos,0);
+    struct Thread *thread = arrayThread(sub,1);
+    thread->skip = 0;
+    thread->count = 0;
+    thread->able = 1;
+    thread->ignore = 0;
+    thread->file = -1;
+    thread->side = -1;
+    thread->pipe = -1;
+    mode_t mode = 00660;
+    int file = openfile(filename,"", "",         O_RDWR|O_CREAT,     mode,0,&mode);
+    int side = openfile(filename,"",PROCESS_SIDE,O_RDWR|O_CREAT,     mode,0,0);
+    int datr = openfile(filename,"",PROCESS_FIFO,O_RDONLY|O_NONBLOCK,mode,O_RDONLY,0);
+    int datw = openfile(filename,"",PROCESS_FIFO,O_WRONLY,           mode,0,0);
+    if (file < 0 || side < 0 || datr < 0 || datw < 0) {processComplain(); return sub;}
+    int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("read pipe failed: %s\n",strerror(errno));
+    int flags = fcntl(pipefd[0],F_GETFL); if (flags < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
+    if (fcntl(pipefd[0],F_SETFL,flags|O_NONBLOCK) < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
+    thread->file = file; helper.file = file;
+    thread->side = side; helper.side = side;
+    thread->fifo = datw; helper.fifo = datr;
+    thread->pipe = pipefd[0]; helper.pipe = pipefd[1];
+    insertCmnProcesses(thread->pipe);
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    if (pthread_create(&thread->helper,0,processHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
+    if (pthread_cond_wait(&cond,&mutex) != 0) exitErrstr("cond wait failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+    // int pos = sizePcsChar(); *enlocPcsChar(1) = '_'; *enlocPcsChar(1) = 0;
+    // int key = 0; int ret = processIdent(pos,Planes,ident->sub,&key);
+    // if (ret >= 0) exitErrstr("ident too underscore\n");
+    // ident = arrayIdent(key,1); arrayThread(ident->sup,1)->count--; ident->sub = -1;
+    return sub;
+}
+
+int processCheck(int pos, enum Queue base, int sup)
+{
+    int bufpos = sizePcsBuf();
+    int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(bufpos,pos,len+1);
+    int ret = 0; SWITCH(base,Files) FALL(Windows) ret = checkName(base,bufpos);
+    CASE (Planes) FALL(States) {struct Ident ident = {0};
+    int idtpos = sizeIdent(); ident.idx = sup; ident.pos = bufpos;
+    *enlocIdent(1) = ident; ret = checkName(base,idtpos); unlocIdent(1);}
+    DEFAULT(exitErrstr("check too base");)
+    unlocPcsBuf(sizePcsBuf()-bufpos);
+    return ret;
+}
+
+void processInsert(int pos, enum Queue base, int sup, int sub)
+{
+    int bufpos = sizePcsBuf();
+    int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(bufpos,pos,len+1);
+    int ret = 0; SWITCH(base,Files) FALL(Windows) ret = insertName(base,bufpos);
+    CASE (Planes) FALL(States) {struct Ident ident = {0};
+    int idtpos = sizeIdent(); ident.idx = sup; ident.pos = bufpos;
+    *enlocIdent(1) = ident; ret = insertName(base,idtpos);}
+    DEFAULT(exitErrstr("insert too base");)
+    if (ret < 0) exitErrstr("insert too insert\n");
+}
+
+int processEnloc(int pos, enum Queue base, int sup)
+{
+    int ret = 0; SWITCH(base,Files) ret = processInit(pos);
+    CASE(Planes) ret = arrayThread(sup,1)->count++;
+    CASE(Windows) ret = altersub++;
+    CASE(States) ret = arrayThread(sup,1)->state++;
     DEFAULT(exitErrstr("base too switch\n");)
-    insertIdent(base,ident);
-    return -1;}
-    const struct Ident *found = castIdent(beginIdent(base,ident));
-    unlocPcsBuf(sizePcsBuf()-ident->pos);
-    ident->pos = found->pos;
-    ident->sub = found->sub;
-    return 0;
+    return ret;
 }
 
-int processName(const struct Ident *left, const struct Ident *right)
+void processAlias(int pos, int sup, int sub)
 {
-    return strcmp(stringPcsBuf(left->pos,0),stringPcsBuf(right->pos,0));
+    int ret = processCheck(pos,Planes,sup);
+    if (ret < 0) processInsert(pos,Planes,sup,sub);
 }
 
-int processSuffix(const struct Ident *left, const struct Ident *right)
+int processIdent(int pos, enum Queue base, int sup, int *sub)
 {
-    int llen = lengthPcsBuf(left->pos,0);
-    int rlen = lengthPcsBuf(right->pos,0);
+    int ret = processCheck(pos,base,sup);
+    if (ret < 0) {*sub = processEnloc(pos,base,sup); processInsert(pos,base,sup,*sub);}
+    return ret;
+}
+
+int processName(const void *left, const void *right)
+{
+    return strcmp(stringPcsBuf(void2int(left),0),stringPcsBuf(void2int(right),0));
+}
+
+int processSuffix(const void *left, const void *right)
+{
+    int lpos = void2int(left);
+    int rpos = void2int(right);
+    int llen = lengthPcsBuf(lpos,0);
+    int rlen = lengthPcsBuf(rpos,0);
     int len = (llen < rlen ? llen : rlen);
-    return strcmp(stringPcsBuf(left->pos+(llen-len),0),stringPcsBuf(right->pos+(rlen-len),0));
+    return strcmp(stringPcsBuf(lpos+(llen-len),0),stringPcsBuf(rpos+(rlen-len),0));
 }
 
-int processBase(const struct Ident *left, const struct Ident *right)
+int processPerfile(const void *left, const void *right)
 {
-    return left->base-right->base;
-}
-
-int processSuper(const struct Ident *left, const struct Ident *right)
-{
-    return left->sup-right->sup;
+    struct Ident lidt = *arrayIdent(void2int(left),1);
+    struct Ident ridt = *arrayIdent(void2int(right),1);
+    int diff = lidt.idx-ridt.idx;
+    if (diff) return diff;
+    return strcmp(stringPcsBuf(lidt.pos,0),stringPcsBuf(ridt.pos,0));
 }
 
 void processBefore(void)
 {
-    int count = 0;
-    initIdent(processName); shift[Name] = count++;
-    initIdent(processSuffix); shift[Suffix] = count++;
-    initIdent(processBase); shift[Base] = count++;
-    initIdent(processSuper); shift[Super] = count++;
-    usedIdent(Files,1<<shift[Suffix]|1<<shift[Base]);
-    usedIdent(Planes,1<<shift[Name]|1<<shift[Base]|1<<shift[Super]);
-    usedIdent(Windows,1<<shift[Name]|1<<shift[Base]);
-    usedIdent(States,1<<shift[Name]|1<<shift[Base]|1<<shift[Super]);
+    initName(Files,processSuffix);
+    initName(Planes,processPerfile);
+    initName(Windows,processName);
+    initName(States,processPerfile);
     pidtime = time(0);
     int pos = sizePcsChar(); msgstrPcsChar("_",0); struct Ident ident = {0};
-    int ret = processIdent(pos,Windows,0,&ident); delocPcsChar(sizePcsChar()-pos);
+    int sub = 0; int ret = processIdent(pos,Windows,0,&sub); delocPcsChar(sizePcsChar()-pos);
+    if (ret != 0 || sub != 0) exitErrstr("before too zero\n");
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("mutex init failed: %s\n",strerror(errno));
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }

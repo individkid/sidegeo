@@ -30,8 +30,8 @@ void configureInflate(void);
 void configureMatrix(void);
 void responseProceed(void);
 int processIgnore(int index, int noneg);
-int processAlias(int pos, enum Queue base, int sup, struct Ident *ident);
-int processIdent(int pos, enum Queue base, int sup, struct Ident *ident);
+void processAlias(int pos, int sup, int sub);
+int processIdent(int pos, enum Queue base, int sup, int *sub);
 DECLARE_MSGSTR(PcsChar)
 
 DEFINE_SCAN(Pcs)
@@ -39,21 +39,12 @@ DEFINE_SCAN(Pcs)
 int processPlane(int *cpos, int file)
 {
 	int clen = lengthPcsChar(*cpos,0);
-	struct Ident ident = {0};
-	if (*arrayPcsChar(*cpos,1) == '_' && *arrayPcsChar(*cpos+1,1) == 0) { // not named
-	int sub = sizeThread();
-	int pos = sizePcsChar(); msgstrPcsChar("%d",0,sub);
-	if (processIdent(*cpos,Planes,file,&ident) < 0) { // number not used as name
-	if (ident.sub != sub) exitErrstr("ident too sub\n");}
-	else ident.sub = sub; // number already used as name
-	unlocPcsChar(sizePcsChar()-pos);} else { // named
-	if (processIdent(*cpos,Planes,file,&ident) < 0) { // named was inserted
-	int pos = sizePcsChar(); msgstrPcsChar("%d",0,ident.sub);
-	struct Ident alias = ident;
-	processAlias(pos,Planes,file,&alias);
-	unlocPcsChar(sizePcsChar()-pos);}}
-	*cpos += clen+1;
-	return ident.sub;
+	int named = (*arrayPcsChar(*cpos,1) != '_' || *arrayPcsChar(*cpos+1,1) != 0);
+	int pos = sizePcsChar(); msgstrPcsChar("%d",0,arrayThread(file,1)->count);
+	int given = (named ? *cpos : pos); int sub = 0;
+	int found = (processIdent(given,Planes,file,&sub) >= 0);
+	if (named && !found) processAlias(pos,file,sub);
+	unlocPcsChar(sizePcsChar()-pos); *cpos += clen+1; return sub;
 }
 
 int processPolyant(int name, int file)

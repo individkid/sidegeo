@@ -186,21 +186,6 @@ EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
 EXTERNC VAL *cast##NAME(KEY key);
 
-#define DECLARE_TUPLE(NAME,VAL) \
-EXTERNC void init##NAME(int (*cmp)(const VAL *, const VAL *)); \
-EXTERNC int usage##NAME(void); \
-EXTERNC void used##NAME(int idx, int msk); \
-EXTERNC int size##NAME(int idx); \
-EXTERNC int test##NAME(int idx, const VAL *val); \
-EXTERNC int check##NAME(int idx, const VAL *val); \
-EXTERNC int begin##NAME(int idx, const VAL *val); \
-EXTERNC int rbegin##NAME(int idx, const VAL *val); \
-EXTERNC int next##NAME(int lnk); \
-EXTERNC int last##NAME(int lnk); \
-EXTERNC int choose##NAME(int idx); \
-EXTERNC void insert##NAME(int idx, const VAL *val); \
-EXTERNC const VAL *cast##NAME(int lnk);
-
 #define DECLARE_TRUE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
 EXTERNC int comp##NAME(const void *left, const void *right); \
@@ -213,10 +198,10 @@ EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
 DECLARE_INDEXED(NAME,VAL,KEY)
 
-#define DECLARE_QUEE(NAME,KEY,VAL) \
+#define DECLARE_FALSE(NAME,KEY,VAL) \
 EXTERNC int usage##NAME(void); \
 EXTERNC void used##NAME(int idx); \
-EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
+EXTERNC void init##NAME(int idx, int (*cmp)(const void *, const void *)); \
 EXTERNC int size##NAME(int idx); \
 EXTERNC int test##NAME(int idx,KEY key); \
 EXTERNC int check##NAME(int idx,KEY key); \
@@ -1342,163 +1327,6 @@ extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
 
-template<class VAL> struct QueueTuple {
-    QueueLink link; // 0 unused links; 1 unused tuple entries; 2 used tuple entries; >2 per tree entry list
-    QueueStruct<VAL> tuple; // database entries
-    QueueStruct<int> back; // index of entry in link
-    QueueStruct<QueueTree<int,int> > tree; // each is map from tuple index to link pool
-    QueueStruct<int (*)(const VAL *, const VAL *)> func;
-    QueueStruct<int> mask; // per tree mask of func
-    int index; // index into mask for compare
-    const VAL *given; // for comparison against
-    int (*share)(const void *, const void *);
-    QueueTuple(int (*cmp)(const void *, const void *))
-    {
-        share = cmp;
-    }
-    void init(int (*cmp)(const VAL *, const VAL *))
-    {
-        *func.enloc(1) = cmp;
-    }
-    int comp(const void *left, const void *right)
-    {
-        int lpos = void2int(left);
-        int rpos = void2int(right);
-        const VAL *lptr = (lpos < tuple.size() ? tuple.array(lpos,1) : given);
-        const VAL *rptr = (rpos < tuple.size() ? tuple.array(rpos,1) : given);
-        int shift = *mask.array(index,1);
-        int idx = 0;
-        while (shift) {if ((shift&1) != 0) {
-        int (*cmp)(const VAL *, const VAL *) = *func.array(idx,1);
-        int ret = cmp(lptr,rptr);
-        if (ret != 0) return ret;}
-        shift >>= 1;
-        idx += 1;}
-        return 0;
-    }
-    int size()
-    {
-        return tree.size();
-    }
-    void touch(int idx, int msk)
-    {
-        if (idx < tree.size()) exitErrstr("ident too size\n"); // TODO free up idx and reinsert to it
-        while (idx >= tree.size()) {
-        QueueTree<int,int> empty = QueueTree<int,int>();
-        empty.init(share);
-        QueueTree<int,int> *ptr = tree.enloc(1);
-        *ptr = empty;
-        *mask.enloc(1) = msk;
-        for (int i = link.begin(2); i >= 0; i = link.next(i)) {
-        int pos = link.get(i);
-        if (ptr->insert(pos) < 0) exitErrstr("tree too insert\n");
-        if (link.begin(0) < 0) link.move(-1,0);
-        int lnk0 = link.begin(0); link.set(lnk0,pos);
-        link.move(lnk0,-1); *ptr->cast(pos) = link.pool(lnk0);}}
-    }
-    int size(int idx)
-    {
-        return tree.array(idx,2)->size();
-    }
-    int test(int idx, const VAL *val) // return 0 if found with same val
-    {
-        index = idx;
-        given = val;
-        int pos = tuple.size();
-        int ret = tree.array(idx,1)->find(&pos);
-        if (ret < 0) return -1;
-        for (int i = link.begin(*tree.array(idx,1)->cast(pos)); i >= 0; i = link.next(i)) {
-        if (*(const VAL *)tuple.array(link.get(i),1) != *val) continue; else return 0;}
-        return -1;
-    }
-    int check(int idx, const VAL *val) // return 0 if found with any val
-    {
-        index = idx;
-        given = val;
-        int pos = tuple.size();
-        int ret = tree.array(idx,1)->find(&pos);
-        if (ret < 0) return -1;
-        return 0;
-    }
-    int begin(int idx, const VAL *val)
-    {
-        index = idx;
-        given = val;
-        int pos = tuple.size();
-        int ret = tree.array(idx,1)->find(&pos);
-        if (ret < 0) return -1;
-        return link.begin(*tree.array(idx,1)->cast(pos));
-    }
-    int rbegin(int idx, const VAL *val)
-    {
-        index = idx;
-        given = val;
-        int pos = tuple.size();
-        int ret = tree.array(idx,1)->find(&pos);
-        if (ret < 0) return -1;
-        return link.rbegin(*tree.array(idx,1)->cast(pos));
-    }
-    int next(int lnk)
-    {
-        return link.next(lnk);
-    }
-    int last(int lnk)
-    {
-        return link.last(lnk);
-    }
-    int choose(int idx)
-    {
-        int pos = 0; int ret = tree.array(idx,1)->choose(&pos);
-        if (ret < 0) return -1;
-        return link.begin(*tree.array(idx,1)->cast(pos));
-    }
-    void insert(int idx, const VAL *val)
-    {
-        index = idx;
-        given = val;
-        int pos = tuple.size(); *tuple.enloc(1) = *val; 
-        if (link.begin(0) < 0) link.move(-1,0);
-        if (link.begin(1) < 0) link.move(-1,1);
-        int lnk1 = link.begin(1); link.move(lnk1,2); link.set(lnk1,pos); *back.enloc(1) = lnk1;
-        int lnk0 = link.begin(0); link.set(lnk0,pos);
-        int ret = tree.array(idx,1)->find(&pos);
-        if (ret < 0) {
-        if (tree.array(idx,1)->insert(pos) < 0) exitErrstr("tree too insert\n");
-        link.move(lnk0,-1); *tree.array(idx,1)->cast(pos) = link.pool(lnk0);}
-        else link.move(lnk0,*tree.array(idx,1)->cast(pos));
-    }
-    void remove(int lnk)
-    {
-        int pos = link.get(lnk); link.move(lnk,0);
-        int found = 0; for (int i = 0; i < tree.size(); i++) {
-        QueueTree<int,int> *ptr = tree.array(i,1); index = i;
-        if (ptr->check(pos) >= 0 && link.begin(*ptr->cast(pos)) >= 0) found = 1;}
-        if (!found) {int lnk = *back.array(pos,1); link.move(lnk,1);}
-    }
-    const VAL *cast(int lnk)
-    {
-        return tuple.array(link.get(lnk),1);
-    }
-};
-
-#define DEFINE_TUPLE(NAME,VAL) \
-extern "C" int comp##NAME(const void *left, const void *right); \
-QueueTuple<VAL> NAME##Inst = QueueTuple<VAL>(comp##NAME); \
-extern "C" void init##NAME(int (*cmp)(const VAL *, const VAL *)) {NAME##Inst.init(cmp);} \
-extern "C" int comp##NAME(const void *left, const void *right) {return NAME##Inst.comp(left,right);} \
-extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
-extern "C" void used##NAME(int idx, int msk) {NAME##Inst.touch(idx,msk);} \
-extern "C" int size##NAME(int idx) {return NAME##Inst.size(idx);} \
-extern "C" int test##NAME(int idx, const VAL *val) {return NAME##Inst.test(idx,val);} \
-extern "C" int check##NAME(int idx, const VAL *val) {return NAME##Inst.check(idx,val);} \
-extern "C" int begin##NAME(int idx, const VAL *val) {return NAME##Inst.begin(idx,val);} \
-extern "C" int rbegin##NAME(int idx, const VAL *val) {return NAME##Inst.rbegin(idx,val);} \
-extern "C" int next##NAME(int lnk) {return NAME##Inst.next(lnk);} \
-extern "C" int last##NAME(int lnk) {return NAME##Inst.last(lnk);} \
-extern "C" int choose##NAME(int idx) {return NAME##Inst.choose(idx);} \
-extern "C" void insert##NAME(int idx, const VAL *val) {NAME##Inst.insert(idx,val);} \
-extern "C" const VAL *cast##NAME(int lnk) {return NAME##Inst.cast(lnk);}
-
 template<class KEY, class VAL> struct QueueTrue {
     QueueTree<KEY,QueueStruct<VAL> > tree;
     QueueTrue() {}
@@ -1559,13 +1387,14 @@ extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
 DEFINE_INDEXED(NAME,VAL,KEY,tree.cast(idx))
 
-template<class KEY, class VAL> struct QueueQuee {
+template<class KEY, class VAL> struct QueueFalse {
     int (*func)(const void *, const void *);
     QueueStruct<QueueTree<KEY,VAL> > meta;
-    QueueQuee() : func(0) {}
-    void init(int (*cmp)(const void *, const void *))
+    QueueFalse() : func(0) {}
+    void init(int idx, int (*cmp)(const void *, const void *))
     {
-        func = cmp;
+        touch(idx);
+        meta.array(idx,1)->init(cmp);
     }
     int size()
     {
@@ -1575,16 +1404,15 @@ template<class KEY, class VAL> struct QueueQuee {
     {
         while (idx >= meta.size()) {
             QueueTree<KEY,VAL> inst = QueueTree<KEY,VAL>();
-            if (func) inst.init(func);
             *meta.enloc(1) = inst;}
     }
 };
 
-#define DEFINE_QUEE(NAME,KEY,VAL) \
-QueueQuee<KEY,VAL> NAME##Inst = QueueQuee<KEY,VAL>(); \
+#define DEFINE_FALSE(NAME,KEY,VAL) \
+QueueFalse<KEY,VAL> NAME##Inst = QueueFalse<KEY,VAL>(); \
 extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" void used##NAME(int idx) {NAME##Inst.touch(idx);} \
-extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
+extern "C" void init##NAME(int idx, int (*cmp)(const void *, const void *)) {NAME##Inst.init(idx,cmp);} \
 extern "C" int size##NAME(int idx) {return NAME##Inst.size();} \
 extern "C" int test##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->test(key);} \
 extern "C" int check##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->check(key);} \
