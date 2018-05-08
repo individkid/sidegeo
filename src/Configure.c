@@ -54,8 +54,8 @@ int processPolyant(int name, int file)
 	*enlocPcsCmdInt(1) = processPlane(&name,file);;
 	int inpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
 	int outpos = sizePcsCmdInt(); *enlocPcsCmdInt(1) = 0;
-	while (*arrayPcsChar(name,1)) {*enlocPcsCmdInt(1) = processPlane(&name,file); *arrayPcsCmdInt(inpos,1) += 1;} delocPcsChar(1);
-	while (*arrayPcsChar(name,1)) {*enlocPcsCmdInt(1) = processPlane(&name,file); *arrayPcsCmdInt(outpos,1) += 1;} delocPcsChar(1);
+	while (*arrayPcsChar(name,1)) {*enlocPcsCmdInt(1) = processPlane(&name,file); *arrayPcsCmdInt(inpos,1) += 1;} name += 1;
+	while (*arrayPcsChar(name,1)) {*enlocPcsCmdInt(1) = processPlane(&name,file); *arrayPcsCmdInt(outpos,1) += 1;} name += 1;
 	if (*arrayPcsCmdInt(pos+1,1) < 0) {unlocPcsCmdInt(sizePcsCmdInt()-pos); return -1;}
 	for (int i = pos+4; i < sizePcsCmdInt(); i++)
 	if (*arrayPcsCmdInt(i,1) < 0) {unlocPcsCmdInt(sizePcsCmdInt()-pos); return -1;}
