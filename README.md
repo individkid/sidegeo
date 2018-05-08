@@ -131,10 +131,9 @@ The --time --color --source --listen --metric commands work together with polyto
 
 For exmple, a system could consist of --time --source --listen points at the vertices of a polytope constructed with --point, and --metric faces in several overlapping --plane polytopes. Stock values in --time --source --listen items associated with points could flow along lines of sight. A line of sight metric could be 0 if any impermeable face intervenes between the points, and 1 if no impermeable faces intervene. Then, the --time formula for the stock associated with a point could multiply the metric by the stock associated with the other point.
 
-Functions in Metric.c are used in stock flow formulae specified by —time and —metric. Also are functions used to pretify collections of polytopes such as tetrahedron overlaps.
+Functions in Metric.c are used in stock flow formulae specified by —time and —metric. Also are functions used to pretify collections of polytopes such as tetrahedron overlaps. For example, sightLine does pershader on each file with feather arrow for pierce points on line between vertex in one file and vertex in another file.
 
-  * sightLine does pershader on each file with feather arrow for pierce points on line between vertex in one file and vertex in another file  
-  * sightLine finds if any planes between the vertices are impermeable  
+  * sightLine finds if any planes between vertices are impermeable  
   * regexPlane gets properties such as permeable from name  
   * inverseSquare returns inverse square of distance between vertices  
   * solidMetric tweaks polytopes to not overlap  
