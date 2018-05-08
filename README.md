@@ -131,7 +131,19 @@ The --time --color --source --listen --metric commands work together with polyto
 
 For exmple, a system could consist of --time --source --listen points at the vertices of a polytope constructed with --point, and --metric faces in several overlapping --plane polytopes. Stock values in --time --source --listen items associated with points could flow along lines of sight. A line of sight metric could be 0 if any impermeable face intervenes between the points, and 1 if no impermeable faces intervene. Then, the --time formula for the stock associated with a point could multiply the metric by the stock associated with the other point.
 
-Functions in Metric.c include sightLine regexPlane inverseSquare, used in stock flow formulae specified by —time and —metric. Metric sightLine does pershader on each file with feather arrow for pierce points on line between vertex in one file and vertex in another file. Then sightLine finds if any planes between the vertices are impermeable. Function regexPlane gets properties such as permeable from name. Metric inverseSquare returns inverse square of distance between vertices.
+Functions in Metric.c are used in stock flow formulae specified by —time and —metric. Also are functions used to pretify collections of polytopes such as tetrahedron overlaps.
+
+  * sightLine does pershader on each file with feather arrow for pierce points on line between vertex in one file and vertex in another file  
+  * sightLine finds if any planes between the vertices are impermeable  
+  * regexPlane gets properties such as permeable from name  
+  * inverseSquare returns inverse square of distance between vertices  
+  * solidMetric tweaks polytopes to not overlap  
+  * localMetric tweaks polytopes to within a volume  
+  * downMetric tweaks polytopes to rest on a plane  
+  * printMetric tweaks precarious planes  
+  * lengthMetric tweaks outlier lengths  
+  * areaMetric tweaks outlier areas  
+  * volumeMetric tweaks outlier volumes  
 
 Functions in Callback.c allow user action like mouse motion to transform displayed polytopes. There is a global matrix, affineMat, that is applied to all polytopes. And there are compensating matrices per polytope per display to allow any polytopes to appear fixed even as affineMat transforms any unfixed polytopes. When a display loses focus, affineMat is saved in the display's context, so changes to affineMat by other displays can be incorporated into a display's context when focus returns to it. For example, if the mode is Transform, and the right mouse button is clicked, the transformation is suspended while the mouse is moved to another display. If transformation continues in the other display, in the same or in a different Transformation mode, affineMat changes. Now, if the mouse moves back to the original display, and the right button is pressed, transformation resumes in the original mode fixed point and mouse position, but transformations from the other display are incorporated and not lost. Transforming individual planes is accomplished by moving them to a special polytope, transforming them, and then moving them back as altered planes. Altering planes through the Transform Plane mode, or changing the polytope with the Additive or Subtractive Sculpt modes, updates the representation of the topology of the polytope by calling functions in Interface.c to send events to the Haskell.c thread. Commands in Configure.c executed from files read by Process.c also change polytope topology by scheduling functions from Interface.c in the Command.c thread.
 
