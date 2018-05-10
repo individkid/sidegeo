@@ -18,6 +18,9 @@
 
 #include "Main.h"
 
+extern int augpid[PROCESS_PID];
+extern int augpids;
+
 DEFINE_LOCATE(Cmd)
 DEFINE_FILL(Cmd)
 DEFINE_HOLLOW(Cmd)
@@ -260,15 +263,15 @@ enum Action manipulateClick(int state)
     Myfloat *vec = dndateBuffer(slot,PlaneBuf,0,1); // base plane is first
     int *ver = dndateBuffer(slot,VersorBuf,0,1);
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
-    *enlocCmdConfiguree(1) = Main;
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--plane %d %d,",-1,plane,ver[0]);
     for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,vec[i]);
     msgstrCmdConfigure("",'\n');
     // sideband msgstr --side responseProceed and wait
-    *enlocCmdConfiguree(1) = Side;
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("--side responseProceed %d",'\n',layer);
+    msgstrCmdConfigure("--side %d",-1);
+    for (int i = 1; i < augpids; i++) msgstrCmdConfigure("/%d",-1,augpid[i]);
+    msgstrCmdConfigure(" mark %d",'\n',layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
     if (state-- == 0) {
@@ -315,7 +318,6 @@ enum Action sculptClick(int state)
     enqueCmdLocate(file,plane,sizeReint(layer),ptrReint(layer),responseLists,layer);
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
-    *enlocCmdConfiguree(1) = Main;
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--%s %d,",-1,stringCmdByte(str,0),plane);
     int inlen = *delocReint(layer,1);

@@ -61,6 +61,9 @@ EXTERNCBEGIN
 #define PORTAUDIO_SIZE (1<<10)
 #define SAMPLE_RATE 44100
 #define RENDER_DELAY 0.01
+#define PROCESS_PID 6
+#define PROCESS_SCAN 64
+#define PROCESS_STEP 64
 
 // if char is unsigned and GLchar is signed
 typedef unsigned Myuint;
@@ -377,19 +380,6 @@ struct Response {
     int nint,nfloat,nbyte;
 };
 
-enum Band { // whether command is recorder
-    Main,
-    Side,
-    Skip,
-    Done};
-struct Header { // information about data appended to files
-    int siz; // number of bytes appended
-    int pos; // filepos indicating when to append sideband
-    int pid; // which process sideband belongs to
-    time_t tim; // when process pid started
-    enum Band neg; // whether this is sideband data
-    int idx; // which fifo to append to
-};
 enum Scan {
     Dis, // match and discard to pass, or mismatch to fail
     Not, // mismatch discard and rewind to pass, or match to fail
@@ -409,10 +399,10 @@ struct Match {
 };
 struct Spoof {
     int is,ii,iF,ic;
-    struct Match as[64];
-    int ai[4];
-    Myfloat af[4];
-    char ac[4];
+    struct Match as[PROCESS_SCAN];
+    int ai[PROCESS_PID];
+    Myfloat af[PROCESS_PID];
+    char ac[PROCESS_STEP];
 };
 enum Queue { // index into queue of name trees
     Files,
@@ -801,7 +791,6 @@ DECLARE_FDSET(CmnProcesses,int)
 DECLARE_STAGE(CmnOption,char)
 DECLARE_STAGE(CmnConfigure,char)
 DECLARE_STAGE(CmnConfigurer,int)
-DECLARE_STAGE(CmnConfiguree,enum Band)
 
 DECLARE_COND(CmnHaskells)
 DECLARE_STAGE(CmnEvent,struct Proto)
@@ -863,7 +852,6 @@ DECLARE_SOURCE(CmdProcesses)
 DECLARE_STAGE(CmdOption,char)
 DECLARE_STAGE(CmdConfigure,char)
 DECLARE_STAGE(CmdConfigurer,int)
-DECLARE_STAGE(CmdConfiguree,enum Band)
 
 DECLARE_SOURCE(CmdHaskells)
 DECLARE_STAGE(CmdEvent,struct Proto)
@@ -960,7 +948,6 @@ DECLARE_DEST(Processes)
 DECLARE_STAGE(Option,char)
 DECLARE_STAGE(Configure,char)
 DECLARE_EXTRA(Configurer,int)
-DECLARE_EXTRA(Configuree,enum Band)
 
 DECLARE_SOURCE(PcsOutputs)
 DECLARE_STAGE(PcsOutput,char)
@@ -997,7 +984,7 @@ DECLARE_FALSE(Name,int,int) // buffer string to queue index
 DECLARE_LOCAL(Thread,struct Thread) // per file thread
 
 DECLARE_LOCAL(Stage,char) // copy of options for process
-DECLARE_LOCAL(Header,struct Header) // staged fifo headers
+DECLARE_LOCAL(Header,int) // staged fifo headers
 DECLARE_LOCAL(Body,char) // staged fifo data
 
 DECLARE_LOCAL(Skip,int) // per file skip next command

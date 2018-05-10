@@ -73,7 +73,6 @@ inline bool operator!=(const State &left, const State &right) {return false;}
 inline bool operator!=(const Metric &left, const Metric &right) {return false;}
 inline bool operator!=(const Stream &left, const Stream &right) {return false;}
 inline bool operator!=(const PaUtilRingBuffer &left, const PaUtilRingBuffer &right) {return false;}
-inline bool operator!=(const Header &left, const Header &right) {return false;}
 inline bool operator!=(const Response &left, const Response &right) {return false;}
 inline bool operator!=(const Match &left, const Match &right) {return false;}
 inline bool operator!=(const Proto &left, const Proto &right) {return false;}
@@ -104,7 +103,6 @@ DEFINE_FDSET(CmnProcesses,int,processConsume,processProduce,processBefore,proces
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigurer,int,CmnConfigure)
-DEFINE_STAGE(CmnConfiguree,enum Band,CmnConfigurer)
 
 DEFINE_COND(CmnHaskells,haskellConsume,haskellBefore,haskellAfter)
 DEFINE_STAGE(CmnEvent,struct Proto,CmnHaskells)
@@ -166,7 +164,6 @@ DEFINE_SOURCE(CmdProcesses,CmnProcesses,CmdOutputs)
 DEFINE_STAGE(CmdOption,char,CmdProcesses)
 DEFINE_STAGE(CmdConfigure,char,CmdOption)
 DEFINE_STAGE(CmdConfigurer,int,CmdConfigure)
-DEFINE_STAGE(CmdConfiguree,enum Band,CmdConfigurer)
 
 DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdProcesses)
 DEFINE_STAGE(CmdEvent,struct Proto,CmdHaskells)
@@ -262,7 +259,6 @@ DEFINE_DEST(Processes,CmnProcesses,CmnProcesses)
 DEFINE_STAGE(Option,char,Processes)
 DEFINE_STAGE(Configure,char,Option)
 DEFINE_EXTRA(Configurer,int,Configure)
-DEFINE_EXTRA(Configuree,enum Band,Configurer)
 
 DEFINE_SOURCE(PcsOutputs,CmnOutputs,Processes)
 DEFINE_STAGE(PcsOutput,char,PcsOutputs)
@@ -300,7 +296,7 @@ DEFINE_FALSE(Name,int,int)
 DEFINE_LOCAL(Thread,struct Thread)
 
 DEFINE_LOCAL(Stage,char)
-DEFINE_LOCAL(Header,struct Header)
+DEFINE_LOCAL(Header,int)
 DEFINE_LOCAL(Body,char)
 
 

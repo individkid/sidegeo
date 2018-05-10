@@ -18,6 +18,9 @@
 
 #include "Common.h"
 
+extern int augpid[PROCESS_PID];
+extern int augpids;
+
 // only this thread sends new state to timewheel
 int cofsiz = 0;
 int varsiz = 0;
@@ -29,12 +32,13 @@ void configureHollow(void);
 void configureInflate(void);
 void configureMatrix(void);
 void responseProceed(void);
+int intncmp(int *left, int *right, int n);
 int processIgnore(int index, int noneg);
 void processAlias(int pos, int sup, int sub);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
 DECLARE_MSGSTR(PcsChar)
 
-DEFINE_SCAN(Pcs)
+DECLARE_SCAN(Pcs)
 
 int processPlane(int *cpos, int file)
 {
@@ -144,13 +148,15 @@ int processConfigure(int index)
 		usePcsChar(); copyPcsRequest(sizePcsRequest(),charpos,sizePcsChar()-charpos);
 		*enlocPcsRequest(1) = 0;
 		DELOC}
-	pos = scanPcs(pattern,4,TEXT4("--skip"),Scans); if (pos>=0) {
+    pos = scanPcs(pattern,21,TEXT4("--side"),INT4,While,8,TEXT4("/"),INT4,TEXT4("skip"),Scans);
+    if (pos>=0 && sizePcsInt()-intpos==augpids && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
 		SKIP
 		arrayThread(index,1)->skip = 1;
 		DELOC}
-	pos = scanPcs(pattern,12,TEXT4("--side"),TEXT4("responseProceed"),INT4,Scans); if (pos>=0) {
+    pos = scanPcs(pattern,25,TEXT4("--side"),INT4,While,8,TEXT4("/"),INT4,TEXT4("mark"),INT4,Scans);
+    if (pos>=0 && sizePcsInt()-intpos==augpids && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
 		SKIP
-		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // layer
+		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos+augpids,1); // layer
 		*enlocPcsCommand(1) = responseProceed;
 		DELOC}
 	pos = scanPcs(pattern,4,TEXT4("-"),Scans); if (pos>=0) {

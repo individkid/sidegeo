@@ -18,6 +18,9 @@
 
 #include "Main.h"
 
+extern int augpid[PROCESS_PID];
+extern int augpids;
+
 int escape = 0; // escape sequence from OpenGL key callback
 int dash = 0; // inject sequence from OpenGL key callback
 
@@ -93,7 +96,6 @@ void leftRefine(void)
     tweakvec(v,1.0,1.0,3);
     int versor;
     basearrow(u,v,&versor,basisMat,3);
-    *enlocCmdConfiguree(1) = Main;
     *enlocCmdConfigurer(1) = qPos;
     msgstrCmdConfigure("--plane _ %d %f %f %f",'\n',versor,u[0],u[1],u[2]);
 }
@@ -124,10 +126,10 @@ void leftManipulate(void)
     CASE(Polytope) {
     Myfloat matrix[16];
     timesmat(invmat(copymat(matrix,arrayShare(qPoint,1)->saved,4),4),affineMat,4);
-    *enlocCmdConfiguree(1) = Side;
     *enlocCmdConfigurer(1) = qPoint;
-    msgstrCmdConfigure("--skip",'\n');
-    *enlocCmdConfiguree(1) = Main;
+    msgstrCmdConfigure("--side %d",-1);
+    for (int i = 1; i < augpids; i++) msgstrCmdConfigure("/%d",-1,augpid[i]);
+    msgstrCmdConfigure(" skip",'\n');
     *enlocCmdConfigurer(1) = qPoint;
     msgstrCmdConfigure("--matrix",-1);
     for (int i = 0; i < 16; i++) msgstrCmdConfigure(" %f",matrix[i]);

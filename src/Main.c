@@ -24,6 +24,9 @@ int layer = 0; // argument shared by command and commands it schedules
 struct Display *current = 0; // display currently in focus
 Myfloat affineMat[16] = {0}; // transformation state sent to uniform
 
+int augpid[PROCESS_PID] = {0};
+int augpids = 0;
+
 #ifdef BRINGUP
 const enum Shader dishader = Diplane;
 const enum Shader pershader = Perplane;
@@ -50,6 +53,15 @@ int main(int argc, char **argv)
     if (sizeof(GLfloat) != sizeof(Myfloat)) exitErrstr("glfloat too sizeof\n");
     GLchar glchr = -1; char chr = -1; GLchar chr2glchr = chr; char glchr2chr = glchr;
     if (glchr != chr2glchr || chr != glchr2chr) exitErrstr("glchr too chr\n");
+
+    pid_t pid = getpid();
+    time_t tim = time(0);
+    int num = sizeof(pid)+sizeof(tim);
+    int den = sizeof(augpid[0]);
+    augpids = num/den + (num%den!=0);
+    if (augpids > PROCESS_PID) exitErrstr("pid too size\n");
+    memcpy(augpid,&pid,sizeof(pid));
+    memcpy((char*)augpid+sizeof(pid),&tim,sizeof(tim));
 
     for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
 
