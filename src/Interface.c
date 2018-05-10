@@ -18,9 +18,6 @@
 
 #include "Main.h"
 
-extern int augpid[PROCESS_PID];
-extern int augpids;
-
 DEFINE_LOCATE(Cmd)
 DEFINE_FILL(Cmd)
 DEFINE_HOLLOW(Cmd)

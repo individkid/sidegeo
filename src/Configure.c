@@ -18,9 +18,6 @@
 
 #include "Common.h"
 
-extern int augpid[PROCESS_PID];
-extern int augpids;
-
 // only this thread sends new state to timewheel
 int cofsiz = 0;
 int varsiz = 0;

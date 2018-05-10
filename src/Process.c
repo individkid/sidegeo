@@ -20,7 +20,6 @@
 #include <sys/file.h>
 #include <setjmp.h>
 
-#define PROCESS_SIDE ".side"
 #define PROCESS_FIFO ".fifo"
 #define PROCESS_YIELD "--yield"
 #define PROCESS_IGNORE 3
@@ -31,9 +30,6 @@ int processOption();
 
 DEFINE_SCAN(Pcs)
 DEFINE_MSGSTR(PcsChar)
-
-extern int augpid[PROCESS_PID];
-extern int augpids;
 
 int toggle = 0;
 int thread = 0;
@@ -78,7 +74,7 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
     if (lseek(hlp->file,hlp->filepos,SEEK_SET) < 0) errorinj(hlp,env);
     int retlen = read(hlp->file,hlp->buffer,PROCESS_STEP-hlp->buflen-1);
     if (retlen < 0) errorinj(hlp,env);
-    hlp->buflen += retlen;
+    hlp->filepos += retlen; hlp->buflen += retlen;
     if (hlp->buflen == 0) {
     int len = strlen(PROCESS_YIELD);
     if (write(hlp->pipe,PROCESS_YIELD,len) != len) exitErrstr("pipe too write\n");

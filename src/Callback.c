@@ -18,9 +18,6 @@
 
 #include "Main.h"
 
-extern int augpid[PROCESS_PID];
-extern int augpids;
-
 int escape = 0; // escape sequence from OpenGL key callback
 int dash = 0; // inject sequence from OpenGL key callback
 

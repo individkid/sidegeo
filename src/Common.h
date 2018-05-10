@@ -736,6 +736,9 @@ void enque##THD##NAME(int file, int mask) { \
     if (state-- == 0) {LOCK.take += 1; if (SHARE == Write) LOCK.write += 1; else LOCK.read += 1; return Continue;}
 
 extern struct Item item[Menus];
+extern int augpid[PROCESS_PID];
+extern int augpids;
+
 
 enum Motion motionof(char code);
 char alphaof(char code);
