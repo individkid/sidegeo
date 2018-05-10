@@ -594,7 +594,7 @@ int prescan##THD(struct Spoof *s, const char *pattern, int len, va_list args) \
     *(s ? s->as+s->is++ : enloc##THD##Scan(1)) = match; index += 1;} \
     if (max >= (s ? s->is : size##THD##Scan())) exitErrstr("index too match\n"); \
     index = orig; \
-    int ret = 0; while (index < max && ret >= 0) rescan##THD(s,pattern,&index,ret); \
+    int ret = 0; while (index < max && ret >= 0) ret = rescan##THD(s,pattern,&index,ret); \
     (s ? (s->as+(s->is=orig)) : unloc##THD##Scan(size##THD##Scan()-orig)); \
     return ret; \
 } \

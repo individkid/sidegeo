@@ -81,9 +81,9 @@ void readbuf(struct Helper *hlp, sigjmp_buf *env)
     break;}
     hlp->buffer[hlp->buflen] = 0;
     struct Spoof spoof = {0};
-    int pos = spoofPcs(&spoof,hlp->buffer,21,TEXT4("--side"),INT4,While,8,TEXT4("/"),INT4,TEXT4("done"),Scans);
-    if (pos>=0 && spoof.ii==augpids && intncmp(spoof.ai,augpid,augpids)==0) longjmp(*env,1);
-    pos = spoofPcs(&spoof,hlp->buffer,4,TEXT4("-"),FILLER6,Scans);
+    int pos = spoofPcs(&spoof,hlp->buffer,21,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4("/"),INT4,TEXT4("done"),Scans);
+    if (pos>=0 && intncmp(spoof.ai,augpid,augpids)==0) longjmp(*env,1);
+    pos = spoofPcs(&spoof,hlp->buffer,4,TEXT4("-"),Scans);
     if (pos<0) pos = spoofPcs(&spoof,hlp->buffer,6,FILLER6,Scans);
     if (pos<0) exitErrstr("spoof too done\n");
     if (write(hlp->pipe,hlp->buffer,pos) < pos) exitErrstr("pipe too write\n");

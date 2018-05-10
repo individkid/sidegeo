@@ -145,18 +145,18 @@ int processConfigure(int index)
 		usePcsChar(); copyPcsRequest(sizePcsRequest(),charpos,sizePcsChar()-charpos);
 		*enlocPcsRequest(1) = 0;
 		DELOC}
-    pos = scanPcs(pattern,21,TEXT4("--side"),INT4,While,8,TEXT4("/"),INT4,TEXT4("skip"),Scans);
-    if (pos>=0 && sizePcsInt()-intpos==augpids && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
+    pos = scanPcs(pattern,21,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4("/"),INT4,TEXT4("skip"),Scans);
+    if (pos>=0 && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
 		SKIP
 		arrayThread(index,1)->skip = 1;
 		DELOC}
-    pos = scanPcs(pattern,25,TEXT4("--side"),INT4,While,8,TEXT4("/"),INT4,TEXT4("mark"),INT4,Scans);
-    if (pos>=0 && sizePcsInt()-intpos==augpids && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
+    pos = scanPcs(pattern,25,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4("/"),INT4,TEXT4("mark"),INT4,Scans);
+    if (pos>=0 && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
 		SKIP
 		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos+augpids,1); // layer
 		*enlocPcsCommand(1) = responseProceed;
 		DELOC}
-	pos = scanPcs(pattern,4,TEXT4("-"),Scans); if (pos>=0) {
+	pos = scanPcs(pattern,10,TEXT4("-"),FILLER6,Scans); if (pos>=0) {
 		DELOC}
 	pos = scanPcs(pattern,6,FILLER6,Scans); if (pos>=0) {
 		DELOC}
