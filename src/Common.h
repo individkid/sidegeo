@@ -407,6 +407,13 @@ struct Match {
     const char *str;
     int idx, alt;
 };
+struct Spoof {
+    int is,ii,iF,ic;
+    struct Match as[64];
+    int ai[4];
+    Myfloat af[4];
+    char ac[4];
+};
 enum Queue { // index into queue of name trees
     Files,
     Planes,
@@ -501,27 +508,22 @@ int msgstr##NAME(const char *fmt, int trm, ...) \
 #define FILLER6 While,5,Not,3,Text,"--",Not,1,White,Char /*match upto double dash nonwhitespace*/
 
 #define DECLARE_SCAN(THD) \
-extern int intcheck##THD; \
-extern int floatcheck##THD; \
-extern int charcheck##THD; \
-int scan##THD(const char *pattern, ...);
+int spoof##THD(struct Spoof *s, const char *pattern, int len, ...); \
+int scan##THD(const char *pattern, int len, ...);
 #define DEFINE_SCAN(THD) \
-int intcheck##THD = 0; \
-int floatcheck##THD = 0; \
-int charcheck##THD = 0; \
-int rescan##THD(const char *pattern, int *index, int accum) \
+int rescan##THD(struct Spoof *s, const char *pattern, int *index, int accum) \
 { \
-    if (*index == size##THD##Scan()) return accum; \
-    struct Match match = *array##THD##Scan(*index,1); \
-    int intpos = size##THD##Int(); \
-    int floatpos = size##THD##Float(); \
-    int charpos = size##THD##Char(); \
+    if (*index == (s ? s->is : size##THD##Scan())) return accum; \
+    struct Match match = (s ? s->as[*index] : *array##THD##Scan(*index,1)); \
+    int intpos = (s ? s->ii : size##THD##Int()); \
+    int floatpos = (s ? s->iF : size##THD##Float()); \
+    int charpos = (s ? s->ic : size##THD##Char()); \
     int pos = accum; switch (match.tag) { \
     case (Dis): { /*match and discard to pass, or mismatch and rewind to fail*/ \
-    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos); \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(s,pattern+pos,index,pos); \
     break;} \
     case (Not): { /*mismatch and rewind to pass, or match and rewind to fail*/ \
-    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos); \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(s,pattern+pos,index,pos); \
     if (pos>=0) {pos = -1; break;} \
     *index = match.idx; \
     pos = accum; \
@@ -529,13 +531,13 @@ int rescan##THD(const char *pattern, int *index, int accum) \
     case (While): { /*match consume repeat, or mismatch rewind, to pass*/ \
     int sofar = pos; int idx = *index; while (pos>=0) { \
     sofar = pos; *index = idx; \
-    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos);} \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(s,pattern+pos,index,pos);} \
     *index = match.idx; \
     return sofar;} \
     case (Loop): { /*match consume repeat to pass*/ \
     int idx = *index; for (int i = 0; i < match.alt; i++) { \
     *index = idx; \
-    while (*index<match.idx && pos>=0) pos = rescan##THD(pattern+pos,index,pos);} \
+    while (*index<match.idx && pos>=0) pos = rescan##THD(s,pattern+pos,index,pos);} \
     if (pos>=0) return pos; \
     break;} \
     case (Char): { /*match and consume to pass*/ \
@@ -555,33 +557,32 @@ int rescan##THD(const char *pattern, int *index, int accum) \
     return pos;} \
     case (Int): { /*match and consume to pass*/ \
     const char *ptr = pattern; if (*pattern && !isspace(*pattern)) \
-    *enloc##THD##Int(1) = strtol(pattern,(char **)&ptr,10); \
+    *(s ? s->ai+s->ii++ : enloc##THD##Int(1)) = strtol(pattern,(char **)&ptr,10); \
     if (ptr==pattern) {pos = -1; break;} \
     *index += 1; \
     pos += ptr-pattern; \
     return pos;} \
     case (Float): { /*match and consume to pass*/ \
     const char *ptr = pattern; if (*pattern && !isspace(*pattern)) \
-    *enloc##THD##Float(1) = strtof(pattern,(char **)&ptr); \
+    *(s ? s->af+s->iF++ : enloc##THD##Float(1)) = strtof(pattern,(char **)&ptr); \
     if (ptr==pattern) {pos = -1; break;} \
     *index += 1; \
     pos += ptr-pattern; \
     return pos;} \
     case (Term): { /*produce to pass*/ \
     int len = strlen(match.str); \
-    memcpy(enloc##THD##Char(len),match.str,len); \
+    memcpy((s ? (s->ic+=len,s->ac+s->ic-len) : enloc##THD##Char(len)),match.str,len); \
     *index += 1; \
     return pos;} \
     default: exitErrstr("match too tag\n");} \
-    unloc##THD##Int(size##THD##Int()-intpos); \
-    unloc##THD##Float(size##THD##Float()-floatpos); \
-    unloc##THD##Char(size##THD##Char()-charpos); \
+    (s ? s->ai+(s->ii=intpos) : unloc##THD##Int(size##THD##Int()-intpos)); \
+    (s ? s->af+(s->iF=floatpos) : unloc##THD##Float(size##THD##Float()-floatpos)); \
+    (s ? s->ac+(s->ic=charpos) : unloc##THD##Char(size##THD##Char()-charpos)); \
     return pos; \
 } \
-int scan##THD(const char *pattern, int len, ...) \
+int prescan##THD(struct Spoof *s, const char *pattern, int len, va_list args) \
 { \
-    int orig = size##THD##Scan(); \
-    va_list args = {0}; va_start(args,len); \
+    int orig = (s ? s->is : size##THD##Scan()); \
     int index = orig, max = 0; \
     while (1) { \
     struct Match match = {0}; \
@@ -600,11 +601,25 @@ int scan##THD(const char *pattern, int len, ...) \
     case (Float): break; \
     case (Term): match.str = va_arg(args,const char *); break; \
     default: exitErrstr("arg too tag\n");} \
-    *enloc##THD##Scan(1) = match; index += 1;} \
-    if (max >= size##THD##Scan()) exitErrstr("index too match\n"); \
-    va_end(args); index = orig; \
-    int ret = 0; while (index < max && ret >= 0) rescan##THD(pattern,&index,ret); \
-    unloc##THD##Scan(size##THD##Scan()-orig); \
+    *(s ? s->as+s->is++ : enloc##THD##Scan(1)) = match; index += 1;} \
+    if (max >= (s ? s->is : size##THD##Scan())) exitErrstr("index too match\n"); \
+    index = orig; \
+    int ret = 0; while (index < max && ret >= 0) rescan##THD(s,pattern,&index,ret); \
+    (s ? (s->as+(s->is=orig)) : unloc##THD##Scan(size##THD##Scan()-orig)); \
+    return ret; \
+} \
+int spoof##THD(struct Spoof *s, const char *pattern, int len, ...) \
+{ \
+    va_list args = {0}; va_start(args,len); \
+    int ret = prescan##THD(s,pattern,len,args); \
+    va_end(args); \
+    return ret; \
+} \
+int scan##THD(const char *pattern, int len, ...) \
+{ \
+    va_list args = {0}; va_start(args,len); \
+    int ret = prescan##THD(0,pattern,len,args); \
+    va_end(args); \
     return ret; \
 }
 
