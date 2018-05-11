@@ -338,7 +338,7 @@ double nomial(int *csub, int *vsub, struct Nomial *poly)
         int cmp = *arrayCoefficient(*csub,1);
         int val = amount(*arrayVariable(*vsub,1));
         if (val < cmp) rslt += amount(*arrayVariable(*vsub+1,1));
-        else rslt += amount(*arrayVariable(*vsub+1,1));
+        else rslt += amount(*arrayVariable(*vsub+2,1));
         *csub += 1;
         *vsub += 3;}
     return rslt;
@@ -349,6 +349,16 @@ double evaluate(int *csub, int *vsub, struct Ratio *ratio)
     double numer = nomial(csub,vsub,&ratio->n);
     double denom = nomial(csub,vsub,&ratio->d);
     return numer / denom;
+}
+
+void timewheelChange(struct Change *change)
+{
+    int sub = (change->map ? change->sub : *castPack(change->sub));
+    struct State *state = arrayState(sub,1);
+    state->amt = change->val;
+    if (state->typ == Write) {
+    if (state->ctl == Sound) pipeWrite(state->idx,state->sub,state->amt);
+    if (state->ctl == Shape) metricWrite(state->idx,state->amt);}
 }
 
 void timewheelBefore(void)
@@ -368,15 +378,7 @@ void timewheelConsume(void *arg)
         CASE(Shape) startMetric();
         CASE(Start) startState();
         DEFAULT(exitErrstr("time too control\n");)}
-    while (sizeChange() > 0) {
-        struct Change *change = delocChange(1);
-        int sub = (change->map ? change->sub : *castPack(change->sub));
-        struct State *state = arrayState(sub,1);
-        state->amt = change->val;
-        if (state->typ == Write) {
-        if (change->map) exitErrstr("change too map\n");
-        if (state->ctl == Sound) pipeWrite(state->idx,state->sub,state->amt);
-        if (state->ctl == Shape) metricWrite(state->idx,state->amt);}}
+    while (sizeChange() > 0) timewheelChange(delocChange(1));
 }
 
 long long timewheelDelay(void)
@@ -401,16 +403,10 @@ void timewheelProduce(void *arg)
         long long delay = evaluate(&csub,&vsub,&state->dly);
         long long schedule = evaluate(&csub,&vsub,&state->sch);
         Myfloat val = saturate(update,state);
-        struct Change change; change.val = val; change.sub = sub;
+        struct Change change; change.val = val; change.sub = sub; change.map = 1;
         *scheduleTime(ofTime(current+schedule)) = sub;
         *scheduleWheel(ofTime(current+delay)) = change;}
-    while (readyWheel(ofTime(current))) {
-        struct Change change = *advanceWheel();
-        struct State *state = arrayState(change.sub,1);
-        state->amt = change.val;
-        if (state->typ == Write) {
-        if (state->ctl == Sound) pipeWrite(state->idx,state->sub,state->amt);
-        if (state->ctl == Shape) metricWrite(state->idx,state->amt);}}
+    while (readyWheel(ofTime(current))) timewheelChange(advanceWheel());
 }
 
 void timewheelAfter(void)

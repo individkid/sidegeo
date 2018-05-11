@@ -191,10 +191,6 @@ enum Click { // mode changed by mouse buttons
     Left, // pierce point calculated; no saved position
     Right, // pierce point calculated; position saved
     Clicks};
-enum Type {
-    Read,
-    Write,
-    Types};
 struct Lock {
     int read; // count of readers
     int write; // count of writers
@@ -331,6 +327,9 @@ enum Control {
     Start,
     Sound,
     Shape};
+enum Type {
+    Read,
+    Write};
 struct State {
     int idt; // how other states will refer to this one
     int map; // indices are packed

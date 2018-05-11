@@ -176,7 +176,7 @@ The code is partitioned to the following files grouped by thread:
   * Process thread: Configure.c Option.c Process.c  
   * Haskell thread: Sculpt.hs Naive.hs Haskell.c  
   * Panel thread: Topology.fl Decorate.fl System.fl Fltk.cpp Panel.c
-  * Other threads: Timewheel.c Lua.c Console.c Server.c  
+  * Other threads: Timewheel.c Lua.c Console.c Socket.c  
 
 This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
 
