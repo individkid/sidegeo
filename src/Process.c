@@ -18,7 +18,6 @@
 
 #include "Common.h"
 #include <sys/file.h>
-#include <setjmp.h>
 
 #define PROCESS_FIFO ".fifo"
 #define PROCESS_YIELD "--yield"
@@ -39,9 +38,6 @@ struct Helper {
     int file; // command el dash dash
     int fifo; // data to append
     int pipe; // helper side of pipe
-    int filepos; // read and scanned
-    int buflen; // valid in buffer
-    char buffer[PROCESS_STEP];
 } helper = {0};
 int altersub = 0;
 
@@ -53,11 +49,11 @@ void inithlp(struct Helper *hlp)
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
 }
 
-void errorinj(struct Helper *hlp, sigjmp_buf *env)
+int errorinj(int pipe)
 {
     // TODO3 write --error to pipe
     exitErrstr("helper too pipe\n");
-    longjmp(*env,-1);
+    return -1;
 }
 
 int intncmp(int *left, int *right, int n)
@@ -68,26 +64,27 @@ int intncmp(int *left, int *right, int n)
     return 0;
 }
 
-void readbuf(struct Helper *hlp, sigjmp_buf *env)
+int readbuf(int file, int pipe, int *filepos, int *buflen, char *buffer)
 {
     while (1) {
-    if (lseek(hlp->file,hlp->filepos,SEEK_SET) < 0) errorinj(hlp,env);
-    int retlen = read(hlp->file,hlp->buffer,PROCESS_STEP-hlp->buflen-1);
-    if (retlen < 0) errorinj(hlp,env);
-    hlp->filepos += retlen; hlp->buflen += retlen;
-    if (hlp->buflen == 0) {
+    if (lseek(file,*filepos,SEEK_SET) < 0) return -1;
+    int retlen = read(file,buffer,PROCESS_STEP-*buflen-1);
+    if (retlen < 0) return -1;
+    *filepos += retlen; *buflen += retlen;
+    if (*buflen == 0) {
     int len = strlen(PROCESS_YIELD);
-    if (write(hlp->pipe,PROCESS_YIELD,len) != len) exitErrstr("pipe too write\n");
+    if (write(pipe,PROCESS_YIELD,len) != len) exitErrstr("pipe too write\n");
     break;}
-    hlp->buffer[hlp->buflen] = 0;
+    buffer[*buflen] = 0;
     struct Spoof spoof = {0};
-    int pos = spoofPcs(&spoof,hlp->buffer,21,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4("/"),INT4,TEXT4("done"),Scans);
-    if (pos>=0 && intncmp(spoof.ai,augpid,augpids)==0) longjmp(*env,1);
-    pos = spoofPcs(&spoof,hlp->buffer,4,TEXT4("-"),Scans);
-    if (pos<0) pos = spoofPcs(&spoof,hlp->buffer,6,FILLER6,Scans);
+    int pos = spoofPcs(&spoof,buffer,21,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4(","),INT4,TEXT4("done"),Scans);
+    if (pos>=0 && intncmp(spoof.ai,augpid,augpids)==0) return 1;
+    pos = spoofPcs(&spoof,buffer,4,TEXT4("-"),Scans);
+    if (pos<0) pos = spoofPcs(&spoof,buffer,6,FILLER6,Scans);
     if (pos<0) exitErrstr("spoof too done\n");
-    if (write(hlp->pipe,hlp->buffer,pos) < pos) exitErrstr("pipe too write\n");
-    memmove(hlp->buffer,hlp->buffer+pos,hlp->buflen-pos);}
+    if (write(pipe,buffer,pos) < pos) exitErrstr("pipe too write\n");
+    memmove(buffer,buffer+pos,*buflen-pos);}
+    return 0;
 }
 
 int setlock(int fd, int pos, int len, int type, int wait)
@@ -102,32 +99,34 @@ int setlock(int fd, int pos, int len, int type, int wait)
 
 void *processHelper(void *arg)
 {
-    sigjmp_buf jmpenv = {0};
-    if (setjmp(jmpenv) != 0) return 0;
     struct Helper helper = {0};
     struct Helper *hlp = &helper;
-    sigjmp_buf *env = &jmpenv;
     inithlp(hlp);
+    int filepos = 0;
+    int buflen = 0;
+    char buffer[PROCESS_STEP] = {0};
     while (1) {
-    readbuf(hlp,env);
-    int retval = setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_WRLCK,F_SETLK);
-    if (retval < 0 && errno != EAGAIN) errorinj(hlp,env);
+    int retval = readbuf(hlp->file,hlp->pipe,&filepos,&buflen,buffer);
+    if (retval > 0) break;
+    if (retval < 0) return 0/*TODO3 errcode*/;
+    retval = setlock(hlp->file,filepos,PROCESS_LEN,F_WRLCK,F_SETLK);
+    if (retval < 0 && errno != EAGAIN) return 0/*errcode*/;
     int atend = 0;
     if (retval == 0) {
         struct stat statbuf = {0};
-        if (fstat(hlp->file,&statbuf) < 0) errorinj(hlp,env);
-        if (statbuf.st_size == hlp->filepos) atend = 1;}
+        if (fstat(hlp->file,&statbuf) < 0) return 0/*errcode*/;
+        if (statbuf.st_size == filepos) atend = 1;}
     if (retval == 0 && atend == 1) {
         char buf[PROCESS_STEP];
         int ret = read(hlp->fifo,buf,PROCESS_STEP);
-        if (ret < 0) errorinj(hlp,env);
-        if (lseek(hlp->file,hlp->filepos,SEEK_SET) < 0) errorinj(hlp,env);
-        if (write(hlp->file,buf,ret) != ret) errorinj(hlp,env);}
+        if (ret < 0) return 0/*errcode*/;
+        if (lseek(hlp->file,filepos,SEEK_SET) < 0) return 0/*errcode*/;
+        if (write(hlp->file,buf,ret) != ret) return 0/*errcode*/;}
     if (retval == 0) {
-        if (setlock(hlp->file,hlp->filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}
+        if (setlock(hlp->file,filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) return 0/*errcode*/;}
     if (retval < 0) {
-        if (setlock(hlp->file,hlp->filepos,1,F_RDLCK,F_SETLKW) < 0) errorinj(hlp,env);
-        if (setlock(hlp->file,hlp->filepos,1,F_UNLCK,F_SETLK) < 0) errorinj(hlp,env);}}
+        if (setlock(hlp->file,filepos,1,F_RDLCK,F_SETLKW) < 0) return 0/*errcode*/;
+        if (setlock(hlp->file,filepos,1,F_UNLCK,F_SETLK) < 0) return 0/*errcode*/;}}
     return 0;
 }
 
@@ -341,21 +340,19 @@ void processProduce(void *arg)
         insertCmnProcesses(arrayThread(thread,1)->pipe);
         toggle = 0;}}
     else if (toggle == 1) {
-        toggle = 2;
         for (int i = 0; i < sizeThread(); i++) {
         int j = (thread+i)%sizeThread();
-        if (arrayThread(i,1)->pipe >= 0 && arrayThread(i,1)->able && readableCmnProcesses(arrayThread(i,1)->pipe)) {
+        if (arrayThread(j,1)->pipe >= 0 && arrayThread(j,1)->able && readableCmnProcesses(arrayThread(j,1)->pipe)) {
         thread = j; toggle = 0;
         for (int k = 0; k < sizeThread(); k++)
         if (k != thread && arrayThread(k,1)->pipe >= 0 && arrayThread(k,1)->able)
         removeCmnProcesses(arrayThread(k,1)->pipe);
-        break;}}}
-    else if (sizeHeader() > 0) {
+        return;}}
+        if (sizeHeader() > 0) {
         int idx = *delocHeader(1);
         int siz = lengthBody(0,'\n')+1;
         char buf[siz]; memcpy(buf,delocBody(siz),siz);
-        if (write(arrayThread(idx,1)->fifo,buf,siz) != siz) processError(idx);}
-    else toggle = 1;
+        if (write(arrayThread(idx,1)->fifo,buf,siz) != siz) processError(idx);}}
 }
 
 void processAfter(void)
@@ -366,7 +363,7 @@ void processAfter(void)
     if (arrayThread(i,1)->pipe >= 0) {
     int pos = sizePcsChar();
     msgstrPcsChar("--side %d",-1,augpid[0]);
-    for (int i = 1; i < augpids; i++) msgstrPcsChar("/%d",-1,augpid[i]);
+    for (int i = 1; i < augpids; i++) msgstrPcsChar(",%d",-1,augpid[i]);
     msgstrPcsChar(" done",'\n');
     int siz = lengthPcsChar(pos,'\n');
     if (write(arrayThread(i,1)->fifo,arrayPcsChar(pos,siz+1),siz+1) != siz+1) exitErrstr("cannot kill thread\n");

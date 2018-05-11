@@ -267,7 +267,7 @@ enum Action manipulateClick(int state)
     // sideband msgstr --side responseProceed and wait
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--side %d",-1);
-    for (int i = 1; i < augpids; i++) msgstrCmdConfigure("/%d",-1,augpid[i]);
+    for (int i = 1; i < augpids; i++) msgstrCmdConfigure(",%d",-1,augpid[i]);
     msgstrCmdConfigure(" mark %d",'\n',layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
