@@ -33,8 +33,9 @@ int intncmp(int *left, int *right, int n);
 int processIgnore(int index, int noneg);
 void processAlias(int pos, int sup, int sub);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
-DECLARE_MSGSTR(PcsChar)
+void processError(int index);
 
+DECLARE_MSGSTR(PcsChar)
 DECLARE_SCAN(Pcs)
 
 int processPlane(int *cpos, int file)
@@ -144,6 +145,11 @@ int processConfigure(int index)
 		SKIP
 		usePcsChar(); copyPcsRequest(sizePcsRequest(),charpos,sizePcsChar()-charpos);
 		*enlocPcsRequest(1) = 0;
+		DELOC}
+    pos = scanPcs(pattern,21,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4(","),INT4,TEXT4("done"),Scans);
+    if (pos>=0 && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
+		SKIP
+		processError(index);
 		DELOC}
     pos = scanPcs(pattern,21,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4(","),INT4,TEXT4("skip"),Scans);
     if (pos>=0 && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {

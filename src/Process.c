@@ -40,6 +40,8 @@ struct Helper {
     int pipe; // helper side of pipe
 } helper = {0};
 int altersub = 0;
+char *donestr = 0;
+int donesiz = 0;
 
 void inithlp(struct Helper *hlp)
 {
@@ -47,13 +49,6 @@ void inithlp(struct Helper *hlp)
     *hlp = helper;
     if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
     if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
-}
-
-int errorinj(int pipe)
-{
-    // TODO3 write --error to pipe
-    exitErrstr("helper too pipe\n");
-    return -1;
 }
 
 int intncmp(int *left, int *right, int n)
@@ -97,6 +92,11 @@ int setlock(int fd, int pos, int len, int type, int wait)
     return fcntl(fd,wait,&lock);
 }
 
+void errorinj(int pipe)
+{
+    if (write(pipe,donestr,donesiz) != donesiz) exitErrstr("pipe too error\n");
+}
+
 void *processHelper(void *arg)
 {
     struct Helper helper = {0};
@@ -108,25 +108,25 @@ void *processHelper(void *arg)
     while (1) {
     int retval = readbuf(hlp->file,hlp->pipe,&filepos,&buflen,buffer);
     if (retval > 0) break;
-    if (retval < 0) return 0/*TODO3 errcode*/;
+    if (retval < 0) {errorinj(hlp->pipe); break;}
     retval = setlock(hlp->file,filepos,PROCESS_LEN,F_WRLCK,F_SETLK);
-    if (retval < 0 && errno != EAGAIN) return 0/*errcode*/;
+    if (retval < 0 && errno != EAGAIN) {errorinj(hlp->pipe); break;}
     int atend = 0;
     if (retval == 0) {
         struct stat statbuf = {0};
-        if (fstat(hlp->file,&statbuf) < 0) return 0/*errcode*/;
+        if (fstat(hlp->file,&statbuf) < 0) {errorinj(hlp->pipe); break;}
         if (statbuf.st_size == filepos) atend = 1;}
     if (retval == 0 && atend == 1) {
         char buf[PROCESS_STEP];
         int ret = read(hlp->fifo,buf,PROCESS_STEP);
-        if (ret < 0) return 0/*errcode*/;
-        if (lseek(hlp->file,filepos,SEEK_SET) < 0) return 0/*errcode*/;
-        if (write(hlp->file,buf,ret) != ret) return 0/*errcode*/;}
+        if (ret < 0) {errorinj(hlp->pipe); break;}
+        if (lseek(hlp->file,filepos,SEEK_SET) < 0) {errorinj(hlp->pipe); break;}
+        if (write(hlp->file,buf,ret) != ret) {errorinj(hlp->pipe); break;}}
     if (retval == 0) {
-        if (setlock(hlp->file,filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) return 0/*errcode*/;}
+        if (setlock(hlp->file,filepos,PROCESS_LEN,F_UNLCK,F_SETLK) < 0) {errorinj(hlp->pipe); break;}}
     if (retval < 0) {
-        if (setlock(hlp->file,filepos,1,F_RDLCK,F_SETLKW) < 0) return 0/*errcode*/;
-        if (setlock(hlp->file,filepos,1,F_UNLCK,F_SETLK) < 0) return 0/*errcode*/;}}
+        if (setlock(hlp->file,filepos,1,F_RDLCK,F_SETLKW) < 0) {errorinj(hlp->pipe); break;}
+        if (setlock(hlp->file,filepos,1,F_UNLCK,F_SETLK) < 0) {errorinj(hlp->pipe); break;}}}
     return 0;
 }
 
@@ -284,6 +284,14 @@ void processBefore(void)
     initName(Planes,processPerfile);
     initName(Windows,processName);
     initName(States,processPerfile);
+    int donepos = sizePcsChar();
+    msgstrPcsChar("--side %d",-1,augpid[0]);
+    for (int i = 1; i < augpids; i++) msgstrPcsChar(",%d",-1,augpid[i]);
+    msgstrPcsChar(" done",'\n');
+    donesiz = lengthPcsChar(donepos,'\n')+1;
+    donestr = malloc(donesiz);
+    memcpy(donestr,arrayPcsChar(donepos,donesiz),donesiz);
+    unlocPcsChar(donesiz);
     int pos = sizePcsChar(); msgstrPcsChar("_",0); struct Ident ident = {0};
     int sub = 0; int ret = processIdent(pos,Windows,0,&sub); delocPcsChar(sizePcsChar()-pos);
     if (ret != 0 || sub != 0) exitErrstr("before too zero\n");
@@ -361,11 +369,6 @@ void processAfter(void)
     if (pthread_cond_destroy(&cond) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
     for (int i = 0; i < sizeThread(); i++)
     if (arrayThread(i,1)->pipe >= 0) {
-    int pos = sizePcsChar();
-    msgstrPcsChar("--side %d",-1,augpid[0]);
-    for (int i = 1; i < augpids; i++) msgstrPcsChar(",%d",-1,augpid[i]);
-    msgstrPcsChar(" done",'\n');
-    int siz = lengthPcsChar(pos,'\n');
-    if (write(arrayThread(i,1)->fifo,arrayPcsChar(pos,siz+1),siz+1) != siz+1) exitErrstr("cannot kill thread\n");
+    if (write(arrayThread(i,1)->fifo,donestr,donesiz) != donesiz) exitErrstr("cannot kill thread\n");
     if (pthread_join(arrayThread(i,1)->helper,0) < 0) exitErrstr("cannot join thread\n");}
 }
