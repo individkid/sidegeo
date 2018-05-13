@@ -25,6 +25,9 @@
 
 int filenum = 0;
 Function function = 0;
+int reqpipe[2] = {0};
+int rsppipe[2] = {0};
+pthread_t haskell = {0};
 
 void setupEnum(void)
 {
@@ -43,36 +46,67 @@ void setupEnum(void)
     val = handleEnum("Divide"); if (val < 0 || insertEnum(Divide) < 0) exitErrstr("enum too event\n"); else *castEnum(Divide) = val;
     val = handleEnum("Vertex"); if (val < 0 || insertEnum(Vertex) < 0) exitErrstr("enum too event\n"); else *castEnum(Vertex) = val;
     val = handleEnum("Index"); if (val < 0 || insertEnum(Index) < 0) exitErrstr("enum too event\n"); else *castEnum(Index) = val;
+    val = handleEnum("Done"); if (val < 0 || insertEnum(Done) < 0) exitErrstr("enum too event\n"); else *castEnum(Done) = val;
+}
+
+void *haskellHelper(void *arg)
+{
+    hs_init(0,0);
+    setupEnum();
+    if (handleEvents() != 0) exitErrstr("haskell return true\n");
+    hs_exit();
 }
 
 void haskellBefore(void)
 {
-    hs_init(0,0);
-    setupEnum();
+    if (pipe(reqpipe) != 0) exitErrstr("request pipe failed: %s\n",strerror(errno));
+    if (pipe(rsppipe) != 0) exitErrstr("rsppipe pipe failed: %s\n",strerror(errno));
+    insertCmnHaskells(rsppipe[0]);
+    if (pthread_create(&haskell,0,haskellHelper,0) != 0) exitErrstr("cannot create thread: %s\n",strerror(errno));
 }
 
-void haskellConsume(void *arg)
+int haskellDelay(void)
 {
-    while (sizeEvent() > 0) {
-    struct Proto event = *delocEvent(1);
-    filenum = event.ctx;
-    useHsInt(); xferInout(event.arg);
-    for (int i = 0; i < event.ars; i++) {
-    int len = *delocHsInt(1);
-    useHsInt(); xferIobus(i,len);}
-    int num = *castEnum(event.event);
-    if (handleEvent(num) != 0) exitErrstr("haskell return true\n");
-    function = 0;
+    if (sizeEvent() > 0) return 1;
+}
+
+void haskellCycle(void *arg)
+{
+    if (readableCmnHaskells(rsppipe[0])) {
+    struct Proto event = *delocProto(1);
     useInout(); xferQueueBase(event.ptr,event.exp);
     for (int i = 0; i < event.exs; i++) {
     useIobus(i); xsizeQueueBase(event.ptr);}
     useHsInt(); xferQueueBase(event.ptr,event.rsp);
     if (event.command) *enlocHsCommand(1) = event.command;}
+    else if (sizeEvent() > 0) {
+    struct Proto event = *delocEvent(1);
+    *enlocProto(1) = event;
+    filenum = event.ctx;
+    useHsInt(); xferInout(event.arg);
+    for (int i = 0; i < event.ars; i++) {
+    int len = *delocHsInt(1);
+    useHsInt(); xferIobus(i,len);}
+    int ret = 0; int num = *castEnum(event.event);
+    while ((ret = write(reqpipe[1],&num,sizeof(num))) < 0 && errno == EINTR);
+    if (ret < 0) exitErrstr("write too pipe\n");}
 }
 
 void haskellAfter(void)
 {
-    hs_exit();
+    int ret = 0; int num = *castEnum(Done);
+    while ((ret = write(reqpipe[1],&num,sizeof(num))) < 0 && errno == EINTR);
+    if (ret < 0) exitErrstr("write too pipe\n");
+    if (pthread_join(haskell,0) < 0) exitErrstr("cannot join thread\n");
+}
+
+int event(void)
+{
+    function = 0;
+    int ret = 0; int num = 0;
+    while ((ret = read(reqpipe[0],&num,sizeof(num))) < 0 && errno == EINTR);
+    if (ret < 0) exitErrstr("read too pipe\n");
+    return num;    
 }
 
 int *accessInt(int size)
@@ -82,42 +116,6 @@ int *accessInt(int size)
     if (size > sizeMeta()) enlocMeta(size-sizeMeta());
     if (size < sizeMeta()) unlocMeta(sizeMeta()-size);
     return arrayMeta(0,size);
-}
-
-int *place(int size)
-{
-    usePlace(filenum); referMeta();
-    return accessInt(size);
-}
-
-int places(void)
-{
-    usePlace(filenum); referMeta();
-    return sizeMeta();
-}
-
-int *embed(int size)
-{
-    useEmbed(filenum); referMeta();
-    return accessInt(size);
-}
-
-int embeds(void)
-{
-    useEmbed(filenum); referMeta();
-    return sizeMeta();
-}
-
-int *filter(int size)
-{
-    useFilter(filenum); referMeta();
-    return accessInt(size);
-}
-
-int filters(void)
-{
-    useFilter(filenum); referMeta();
-    return sizeMeta();
 }
 
 int *inout(int size)

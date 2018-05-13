@@ -193,8 +193,6 @@ int processInit(int pos)
     int datw = openfile(filename,"",PROCESS_FIFO,O_WRONLY,           mode,0,0);
     if (file < 0 || datr < 0 || datw < 0) {processComplain(); return sub;}
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("read pipe failed: %s\n",strerror(errno));
-    int flags = fcntl(pipefd[0],F_GETFL); if (flags < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
-    if (fcntl(pipefd[0],F_SETFL,flags|O_NONBLOCK) < 0) exitErrstr("fcntl pipe failed: %s\n",strerror(errno));
     thread->file = file; helper.file = file;
     thread->fifo = datw; helper.fifo = datr;
     thread->pipe = pipefd[0]; helper.pipe = pipefd[1];
@@ -299,20 +297,11 @@ void processBefore(void)
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }
 
-void processConsume(void *arg)
-{
-    while (sizeConfigurer() > 0) {
-        int siz = lengthConfigure(0,'\n')+1;
-        *enlocHeader(1) = *delocConfigurer(1);
-        useConfigure(); xferBody(siz);}
-    useOption(); xferStage(sizeOption());
-}
-
 int processDelay(void)
 {
     if (toggle == 0) return 0;
-    if (sizeHeader() > 0) return 1;
-    if (sizeStage() > 0) return 1;
+    if (sizeConfigurer() > 0) return 1;
+    if (sizeOption() > 0) return 1;
     return 0;
 }
 /*
@@ -322,7 +311,7 @@ then prioritize reading to yield any readable
 then prioritize writing
 */
 
-void processProduce(void *arg)
+void processCycle(void *arg)
 {
     if (toggle == 0) {
         struct Thread *ptr = arrayThread(thread,1);
@@ -337,8 +326,8 @@ void processProduce(void *arg)
         if (i != thread && arrayThread(i,1)->pipe >= 0 && arrayThread(i,1)->able)
         insertCmnProcesses(arrayThread(i,1)->pipe);
         toggle = 1;}}
-    else if (toggle == 1 && sizeStage() > 0) {
-        int len = sizeStage(); useStage(); xferComplete(len);
+    else if (toggle == 1 && sizeOption() > 0) {
+        int len = sizeOption(); useOption(); xferComplete(len);
         while (len > 0 /*nop or non-f consumed*/) len = processOption();
         // (len == 0) nothing consumed, so wait for any file
         if (len < 0) { // -f consumed, so wait for single file
@@ -356,10 +345,11 @@ void processProduce(void *arg)
         if (k != thread && arrayThread(k,1)->pipe >= 0 && arrayThread(k,1)->able)
         removeCmnProcesses(arrayThread(k,1)->pipe);
         return;}}
-        if (sizeHeader() > 0) {
-        int idx = *delocHeader(1);
-        int siz = lengthBody(0,'\n')+1;
-        char buf[siz]; memcpy(buf,delocBody(siz),siz);
+        if (sizeConfigurer() > 0) {
+        int idx = *delocConfigurer(1);
+        int siz = lengthConfigure(0,'\n')+1;
+        if (siz > sizeConfigure()) exitErrstr("configure too size\n");
+        char buf[siz]; memcpy(buf,delocConfigure(siz),siz);
         if (write(arrayThread(idx,1)->fifo,buf,siz) != siz) processError(idx);}}
 }
 

@@ -24,19 +24,19 @@ import Foreign.C.Types
 import Foreign.C.String
 import AffTopo.Naive
 
-foreign import ccall "place" placeC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "places" placesC :: CInt -> IO CInt
-foreign import ccall "embed" embedC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "embeds" embedsC :: CInt -> IO CInt
-foreign import ccall "filter" filterC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "filters" filtersC :: CInt -> IO CInt
+foreign import ccall "event" eventC :: IO CInt
 foreign import ccall "inout" inoutC :: CInt -> IO (Ptr CInt)
 foreign import ccall "inouts" inoutsC :: IO CInt
 foreign import ccall "iobus" iobusC :: CInt -> CInt -> IO (Ptr CInt)
 foreign import ccall "iobuss" iobussC :: CInt -> IO CInt
 foreign import ccall "mapping" mappingC :: CInt -> CInt -> IO CInt
-foreign export ccall handleEvent :: CInt -> IO Bool
+foreign export ccall handleEvents :: IO Bool
 foreign export ccall handleEnum :: Ptr CChar -> IO CInt
+
+data State =
+    PlaceState Place [Region] [Int] |
+    DoneState |
+    ErrorState
 
 data Event =
     Locate | -- inout(wrt), place: inout(polyant)
@@ -52,6 +52,7 @@ data Event =
     Divide | -- inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex | -- inout(boundary), place: inout(vertex)
     Index | -- inout(boundary), place: inout(index)
+    Done |
     Error
 
 eventOf :: Int -> Event
@@ -68,6 +69,7 @@ eventOf 9 = Set
 eventOf 10 = Divide
 eventOf 11 = Vertex
 eventOf 12 = Index
+eventOf 13 = Done
 eventOf _ = Error
 
 ofEvent :: Event -> Int
@@ -84,6 +86,7 @@ ofEvent Set = 9
 ofEvent Divide = 10
 ofEvent Vertex = 11
 ofEvent Index = 12
+ofEvent Done = 13
 ofEvent _ = (-1)
 
 ofString :: [Char] -> Event
@@ -100,6 +103,7 @@ ofString "Set" = Set
 ofString "Divide" = Divide
 ofString "Vertex" = Vertex
 ofString "Index" = Index
+ofString "Done" = Done
 ofString _ = Error
 
 handleEnum :: Ptr CChar -> IO CInt
@@ -107,43 +111,37 @@ handleEnum cstr = do
  str <- peekCString cstr
  return (fromIntegral (ofEvent (ofString str)))
 
-split :: [a] -> [Int] -> [[a]]
-split [] _ = []
-split _ [] = []
-split a (b:c) = (take b a):(split (drop b a) c)
+handleState :: Event -> State -> State
+handleState event state = case event of
+ Locate -> state
+ Fill -> state
+ Hollow -> state
+ Inflate -> state
+ Faces -> state
+ Frames -> state
+ Face -> state
+ Frame -> state
+ Get -> state
+ Set -> state
+ Divide -> state
+ Vertex -> state
+ Index -> state
+ Done -> DoneState
+ Error -> ErrorState
 
-decodePlace :: [Int] -> [Int] -> Place
-decodePlace boundaryI list = let
- size = length boundaryI
- boundary = map Boundary boundaryI
- (firsts,list1) = splitAt size list
- (seconds,list2) = splitAt size list1
- (list3,list4) = splitAt (sum firsts) list2
- first = map2 Region (split list3 firsts)
- second = map2 Region (split list4 seconds)
- in zipWith3 (\x y z -> (x,[y,z])) boundary first second
+handleStates :: State -> IO State
+handleStates state = do
+ event <- eventC
+ let e = eventOf (fromIntegral event) in
+  return (handleState e state)
 
-encodePlace :: Place -> [Int]
-encodePlace place = let
- firsts = map (length . head) (range place)
- seconds = map (length . last) (range place)
- first = concat (map head (range place))
- second = concat (map last (range place))
- in concat [firsts, seconds, map (\(Region x) -> x) first, map (\(Region x) -> x) second]
+handleEvent :: State -> IO Bool
+handleEvent state = do
+ s <- handleStates state
+ case s of
+  DoneState -> return False
+  ErrorState -> return True
+  _ -> handleEvent s
 
-handleEvent :: CInt -> IO Bool
-handleEvent event = case (eventOf (fromIntegral event)) of
- Locate -> return False
- Fill -> return False
- Hollow -> return False
- Inflate -> return False
- Faces -> return False
- Frames -> return False
- Face -> return False
- Frame -> return False
- Get -> return False
- Set -> return False
- Divide -> return False
- Vertex -> return False
- Index -> return False
- _ -> return True
+handleEvents :: IO Bool
+handleEvents = handleEvent (PlaceState [] [] [])

@@ -129,6 +129,7 @@ enum Event {
     Divide, // inout(boundary, mask, wrt), place, embed, tag: place, embed, tag
     Vertex, // inout(boundary), place: inout(vertex)
     Index, // inout(boundary), place: inout(index)
+    Done,
     Events};
 struct Proto { // event ctx arg exp rsp command
     enum Event event;
@@ -789,12 +790,12 @@ DECLARE_STAGE(CmnLuaInt,int)
 DECLARE_STAGE(CmnLuaFloat,Myfloat)
 DECLARE_STAGE(CmnLuaByte,char)
 
-DECLARE_FDSET(CmnProcesses,int)
+DECLARE_FDSET(CmnProcesses)
 DECLARE_STAGE(CmnOption,char)
 DECLARE_STAGE(CmnConfigure,char)
 DECLARE_STAGE(CmnConfigurer,int)
 
-DECLARE_COND(CmnHaskells)
+DECLARE_FDSET(CmnHaskells)
 DECLARE_STAGE(CmnEvent,struct Proto)
 DECLARE_STAGE(CmnHsInt,int)
 DECLARE_STAGE(CmnFunc,Function)
@@ -878,6 +879,7 @@ DECLARE_LOCAL(Inout,int)
 DECLARE_META(Iobus,int)
 DECLARE_TREE(Enum,enum Event,int)
 DECLARE_POINTER(Meta,int)
+DECLARE_LOCAL(Proto,struct Proto)
 
 DECLARE_SOURCE(HsCommands)
 DECLARE_STAGE(HsCommand,Command)
@@ -984,20 +986,6 @@ DECLARE_LOCAL(PcsBuf,char) // string buffer
 DECLARE_LOCAL(Ident,struct Ident) // info for perfile names
 DECLARE_FALSE(Name,int,int) // buffer string to queue index
 DECLARE_LOCAL(Thread,struct Thread) // per file thread
-
-DECLARE_LOCAL(Stage,char) // copy of options for process
-DECLARE_LOCAL(Header,int) // staged fifo headers
-DECLARE_LOCAL(Body,char) // staged fifo data
-
-DECLARE_LOCAL(Skip,int) // per file skip next command
-DECLARE_LOCAL(Count,int) // per file number of planes
-DECLARE_LOCAL(Able,int) // toggle disable
-DECLARE_LOCAL(File,int) // file handles
-DECLARE_LOCAL(Side,int) // sideband handles
-DECLARE_LOCAL(Fifo,int) // fifo handles
-DECLARE_LOCAL(Pipe,int) // data pipe handles
-DECLARE_LOCAL(Ignore,int) // ignored error count
-DECLARE_LOCAL(Helper,pthread_t) // thread handle
 
 
 DECLARE_DEST(Panels)

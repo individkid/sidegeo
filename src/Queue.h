@@ -78,11 +78,11 @@ EXTERNC void exit##NAME(void);
 // non-pselect
 #define DECLARE_STDIN(NAME) DECLARE_MUTEX(NAME)
 // stdin pselect
-#define DECLARE_FDSET(NAME,ELEM) DECLARE_MUTEX(NAME) \
-EXTERNC void insert##NAME(ELEM val); \
-EXTERNC void remove##NAME(ELEM val); \
-EXTERNC int member##NAME(ELEM val); \
-EXTERNC int readable##NAME(ELEM val);
+#define DECLARE_FDSET(NAME) DECLARE_MUTEX(NAME) \
+EXTERNC void insert##NAME(int val); \
+EXTERNC void remove##NAME(int val); \
+EXTERNC int member##NAME(int val); \
+EXTERNC int readable##NAME(int val);
 // pselect on pipes
 #define DECLARE_TIME(NAME) DECLARE_MUTEX(NAME) \
 // timed delay
@@ -393,7 +393,7 @@ struct QueueFdset : QueueMutex {
     void (*func0)();
     void (*func1)();
     int (*func)();
-    QueueFdset(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,fnc4) {
+    QueueFdset(void (*fnc3)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,fnc3) {
         FD_ZERO(&fds);
         maxfd = 0;
         func0 = fnc0;
@@ -541,11 +541,11 @@ extern "C" void exit##NAME(void) {NAME##Inst.exit(); NAME##Inst.signal(); NAME##
 
 #define DEFINE_STDIN(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueStdin,FUNC)
 
-#define DEFINE_FDSET(NAME,ELEM,FUNC...) DEFINE_MUTEX(NAME,QueueFdset,FUNC) \
-extern "C" void insert##NAME(ELEM val) {NAME##Inst.insert(val);} \
-extern "C" void remove##NAME(ELEM val) {NAME##Inst.remove(val);} \
-extern "C" int member##NAME(ELEM val) {return NAME##Inst.member(val);} \
-extern "C" int readable##NAME(ELEM val) {return NAME##Inst.readable(val);}
+#define DEFINE_FDSET(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueFdset,FUNC) \
+extern "C" void insert##NAME(int val) {NAME##Inst.insert(val);} \
+extern "C" void remove##NAME(int val) {NAME##Inst.remove(val);} \
+extern "C" int member##NAME(int val) {return NAME##Inst.member(val);} \
+extern "C" int readable##NAME(int val) {return NAME##Inst.readable(val);}
 
 #define DEFINE_TIME(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueTime,FUNC)
 

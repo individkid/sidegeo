@@ -38,13 +38,13 @@ void consumeLua(void *arg);
 void afterLua(void);
 
 void processBefore(void);
-void processConsume(void *arg);
 int processDelay(void);
-void processProduce(void *arg);
+void processCycle(void *arg);
 void processAfter(void);
 
 void haskellBefore(void);
-void haskellConsume(void *arg);
+int haskellDelay(void);
+void haskellCycle(void *arg);
 void haskellAfter(void);
 
 void timewheelBefore(void);
@@ -99,12 +99,12 @@ DEFINE_STAGE(CmnLuaInt,int,CmnResponse)
 DEFINE_STAGE(CmnLuaFloat,Myfloat,CmnLuaInt)
 DEFINE_STAGE(CmnLuaByte,char,CmnLuaFloat)
 
-DEFINE_FDSET(CmnProcesses,int,processConsume,processProduce,processBefore,processAfter,processDelay)
+DEFINE_FDSET(CmnProcesses,processCycle,processBefore,processAfter,processDelay)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigurer,int,CmnConfigure)
 
-DEFINE_COND(CmnHaskells,haskellConsume,haskellBefore,haskellAfter)
+DEFINE_FDSET(CmnHaskells,haskellCycle,haskellBefore,haskellAfter,haskellDelay)
 DEFINE_STAGE(CmnEvent,struct Proto,CmnHaskells)
 DEFINE_STAGE(CmnHsInt,int,CmnEvent)
 DEFINE_STAGE(CmnFunc,Function,CmnHsInt)
@@ -188,6 +188,7 @@ DEFINE_LOCAL(Inout,int)
 DEFINE_META(Iobus,int)
 DEFINE_TREE(Enum,enum Event,int)
 DEFINE_POINTER(Meta,int)
+DEFINE_LOCAL(Proto,struct Proto)
 
 DEFINE_SOURCE(HsCommands,CmnCommands,CmnHaskells)
 DEFINE_STAGE(HsCommand,Command,HsCommands)
@@ -294,10 +295,6 @@ DEFINE_LOCAL(PcsBuf,char)
 DEFINE_LOCAL(Ident,struct Ident)
 DEFINE_FALSE(Name,int,int)
 DEFINE_LOCAL(Thread,struct Thread)
-
-DEFINE_LOCAL(Stage,char)
-DEFINE_LOCAL(Header,int)
-DEFINE_LOCAL(Body,char)
 
 
 DEFINE_DEST(Panels,CmnPanels,CmnPanels)
