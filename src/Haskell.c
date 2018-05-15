@@ -77,7 +77,23 @@ void haskellAfter(void)
 
 int event(void)
 {
-    return Events;
+    stallCmnHaskells();
+    function = 0;
+    return *delocEvent(1);
+}
+
+int *input(int size)
+{
+    return delocHsInt(size);
+}
+
+int *output(int size)
+{
+    // local queues wont be transferred until next call to stallCmnHaskells()
+    *enlocHsCommand(1) = *delocHsCmd(1);
+    useQueueBase(*delocHsPtr(1));
+    referMeta();
+    return enlocMeta(size);
 }
 
 int mapping(int arg, int mask)
