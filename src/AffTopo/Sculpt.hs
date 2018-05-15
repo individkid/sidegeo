@@ -25,10 +25,6 @@ import Foreign.C.String
 import AffTopo.Naive
 
 foreign import ccall "event" eventC :: IO CInt
-foreign import ccall "inout" inoutC :: CInt -> IO (Ptr CInt)
-foreign import ccall "inouts" inoutsC :: IO CInt
-foreign import ccall "iobus" iobusC :: CInt -> CInt -> IO (Ptr CInt)
-foreign import ccall "iobuss" iobussC :: CInt -> IO CInt
 foreign import ccall "mapping" mappingC :: CInt -> CInt -> IO CInt
 foreign export ccall handleEvents :: IO Bool
 foreign export ccall handleEnum :: Ptr CChar -> IO CInt

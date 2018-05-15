@@ -34,6 +34,7 @@ void produceConsole(void *arg);
 void afterConsole(void);
 
 void beforeLua(void);
+int delayLua(void);
 void consumeLua(void *arg);
 void afterLua(void);
 
@@ -44,7 +45,7 @@ void processAfter(void);
 
 void haskellBefore(void);
 int haskellDelay(void);
-void haskellCycle(void *arg);
+void haskellProduce(void *arg);
 void haskellAfter(void);
 
 void timewheelBefore(void);
@@ -75,7 +76,6 @@ inline bool operator!=(const Stream &left, const Stream &right) {return false;}
 inline bool operator!=(const PaUtilRingBuffer &left, const PaUtilRingBuffer &right) {return false;}
 inline bool operator!=(const Response &left, const Response &right) {return false;}
 inline bool operator!=(const Match &left, const Match &right) {return false;}
-inline bool operator!=(const Proto &left, const Proto &right) {return false;}
 inline bool operator!=(const Pack &left, const Pack &right) {return false;}
 inline bool operator!=(const Thread &left, const Thread &right) {return false;}
 inline bool operator!=(const Ident &left, const Ident &right) {return false;}
@@ -92,7 +92,7 @@ DEFINE_STAGE(CmnRender,struct Render,CmnVoid)
 DEFINE_STDIN(CmnOutputs,consumeConsole,produceConsole,beforeConsole,afterConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
-DEFINE_COND(CmnLuas,consumeLua,beforeLua,afterLua)
+DEFINE_COND(CmnLuas,consumeLua,0,beforeLua,afterLua,delayLua)
 DEFINE_STAGE(CmnRequest,char,CmnLuas)
 DEFINE_STAGE(CmnResponse,struct Response,CmnRequest)
 DEFINE_STAGE(CmnLuaInt,int,CmnResponse)
@@ -104,10 +104,11 @@ DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigurer,int,CmnConfigure)
 
-DEFINE_FDSET(CmnHaskells,haskellCycle,haskellBefore,haskellAfter,haskellDelay)
-DEFINE_STAGE(CmnEvent,struct Proto,CmnHaskells)
+DEFINE_COND(CmnHaskells,0,haskellProduce,haskellBefore,haskellAfter,haskellDelay)
+DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnHsInt,int,CmnEvent)
 DEFINE_STAGE(CmnFunc,Function,CmnHsInt)
+DEFINE_STAGE(CmnHsPtr,struct QueueBase *,CmnFunc)
 
 DEFINE_TIME(CmnTimewheels,timewheelConsume,timewheelProduce,timewheelBefore,timewheelAfter,timewheelDelay)
 DEFINE_STAGE(CmnChange,struct Change,CmnTimewheels)
@@ -166,9 +167,10 @@ DEFINE_STAGE(CmdConfigure,char,CmdOption)
 DEFINE_STAGE(CmdConfigurer,int,CmdConfigure)
 
 DEFINE_SOURCE(CmdHaskells,CmnHaskells,CmdProcesses)
-DEFINE_STAGE(CmdEvent,struct Proto,CmdHaskells)
+DEFINE_STAGE(CmdEvent,enum Event,CmdHaskells)
 DEFINE_STAGE(CmdHsInt,int,CmdEvent)
 DEFINE_STAGE(CmdFunc,Function,CmdHsInt)
+DEFINE_STAGE(CmdHsPtr,struct QueueBase *,CmdFunc)
 
 DEFINE_SOURCE(CmdTimewheels,CmnTimewheels,CmdHaskells)
 DEFINE_STAGE(CmdChange,struct Change,CmdTimewheels)
@@ -181,23 +183,19 @@ DEFINE_EXTRA(CmdLuaFloat,Myfloat,CmdLuaInt)
 DEFINE_EXTRA(CmdLuaByte,char,CmdLuaFloat)
 
 
-DEFINE_META(Place,int)
-DEFINE_META(Embed,int)
-DEFINE_META(Filter,int)
-DEFINE_LOCAL(Inout,int)
-DEFINE_META(Iobus,int)
-DEFINE_TREE(Enum,enum Event,int)
-DEFINE_POINTER(Meta,int)
-DEFINE_LOCAL(Proto,struct Proto)
-
 DEFINE_SOURCE(HsCommands,CmnCommands,CmnHaskells)
 DEFINE_STAGE(HsCommand,Command,HsCommands)
 DEFINE_STAGE(HsCmdInt,int,HsCommand)
 
 DEFINE_WAIT(Haskells,CmnHaskells,HsCommands) // wait after source
-DEFINE_STAGE(Event,struct Proto,Haskells)
+DEFINE_STAGE(Event,enum Event,Haskells)
 DEFINE_EXTRA(HsInt,int,Event)
 DEFINE_EXTRA(Func,Function,HsInt)
+DEFINE_EXTRA(HsPtr,struct QueueBase *,Func)
+
+DEFINE_TREE(Enum,enum Event,int)
+DEFINE_POINTER(Meta,int)
+
 
 
 DEFINE_SOURCE(CslCommands,CmnCommands,CmnOutputs)

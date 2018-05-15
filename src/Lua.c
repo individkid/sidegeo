@@ -54,6 +54,11 @@ void beforeLua(void)
 	lua_setglobal(lua,"request");
 }
 
+int delayLua(void)
+{
+	return 0;
+}
+
 void consumeLua(void *arg)
 {
 	struct Response response = {0};

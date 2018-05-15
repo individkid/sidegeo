@@ -67,6 +67,7 @@ EXTERNC void xsizeQueueBase(struct QueueBase *ptr);
 
 #define DECLARE_MUTEX(NAME) \
 EXTERNC void *loop##NAME(void *arg); \
+EXTERNC void stall##NAME(void); \
 EXTERNC void create##NAME(int arg); \
 EXTERNC void lock##NAME(void); \
 EXTERNC void unlock##NAME(void); \
@@ -294,14 +295,21 @@ struct QueueMutex {
         if (ptr->xfer()) retval = 1;
         return retval;
     }
+    void stall()
+    {
+        while (!nodelay() && !xfer() && !delay());
+    }
     void *loop(void *arg)
     {
         before();
-        while (!done) {
+        if (consume && produce) while (!done) {
             if (xfer()) consume(arg);
+            if (done) break;
             if (!delay()) continue;
             produce(arg);
             while (!done && nodelay()) produce(arg);}
+        else if (consume) while (!done) {stall(); consume(arg);}
+        else if (produce) produce(arg);
         after();
         return 0;
     }
@@ -393,7 +401,7 @@ struct QueueFdset : QueueMutex {
     void (*func0)();
     void (*func1)();
     int (*func)();
-    QueueFdset(void (*fnc3)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,fnc3) {
+    QueueFdset(void (*fnc3)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,0) {
         FD_ZERO(&fds);
         maxfd = 0;
         func0 = fnc0;
@@ -494,11 +502,13 @@ struct QueueTime : QueueMutex {
 
 struct QueueCond : QueueMutex {
     pthread_cond_t cond;
+    int (*func)();
     void (*func0)();
     void (*func1)();
-    QueueCond(void (*fnc3)(void *), void (*fnc0)(), void (*fnc1)()) : QueueMutex(fnc3,0)
+    QueueCond(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,fnc4)
     {
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+        func = fnc;
         func0 = fnc0;
         func1 = fnc1;
     }
@@ -514,21 +524,28 @@ struct QueueCond : QueueMutex {
     {
         if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
     }
-    virtual void before()
-    {
+    virtual void before() {
         (*func0)();
     }
-    virtual void after()
-    {
+    virtual void after() {
         (*func1)();
     }
-    virtual int delay() {return 0;}
-    virtual int nodelay() {return 0;}
+    virtual int delay()
+    {
+        if ((*func)()) return 1;
+        lock(); wait(); unlock();
+        return 0;
+    }
+    virtual int nodelay()
+    {
+        return (*func)();
+    }
 };
 
 #define DEFINE_MUTEX(NAME,TYPE,FUNC...) \
 TYPE NAME##Inst = TYPE(FUNC); \
 extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
+extern "C" void stall##NAME(void) {NAME##Inst.stall();} \
 extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
 extern "C" void lock##NAME(void) {NAME##Inst.lock();} \
 extern "C" void unlock##NAME(void) {NAME##Inst.unlock();} \
