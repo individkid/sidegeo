@@ -608,6 +608,8 @@ void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Comm
     *enloc##THD##HsInt(1) = len; \
     useQueueBase(ptr); xfer##THD##HsInt(len); \
     *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##HsPtr(1) = ptrHs##THD##Int(); \
+    *enloc##THD##HsCmd(1) = cmd; \
     *enloc##THD##Event(1) = EVENT; \
 }
 #define DECLARE_EVENT_1IN_2INS_1TAG(THD,EVENT) \
@@ -621,6 +623,8 @@ void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase
     *enloc##THD##HsInt(1) = len1; \
     useQueueBase(ptr); xfer##THD##HsInt(len1); \
     *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##HsPtr(1) = ptrHs##THD##Int(); \
+    *enloc##THD##HsCmd(1) = cmd; \
     *enloc##THD##Event(1) = EVENT; \
 }
 #define DECLARE_EVENT_1IN_1TAG(THD,EVENT) \
@@ -630,6 +634,8 @@ void enque##THD##EVENT(int file, int plane, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = file; \
     *enloc##THD##HsInt(1) = plane; \
     *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##HsPtr(1) = ptrHs##THD##Int(); \
+    *enloc##THD##HsCmd(1) = cmd; \
     *enloc##THD##Event(1) = EVENT; \
 }
 #define DECLARE_EVENT_2IN_1TAG(THD,EVENT) \
@@ -640,6 +646,8 @@ void enque##THD##EVENT(int file, int plane, int mask, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = plane; \
     *enloc##THD##HsInt(1) = mask; \
     *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##HsPtr(1) = ptrHs##THD##Int(); \
+    *enloc##THD##HsCmd(1) = cmd; \
     *enloc##THD##Event(1) = EVENT; \
 }
 #define DECLARE_EVENT_1TAG(THD,EVENT) \
@@ -648,6 +656,8 @@ void enque##THD##EVENT(int file, Command cmd, int arg);
 void enque##THD##EVENT(int file, Command cmd, int arg) { \
     *enloc##THD##HsInt(1) = file; \
     *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##HsPtr(1) = ptrHs##THD##Int(); \
+    *enloc##THD##HsCmd(1) = cmd; \
     *enloc##THD##Event(1) = EVENT; \
 }
 #define DECLARE_EVENT_1IN(THD,EVENT,NAME) \
