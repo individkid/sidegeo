@@ -31,7 +31,6 @@
 #define EXTERNCEND
 #endif
 
-EXTERNCBEGIN
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -42,6 +41,7 @@ EXTERNCBEGIN
 #include <signal.h>
 #include <termios.h>
 #include <sys/types.h>
+EXTERNCBEGIN
 #include "pqueue.h"
 #undef nil
 #include "rbtree.h"

@@ -65,6 +65,7 @@ int event(void)
 {
     while (sizeEvent() == 0) xferCmnHaskells();
     function = 0;
+    if (sizeEvent() < sizeFunc()) exitErrstr("event too func\n");
     return *delocEvent(1);
 }
 
@@ -75,7 +76,7 @@ int *input(int size)
 
 int *output(int size)
 {
-    // local queues wont be transferred until next call to stallCmnHaskells()
+    // local queues wont be transferred until next call to xferCmnHaskells()
     *enlocHsCommand(1) = *delocHsCmd(1);
     useQueueBase(*delocHsPtr(1));
     referMeta();

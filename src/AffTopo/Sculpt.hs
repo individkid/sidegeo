@@ -19,6 +19,7 @@
 module AffTopo.Sculpt where
 
 import Prelude hiding ((++))
+import Foreign.Storable
 import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.C.String
@@ -31,10 +32,7 @@ foreign import ccall "mapping" mappingC :: CInt -> CInt -> IO CInt
 foreign export ccall handleEvents :: IO Bool
 foreign export ccall handleEnum :: Ptr CChar -> IO CInt
 
-data State =
-    PlaceState Place [Region] [Int] |
-    DoneState |
-    ErrorState
+data State = State Place [Region] [Int]
 
 data Event =
     Locate | -- inout(wrt), place: inout(polyant)
@@ -109,37 +107,31 @@ handleEnum cstr = do
  str <- peekCString cstr
  return (fromIntegral (ofEvent (ofString str)))
 
-handleState :: Event -> State -> State
-handleState event state = case event of
- Locate -> state
- Fill -> state
- Hollow -> state
- Inflate -> state
- Faces -> state
- Frames -> state
- Face -> state
- Frame -> state
- Get -> state
- Set -> state
- Divide -> state
- Vertex -> state
- Index -> state
- Done -> DoneState
- Error -> ErrorState
+handleState :: Event -> State -> IO State
+handleState Locate state = return state
+handleState Fill state = return state
+handleState Hollow state = return state
+handleState Inflate state = return state
+handleState Faces state = return state
+handleState Frames state = return state
+handleState Face state = return state
+handleState Frame state = return state
+handleState Get state = return state
+handleState Set state = return state
+handleState Divide state = return state
+handleState Vertex state = return state
+handleState Index state = return state
+handleState _ state = return state
 
-handleStates :: State -> IO State
-handleStates state = do
- event <- eventC
- let e = eventOf (fromIntegral event) in
-  return (handleState e state)
-
-handleEvent :: State -> IO Bool
-handleEvent state = do
- s <- handleStates state
- case s of
-  DoneState -> return False
-  ErrorState -> return True
-  _ -> handleEvent s
+handleEvent :: [State] -> IO Bool
+handleEvent s = do
+ event <- eventC >>= (return . eventOf . fromIntegral)
+ index <- (inputC 1) >>= peek >>= (return . fromIntegral)
+ state <- (handleState event (s !! index))
+ case event of
+  Done -> return False
+  Error -> return True
+  _ -> handleEvent (replace index state s)
 
 handleEvents :: IO Bool
-handleEvents = handleEvent (PlaceState [] [] [])
+handleEvents = handleEvent [State [] [] []]
