@@ -23,11 +23,7 @@
 
 #include "Common.h"
 
-int filenum = 0;
 Function function = 0;
-int reqpipe[2] = {0};
-int rsppipe[2] = {0};
-pthread_t haskell = {0};
 
 void setupEnum(void)
 {
@@ -53,31 +49,21 @@ void haskellBefore(void)
 {
 }
 
-int haskellDelay(void)
-{
-    return (sizeEvent() > 0);
-}
-
-void *haskellProduce(void *arg)
+void haskellProduce(void *arg)
 {
     hs_init(0,0);
     setupEnum();
     if (handleEvents() != 0) exitErrstr("haskell return true\n");
     hs_exit();
-    return 0;
 }
 
 void haskellAfter(void)
 {
-    int ret = 0; int num = *castEnum(Done);
-    while ((ret = write(reqpipe[1],&num,sizeof(num))) < 0 && errno == EINTR);
-    if (ret < 0) exitErrstr("write too pipe\n");
-    if (pthread_join(haskell,0) < 0) exitErrstr("cannot join thread\n");
 }
 
 int event(void)
 {
-    stallCmnHaskells();
+    while (sizeEvent() == 0) xferCmnHaskells();
     function = 0;
     return *delocEvent(1);
 }

@@ -22,7 +22,6 @@ EXTERNCBEGIN
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io
 int validTermios = 0; // for whether to restore before exit
-int sigusr2 = 0;
 
 void *int2void(int val)
 {
@@ -46,7 +45,6 @@ void exitErrstr(const char *fmt, ...)
 
 void handler(int sig)
 {
-	if (sig == SIGUSR2) sigusr2 = 1;
 }
 
 void undoQueueBase(QueueBase *ptr, int siz)

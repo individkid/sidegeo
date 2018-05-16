@@ -49,7 +49,6 @@ EXTERNCEND
 
 EXTERNV struct termios savedTermios;
 EXTERNV int validTermios;
-EXTERNV int sigusr2;
 struct QueueBase;
 
 EXTERNC void *int2void(int val);
@@ -66,8 +65,8 @@ EXTERNC void xferQueueBase(struct QueueBase *ptr, int siz);
 EXTERNC void xsizeQueueBase(struct QueueBase *ptr);
 
 #define DECLARE_MUTEX(NAME) \
+EXTERNC int xfer##NAME(void); \
 EXTERNC void *loop##NAME(void *arg); \
-EXTERNC void stall##NAME(void); \
 EXTERNC void create##NAME(int arg); \
 EXTERNC void lock##NAME(void); \
 EXTERNC void unlock##NAME(void); \
@@ -85,9 +84,9 @@ EXTERNC void remove##NAME(int val); \
 EXTERNC int member##NAME(int val); \
 EXTERNC int readable##NAME(int val);
 // pselect on pipes
-#define DECLARE_TIME(NAME) DECLARE_MUTEX(NAME) \
+#define DECLARE_TIME(NAME) DECLARE_MUTEX(NAME)
 // timed delay
-#define DECLARE_COND(NAME) DECLARE_MUTEX(NAME) \
+#define DECLARE_COND(NAME) DECLARE_MUTEX(NAME)
 // queue driven
 
 #define DECLARE_SOURCE(NAME) \
@@ -279,10 +278,7 @@ struct QueueMutex {
     {
         if (pthread_join(thread,0) != 0) exitErrstr("cannot join thread\n");
     }
-    void exit()
-    {
-        done = 1;
-    }
+    // virtual void exit() = 0; // TODO
     virtual void signal() = 0;
     virtual void before() = 0;
     virtual void after() = 0;
@@ -295,10 +291,6 @@ struct QueueMutex {
         if (ptr->xfer()) retval = 1;
         return retval;
     }
-    void stall()
-    {
-        while (!nodelay() && !xfer() && !delay());
-    }
     void *loop(void *arg)
     {
         before();
@@ -308,7 +300,7 @@ struct QueueMutex {
             if (!delay()) continue;
             produce(arg);
             while (!done && nodelay()) produce(arg);}
-        else if (consume) while (!done) {stall(); consume(arg);}
+        else if (consume) while (!done) {if (xfer()) consume(arg);}
         else if (produce) produce(arg);
         after();
         return 0;
@@ -401,7 +393,7 @@ struct QueueFdset : QueueMutex {
     void (*func0)();
     void (*func1)();
     int (*func)();
-    QueueFdset(void (*fnc3)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,0) {
+    QueueFdset(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,fnc4) {
         FD_ZERO(&fds);
         maxfd = 0;
         func0 = fnc0;
@@ -502,13 +494,11 @@ struct QueueTime : QueueMutex {
 
 struct QueueCond : QueueMutex {
     pthread_cond_t cond;
-    int (*func)();
     void (*func0)();
     void (*func1)();
-    QueueCond(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)(), int (*fnc)()) : QueueMutex(fnc3,fnc4)
+    QueueCond(void (*fnc3)(void *), void (*fnc4)(void *), void (*fnc0)(), void (*fnc1)()) : QueueMutex(fnc3,fnc4)
     {
         if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
-        func = fnc;
         func0 = fnc0;
         func1 = fnc1;
     }
@@ -532,27 +522,27 @@ struct QueueCond : QueueMutex {
     }
     virtual int delay()
     {
-        if ((*func)()) return 1;
-        lock(); wait(); unlock();
+        exitErrstr("cond too delay\n");
         return 0;
     }
     virtual int nodelay()
     {
-        return (*func)();
+        exitErrstr("cond too nodelay\n");
+        return 0;
     }
 };
 
 #define DEFINE_MUTEX(NAME,TYPE,FUNC...) \
 TYPE NAME##Inst = TYPE(FUNC); \
+extern "C" int xfer##NAME(void) {return NAME##Inst.xfer();} \
 extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
-extern "C" void stall##NAME(void) {NAME##Inst.stall();} \
 extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
 extern "C" void lock##NAME(void) {NAME##Inst.lock();} \
 extern "C" void unlock##NAME(void) {NAME##Inst.unlock();} \
 extern "C" void done##NAME(void) {NAME##Inst.done = 1;} \
 extern "C" void join##NAME(void) {NAME##Inst.join();} \
 extern "C" void signal##NAME(void) {NAME##Inst.signal();} \
-extern "C" void exit##NAME(void) {NAME##Inst.exit(); NAME##Inst.signal(); NAME##Inst.join();}
+extern "C" void exit##NAME(void) {NAME##Inst.done = 1; /*TODO NAME##Inst.exit();*/ NAME##Inst.signal(); NAME##Inst.join();}
 
 #define DEFINE_FUNC(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueFunc,FUNC)
 
@@ -618,13 +608,11 @@ struct QueueXfer : QueueXbase {
                 if (source->size() > 0) {
                     source->use(); dest->xfer(source->size());
                     if (!dest->flag) retval = 1;}}
-            if (flag && retval) {mutex->signal(); retval = 0; break;} // busy source
-            else if (flag) break; // idle source
-            else if (cond && retval) break; // busy cond
-            else if (cond) cond->wait(); // idle cond
-            else break;} // not cond
+            if (flag && retval) mutex->signal();
+            if (flag || !cond || retval) break;
+            cond->wait();}
         mutex->unlock();
-        return retval;
+        return (!flag && retval);
     }
 };
 

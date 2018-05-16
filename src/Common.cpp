@@ -34,17 +34,15 @@ void produceConsole(void *arg);
 void afterConsole(void);
 
 void beforeLua(void);
-int delayLua(void);
 void consumeLua(void *arg);
 void afterLua(void);
 
 void processBefore(void);
 int processDelay(void);
-void processCycle(void *arg);
+void processConsume(void *arg);
 void processAfter(void);
 
 void haskellBefore(void);
-int haskellDelay(void);
 void haskellProduce(void *arg);
 void haskellAfter(void);
 
@@ -92,19 +90,19 @@ DEFINE_STAGE(CmnRender,struct Render,CmnVoid)
 DEFINE_STDIN(CmnOutputs,consumeConsole,produceConsole,beforeConsole,afterConsole)
 DEFINE_STAGE(CmnOutput,char,CmnOutputs)
 
-DEFINE_COND(CmnLuas,consumeLua,0,beforeLua,afterLua,delayLua)
+DEFINE_COND(CmnLuas,consumeLua,0,beforeLua,afterLua)
 DEFINE_STAGE(CmnRequest,char,CmnLuas)
 DEFINE_STAGE(CmnResponse,struct Response,CmnRequest)
 DEFINE_STAGE(CmnLuaInt,int,CmnResponse)
 DEFINE_STAGE(CmnLuaFloat,Myfloat,CmnLuaInt)
 DEFINE_STAGE(CmnLuaByte,char,CmnLuaFloat)
 
-DEFINE_FDSET(CmnProcesses,processCycle,processBefore,processAfter,processDelay)
+DEFINE_FDSET(CmnProcesses,processConsume,0,processBefore,processAfter,processDelay)
 DEFINE_STAGE(CmnOption,char,CmnProcesses)
 DEFINE_STAGE(CmnConfigure,char,CmnOption)
 DEFINE_STAGE(CmnConfigurer,int,CmnConfigure)
 
-DEFINE_COND(CmnHaskells,0,haskellProduce,haskellBefore,haskellAfter,haskellDelay)
+DEFINE_COND(CmnHaskells,0,haskellProduce,haskellBefore,haskellAfter)
 DEFINE_STAGE(CmnEvent,enum Event,CmnHaskells)
 DEFINE_STAGE(CmnHsInt,int,CmnEvent)
 DEFINE_STAGE(CmnFunc,Function,CmnHsInt)
@@ -222,7 +220,7 @@ DEFINE_STAGE(LuaCmdFloat,Myfloat,LuaCmdInt)
 DEFINE_STAGE(LuaCmdByte,char,LuaCmdFloat)
 DEFINE_STAGE(LuaYield,struct Response,LuaCmdByte)
 
-DEFINE_WAIT(Luas,CmnLuas,LuaCommands)
+DEFINE_WAIT(Luas,CmnLuas,LuaCommands) // wait after source
 DEFINE_STAGE(Request,char,Luas)
 DEFINE_STAGE(Response,struct Response,Request)
 DEFINE_EXTRA(LuaInt,int,Response)

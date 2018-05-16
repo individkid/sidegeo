@@ -311,7 +311,7 @@ then prioritize reading to yield any readable
 then prioritize writing
 */
 
-void processCycle(void *arg)
+void processConsume(void *arg)
 {
     if (toggle == 0) {
         struct Thread *ptr = arrayThread(thread,1);
