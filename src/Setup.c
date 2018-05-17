@@ -65,6 +65,14 @@ enum Data bufferElement(int i, enum Shader shader)
     return Datas;
 }
 
+enum Data bufferScratch(int i, enum Shader shader)
+{
+    SWITCH(shader,Diplane) {enum Data data[3] = {Datas}; return data[i];}
+    CASE(Dipoint) {enum Data data[3] = {Datas}; return data[i];}
+    DEFAULT(return bufferElement(i,shader);)
+    return Datas;
+}
+
 enum Data bufferFeedback(int i, enum Shader shader)
 {
     if (i >= 3) exitErrstr("invalid data index\n");
@@ -399,7 +407,8 @@ void setupCode(enum Shader shader)
     DEFAULT(exitErrstr("unknown shader type\n");)
     code->handle = prog;
     for (int i = 0; i < 3; i++) code->vertex[i] = bufferVertex(i,shader);
-    for (int i = 0; i < 3; i++) code->element[i] = bufferElement(i,shader);
+    for (int i = 0; i < 3; i++) for (int j = 0; j < Usages; j++) code->element[j][i] = bufferElement(i,shader);
+    for (int i = 0; i < 3; i++) code->element[Scratch][i] = bufferScratch(i,shader);
     for (int i = 0; i < 3; i++) code->feedback[i] = bufferFeedback(i,shader);
     for (int i = 0; i < 4; i++) code->server[i] = uniformServer(i,shader);
     for (int i = 0; i < 4; i++) code->config[i] = uniformGlobal(i,shader);

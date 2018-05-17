@@ -223,11 +223,12 @@ void enqueFilter(void)
 
 #define RENDER_DEARG \
     struct Render *render = deargRender(1); \
-    struct File *file = arrayPoly(render->file,1); \
-    struct Code *shader = arrayCode(render->shader,1); \
     updateContext(render->context); \
+    struct File *file = arrayPoly(render->file,1); \
+    struct Share *share = arrayShare(render->file,1); \
+    struct Code *shader = arrayCode(render->shader,1); \
     enum Data *vertex = shader->vertex; \
-    enum Data *element = shader->element; \
+    enum Data *element = shader->element[share->usage]; \
     enum Data *feedback = shader->feedback; \
     enum Server *server = shader->server; \
     enum Server *config = shader->config; \

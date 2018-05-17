@@ -232,7 +232,9 @@ enum Action transformClick(int state)
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;
     // copy vectors from PlaneBuf/PointBuf in file to preview.
-    for (int i = 0; i < enqueCmdDimen; i++) {
+    int len = sizeReint(layer);
+    if (len%enqueCmdDimen != 0) exitErrstr("list too dimen\n");
+    for (int i = 0; i < len; i++) {
     int from = *delocReint(layer,1);
     Myfloat *vec = dndateBuffer(file,PlaneBuf,from,1);
     int *ver = dndateBuffer(file,VersorBuf,from,1);

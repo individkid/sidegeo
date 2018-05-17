@@ -136,10 +136,9 @@ handleLocateB = undefined -- outside attachments
 handleState :: Event -> State -> IO State
 handleState Locate state = do
  wrt <- handleInputs
- tag <- handleInput
  handleOutputs (handleLocateA wrt state)
  handleOutputs (handleLocateB wrt state)
- handleOutput tag
+ handleInput >>= handleOutput
  return state
 handleState Fill state = return state
 handleState Hollow state = return state
@@ -168,3 +167,4 @@ handleEvent s = eventC >>= ((handleStates s) . eventOf . fromIntegral)
 
 handleEvents :: IO Bool
 handleEvents = handleEvent [State [] [] []]
+

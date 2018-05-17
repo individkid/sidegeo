@@ -246,7 +246,8 @@ struct Display {
 enum Usage {
     Blank = 0,
     Scratch,
-    Draft};
+    Draft,
+    Usages};
 struct File {
     int fixed; // whether object moves opposite to view
     int last; // last value of fixed
@@ -287,7 +288,7 @@ struct Code { // files use same shader code and server uniforms
     int input; // organization and layout of input buffer items
     int output; // organization and layout of output buffer items
     enum Data vertex[3]; // index in arrayFile(file,1)->buffer
-    enum Data element[3]; // index in arrayFile(file,1)->buffer
+    enum Data element[Usages][3]; // index in arrayFile(file,1)->buffer
     enum Data feedback[3]; // index in arrayFile(file,1)->buffer
     enum Server server[4]; // index into writelocked uniform
     enum Server config[4]; // index into readlocked uniform
