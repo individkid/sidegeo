@@ -312,7 +312,7 @@ enum Action sculptClick(int state)
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;
-    enqueCmdLocate(file,plane,sizeReint(layer),ptrReint(layer),responseLists,layer);
+    enqueCmdLocate(file,sizeReint(layer),ptrReint(layer),responseLists,layer);
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfigurer(1) = share->ident;
@@ -322,7 +322,7 @@ enum Action sculptClick(int state)
     msgstrCmdConfigure(",",-1);
     int outlen = *delocReint(layer,1);
     for (int i = 0; i < outlen; i++) msgstrCmdConfigure(" %d",-1,*delocReint(layer,1));
-    msgstrCmdConfigure("",'\n');
+    msgstrCmdConfigure(".",'\n');
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     return Advance;
 }

@@ -599,6 +599,18 @@ int scan##THD(const char *pattern, int len, ...) \
     return ret; \
 }
 
+#define DECLARE_EVENT_1INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int len, struct QueueBase *ptr, Command cmd, int arg);
+#define DEFINE_EVENT_1INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int len, struct QueueBase *ptr, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = file; \
+    *enloc##THD##HsInt(1) = len; \
+    useQueueBase(ptr); xfer##THD##HsInt(len); \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##HsPtr(1) = ptrHs##THD##Int(); \
+    *enloc##THD##HsCmd(1) = cmd; \
+    *enloc##THD##Event(1) = EVENT; \
+}
 #define DECLARE_EVENT_1IN_1INS_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Command cmd, int arg);
 #define DEFINE_EVENT_1IN_1INS_1TAG(THD,EVENT) \
@@ -669,7 +681,7 @@ void enque##THD##NAME(int file, int mask) { \
     *enloc##THD##Event(1) = EVENT; \
 }
 
-#define DECLARE_LOCATE(THD) DECLARE_EVENT_1IN_1INS_1TAG(THD,Locate)
+#define DECLARE_LOCATE(THD) DECLARE_EVENT_1INS_1TAG(THD,Locate)
 #define DECLARE_FILL(THD) DECLARE_EVENT_1IN_2INS_1TAG(THD,Fill)
 #define DECLARE_HOLLOW(THD) DECLARE_EVENT_1IN_2INS_1TAG(THD,Hollow)
 #define DECLARE_INFLATE(THD) DECLARE_EVENT_1TAG(THD,Inflate)
@@ -685,7 +697,7 @@ void enque##THD##NAME(int file, int mask) { \
 #define DECLARE_INDEX(THD) DECLARE_EVENT_1IN_1TAG(THD,Index)
 #define DECLARE_CLOSE(THD) DECLARE_EVENT_1IN(THD,Filter,Close)
 
-#define DEFINE_LOCATE(THD) DEFINE_EVENT_1IN_1INS_1TAG(THD,Locate)
+#define DEFINE_LOCATE(THD) DEFINE_EVENT_1INS_1TAG(THD,Locate)
 #define DEFINE_FILL(THD) DEFINE_EVENT_1IN_2INS_1TAG(THD,Fill)
 #define DEFINE_HOLLOW(THD) DEFINE_EVENT_1IN_2INS_1TAG(THD,Hollow)
 #define DEFINE_INFLATE(THD) DEFINE_EVENT_1TAG(THD,Inflate)

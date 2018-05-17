@@ -23,6 +23,7 @@ import Foreign.Storable
 import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.C.String
+import Foreign.Marshal.Array
 import AffTopo.Naive
 
 foreign import ccall "event" eventC :: IO CInt
@@ -107,8 +108,39 @@ handleEnum cstr = do
  str <- peekCString cstr
  return (fromIntegral (ofEvent (ofString str)))
 
+handleInput :: IO Int
+handleInput = (inputC 1) >>= peek >>= (return . fromIntegral)
+
+handleInputs :: IO [Int]
+handleInputs = do
+ len <- handleInput
+ lst <- (inputC (fromIntegral len)) >>= (peekArray len)
+ return (map fromIntegral lst)
+
+handleOutput :: Int -> IO ()
+handleOutput a = do
+ ptr <- (outputC 1)
+ poke ptr (fromIntegral a)
+
+handleOutputs :: [Int] -> IO ()
+handleOutputs a = do
+ ptr <- (outputC (fromIntegral (length a)))
+ pokeArray ptr (map fromIntegral a)
+
+handleLocateA :: [Int] -> State -> [Int]
+handleLocateA = undefined -- inside attachments
+
+handleLocateB :: [Int] -> State -> [Int]
+handleLocateB = undefined -- outside attachments
+
 handleState :: Event -> State -> IO State
-handleState Locate state = return state
+handleState Locate state = do
+ wrt <- handleInputs
+ tag <- handleInput
+ handleOutputs (handleLocateA wrt state)
+ handleOutputs (handleLocateB wrt state)
+ handleOutput tag
+ return state
 handleState Fill state = return state
 handleState Hollow state = return state
 handleState Inflate state = return state
@@ -123,15 +155,16 @@ handleState Vertex state = return state
 handleState Index state = return state
 handleState _ state = return state
 
+handleStates :: [State] -> Event -> IO Bool
+handleStates _ Done = return False
+handleStates _ Error = return True
+handleStates s e = do
+ index <- handleInput
+ state <- (handleState e (s !! index))
+ handleEvent (replace index state s)
+
 handleEvent :: [State] -> IO Bool
-handleEvent s = do
- event <- eventC >>= (return . eventOf . fromIntegral)
- index <- (inputC 1) >>= peek >>= (return . fromIntegral)
- state <- (handleState event (s !! index))
- case event of
-  Done -> return False
-  Error -> return True
-  _ -> handleEvent (replace index state s)
+handleEvent s = eventC >>= ((handleStates s) . eventOf . fromIntegral)
 
 handleEvents :: IO Bool
 handleEvents = handleEvent [State [] [] []]
