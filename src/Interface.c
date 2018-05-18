@@ -146,10 +146,7 @@ void file(void)
     int len = lengthCmdByte(0,0);
     useCmdByte(); xferCmdBuf(len+1);
     int ident = *delocCmdInt(1);
-    int sub = setupShare(name);
-    struct Share *share = arrayShare(sub,1);
-    share->usage = Draft;
-    share->ident = ident;
+    int sub = setupShare(name,Draft,ident);
     setupTarget(sub);
 }
 
@@ -192,19 +189,12 @@ void responseProceed(void)
 
 int openSlot(void)
 {
-    if (availSlot() == 0) {
+    int empty = (availSlot() == 0);
     int key = allocSlot();
-    int sub = setupShare(0);
-    struct Share *share = arrayShare(sub,1);
-    share->usage = Scratch;
-    share->ident = key;
+    int sub = (empty?setupShare(0,Scratch,key):*castSlot(key));
+    if (empty) {
     setupTarget(sub);
     *castSlot(key) = sub;}
-    int key = allocSlot();
-    int sub = *castSlot(key);
-    struct Share *share = arrayShare(sub,1);
-    share->usage = Scratch;
-    share->ident = key;
     return sub;
 }
 
@@ -212,7 +202,6 @@ void closeSlot(int slot)
 {
     struct Share *share = arrayShare(slot,1);
     if (share->usage != Scratch) exitErrstr("usage too scratch\n");
-    share->usage = Blank;
     freeSlot(share->ident);
 }
 
@@ -238,7 +227,7 @@ enum Action transformClick(int state)
     int from = *delocReint(layer,1);
     Myfloat *vec = dndateBuffer(file,PlaneBuf,from,1);
     int *ver = dndateBuffer(file,VersorBuf,from,1);
-    updateBuffer(slot,PlaneBuf,i,1,vec);
+    updateBuffer(slot,PlaneBuf,i,1,vec); // TODO update PointBuf in Dipoint mode
     updateBuffer(slot,VersorBuf,i,1,ver);}
     // send Get and Set events to swap visibility of plane and slot.
     //  with enqueFilter response.
@@ -288,6 +277,8 @@ enum Action manipulateClick(int state)
     if (*arrayReint(layer,1,1) == 0) return Defer;
     int mask = *delocReint(layer,2);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
+    resetBuffer(slot,PlaneBuf); // TODO reset PointBuf in Dipoint mode
+    resetBuffer(slot,VersorBuf);
     closeSlot(slot);
     // send enqueFilter for clipboard
     *enlocCmdInt(1) = slot;

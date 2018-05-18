@@ -138,7 +138,7 @@ void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
 void setupDisplay(int name);
 void setupCode(enum Shader shader);
 int setupFile();
-int setupShare(int name);
+int setupShare(int name, enum Usage usage, int ident);
 void setupTarget(int sub);
 void updateAffine(struct File *ptr);
 void updateFile(int ctx, int sub, int cpy);

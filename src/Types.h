@@ -244,7 +244,6 @@ struct Display {
     Myfloat affineMatc[16]; // save and incorporate upon focus change
 };
 enum Usage {
-    Blank = 0,
     Scratch,
     Draft,
     Usages};

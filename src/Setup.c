@@ -343,7 +343,7 @@ int setupFile()
     return sub;
 }
 
-int setupShare(int name)
+int setupShare(int name, enum Usage usage, int ident)
 {
     int sub = sizeShare();
     struct Share *share = enlocShare(1);
@@ -351,15 +351,18 @@ int setupShare(int name)
     *share = init;
     share->name = name;
     for (enum Data data = 0; data < Datas; data++) share->client[data] = -1;
+    share->usage = usage;
+    share->ident = ident;
     return sub;
 }
 
-void setupTarget(int sub)
+void setupTarget(int given)
 {
     int save = contextHandle;
     for (int context = 0; context < sizeDisplay(); context++) {
     updateContext(context);
     int sub = setupFile();
+    if (sub != given) exitErrstr("sub too given\n");
     struct File *file = arrayPoly(sub,1);
     SWITCH(mode[Target],Plane) {
     enum Usage usage = arrayShare(sub,1)->usage;
