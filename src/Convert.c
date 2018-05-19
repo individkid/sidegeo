@@ -255,3 +255,10 @@ Myfloat *basearrow(Myfloat *u, Myfloat *v, int *i, Myfloat *b, int n)
         u[h] = x[0]-(dotvec(w,y+1,n-1)/y[0])-a[0];}
     return u;
 }
+
+Myfloat *arrowbase(Myfloat *u, Myfloat *v, int i, Myfloat *b, int n)
+{
+    // given distances u above index i in base points b
+    // return feather in u and arrow in v
+    
+}

@@ -108,7 +108,8 @@ void leftTransform(void)
     *enlocCmdInt(1) = pPoint;
     *enlocCmdInt(1) = qPoint;
     *enlocCmdInt(1) = rPoint;
-    enqueMachine(transformClick);}
+    enqueMachine(transformClick);
+    copymat(arrayShare(qPoint,1)->saved,affineMat,4);}
     CASE(Polytope) copymat(arrayShare(qPoint,1)->saved,affineMat,4);
     DEFAULT()
 }
@@ -122,7 +123,7 @@ void leftManipulate(void)
     enqueMachine(manipulateClick);}
     CASE(Polytope) {
     Myfloat matrix[16];
-    timesmat(invmat(copymat(matrix,arrayShare(qPoint,1)->saved,4),4),affineMat,4);
+    jumpmat(invmat(copymat(matrix,arrayShare(qPoint,1)->saved,4),4),affineMat,4);
     *enlocCmdConfigurer(1) = qPoint;
     msgstrCmdConfigure("--side %d",-1);
     for (int i = 1; i < augpids; i++) msgstrCmdConfigure(",%d",-1,augpid[i]);

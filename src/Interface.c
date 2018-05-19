@@ -225,10 +225,7 @@ enum Action transformClick(int state)
     if (len%enqueCmdDimen != 0) exitErrstr("list too dimen\n");
     for (int i = 0; i < len; i++) {
     int from = *delocReint(layer,1);
-    Myfloat *vec = dndateBuffer(file,PlaneBuf,from,1);
-    int *ver = dndateBuffer(file,VersorBuf,from,1);
-    updateBuffer(slot,PlaneBuf,i,1,vec); // TODO update PointBuf in Dipoint mode
-    updateBuffer(slot,VersorBuf,i,1,ver);}
+    redateBuffer(file,slot,from,i);}
     // send Get and Set events to swap visibility of plane and slot.
     //  with enqueFilter response.
     enqueCmdGet(file,plane,responseSingle,layer);
@@ -248,12 +245,19 @@ enum Action manipulateClick(int state)
     int slot = *deargCmdInt(1);
     struct Share *share = arrayShare(file,1);
     if (state-- == 0) {
-    Myfloat *vec = dndateBuffer(slot,PlaneBuf,0,1); // base plane is first
-    int *ver = dndateBuffer(slot,VersorBuf,0,1);
+    Myfloat *vec = dndateBuffer(file,PlaneBuf,plane,1);
+    int *ver = dndateBuffer(file,VersorBuf,plane,1);
+    Myfloat matrix[16];
+    jumpmat(invmat(copymat(matrix,arrayShare(qPoint,1)->saved,4),4),affineMat,4);
+    Myfloat feather[4] = {0}; Myfloat arrow[4] = {0}; int versor = 0;
+    arrowbase(copyvec(feather,vec,3),arrow,*ver,basisMat,3);
+    feather[3] = 1.0; jumpvec(feather,matrix,4);
+    arrow[3] = 1.0; jumpvec(arrow,matrix,4);
+    basearrow(feather,arrow,&versor,basisMat,3);
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("--plane %d %d,",-1,plane,ver[0]);
-    for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,vec[i]);
+    msgstrCmdConfigure("--plane %d %d,",-1,plane,versor);
+    for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,feather[i]);
     msgstrCmdConfigure("",'\n');
     // sideband msgstr --side responseProceed and wait
     *enlocCmdConfigurer(1) = share->ident;
@@ -277,8 +281,7 @@ enum Action manipulateClick(int state)
     if (*arrayReint(layer,1,1) == 0) return Defer;
     int mask = *delocReint(layer,2);
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
-    resetBuffer(slot,PlaneBuf); // TODO reset PointBuf in Dipoint mode
-    resetBuffer(slot,VersorBuf);
+    undateBuffer(slot);
     closeSlot(slot);
     // send enqueFilter for clipboard
     *enlocCmdInt(1) = slot;

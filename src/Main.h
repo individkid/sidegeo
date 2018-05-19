@@ -88,10 +88,23 @@ extern const enum Data data;
 #define enqueCmdEvent enqueCmdFaces
 #define enqueCmdSingle enqueCmdFace
 #define enqueCmdDimen FACE_DIMENSIONS
+#define redateBuffer(FILE,SLOT,FROM,TO) \
+    Myfloat *vec = dndateBuffer(FILE,PlaneBuf,FROM,1); \
+    int *ver = dndateBuffer(FILE,VersorBuf,FROM,1); \
+    updateBuffer(SLOT,PlaneBuf,TO,1,vec); \
+    updateBuffer(SLOT,VersorBuf,TO,1,ver)
+#define undateBuffer(SLOT) \
+    resetBuffer(SLOT,PlaneBuf); \
+    resetBuffer(SLOT,VersorBuf)
 #else
 #define enqueCmdEvent enqueCmdFrames
 #define enqueCmdSingle enqueCmdFrame
 #define enqueCmdDimen FRAME_DIMENSIONS
+#define redateBuffer(FILE,SLOT,FROM,TO) \
+    Myfloat *vec = dndateBuffer(FILE,PointBuf,FROM,1); \
+    updateBuffer(SLOT,PointBuf,TO,1,vec)
+#define undateBuffer(SLOT) \
+    resetBuffer(SLOT,PointBuf)
 #endif
 
 DECLARE_MSGSTR(CmdBuf)

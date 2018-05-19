@@ -278,6 +278,7 @@ struct Share { // per file state shared across displays
     int client[Datas]; // sometimes client data is shared between displays
     enum Usage usage; // manipulated single plane or file of planes
     Myfloat saved[16]; // affineMat when mode changed to Polytope
+    // saved also used for click when target is Plane
 };
 struct Code { // files use same shader code and server uniforms
     struct Uniform uniform[Servers]; // uniforms used by program
@@ -757,5 +758,6 @@ Myfloat *adjmat(Myfloat *u, int n);
 Myfloat *invmat(Myfloat *u, int n);
 Myfloat *tweakvec(Myfloat *u, Myfloat a, Myfloat b, int n);
 Myfloat *basearrow(Myfloat *u, Myfloat *v, int *i, Myfloat *b, int n);
+Myfloat *arrowbase(Myfloat *u, Myfloat *v, int i, Myfloat *b, int n);
 
 #endif
