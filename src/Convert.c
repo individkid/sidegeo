@@ -192,25 +192,53 @@ Myfloat *crossvec(Myfloat *u, Myfloat *v)
     return jumpvec(copyvec(u,v,3),crossmat(w),3);
 }
 
+Myfloat *submat(Myfloat *u, int i, int n)
+{
+    int m = n*n; int k = 0;
+    for (int j = 0; j < m; j++) if (j/n!=i/n && j%n!=i%n) u[k++] = u[j];
+    return u;
+}
+
+Myfloat *minmat(Myfloat *u, int n)
+{
+    int m = n*n; Myfloat v[m];
+    for (int i = 0; i < m; i++) {
+        Myfloat w[m]; submat(copymat(w,u,n),i,n);
+        v[i%n*n+i/n] = detmat(w,n-1);}
+    return copymat(u,v,n);
+}
+
+Myfloat *cofmat(Myfloat *u, int n)
+{
+    int m = n*n;
+    for (int i = 0; i < m; i++)
+    u[i] = ((i/n)%2!=(i%n)%2?-u[i]:u[i]);
+    return u;
+}
+
 Myfloat detmat(Myfloat *u, int n)
 {
     if (n == 1) return *u;
-    int m = n*n; Myfloat v[m];
-    adjmat(copymat(v,u,n),n);
-    Myfloat det = 0.0;
-    for (int i = 0; i < n; i++) det += v[i*n]*u[i];
+    int m = n*n; Myfloat det = 0.0;
+    for (int i = 0; i < n; i++) {
+    Myfloat v[m];
+    Myfloat s = detmat(submat(copymat(v,u,n),i,n),n-1);
+    det += ((i/n)%2!=(i%n)%2?-s:s);}
     return det;
+}
+
+Myfloat *xposmat(Myfloat *u, int n)
+{
+    int m = n*n; Myfloat v[m];
+    for (int i = 0; i < n; i++)
+    for (int j = 0; j < n; j++)
+    v[i*n+j] = u[j*n+i];
+    return copyvec(u,v,m);
 }
 
 Myfloat *adjmat(Myfloat *u, int n)
 {
-    int m = n*n; int p = n-1; int q = p*p; Myfloat v[m];
-    for (int i = 0; i < m; i++) {
-        Myfloat w[q]; int j = 0;
-        for (int k = 0; k < m; k++) if (k/n!=i/n && k%n!=i%n) w[j++] = u[k];
-        Myfloat s = detmat(w,p);
-        v[i%n*n+i/n] = ((i/n)%2!=(i%n)%2?-s:s);}
-    return copymat(u,v,n);
+    return xposmat(cofmat(u,n),n);
 }
 
 Myfloat *invmat(Myfloat *u, int n)
@@ -222,6 +250,19 @@ Myfloat *invmat(Myfloat *u, int n)
     for (int i = 0; i < m; i++) if (det<1.0 && v[i]>lim) exitErrstr("cannot invert matrix\n");
     for (int i = 0; i < m; i++) u[i] = v[i]/det;
     return u;
+}
+
+Myfloat *crossvecs(Myfloat *u, int n)
+{
+    int m = n*n; int p = n-1; int q = p*n; Myfloat w[m];
+    for (int i = q; i < m; i++) w[i] = 0.0;
+    xposmat(copyvec(w,u,q),n);
+    for (int i = 0; i < n; i++) {
+    int j = (i+1)*n-1;
+    Myfloat v[m];
+    Myfloat s = detmat(submat(copyvec(v,u,m),j,n),n-1);
+    w[i] = ((j/n)%2!=(j%n)%2?-s:s);}
+    return copyvec(u,w,n);
 }
 
 Myfloat *tweakvec(Myfloat *u, Myfloat a, Myfloat b, int n)
@@ -260,5 +301,17 @@ Myfloat *arrowbase(Myfloat *u, Myfloat *v, int i, Myfloat *b, int n)
 {
     // given distances u above index i in base points b
     // return feather in u and arrow in v
-    
+    Myfloat point[n][n];
+    for (int j = 0; j < n; j++) {
+    copyvec(point[j],b+i*n*n+j*n,n); point[j][i] = u[j];}
+    Myfloat diff[n-1][n];
+    for (int j = 0; j < n-1; j++)
+    plusvec(scalevec(copyvec(diff[j],point[0],n),-1.0,n),point[j+1],n);
+    Myfloat matrix[(n-1)*n];
+    for (int j = 0; j < n-1; j++)
+    for (int k = 0; k < n; k++)
+    matrix[j*n+k] = diff[j][k];
+    crossvecs(matrix,n);
+    copyvec(v,matrix,n);
+    return copyvec(u,point[0],n);
 }
