@@ -106,7 +106,7 @@ int processConfigure(int index)
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePlane;
 		DELOC}
-	pos = scanPcs(pattern,9,TEXT4("--point"),VECTOR5(3),Scans); if (pos>=0) { // TODO2 add optional name
+	pos = scanPcs(pattern,9,TEXT4("--point"),VECTOR5(3),Scans); if (pos>=0) { // TODO1 add name for struct Share to use
 		SKIP
 		*enlocPcsCmdInt(1) = index;
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
@@ -137,6 +137,9 @@ int processConfigure(int index)
 		SKIP
 		usePcsChar(); copyOption(sizeOption(),charpos,sizePcsChar()-charpos);
 		*enlocOption(1) = '\n';
+		DELOC}
+	pos = scanPcs(pattern,13,TEXT4("--menu"),STRING9,Scans); if (pos>=0) {
+		// TODO2 inject keystrokes to console
 		DELOC}
 	pos = scanPcs(pattern,4,TEXT4("--yield"),Scans); if (pos>=0) {
 		SKIP

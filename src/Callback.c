@@ -197,7 +197,7 @@ void transformTranslate(void)
 
 void transformLook(void)
 {
-    // TODO2
+    // TODO2 do linear transformation
     enqueDishader();
 }
 

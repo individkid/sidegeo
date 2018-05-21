@@ -29,6 +29,7 @@ int processOption();
 
 DEFINE_SCAN(Pcs)
 DEFINE_MSGSTR(PcsChar)
+DEFINE_MSGSTR(PcsOutput)
 
 int toggle = 0;
 int thread = 0;

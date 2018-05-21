@@ -21,6 +21,7 @@
 extern int thread;
 
 DECLARE_SCAN(Pcs)
+DECLARE_MSGSTR(PcsOutput)
 int processInit(int pos);
 void processComplain(void);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
@@ -41,7 +42,7 @@ int processOption(void)
 	int len = sizeComplete(); *enlocComplete(1) = 0; char *pattern = arrayComplete(0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
 	int pos = scanPcs(pattern,4,TEXT4("-h"),Scans); if (pos>=0) {
-		// TODO3 msgsndPcsOutput usage
+		msgstrPcsOutput("See https://github.com/individkid/sidegeo",'\n');
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,4,TEXT4("-H"),Scans); if (pos>=0) {
 		// TODO3 run tests
@@ -62,6 +63,18 @@ int processOption(void)
 		DELOC(pos) return pos;}
 		*enlocPcsCmdInt(1) = sub;
 		*enlocPcsCommand(1) = focus;
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,13,TEXT4("-a"),STRING9,Scans); if (pos>=0) {
+		// TODO2 inject command to current file
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,13,TEXT4("-A"),STRING9,Scans); if (pos>=0) {
+		// TODO5 change current file
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,13,TEXT4("-s"),STRING9,Scans); if (pos>=0) {
+		// TODO5 send focussed display as framebuffers
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,13,TEXT4("-S"),STRING9,Scans); if (pos>=0) {
+		// TODO5 append cutbuffers to current file
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,9,STRING9,Scans); if (pos>=0) {
 		processComplain();
