@@ -65,12 +65,12 @@ EXTERNC void xferQueueBase(struct QueueBase *ptr, int siz);
 EXTERNC void xsizeQueueBase(struct QueueBase *ptr);
 
 #define DECLARE_MUTEX(NAME) \
+EXTERNC int done##NAME(void); \
 EXTERNC int xfer##NAME(void); \
 EXTERNC void *loop##NAME(void *arg); \
 EXTERNC void create##NAME(int arg); \
 EXTERNC void lock##NAME(void); \
 EXTERNC void unlock##NAME(void); \
-EXTERNC void done##NAME(void); \
 EXTERNC void join##NAME(void); \
 EXTERNC void signal##NAME(void); \
 EXTERNC void exit##NAME(void);
@@ -278,7 +278,6 @@ struct QueueMutex {
     {
         if (pthread_join(thread,0) != 0) exitErrstr("cannot join thread\n");
     }
-    // virtual void exit() = 0; // TODO
     virtual void signal() = 0;
     virtual void before() = 0;
     virtual void after() = 0;
@@ -534,15 +533,15 @@ struct QueueCond : QueueMutex {
 
 #define DEFINE_MUTEX(NAME,TYPE,FUNC...) \
 TYPE NAME##Inst = TYPE(FUNC); \
+extern "C" int done##NAME(void) {return NAME##Inst.done;} \
 extern "C" int xfer##NAME(void) {return NAME##Inst.xfer();} \
 extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
 extern "C" void create##NAME(int arg) {NAME##Inst.create(loop##NAME,arg);} \
 extern "C" void lock##NAME(void) {NAME##Inst.lock();} \
 extern "C" void unlock##NAME(void) {NAME##Inst.unlock();} \
-extern "C" void done##NAME(void) {NAME##Inst.done = 1;} \
 extern "C" void join##NAME(void) {NAME##Inst.join();} \
 extern "C" void signal##NAME(void) {NAME##Inst.signal();} \
-extern "C" void exit##NAME(void) {NAME##Inst.done = 1; /*TODO NAME##Inst.exit();*/ NAME##Inst.signal(); NAME##Inst.join();}
+extern "C" void exit##NAME(void) {NAME##Inst.done = 1; NAME##Inst.signal(); NAME##Inst.join();}
 
 #define DEFINE_FUNC(NAME,FUNC...) DEFINE_MUTEX(NAME,QueueFunc,FUNC)
 

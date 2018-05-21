@@ -63,7 +63,8 @@ void haskellAfter(void)
 
 int event(void)
 {
-    while (sizeEvent() == 0) xferCmnHaskells();
+    while (sizeEvent() == 0 && !doneCmnHaskells()) xferCmnHaskells();
+    if (doneCmnHaskells()) return Done;
     function = 0;
     if (sizeEvent() < sizeFunc()) exitErrstr("event too func\n");
     return *delocEvent(1);
