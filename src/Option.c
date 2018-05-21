@@ -68,7 +68,13 @@ int processOption(void)
 		// TODO2 inject command to current file
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-A"),STRING9,Scans); if (pos>=0) {
-		// TODO5 change current file
+		// TODO2 change current file
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,13,TEXT4("-l"),STRING9,Scans); if (pos>=0) {
+		// TODO2 link planes so transformations of one transform the other
+		DELOC(pos) return pos;}
+	pos = scanPcs(pattern,13,TEXT4("-L"),STRING9,Scans); if (pos>=0) {
+		// TODO2 select given plane in current file
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-s"),STRING9,Scans); if (pos>=0) {
 		// TODO5 send focussed display as framebuffers

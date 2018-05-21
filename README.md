@@ -35,6 +35,8 @@ The main display window is a hub from which parts or collections of polytopes ca
   * -O \<name> open or select alternate display  
   * -a \<config> append to last file  
   * -A \<file> change last file to indicated  
+  * -l \<plane> link selected and given plane  
+  * -L \<plane> select plane in last file  
   * -s \<name> serve remote framebuffer clients  
   * -S \<file> serve sculpt command clients  
 
@@ -162,15 +164,29 @@ The following queries and callbacks are supported.
 
 The development plan is to complete the namesake usage features first, then proceed to more detailed uses.
 
-  * Sculpt: -o --plane --point --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric)  
-  * Edit: -h -O -a --inject --menu Move Copy Mouse Roller Target  
+  * Sculpt: -o --plane (_) --point (_) --inflate Transform (Session Plane Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric) Event (Locate Fill Hollow Inflate Faces Divide Done)  
+  * Edit: -h -O -a -A -l -L --yield --inject --menu Move Copy Mouse Roller Target --plane --point Event (Frames Face Frame Get Set Filter Vertex Index)  
   * Analyze: Sample Display Classify Panel (Topology) --sample --dual --embed --polytope -H  
   * Synthesize: --call --bind --action Execute --time --change --listen (speaker)  
-  * Decorate: -A --yield libsndfile --script --source --metric --color --configure -s -S Panel  
+  * Decorate: libsndfile --script --source --metric --color --configure -s -S Panel  
+
+The C code leverages the following libraries, languages, and protocols:
+
+  * Haskell/Cabal  
+  * Opengl/Glsl  
+  * C++  
+  * Posix threads  
+  * github/libpqueue/rbtree  
+  * portaudio/PaUtil  
+  * libsndfile  
+  * Lua  
+  * Fltk/Fluid  
+  * Posix sockets  
+  * Remote framebuffer  
 
 The code is partitioned to the following files grouped by thread:
 
-  * Memory management: Queue.h Queue.cpp Common.h Common.cpp Convert.c Wrap.c  
+  * Memory management: Queue.h Queue.cpp Types.h Common.h Common.cpp Convert.c Wrap.c  
   * Command thread: Main.h  Main.c Debug.c Interface.c Metric.c Command.c  
   * Opengl commands: Setup.c Render.c Microcode.c Callback.c  
   * Process thread: Configure.c Option.c Process.c  
