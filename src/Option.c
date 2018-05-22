@@ -18,7 +18,9 @@
 
 #include "Common.h"
 
-extern int thread;
+int adfile = 0;
+int refile = 0;
+int replane = 0;
 
 DECLARE_SCAN(Pcs)
 DECLARE_MSGSTR(PcsOutput)
@@ -27,6 +29,8 @@ void processComplain(void);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
 void display(void);
 void focus(void);
+void file(void);
+void relate(void);
 
 #define UNLOC \
 unlocPcsInt(sizePcsInt()-intpos); \
@@ -49,6 +53,11 @@ int processOption(void)
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-o"),STRING9,Scans); if (pos>=0) {
 		int sub = 0; if (processIdent(charpos,Files,0,&sub) < 0) {
+		int len = lengthPcsChar(charpos,0);
+	    usePcsChar(); copyPcsCmdByte(sizePcsCmdByte(),charpos,len+1);
+		*enlocPcsCmdInt(1) = sub;
+		*enlocPcsCommand(1) = file;
+		adfile = sub;
 		DELOC(pos) return -pos;}
 		struct Thread *thread = arrayThread(sub,1);
 		if (thread->pipe >= 0 && thread->able) removeCmnProcesses(thread->pipe);
@@ -68,13 +77,19 @@ int processOption(void)
 		// TODO2 inject command to current file
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-A"),STRING9,Scans); if (pos>=0) {
-		// TODO2 change current file
+		int sub = 0; if (processIdent(charpos,Files,0,&sub) >= 0) adfile = sub;
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-l"),STRING9,Scans); if (pos>=0) {
-		// TODO2 link planes so transformations of one transform the other
+		int sub = 0; if (processIdent(charpos,Planes,adfile,&sub) >= 0) {
+		*enlocPcsCmdInt(1) = adfile;
+		*enlocPcsCmdInt(1) = sub;
+		*enlocPcsCmdInt(1) = refile;
+		*enlocPcsCmdInt(1) = replane;
+		*enlocPcsCommand(1) = relate;}
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-L"),STRING9,Scans); if (pos>=0) {
-		// TODO2 select given plane in current file
+		int sub = 0; if (processIdent(charpos,Planes,adfile,&sub) >= 0) {
+		refile = adfile; replane = sub;}
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-s"),STRING9,Scans); if (pos>=0) {
 		// TODO5 send focussed display as framebuffers

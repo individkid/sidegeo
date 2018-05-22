@@ -230,6 +230,19 @@ int fileSlot(int ident)
     return file;
 }
 
+void relate(void)
+{
+    int index = fileSlot(*delocCmdInt(1));
+    int relate = *delocCmdInt(1);
+    int file = fileSlot(*delocCmdInt(1));
+    int plane = *delocCmdInt(1);
+    struct Relate init = {0};
+    init.relate = relate; init.file = file; init.plane = plane;
+    *enlocRelate(index,1) = init;
+    init.relate = plane; init.file = index; init.plane = relate;
+    *enlocRelate(file,1) = init;
+}
+
 enum Action transformClick(int state)
 {
     int plane = *deargCmdInt(1);
@@ -515,19 +528,6 @@ void configureMatrix(void)
     for (int j = 0; j < sizeDisplayPoly(i); j++)
     updateAffine(arrayDisplayPoly(i,j,1));
     mode[Target] = menu; qPos = qpos; target();
-}
-
-void configureRelate(void)
-{
-    int index = fileSlot(*delocCmdInt(1));
-    int relate = *delocCmdInt(1);
-    int file = fileSlot(*delocCmdInt(1));
-    int plane = *delocCmdInt(1);
-    struct Relate init = {0};
-    init.relate = relate; init.file = file; init.plane = plane;
-    *enlocRelate(index,1) = init;
-    init.relate = plane; init.file = index; init.plane = relate;
-    *enlocRelate(file,1) = init;
 }
 
 #define MOVE_COPY \
