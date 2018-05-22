@@ -122,16 +122,20 @@ void leftManipulate(void)
     *enlocCmdInt(1) = rPoint;
     enqueMachine(manipulateClick);}
     CASE(Polytope) {
+    struct Share *share = arrayShare(qPoint,1);
     Myfloat matrix[16];
-    jumpmat(invmat(copymat(matrix,arrayShare(qPoint,1)->saved,4),4),affineMat,4);
-    *enlocCmdConfigurer(1) = qPoint;
+    jumpmat(invmat(copymat(matrix,share->saved,4),4),affineMat,4);
+    *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--side %d",-1);
     for (int i = 1; i < augpids; i++) msgstrCmdConfigure(",%d",-1,augpid[i]);
     msgstrCmdConfigure(" skip",'\n');
-    *enlocCmdConfigurer(1) = qPoint;
+    *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--matrix",-1);
     for (int i = 0; i < 16; i++) msgstrCmdConfigure(" %f",matrix[i]);
-    msgstrCmdConfigure("",'\n');}
+    msgstrCmdConfigure("",'\n');
+    for (int i = 0; i < sizeRelate(qPoint); i++) {
+    struct Relate *relate = arrayRelate(qPoint,i,1);
+    transform(matrix,relate->file,relate->plane);}}
     DEFAULT()
 }
 

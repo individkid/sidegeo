@@ -148,12 +148,29 @@ void file(void)
     int ident = *delocCmdInt(1);
     int sub = setupShare(name,Draft,ident);
     setupTarget(sub);
+    usedRelate(sub);
 }
 
 void focus(void)
 {
     int context = *delocCmdInt(1);
     updateContext(context);
+}
+
+void transform(Myfloat *matrix, int file, int plane)
+{
+    Myfloat *vec = dndateBuffer(file,PlaneBuf,plane,1);
+    int *ver = dndateBuffer(file,VersorBuf,plane,1);
+    struct Share *share = arrayShare(file,1);
+    Myfloat feather[4] = {0}; Myfloat arrow[4] = {0}; int versor = 0;
+    arrowbase(copyvec(feather,vec,3),arrow,*ver,basisMat,3);
+    feather[3] = 1.0; jumpvec(feather,matrix,4);
+    arrow[3] = 1.0; jumpvec(arrow,matrix,4);
+    basearrow(feather,arrow,&versor,basisMat,3);
+    *enlocCmdConfigurer(1) = share->ident;
+    msgstrCmdConfigure("--plane %d %d,",-1,plane,versor);
+    for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,feather[i]);
+    msgstrCmdConfigure("",'\n');
 }
 
 void responseLists(void)
@@ -205,6 +222,14 @@ void closeSlot(int slot)
     freeSlot(share->ident);
 }
 
+int fileSlot(int ident)
+{
+    int file = -1; while (++file < sizeShare())
+    if (arrayShare(file,1)->ident == ident) break;
+    if (file < 0) exitErrstr("file too ident\n");
+    return file;
+}
+
 enum Action transformClick(int state)
 {
     int plane = *deargCmdInt(1);
@@ -245,20 +270,14 @@ enum Action manipulateClick(int state)
     int slot = *deargCmdInt(1);
     struct Share *share = arrayShare(file,1);
     if (state-- == 0) {
-    Myfloat *vec = dndateBuffer(file,PlaneBuf,plane,1);
-    int *ver = dndateBuffer(file,VersorBuf,plane,1);
     Myfloat matrix[16];
-    jumpmat(invmat(copymat(matrix,arrayShare(qPoint,1)->saved,4),4),affineMat,4);
-    Myfloat feather[4] = {0}; Myfloat arrow[4] = {0}; int versor = 0;
-    arrowbase(copyvec(feather,vec,3),arrow,*ver,basisMat,3);
-    feather[3] = 1.0; jumpvec(feather,matrix,4);
-    arrow[3] = 1.0; jumpvec(arrow,matrix,4);
-    basearrow(feather,arrow,&versor,basisMat,3);
+    jumpmat(invmat(copymat(matrix,arrayShare(slot,1)->saved,4),4),affineMat,4);
     // msgstr --plane pPoint in qPoint with transformed plane from clipboard at rPoint
-    *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("--plane %d %d,",-1,plane,versor);
-    for (int i = 0; i < PLANE_DIMENSIONS; i++) msgstrCmdConfigure(" %f",-1,feather[i]);
-    msgstrCmdConfigure("",'\n');
+    transform(matrix,file,plane);
+    for (int i = 0; i < sizeRelate(file); i++) {
+    struct Relate *relate = arrayRelate(file,i,1);
+    if (relate->relate == plane)
+    transform(matrix,relate->file,relate->plane);}
     // sideband msgstr --side responseProceed and wait
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--side %d",-1);
@@ -407,15 +426,12 @@ void configurePlane(void)
 {
     relocCmdInt(1); // plane subscript
     int *ident = relocCmdInt(1);
-    int file = -1; while (++file < sizeShare())
-    if (arrayShare(file,1)->ident == *ident) break;
-    if (file < 0) exitErrstr("file too ident\n");
-    *ident = file;
+    *ident = fileSlot(*ident);
     relocCmdInt(1); // versor
     relocCmdFloat(3); // plane vector
-    *enlocCmdInt(1) = arrayShare(file,1)->pending;
+    *enlocCmdInt(1) = arrayShare(*ident,1)->pending;
     layer = uniqueLayer();
-    arrayShare(file,1)->pending += 1;
+    arrayShare(*ident,1)->pending += 1;
     enqueMachine(configureRefine);
 }
 
@@ -499,6 +515,19 @@ void configureMatrix(void)
     for (int j = 0; j < sizeDisplayPoly(i); j++)
     updateAffine(arrayDisplayPoly(i,j,1));
     mode[Target] = menu; qPos = qpos; target();
+}
+
+void configureRelate(void)
+{
+    int index = fileSlot(*delocCmdInt(1));
+    int relate = *delocCmdInt(1);
+    int file = fileSlot(*delocCmdInt(1));
+    int plane = *delocCmdInt(1);
+    struct Relate init = {0};
+    init.relate = relate; init.file = file; init.plane = plane;
+    *enlocRelate(index,1) = init;
+    init.relate = plane; init.file = index; init.plane = relate;
+    *enlocRelate(file,1) = init;
 }
 
 #define MOVE_COPY \

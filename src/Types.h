@@ -302,6 +302,11 @@ struct Render { // argument to render functions
     int draw; // waiting for shader
     int wait; // buffer sequence number
 };
+struct Relate {
+    int relate; // plane in indexed file
+    int file; // file with related plane
+    int plane; // related plane in file
+};
 
 struct Nomial {
     int num0; // number of zero variable terms

@@ -126,6 +126,7 @@ void display(void);
 void file(void);
 void save(void);
 void restore(void);
+void transform(Myfloat *matrix, int file, int plane);
 void responseList(void);
 int openSlot(void);
 void closeSlot(int slot);
