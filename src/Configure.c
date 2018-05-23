@@ -21,6 +21,7 @@
 // only this thread sends new state to timewheel
 int cofsiz = 0;
 int varsiz = 0;
+int dimcnt = 0;
 
 void configurePlane(void);
 void configurePoint(void);
@@ -99,7 +100,6 @@ int processConfigure(int index)
 		SKIP
 		int cpos = charpos;
 		int plane = processPlane(&cpos,index);
-		if (plane < 0) {IGNORE}
 		*enlocPcsCmdInt(1) = plane;
 		*enlocPcsCmdInt(1) = index;
 		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos,1); // versor
@@ -108,6 +108,9 @@ int processConfigure(int index)
 		DELOC}
 	pos = scanPcs(pattern,9,TEXT4("--point"),VECTOR5(3),Scans); if (pos>=0) { // TODO2 add name for struct Share to use
 		SKIP
+		if (++dimcnt == 3) {dimcnt = 0;
+		*enlocPcsCmdInt(1) = arrayThread(index,1)->count++;}
+		else *enlocPcsCmdInt(1) = -1;
 		*enlocPcsCmdInt(1) = index;
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePoint;

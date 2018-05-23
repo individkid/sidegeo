@@ -450,9 +450,9 @@ void configurePlane(void)
 
 void configurePoint(void)
 {
+    int index = *delocCmdInt(1);
     int ident = *delocCmdInt(1);
-    int file = -1; while (++file < sizeShare())
-    if (arrayShare(file,1)->ident == ident) break;
+    int file = fileSlot(ident);
     struct Share *share = arrayShare(file,1);
     for (int i = 0; i < 3; i++)
     share->point[share->collect*3+i] = *delocCmdFloat(1);
@@ -483,6 +483,7 @@ void configurePoint(void)
     plane[j] = dotvec(share->point,share->point+3,3);
     for (int i = 0; i < 3; i++) if (i != versor) plane[j] += base[j*3+i]*share->point[3+i];
     plane[j] /= -share->point[3+versor];}
+    *enlocCmdInt(1) = index;
     *enlocCmdInt(1) = ident;
     *enlocCmdInt(1) = versor;
     for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = plane[i];
