@@ -106,7 +106,7 @@ int processConfigure(int index)
 		for (int i = 0; i < 3; i++) *enlocPcsCmdFloat(1) = *arrayPcsFloat(floatpos+i,1);
 		*enlocPcsCmdCmd(1) = configurePlane;
 		DELOC}
-	pos = scanPcs(pattern,9,TEXT4("--point"),VECTOR5(3),Scans); if (pos>=0) { // TODO2 add name for struct Share to use
+	pos = scanPcs(pattern,9,TEXT4("--point"),VECTOR5(3),Scans); if (pos>=0) {
 		SKIP
 		if (++dimcnt == 3) {dimcnt = 0;
 		*enlocPcsCmdInt(1) = arrayThread(index,1)->count++;}
@@ -142,7 +142,20 @@ int processConfigure(int index)
 		*enlocOption(1) = '\n';
 		DELOC}
 	pos = scanPcs(pattern,13,TEXT4("--menu"),STRING9,Scans); if (pos>=0) {
-		// TODO2 inject keystrokes to console
+		int pos = sizePcsOutput();
+		usePcsChar(); copyPcsOutput(sizePcsOutput(),charpos,sizePcsChar()-charpos);
+		int k = 0; int j = 0; for (int i = pos; i < sizePcsOutput(); i++,j++) {
+		if (*arrayPcsOutput(i,1) == '\\' && i+1 < sizePcsOutput() && *arrayPcsOutput(i+1,1) =='r') {
+		i++; k=1; *arrayPcsOutput(j,1) = ofalpha('\r');}
+		else if (*arrayPcsOutput(i,1) == '\\' && i+1 < sizePcsOutput() && *arrayPcsOutput(i+1,1) =='n' && k) {
+		i++; k=0; *arrayPcsOutput(j,1) = ofalpha('\n');}
+		else if (*arrayPcsOutput(i,1) == '\\' && i+1 < sizePcsOutput() && *arrayPcsOutput(i+1,1) =='n') {
+		i++; *arrayPcsOutput(j,1) = ofmotion(Enter);}
+		else if (*arrayPcsOutput(i,1) == '\\' && i+1 < sizePcsOutput() && *arrayPcsOutput(i+1,1) =='b') {
+		i++; *arrayPcsOutput(j,1) = ofmotion(Back);}
+		else *arrayPcsOutput(j,1) = ofalpha(*arrayPcsOutput(i,1));}
+		if (k) *arrayPcsOutput(j,1) = ofalpha('\n');
+		unlocPcsOutput(sizePcsOutput()-j);
 		DELOC}
 	pos = scanPcs(pattern,4,TEXT4("--yield"),Scans); if (pos>=0) {
 		SKIP

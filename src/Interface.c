@@ -487,7 +487,7 @@ void configurePoint(void)
     *enlocCmdInt(1) = ident;
     *enlocCmdInt(1) = versor;
     for (int i = 0; i < 3; i++) *enlocCmdFloat(1) = plane[i];
-    enqueCommand(configurePlane);}
+    configurePlane();}
 }
 
 void configureInflate(void)

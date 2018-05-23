@@ -46,17 +46,20 @@ int processOption(void)
 	int len = sizeComplete(); *enlocComplete(1) = 0; char *pattern = arrayComplete(0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
 	int pos = scanPcs(pattern,4,TEXT4("-h"),Scans); if (pos>=0) {
-		msgstrPcsOutput("See https://github.com/individkid/sidegeo",'\n');
-		msgstrPcsOutput("-h print usage",'\n');
-		msgstrPcsOutput("-H run tests",'\n');
-		msgstrPcsOutput("-o <file> open or toggle polytope file",'\n');
-		msgstrPcsOutput("-O <name> open or select alternate display",'\n');
-		msgstrPcsOutput("-a <config> append to last file",'\n');
-		msgstrPcsOutput("-A <file> change last file to indicated",'\n');
-		msgstrPcsOutput("-l <plane> link selected and given plane",'\n');
-		msgstrPcsOutput("-L <plane> select plane in last file",'\n');
-		msgstrPcsOutput("-s <name> serve remote framebuffer clients",'\n');
-		msgstrPcsOutput("-S <file> serve sculpt command clients",'\n');
+		int pos = sizePcsOutput();
+		msgstrPcsOutput("\rSee https://github.com/individkid/sidegeo",'\n');
+		msgstrPcsOutput("\r-h print usage",'\n');
+		msgstrPcsOutput("\r-H run tests",'\n');
+		msgstrPcsOutput("\r-o <file> open or toggle polytope file",'\n');
+		msgstrPcsOutput("\r-O <name> open or select alternate display",'\n');
+		msgstrPcsOutput("\r-a <config> append to last file",'\n');
+		msgstrPcsOutput("\r-A <file> change last file to indicated",'\n');
+		msgstrPcsOutput("\r-l <plane> link selected and given plane",'\n');
+		msgstrPcsOutput("\r-L <plane> select plane in last file",'\n');
+		msgstrPcsOutput("\r-s <name> serve remote framebuffer clients",'\n');
+		msgstrPcsOutput("\r-S <file> serve sculpt command clients",'\n');
+		for (int i = pos; i < sizePcsOutput(); i++)
+		*arrayPcsOutput(i,1) = ofalpha(*arrayPcsOutput(i,1));
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,4,TEXT4("-H"),Scans); if (pos>=0) {
 		// TODO3 run tests
