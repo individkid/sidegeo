@@ -205,14 +205,18 @@ int processInit(int pos)
     return sub;
 }
 
-int processCheck(int pos, enum Queue base, int sup)
+int processCheck(int pos, enum Queue base, int sup, int *sub)
 {
     int bufpos = sizePcsBuf();
     int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(bufpos,pos,len+1);
-    int ret = 0; SWITCH(base,Files) FALL(Windows) ret = checkName(base,bufpos);
+    int ret = 0; SWITCH(base,Files) FALL(Windows) {
+    ret = checkName(base,bufpos);
+    if (ret>=0) *sub = *castName(base,bufpos);}
     CASE (Planes) FALL(States) {struct Ident ident = {0};
     int idtpos = sizeIdent(); ident.idx = sup; ident.pos = bufpos;
-    *enlocIdent(1) = ident; ret = checkName(base,idtpos); unlocIdent(1);}
+    *enlocIdent(1) = ident; ret = checkName(base,idtpos);
+    if (ret>=0) *sub = *castName(base,idtpos);
+    unlocIdent(1);}
     DEFAULT(exitErrstr("check too base");)
     unlocPcsBuf(sizePcsBuf()-bufpos);
     return ret;
@@ -222,10 +226,13 @@ void processInsert(int pos, enum Queue base, int sup, int sub)
 {
     int bufpos = sizePcsBuf();
     int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(bufpos,pos,len+1);
-    int ret = 0; SWITCH(base,Files) FALL(Windows) ret = insertName(base,bufpos);
+    int ret = 0; SWITCH(base,Files) FALL(Windows) {
+    ret = insertName(base,bufpos);
+    if (ret>=0) *castName(base,bufpos) = sub;}
     CASE (Planes) FALL(States) {struct Ident ident = {0};
     int idtpos = sizeIdent(); ident.idx = sup; ident.pos = bufpos;
-    *enlocIdent(1) = ident; ret = insertName(base,idtpos);}
+    *enlocIdent(1) = ident; ret = insertName(base,idtpos);
+    if (ret>=0) *castName(base,idtpos) = sub;}
     DEFAULT(exitErrstr("insert too base");)
     if (ret < 0) exitErrstr("insert too insert\n");
 }
@@ -242,13 +249,13 @@ int processEnloc(int pos, enum Queue base, int sup)
 
 void processAlias(int pos, int sup, int sub)
 {
-    int ret = processCheck(pos,Planes,sup);
+    int ret = processCheck(pos,Planes,sup,&sub);
     if (ret < 0) processInsert(pos,Planes,sup,sub);
 }
 
 int processIdent(int pos, enum Queue base, int sup, int *sub)
 {
-    int ret = processCheck(pos,base,sup);
+    int ret = processCheck(pos,base,sup,sub);
     if (ret < 0) {*sub = processEnloc(pos,base,sup); processInsert(pos,base,sup,*sub);}
     return ret;
 }
