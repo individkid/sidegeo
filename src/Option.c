@@ -47,6 +47,16 @@ int processOption(void)
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
 	int pos = scanPcs(pattern,4,TEXT4("-h"),Scans); if (pos>=0) {
 		msgstrPcsOutput("See https://github.com/individkid/sidegeo",'\n');
+		msgstrPcsOutput("-h print usage",'\n');
+		msgstrPcsOutput("-H run tests",'\n');
+		msgstrPcsOutput("-o <file> open or toggle polytope file",'\n');
+		msgstrPcsOutput("-O <name> open or select alternate display",'\n');
+		msgstrPcsOutput("-a <config> append to last file",'\n');
+		msgstrPcsOutput("-A <file> change last file to indicated",'\n');
+		msgstrPcsOutput("-l <plane> link selected and given plane",'\n');
+		msgstrPcsOutput("-L <plane> select plane in last file",'\n');
+		msgstrPcsOutput("-s <name> serve remote framebuffer clients",'\n');
+		msgstrPcsOutput("-S <file> serve sculpt command clients",'\n');
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,4,TEXT4("-H"),Scans); if (pos>=0) {
 		// TODO3 run tests
@@ -74,7 +84,10 @@ int processOption(void)
 		*enlocPcsCommand(1) = focus;
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-a"),STRING9,Scans); if (pos>=0) {
-		// TODO2 inject command to current file
+		*enlocConfigurer(1) = adfile;
+		int len = lengthPcsChar(charpos,0);
+		usePcsChar(); copyConfigure(sizeConfigure(),charpos,len);
+		*enlocConfigure(1) = '\n';
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,13,TEXT4("-A"),STRING9,Scans); if (pos>=0) {
 		int sub = 0; if (processIdent(charpos,Files,0,&sub) >= 0) adfile = sub;
