@@ -128,10 +128,10 @@ handleOutputs a = do
  pokeArray ptr (map fromIntegral a)
 
 handleLocateA :: [Int] -> State -> [Int]
-handleLocateA = undefined -- inside attachments
+handleLocateA = undefined -- TODO1 inside attachments
 
 handleLocateB :: [Int] -> State -> [Int]
-handleLocateB = undefined -- outside attachments
+handleLocateB = undefined -- TODO1 outside attachments
 
 handleState :: Event -> State -> IO State
 handleState Locate state = do
@@ -140,18 +140,18 @@ handleState Locate state = do
  handleOutputs (handleLocateB wrt state)
  handleInput >>= handleOutput
  return state
-handleState Fill state = return state
-handleState Hollow state = return state
-handleState Inflate state = return state
-handleState Faces state = return state
-handleState Frames state = return state
-handleState Face state = return state
-handleState Frame state = return state
-handleState Get state = return state
-handleState Set state = return state
-handleState Divide state = return state
-handleState Vertex state = return state
-handleState Index state = return state
+handleState Fill state = return state -- TODO1
+handleState Hollow state = return state -- TODO1
+handleState Inflate state = return state -- TODO1
+handleState Faces state = return state -- TODO1
+handleState Frames state = return state -- TODO2
+handleState Face state = return state -- TODO2
+handleState Frame state = return state -- TODO2
+handleState Get state = return state -- TODO2
+handleState Set state = return state -- TODO2
+handleState Divide state = return state -- TODO1
+handleState Vertex state = return state -- TODO1
+handleState Index state = return state -- TODO1
 handleState _ state = return state
 
 handleStates :: [State] -> Event -> IO Bool
