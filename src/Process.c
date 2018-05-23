@@ -156,15 +156,24 @@ void processError(int index)
     thread->file = thread->side = thread->fifo = thread->pipe = -1;
 }
 
-int processIgnore(int index, int noneg)
+void processIgnore(int index)
 {
-    // TODO3 ignore several times, then error
-    return noneg;
+    struct Thread *thread = arrayThread(index,1);
+    if (thread->ignore < PROCESS_IGNORE) {
+    int pos = sizePcsOutput();
+    msgstrPcsOutput("\rignore number %d at %d in %s",'\n',thread->ignore,thread->hint,stringPcsBuf(thread->name,0));
+    for (int i = pos; i < sizePcsOutput(); i++)
+    *arrayPcsOutput(i,1) = ofalpha(*arrayPcsOutput(i,1));
+    thread->ignore++;}
+    else processError(index);
 }
 
-void processComplain(void)
+void processComplain(const char *str)
 {
-    // TODO3 msgstrPcsOutput
+    int pos = sizePcsOutput();
+    msgstrPcsOutput("\rinvalid argument %s",'\n',str);
+    for (int i = pos; i < sizePcsOutput(); i++)
+    *arrayPcsOutput(i,1) = ofalpha(*arrayPcsOutput(i,1));
 }
 
 int processRead(int thread)
@@ -182,6 +191,8 @@ int processInit(int pos)
     struct Thread init = {0}; *enlocThread(1) = init;
     char *filename = stringPcsBuf(pos,0);
     struct Thread *thread = arrayThread(sub,1);
+    thread->name = pos;
+    thread->hint = 0;
     thread->skip = 0;
     thread->count = 0;
     thread->able = 1;
@@ -192,7 +203,7 @@ int processInit(int pos)
     int file = openfile(filename,"", "",         O_RDWR|O_CREAT,     mode,0,&mode);
     int datr = openfile(filename,"",PROCESS_FIFO,O_RDONLY|O_NONBLOCK,mode,O_RDONLY,0);
     int datw = openfile(filename,"",PROCESS_FIFO,O_WRONLY,           mode,0,0);
-    if (file < 0 || datr < 0 || datw < 0) {processComplain(); return sub;}
+    if (file < 0 || datr < 0 || datw < 0) {processComplain(stringPcsBuf(thread->name,0)); return sub;}
     int pipefd[2]; if (pipe(pipefd) != 0) exitErrstr("read pipe failed: %s\n",strerror(errno));
     thread->file = file; helper.file = file;
     thread->fifo = datw; helper.fifo = datr;
@@ -237,14 +248,13 @@ void processInsert(int pos, enum Queue base, int sup, int sub)
     if (ret < 0) exitErrstr("insert too insert\n");
 }
 
-int processEnloc(int pos, enum Queue base, int sup)
+void processEnloc(int pos, enum Queue base, int sup, int *sub)
 {
-    int ret = 0; SWITCH(base,Files) ret = processInit(pos);
-    CASE(Planes) ret = arrayThread(sup,1)->count++;
-    CASE(Windows) ret = altersub++;
-    CASE(States) ret = arrayThread(sup,1)->state++;
+    SWITCH(base,Files) *sub = processInit(pos);
+    CASE(Planes) *sub = arrayThread(sup,1)->count++;
+    CASE(Windows) *sub = altersub++;
+    CASE(States) *sub = arrayThread(sup,1)->state++;
     DEFAULT(exitErrstr("base too switch\n");)
-    return ret;
 }
 
 void processAlias(int pos, int sup, int sub)
@@ -256,7 +266,7 @@ void processAlias(int pos, int sup, int sub)
 int processIdent(int pos, enum Queue base, int sup, int *sub)
 {
     int ret = processCheck(pos,base,sup,sub);
-    if (ret < 0) {*sub = processEnloc(pos,base,sup); processInsert(pos,base,sup,*sub);}
+    if (ret < 0) {processEnloc(pos,base,sup,sub); processInsert(pos,base,sup,*sub);}
     return ret;
 }
 

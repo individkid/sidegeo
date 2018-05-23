@@ -407,6 +407,8 @@ struct Ident {
     int idx; // file index
 };
 struct Thread {
+    int name; // index into string buffer
+    int hint; // where user shold look for error
     int count; // per file number of planes
     int state; // per file number of states
     int skip; // per file skip next command

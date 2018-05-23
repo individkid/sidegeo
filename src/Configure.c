@@ -31,7 +31,7 @@ void configureInflate(void);
 void configureMatrix(void);
 void responseProceed(void);
 int intncmp(int *left, int *right, int n);
-int processIgnore(int index, int noneg);
+void processIgnore(int index);
 void processAlias(int pos, int sup, int sub);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
 void processError(int index);
@@ -72,11 +72,15 @@ unlocPcsChar(sizePcsChar()-charpos); \
 unlocRemain(index,1);
 
 #define DELOC \
-UNLOC delocRemain(index,pos); \
+UNLOC \
+arrayThread(index,1)->hint += pos; \
+delocRemain(index,pos); \
 return pos;
 
 #define YIELD \
-UNLOC delocRemain(index,pos); \
+UNLOC \
+arrayThread(index,1)->hint += pos; \
+delocRemain(index,pos); \
 return -pos;
 
 #define WAIT \
@@ -84,8 +88,11 @@ UNLOC \
 return 0;
 
 #define IGNORE \
-UNLOC delocRemain(index,pos); \
-return processIgnore(index,pos);
+processIgnore(index); \
+UNLOC \
+arrayThread(index,1)->hint += pos; \
+delocRemain(index,pos); \
+return pos;
 
 #define SKIP \
 if (arrayThread(index,1)->skip) { \

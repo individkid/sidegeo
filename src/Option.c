@@ -25,7 +25,7 @@ int replane = 0;
 DECLARE_SCAN(Pcs)
 DECLARE_MSGSTR(PcsOutput)
 int processInit(int pos);
-void processComplain(void);
+void processComplain(const char *str);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
 void display(void);
 void focus(void);
@@ -114,7 +114,7 @@ int processOption(void)
 		// TODO5 append cutbuffers to current file
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,9,STRING9,Scans); if (pos>=0) {
-		processComplain();
+		processComplain(stringPcsChar(charpos,0));
 		DELOC(pos) return pos;}
     UNLOC return 0;
 }
