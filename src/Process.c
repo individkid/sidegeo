@@ -189,9 +189,9 @@ int processInit(int pos)
 {
     int sub = sizeThread();
     struct Thread init = {0}; *enlocThread(1) = init;
-    char *filename = stringPcsBuf(pos,0);
+    char *filename = stringPcsChar(pos,0);
     struct Thread *thread = arrayThread(sub,1);
-    thread->name = pos;
+    thread->name = -1;
     thread->hint = 0;
     thread->skip = 0;
     thread->count = 0;
@@ -237,8 +237,8 @@ void processInsert(int pos, enum Queue base, int sup, int sub)
 {
     int bufpos = sizePcsBuf();
     int len = lengthPcsChar(pos,0); usePcsChar(); copyPcsBuf(bufpos,pos,len+1);
-    int ret = 0; SWITCH(base,Files) FALL(Windows) {
-    ret = insertName(base,bufpos);
+    int ret = 0; SWITCH(base,Files) arrayThread(sub,1)->name = bufpos;
+    FALL(Windows) {ret = insertName(base,bufpos);
     if (ret>=0) *castName(base,bufpos) = sub;}
     CASE (Planes) FALL(States) {struct Ident ident = {0};
     int idtpos = sizeIdent(); ident.idx = sup; ident.pos = bufpos;
