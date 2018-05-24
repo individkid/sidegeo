@@ -163,8 +163,8 @@ The following queries and callbacks are supported.
 
 The development plan is to complete the namesake usage features first, then proceed to more detailed uses.
 
-  * Sculpt: -o --plane (_) --inflate Transform (Session Rotate Cylinder) Refine Additive Subtractive Tweak (Numeric) Event (Locate Fill Hollow Inflate Faces Divide Vertex Index Done)  
-  * Edit: -h -O -a -A -l -L --yield --inject --menu --plane --point Move Copy Mouse Roller Target Event  
+  * Sculpt: -o --plane (_) --inflate Transform (Session Rotate Cylinder) Refine Additive Subtractive Event (Locate Fill Hollow Inflate Faces Divide Vertex Index Done)  
+  * Edit: -h -O -a -A -l -L --yield --inject --menu --plane --point Move Copy Mouse Roller Target Tweak (Numeric) Event  
   * Analyze: Sample Display Classify Panel (Topology) --sample --dual --embed --polytope -H  
   * Synthesize: --call --bind --action Execute --time --change --listen (speaker)  
   * Decorate: libsndfile --script --source --metric --color --configure -s -S Panel  
