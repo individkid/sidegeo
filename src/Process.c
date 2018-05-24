@@ -148,6 +148,12 @@ int openfile(const char *file, const char *dot, const char *ext, int flags, mode
     return fd;
 }
 
+void processMsgstr(int pos)
+{
+    for (int i = pos; i < sizePcsOutput(); i++)
+    *arrayPcsOutput(i,1) = alphaof(*arrayPcsOutput(i,1));
+}
+
 void processError(int index)
 {
     struct Thread *thread = arrayThread(index,1);
@@ -160,20 +166,14 @@ void processIgnore(int index)
 {
     struct Thread *thread = arrayThread(index,1);
     if (thread->ignore < PROCESS_IGNORE) {
-    int pos = sizePcsOutput();
-    msgstrPcsOutput("\rignore number %d at %d in %s",'\n',thread->ignore,thread->hint,stringPcsBuf(thread->name,0));
-    for (int i = pos; i < sizePcsOutput(); i++)
-    *arrayPcsOutput(i,1) = ofalpha(*arrayPcsOutput(i,1));
+    processMsgstr(msgstrPcsOutput("\rignore number %d at %d in %s",'\n',thread->ignore,thread->hint,stringPcsBuf(thread->name,0)));
     thread->ignore++;}
     else processError(index);
 }
 
 void processComplain(const char *str)
 {
-    int pos = sizePcsOutput();
-    msgstrPcsOutput("\rinvalid argument %s",'\n',str);
-    for (int i = pos; i < sizePcsOutput(); i++)
-    *arrayPcsOutput(i,1) = ofalpha(*arrayPcsOutput(i,1));
+    processMsgstr(msgstrPcsOutput("\rinvalid argument %s",'\n',str));
 }
 
 int processRead(int thread)

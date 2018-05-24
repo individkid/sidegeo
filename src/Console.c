@@ -171,9 +171,9 @@ void frontend(char key)
 {
     if (esc == 0 && key >= 'a' && key <= 'z' && inj == 0) *enlocOutput(1) = ofalpha(key);
     else if (esc == 0 && key >= 'A' && key <= 'Z' && inj == 0) *enlocOutput(1) = ofalpha(key-'A'+'a');
-    else if (esc == 0 && key == '-') {inj++; *enlocOutput(1) = '\r'; *enlocOutput(1) = key;}
+    else if (esc == 0 && key == '-') {inj++; *enlocOutput(1) = ofalpha('\r'); *enlocOutput(1) = ofalpha(key);}
     else if (esc == 0 && key == '\n' && inj == 0) *enlocOutput(1) = ofmotion(Enter);
-    else if (esc == 0 && key == '\n' && inj > 0) {inj--; *enlocOutput(1) = key;}
+    else if (esc == 0 && key == '\n' && inj > 0) {inj--; *enlocOutput(1) = ofalpha(key);}
     else if (esc == 0 && key == 127) *enlocOutput(1) = ofmotion(Back);
     else if (esc == 0 && key == 27) last[esc++] = key;
     else if (esc == 0 && inj > 0) *enlocOutput(1) = key;

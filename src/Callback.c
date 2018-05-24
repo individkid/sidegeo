@@ -344,8 +344,8 @@ void displayKey(GLFWwindow* ptr, int key, int scancode, int action, int mods)
     else if (escape) *enlocCmdOutput(1) = ofmotion(Space);
     else if (key == GLFW_KEY_ESCAPE) escape = 1;
     else if (dash && key == GLFW_KEY_ENTER) {dash = 0; *enlocCmdOutput(1) = ofalpha('\n');}
-    else if (dash && mods == GLFW_MOD_SHIFT && ofshift(key) > 0) *enlocCmdOutput(1) = ofshift(key);
-    else if (dash && mods == 0 && ofglfw(key) > 0) *enlocCmdOutput(1) = ofglfw(key);
+    else if (dash && mods == GLFW_MOD_SHIFT && ofshift(key) >= 0) *enlocCmdOutput(1) = ofshift(key);
+    else if (dash && mods == 0 && ofglfw(key) >= 0) *enlocCmdOutput(1) = ofglfw(key);
     else if (dash) *enlocCmdOutput(1) = ofmotion(Space);
     else if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) *enlocCmdOutput(1) = ofalpha(key-GLFW_KEY_A+'a');
     else if (key == GLFW_KEY_MINUS) {dash = 1; *enlocCmdOutput(1) = ofalpha('\r'); *enlocCmdOutput(1) = ofalpha('-');}

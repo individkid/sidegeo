@@ -462,7 +462,6 @@ int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...) \
 { \
-    int size = size##NAME(); \
     va_list args; va_start(args, trm); int len = vsnprintf(0, 0, fmt, args); va_end(args); \
     char buf[len+1]; va_start(args, trm); vsnprintf(buf, len+1, fmt, args); va_end(args); \
     if (trm == (char)-1) len -= 1; \

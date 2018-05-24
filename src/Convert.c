@@ -28,21 +28,21 @@ enum Motion motionof(char code)
 char alphaof(char code)
 {
     int uchar = code; if (uchar < 0) uchar += 256;
-    if (uchar < 128 || uchar - 128 < Motions || uchar - 128 - Motions + 'a' > 'z') return 0;
-    return uchar - 128 - Motions + 'a';
+    if (uchar >= 128) return 0;
+    return uchar;
 }
 
 int indexof(char code)
 {
     int uchar = code; if (uchar < 0) uchar += 256;
-    if (uchar < 128 + 'z' || uchar - 128 - 'z' < Motions + 'a') return -1;
-    return uchar - 128 - Motions - 'z' + 'a';
+    if (uchar < 128 || uchar - 128 < Motions) return -1;
+    return uchar - 128 - Motions;
 }
 
 char ofglfw(int key)
 {
     int uchar = key;
-    if (key < 32 || key > 96) uchar = 128;
+    if (key < 32 || key > 96) uchar = 0;
     if (key >= 65 && key <= 90) uchar += 32;
     return uchar;
 }
@@ -50,7 +50,7 @@ char ofglfw(int key)
 char ofshift(int key)
 {
     int uchar = key;
-    if (key < 32 || key > 96) uchar = 128;
+    if (key < 32 || key > 96) uchar = 0;
     return uchar;
 }
 
@@ -63,14 +63,14 @@ char ofmotion(enum Motion code)
 
 char ofalpha(char code)
 {
-    int uchar = (int)code - 'a' + 128 + Motions;
+    int uchar = (int)code;
     if (alphaof(uchar) != code) exitErrstr("code not reversed\n");
     return uchar;
 }
 
 char ofindex(int code)
 {
-    int uchar = (int)code + 128 + Motions + 'z' - 'a';
+    int uchar = (int)code + 128 + Motions;
     if (indexof(uchar) != code) exitErrstr("code not reversed\n");
     return uchar;
 }

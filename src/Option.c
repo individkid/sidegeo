@@ -24,6 +24,7 @@ int replane = 0;
 
 DECLARE_SCAN(Pcs)
 DECLARE_MSGSTR(PcsOutput)
+void processMsgstr(int pos);
 int processInit(int pos);
 void processComplain(const char *str);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
@@ -46,20 +47,17 @@ int processOption(void)
 	int len = sizeComplete(); *enlocComplete(1) = 0; char *pattern = arrayComplete(0,len+1);
 	int intpos = sizePcsInt(), floatpos = sizePcsFloat(), charpos = sizePcsChar();
 	int pos = scanPcs(pattern,4,TEXT4("-h"),Scans); if (pos>=0) {
-		int pos = sizePcsOutput();
-		msgstrPcsOutput("\rSee https://github.com/individkid/sidegeo",'\n');
-		msgstrPcsOutput("\r-h print usage",'\n');
-		msgstrPcsOutput("\r-H run tests",'\n');
-		msgstrPcsOutput("\r-o <file> open or toggle polytope file",'\n');
-		msgstrPcsOutput("\r-O <name> open or select alternate display",'\n');
-		msgstrPcsOutput("\r-a <config> append to last file",'\n');
-		msgstrPcsOutput("\r-A <file> change last file to indicated",'\n');
-		msgstrPcsOutput("\r-l <plane> link selected and given plane",'\n');
-		msgstrPcsOutput("\r-L <plane> select plane in last file",'\n');
-		msgstrPcsOutput("\r-s <name> serve remote framebuffer clients",'\n');
-		msgstrPcsOutput("\r-S <file> serve sculpt command clients",'\n');
-		for (int i = pos; i < sizePcsOutput(); i++)
-		*arrayPcsOutput(i,1) = ofalpha(*arrayPcsOutput(i,1));
+		processMsgstr(msgstrPcsOutput("\rSee https://github.com/individkid/sidegeo",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-h print usage",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-H run tests",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-o <file> open or toggle polytope file",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-O <name> open or select alternate display",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-a <config> append to last file",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-A <file> change last file to indicated",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-l <plane> link selected and given plane",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-L <plane> select plane in last file",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-s <name> serve remote framebuffer clients",'\n'));
+		processMsgstr(msgstrPcsOutput("\r-S <file> serve sculpt command clients",'\n'));
 		DELOC(pos) return pos;}
 	pos = scanPcs(pattern,4,TEXT4("-H"),Scans); if (pos>=0) {
 		// TODO3 run tests
