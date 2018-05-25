@@ -201,7 +201,10 @@ void transformTranslate(void)
 
 void transformLook(void)
 {
-    // TODO2 do linear transformation
+    Myfloat u[16]; matrixRotate(u);
+    copymat(affineMat,displayMata,4);
+    jumpmat(affineMat,displayMatb,4);
+    jumpmat(affineMat,u,4);
     enqueDishader();
 }
 
