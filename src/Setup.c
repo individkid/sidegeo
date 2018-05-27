@@ -296,7 +296,9 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn,
     buffer.client = client;
     if (loc != INVALID_LOCATION) {
     glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
-    glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
+    SWITCH(buffer.type,GL_FLOAT) glVertexAttribPointer(buffer.loc, buffer.dimn, buffer.type, GL_FALSE, 0, 0);
+    CASE(GL_UNSIGNED_INT) glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
+    DEFAULT(exitErrstr("buffer too type\n");)
     glBindBuffer(GL_ARRAY_BUFFER, 0);}
     *ptr = buffer;
 }
