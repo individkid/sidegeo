@@ -159,7 +159,7 @@ void processError(int index)
     struct Thread *thread = arrayThread(index,1);
     if (pthread_cancel(thread->helper) < 0 && errno != ESRCH) exitErrstr("cannot cancel thread\n");
     if (thread->pipe >= 0 && thread->able) removeCmnProcesses(thread->pipe);
-    thread->file = thread->side = thread->fifo = thread->pipe = -1;
+    thread->file = thread->fifo = thread->pipe = -1;
 }
 
 void processIgnore(int index)

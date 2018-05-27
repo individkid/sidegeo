@@ -67,6 +67,7 @@ enum Data bufferElement(int i, enum Shader shader)
 
 enum Data bufferScratch(int i, enum Shader shader)
 {
+    if (i >= 3) exitErrstr("invalid scratch index\n");
     SWITCH(shader,Diplane) {enum Data data[3] = {Datas}; return data[i];}
     CASE(Dipoint) {enum Data data[3] = {Datas}; return data[i];}
     DEFAULT(return bufferElement(i,shader);)
@@ -196,8 +197,8 @@ Myuint compileProgram(
     source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
     source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode; int num = 7;
     num += arrayLocation(source+num,shader);
-    source[num] = vertexCode; num += 1;
-    glShaderSource(vertex, num, source, NULL);
+    source[num+0] = vertexCode;
+    glShaderSource(vertex, num+1, source, NULL);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if(!success) {
@@ -207,10 +208,10 @@ Myuint compileProgram(
     Myuint geometry = 0;
     if (geometryCode) {
         geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        source[7] = inputCode(shader);
-        source[8] = outputCode(shader);
-        source[9] = geometryCode;
-        glShaderSource(geometry, 10, source, NULL);
+        source[num+0] = inputCode(shader);
+        source[num+1] = outputCode(shader);
+        source[num+2] = geometryCode;
+        glShaderSource(geometry, num+3, source, NULL);
         glCompileShader(geometry);
         glGetShaderiv(geometry, GL_COMPILE_STATUS, &success);
         if(!success) {
@@ -220,8 +221,8 @@ Myuint compileProgram(
     Myuint fragment = 0;
     if (fragmentCode) {
         fragment = glCreateShader(GL_FRAGMENT_SHADER);
-        source[7] = fragmentCode;
-        glShaderSource(fragment, 8, source, NULL);
+        source[num+0] = fragmentCode;
+        glShaderSource(fragment, num+1, source, NULL);
         glCompileShader(fragment);
         glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
         if(!success) {

@@ -315,7 +315,8 @@ struct Nomial {
     int num3; // number of three variable terms
 };
 struct Ratio {
-    struct Nomial n,d;};
+    struct Nomial n,d;
+};
 enum Control {
     Start,
     Sound,
@@ -325,7 +326,7 @@ enum Type {
     Write};
 struct State {
     int idt; // how other states will refer to this one
-    int map; // indices are packed
+    int map; // whether indices are packed
     int run; // whether to schedule toggled by control
     enum Control ctl; // none stream metric
     enum Type typ; // read or write stream or metric
@@ -341,8 +342,8 @@ struct State {
 };
 struct Stream { // for opening and maintaining stream
     int idt; // how other states will refer to this one
-    int map; // indices are packed
-    int run; // callback is scheduled
+    int map; // whether indices are packed
+    int run; // whether callback is scheduled
     int otp; // number of output channels
     int inp; // number of input channels
     int siz; // size of ring buffer per channel
@@ -389,7 +390,7 @@ struct Match {
     const char *str;
     int idx, alt;
 };
-struct Spoof {
+struct Spoof { // thread safe so helper threads can scan for --side done
     int is,ii,iF,ic;
     struct Match as[PROCESS_SCAN];
     int ai[PROCESS_PID];
@@ -400,7 +401,7 @@ enum Queue { // index into queue of name trees
     Files,
     Planes,
     Windows,
-    States,
+    States, // for idt in State Stream Metric
     Queues};
 struct Ident {
     int pos; // name index
@@ -414,7 +415,6 @@ struct Thread {
     int skip; // per file skip next command
     int able; // toggle disable
     int file; // file handle
-    int side; // sideband handle
     int fifo; // fifo handle
     int pipe; // data pipe handle
     int ignore; // ignored error count
@@ -429,20 +429,20 @@ struct Pack { // for Panel configuration
 };
 
 enum When {
-    Setv,
-    Getv,
-    Call,
-    Test};
+    Setv, // no response; just change value
+    Getv, // immediately schedule response with value
+    Call, // schedule response when value changes
+    Test}; // no response; just check value
 enum What {
     Map, // from Haskell
     Signal, // from Wave
     Value, // from State
     Element}; // from Buffer
 enum Where {
-    Skt,
-    Lua,
-    Cmd,
-    Pnl};
+    Skt, // Socket.c
+    Lua, // Lua.c
+    Cmd, // Command.c
+    Pnl}; // Panel.c
 struct Query {
     enum When when;
     int ival;
