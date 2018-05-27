@@ -190,7 +190,7 @@ Myuint compileProgram(
 {
     GLint success = 0;
     char infoLog[512];
-    const char *source[10] = {0};
+    const char *source[13] = {0};
     Myuint prog = glCreateProgram();
     Myuint vertex = glCreateShader(GL_VERTEX_SHADER);
     arrayCode(shader,1)->input = inp; arrayCode(shader,1)->output = outp; arrayCode(shader,1)->handle = prog; arrayCode(shader,1)->name = name;
