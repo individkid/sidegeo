@@ -520,7 +520,7 @@ void configureMatrix(void)
     timesmat(affineMat,matrix,4);
     for (int i = 0; i < sizeDisplay(); i++)
     for (int j = 0; j < sizeDisplayPoly(i); j++)
-    updateAffine(arrayDisplayPoly(i,j,1));
+    updateAffine(i,j);
     mode[Target] = menu; qPos = qpos; target();
 }
 

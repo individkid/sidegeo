@@ -587,8 +587,9 @@ void updateTarget(int display, int file, int context)
     DEFAULT(exitErrstr("target too line\n");)
 }
 
-void updateAffine(struct File *ptr)
+void updateAffine(int display, int file)
 {
+    struct File *ptr = arrayDisplayPoly(display,file,1);
     int posedge = (ptr->fixed && !ptr->last);
     int negedge = (!ptr->fixed && ptr->last);
     ptr->last = ptr->fixed;
@@ -607,9 +608,8 @@ void updateUniform(enum Server server, int file, enum Shader shader)
         glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
     CASE(Affine)
         if (file < 0) exitErrstr("affine too file\n");
-        struct File *ptr = arrayPoly(file,1);
-        updateAffine(ptr);
-        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,ptr->sent);
+        updateAffine(contextHandle,file);
+        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,arrayPoly(file,1)->sent);
     CASE(Feather) {
         SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) {
             Myfloat xpoint, ypoint, zpoint;
