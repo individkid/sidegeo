@@ -154,6 +154,7 @@ void setupCode(enum Shader shader);
 int setupFile();
 int setupShare(int name, enum Usage usage, int ident);
 void setupTarget(int sub);
+void updateTarget(int display, int file, int context);
 void updateAffine(struct File *ptr);
 void updateFile(int ctx, int sub, int cpy);
 void updateContext(int sub);

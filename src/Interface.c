@@ -74,15 +74,8 @@ void restore(void)
 void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
-    for (int j = 0; j < sizeDisplayPoly(i); j++) {
-    struct File *file = arrayDisplayPoly(i,j,1);
-    SWITCH(mode[Target],Plane) {
-    enum Usage usage = arrayShare(j,1)->usage;
-    file->fixed = !(usage==Scratch&&i==contextHandle);}
-    CASE(Polytope) file->fixed = !(j==qPos);
-    CASE(Alternate) file->fixed = !(i==contextHandle);
-    CASE(Session) file->fixed = 0;
-    DEFAULT(exitErrstr("target too line\n");)}
+    for (int j = 0; j < sizeDisplayPoly(i); j++)
+    updateTarget(i,j,i);
 }
 
 void init(void)

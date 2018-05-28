@@ -366,15 +366,8 @@ void setupTarget(int given)
     updateContext(context);
     int sub = setupFile();
     if (sub != given) exitErrstr("sub too given\n");
-    struct File *file = arrayPoly(sub,1);
-    SWITCH(mode[Target],Plane) {
-    enum Usage usage = arrayShare(sub,1)->usage;
-    file->fixed = !(usage==Scratch&&contextHandle==save);}
-    CASE(Polytope) file->fixed = 1;
-    CASE(Alternate) file->fixed = !(contextHandle==save);
-    CASE(Session) file->fixed = 0;
-    DEFAULT(exitErrstr("target too line\n");)
-    invmat(copymat(file->ratio,affineMat,4),4);}
+    updateTarget(context,sub,save);
+    invmat(copymat(arrayPoly(sub,1)->ratio,affineMat,4),4);}
     updateContext(save);
 }
 
@@ -580,6 +573,18 @@ void updateFile(int ctx, int sub, int cpy)
     updateContext(ctx);
     updateBuffer(sub, i, 0, todo, buf);
     updateContext(save);}
+}
+
+void updateTarget(int display, int file, int context)
+{
+    struct File *ptr = arrayDisplayPoly(display,file,1);
+    SWITCH(mode[Target],Plane) {
+    enum Usage usage = arrayShare(file,1)->usage;
+    ptr->fixed = !(usage==Scratch&&contextHandle==context);}
+    CASE(Polytope) ptr->fixed = 1;
+    CASE(Alternate) ptr->fixed = !(contextHandle==context);
+    CASE(Session) ptr->fixed = 0;
+    DEFAULT(exitErrstr("target too line\n");)
 }
 
 void updateAffine(struct File *ptr)
