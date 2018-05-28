@@ -186,8 +186,8 @@ The C code leverages the following libraries, languages, and protocols:
 The code is partitioned to the following files grouped by thread:
 
   * Memory management: Types.h Queue.h Queue.cpp Common.h Common.cpp Convert.c Wrap.c  
-  * Opengl commands: Setup.c Render.c Microcode.c Callback.c  
-  * Command thread: Main.h Main.c Debug.c Interface.c Metric.c Command.c  
+  * Opengl commands: Main.h Main.c Setup.c Render.c Microcode.c Callback.c  
+  * Command thread: Debug.c Interface.c Metric.c Command.c  
   * Process thread: Configure.c Option.c Process.c  
   * Haskell thread: Sculpt.hs Naive.hs Haskell.c  
   * Panel thread: Topology.fl Decorate.fl System.fl Fltk.cpp Panel.c
