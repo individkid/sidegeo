@@ -513,15 +513,12 @@ void configureMatrix(void)
     int file = *delocCmdInt(1);
     Myfloat matrix[16] = {0}; for (int i = 0; i < 16; i++) matrix[i] = *delocCmdFloat(1);
     // upon open transform polytope, save affineMat in polytope shared struct
-    // upon close transform polytope, send side:--skip main:--matrix of changes since open transform polytope.
+    // upon close transform polytope, send --skip --matrix of changes since open transform polytope.
     // upon read of --matrix not preceded by --skip, apply change to every plane of polytope in every display.
     enum Menu menu = mode[Target]; int qpos = qPos;
-    mode[Target] = Polytope; qPos = file; target();
+    updateAffine(file); mode[Target] = Polytope; qPos = file; target();
     timesmat(affineMat,matrix,4);
-    for (int i = 0; i < sizeDisplay(); i++)
-    for (int j = 0; j < sizeDisplayPoly(i); j++)
-    updateAffine(i,j);
-    mode[Target] = menu; qPos = qpos; target();
+    updateAffine(file); mode[Target] = menu; qPos = qpos; target();
 }
 
 #define MOVE_COPY \
