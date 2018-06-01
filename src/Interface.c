@@ -78,6 +78,13 @@ void target(void)
     updateTarget(i,j);
 }
 
+void affine(void)
+{
+    for (int i = 0; i < sizeDisplay(); i++)
+    for (int j = 0; j < sizeDisplayPoly(i); j++)
+    updateAffine(i,j);
+}
+
 void init(void)
 {
     SWITCH(click,Init) /*nop*/;
@@ -511,10 +518,10 @@ void configureMatrix(void)
     // upon open transform polytope, save affineMat in polytope shared struct
     // upon close transform polytope, send --skip --matrix of changes since open transform polytope.
     // upon read of --matrix not preceded by --skip, apply change to every plane of polytope in every display.
-    enum Menu menu = mode[Target]; int qpoint = qPoint; // TODO
-    // updateAffine(file); mode[Target] = Polytope; qPoint = file; target();
-    // timesmat(affineMat,matrix,4);
-    // updateAffine(file); mode[Target] = menu; qPoint = qpoint; target();
+    enum Menu menu = mode[Target]; int qpoint = qPoint;
+    affine(); mode[Target] = Polytope; qPoint = file; target();
+    timesmat(affineMat,matrix,4);
+    affine(); mode[Target] = menu; qPoint = qpoint; target();
 }
 
 #define MOVE_COPY \

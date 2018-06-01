@@ -155,7 +155,7 @@ int setupFile(int context);
 int setupShare(int name, enum Usage usage, int ident, int file);
 void setupTarget(int sub);
 void updateTarget(int display, int file);
-void updateAffine(int file);
+void updateAffine(int display, int file);
 void updateFile(int ctx, int sub, int cpy);
 void updateContext(int sub);
 void updateDisplay(GLFWwindow *ptr);
