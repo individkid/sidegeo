@@ -91,8 +91,8 @@ extern const enum Data data;
 #define redateBuffer(FILE,SLOT,FROM,TO) \
     Myfloat *vec = dndateBuffer(FILE,PlaneBuf,FROM,1); \
     int *ver = dndateBuffer(FILE,VersorBuf,FROM,1); \
-    updateBuffer(SLOT,PlaneBuf,TO,1,vec); \
-    updateBuffer(SLOT,VersorBuf,TO,1,ver)
+    updateBuffer(0,SLOT,PlaneBuf,TO,1,vec); \
+    updateBuffer(0,SLOT,VersorBuf,TO,1,ver)
 #define undateBuffer(SLOT) \
     resetBuffer(SLOT,PlaneBuf); \
     resetBuffer(SLOT,VersorBuf)
@@ -100,11 +100,11 @@ extern const enum Data data;
 #define enqueCmdEvent enqueCmdFrames
 #define enqueCmdSingle enqueCmdFrame
 #define enqueCmdDimen FRAME_DIMENSIONS
-#define redateBuffer(FILE,SLOT,FROM,TO) \
-    Myfloat *vec = dndateBuffer(FILE,PointBuf,FROM,1); \
-    updateBuffer(SLOT,PointBuf,TO,1,vec)
-#define undateBuffer(SLOT) \
-    resetBuffer(SLOT,PointBuf)
+#define redateBuffer(DISP,FILE,SLOT,FROM,TO) \
+    Myfloat *vec = dndateBuffer(DISP,FILE,PointBuf,FROM,1); \
+    updateBuffer(DISP,SLOT,PointBuf,TO,1,vec)
+#define undateBuffer(DISP,SLOT) \
+    resetBuffer(DISP,SLOT,PointBuf)
 #endif
 
 DECLARE_MSGSTR(CmdBuf)
@@ -128,7 +128,7 @@ void save(void);
 void restore(void);
 void transform(Myfloat *matrix, int file, int plane);
 void responseList(void);
-int openSlot(void);
+int openSlot(int file);
 void closeSlot(int slot);
 enum Action transformClick(int state);
 enum Action manipulateClick(int state);
@@ -149,18 +149,18 @@ void displayClick(GLFWwindow *display, int button, int action, int mods);
 void displayCursor(GLFWwindow *display, double xpos, double ypos);
 void displayScroll(GLFWwindow *display, double xoffset, double yoffset);
 
-void setupDisplay(int name);
-void setupCode(enum Shader shader);
-int setupFile();
-int setupShare(int name, enum Usage usage, int ident);
+int setupDisplay(int name);
+void setupCode(int display, enum Shader shader);
+int setupFile(int context);
+int setupShare(int name, enum Usage usage, int ident, int file);
 void setupTarget(int sub);
-void updateTarget(int display, int file, int context);
+void updateTarget(int display, int file);
 void updateAffine(int file);
 void updateFile(int ctx, int sub, int cpy);
 void updateContext(int sub);
 void updateDisplay(GLFWwindow *ptr);
 void updateUniform(enum Server server, int file, enum Shader shader);
-void updateBuffer(int file, enum Data sub, int done, int todo, void *data);
+void updateBuffer(int ctx, int file, enum Data sub, int done, int todo, void *data);
 void *dndateBuffer(int file, enum Data sub, int done, int todo);
 void resetBuffer(int file, enum Data sub);
 int sizeBuffer(int file, enum Data sub);

@@ -75,7 +75,7 @@ void target(void)
 {
     for (int i = 0; i < sizeDisplay(); i++)
     for (int j = 0; j < sizeDisplayPoly(i); j++)
-    updateTarget(i,j,i);
+    updateTarget(i,j);
 }
 
 void init(void)
@@ -112,22 +112,19 @@ void metric(void)
 
 void display(void)
 {
-    int new = sizeDisplay();
     int name = sizeCmdBuf();
     int len = lengthCmdByte(0,0);
     useCmdByte(); xferCmdBuf(len+1);
-    setupDisplay(name);
-    updateContext(new);
-    for (enum Shader shader = 0; shader < Shaders; shader++) setupCode(shader);
+    int new = setupDisplay(name);
+    for (enum Shader shader = 0; shader < Shaders; shader++) setupCode(new,shader);
     if (new > 0) {
     struct Display *save = current;
+    current = arrayDisplay(new,1);
     for (int i = 0; i < 16; i++) displayMata[i] = save->affineMata[i];
     for (int i = 0; i < 16; i++) displayMatb[i] = save->affineMatb[i];
-    updateContext(0);
+    current = save;
     for (int i = 0; i < sizeShare(); i++) {
-    updateContext(new);
-    int sub = setupFile();
-    updateContext(0);
+    int sub = setupFile(new);
     updateFile(new,sub,i);}
     current = save;}
     alternate = new;
@@ -139,7 +136,7 @@ void file(void)
     int len = lengthCmdByte(0,0);
     useCmdByte(); xferCmdBuf(len+1);
     int ident = *delocCmdInt(1);
-    int sub = setupShare(name,Draft,ident);
+    int sub = setupShare(name,Draft,ident,0);
     setupTarget(sub);
     usedRelate(sub);
 }
@@ -197,11 +194,11 @@ void responseProceed(void)
     *arrayReint(tag,size-1,1) = 1;
 }
 
-int openSlot(void)
+int openSlot(int file)
 {
     int empty = (availSlot() == 0);
     int key = allocSlot();
-    int sub = (empty?setupShare(0,Scratch,key):*castSlot(key));
+    int sub = (empty?setupShare(0,Scratch,key,file):*castSlot(key));
     if (empty) {
     setupTarget(sub);
     *castSlot(key) = sub;}
@@ -360,7 +357,6 @@ enum Action configureRefine(int state)
     // wait for lock on file shared struct
     if (share->complete+1 < pending) return Defer;
     if (plane < 0) plane = share->planes;
-    updateContext(0);
     if (state-- == 0) {
     layer = uniqueLayer();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
@@ -376,8 +372,8 @@ enum Action configureRefine(int state)
     if (sizeReint(layer) == 0) return Defer;
     if (share->points != sizeReint(layer)) exitErrstr("points too layer\n");
     // append plane to file's planebuf
-    updateBuffer(file,VersorBuf,plane,1,arrayCmdInt(vsr,1));
-    updateBuffer(file,PlaneBuf,plane,1,arrayCmdFloat(vec,3));
+    updateBuffer(0,file,VersorBuf,plane,1,arrayCmdInt(vsr,1));
+    updateBuffer(0,file,PlaneBuf,plane,1,arrayCmdFloat(vec,3));
     if (plane > share->planes) exitErrstr("refine too plane\n");
     if (plane == share->planes) share->planes += 1;
     // send vertex event with layer response
@@ -392,7 +388,7 @@ enum Action configureRefine(int state)
     int *buf = unlocReint(0,flat);
     int todo = bufferUnflat(file,VertSub,flat);
     resetBuffer(file,VertSub);
-    updateBuffer(file,VertSub,0,todo,buf);
+    updateBuffer(0,file,VertSub,0,todo,buf);
     // enque Coplane shader with renderClient follow
     resetBuffer(file,VertBuf);
     enqueShader(Coplane,file,0,renderClient); // get points on plane
@@ -410,7 +406,7 @@ enum Action configureRefine(int state)
     // get point from i in client VertBuf
     Myfloat *point = dndateBuffer(file,VertBuf,i,1);
     int index = *arrayReint(layer,share->points+i,1);
-    updateBuffer(file,PointBuf,index,1,point);}
+    updateBuffer(0,file,PointBuf,index,1,point);}
     unlocReint(layer,len);
     share->points += len;
     enqueCmdDivide(file,plane,sizeReint(layer),ptrReint(layer),responseProceed,layer);
@@ -515,10 +511,10 @@ void configureMatrix(void)
     // upon open transform polytope, save affineMat in polytope shared struct
     // upon close transform polytope, send --skip --matrix of changes since open transform polytope.
     // upon read of --matrix not preceded by --skip, apply change to every plane of polytope in every display.
-    enum Menu menu = mode[Target]; int qpos = qPos;
-    updateAffine(file); mode[Target] = Polytope; qPos = file; target();
-    timesmat(affineMat,matrix,4);
-    updateAffine(file); mode[Target] = menu; qPos = qpos; target();
+    enum Menu menu = mode[Target]; int qpoint = qPoint; // TODO
+    // updateAffine(file); mode[Target] = Polytope; qPoint = file; target();
+    // timesmat(affineMat,matrix,4);
+    // updateAffine(file); mode[Target] = menu; qPoint = qpoint; target();
 }
 
 #define MOVE_COPY \

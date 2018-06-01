@@ -193,5 +193,7 @@ The code is partitioned to the following files grouped by thread:
   * Panel thread: Topology.fl Decorate.fl System.fl Fltk.cpp Panel.c
   * Other threads: Timewheel.c Lua.c Console.c Socket.c  
 
+TODO: call/schedule graph of functions with dependence on and changes to global current context
+
 This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
 

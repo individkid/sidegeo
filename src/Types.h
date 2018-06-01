@@ -268,6 +268,8 @@ struct File {
 struct Share { // per file state shared across displays
     int name;
     int ident; // index used by process thread, or pool key
+    int disp; // display controling scratch polytope
+    int file; // source of plane in scratch polytope
     Myfloat tweak; // from --configure
     int pending; // number of planes to be added
     int complete; // number of planes added

@@ -139,18 +139,18 @@ enum Server uniformConstant(int i, enum Shader shader)
     return server[i];
 }
 
-const char *inputCode(enum Shader shader)
+const char *inputCode(int display, enum Shader shader)
 {
-    SWITCH(arrayCode(shader,1)->input,GL_POINTS) return "#define INPUT points\n";
+    SWITCH(arrayDisplayCode(display,shader,1)->input,GL_POINTS) return "#define INPUT points\n";
     CASE(GL_TRIANGLES) return "#define INPUT triangles\n";
     CASE(GL_TRIANGLES_ADJACENCY) return "#define INPUT triangles_adjacency\n";
     DEFAULT(exitErrstr("unknown input primitive");)
     return "";
 }
 
-const char *outputCode(enum Shader shader)
+const char *outputCode(int display, enum Shader shader)
 {
-    SWITCH(arrayCode(shader,1)->output,GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
+    SWITCH(arrayDisplayCode(display,shader,1)->output,GL_POINTS) return "#define OUTPUT points, max_vertices = 1\n";
     CASE(GL_TRIANGLES) return "#define OUTPUT triangle_strip, max_vertices = 3\n";
     DEFAULT(exitErrstr("unknown output primitive");)
     return "";
@@ -186,14 +186,15 @@ extern const char *intersectCode;
 
 Myuint compileProgram(
     const char *vertexCode, const char *geometryCode, const char *fragmentCode,
-    int inp, int outp, const char *name, enum Shader shader)
+    int inp, int outp, const char *name, int display, enum Shader shader)
 {
     GLint success = 0;
     char infoLog[512];
     const char *source[13] = {0};
     Myuint prog = glCreateProgram();
     Myuint vertex = glCreateShader(GL_VERTEX_SHADER);
-    arrayCode(shader,1)->input = inp; arrayCode(shader,1)->output = outp; arrayCode(shader,1)->handle = prog; arrayCode(shader,1)->name = name;
+    arrayDisplayCode(display,shader,1)->input = inp; arrayDisplayCode(display,shader,1)->output = outp;
+    arrayDisplayCode(display,shader,1)->handle = prog; arrayDisplayCode(display,shader,1)->name = name;
     source[0] = uniformCode; source[1] = projectCode; source[2] = pierceCode; source[3] = sideCode;
     source[4] = expandCode; source[5] = constructCode; source[6] = intersectCode; int num = 7;
     num += arrayLocation(source+num,shader);
@@ -208,8 +209,8 @@ Myuint compileProgram(
     Myuint geometry = 0;
     if (geometryCode) {
         geometry = glCreateShader(GL_GEOMETRY_SHADER);
-        source[num+0] = inputCode(shader);
-        source[num+1] = outputCode(shader);
+        source[num+0] = inputCode(display,shader);
+        source[num+1] = outputCode(display,shader);
         source[num+2] = geometryCode;
         glShaderSource(geometry, num+3, source, NULL);
         glCompileShader(geometry);
@@ -322,10 +323,10 @@ int setupClient(int file, enum Data data)
     return client;
 }
 
-int setupFile()
+int setupFile(int display)
 {
-    int sub = sizePoly();
-    struct File *file = enlocPoly(1);
+    int sub = sizeDisplayPoly(display);
+    struct File *file = enlocDisplayPoly(display,1);
     struct File init = {0};
     *file = init;
     identmat(file->saved,4);
@@ -346,7 +347,7 @@ int setupFile()
     return sub;
 }
 
-int setupShare(int name, enum Usage usage, int ident)
+int setupShare(int name, enum Usage usage, int ident, int file)
 {
     int sub = sizeShare();
     struct Share *share = enlocShare(1);
@@ -356,19 +357,18 @@ int setupShare(int name, enum Usage usage, int ident)
     for (enum Data data = 0; data < Datas; data++) share->client[data] = -1;
     share->usage = usage;
     share->ident = ident;
+    share->disp = contextHandle;
+    share->file = file;
     return sub;
 }
 
 void setupTarget(int given)
 {
-    int save = contextHandle;
     for (int context = 0; context < sizeDisplay(); context++) {
-    updateContext(context);
-    int sub = setupFile();
+    int sub = setupFile(context);
     if (sub != given) exitErrstr("sub too given\n");
-    updateTarget(context,sub,save);
-    invmat(copymat(arrayPoly(sub,1)->ratio,affineMat,4),4);}
-    updateContext(save);
+    updateTarget(context,sub);
+    invmat(copymat(arrayDisplayPoly(context,sub,1)->ratio,affineMat,4),4);}
 }
 
 void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
@@ -387,22 +387,22 @@ void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
     *ptr = uniform;
 }
 
-void setupCode(enum Shader shader)
+void setupCode(int display, enum Shader shader)
 {
     while (sizeCode() < shader) {struct Code code = {0}; *enlocCode(1) = code;}
-    struct Code *code = arrayCode(shader,1);
+    struct Code *code = arrayDisplayCode(display,shader,1);
     if (code->name != 0) return;
     Myuint prog = 0;
-    SWITCH(shader,Diplane) prog = compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",Diplane);
-    CASE(Dipoint) prog = compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",Dipoint);
-    CASE(Coplane) prog = compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",Coplane);
-    CASE(Copoint) prog = compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",Copoint);
-    CASE(Adplane) prog = compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",Adplane);
-    CASE(Adpoint) prog = compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",Adpoint);
-    CASE(Perplane) prog = compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",Perplane);
-    CASE(Perpoint) prog = compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",Perpoint);
-    CASE(Replane) prog = compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",Replane);
-    CASE(Repoint) prog = compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",Repoint);
+    SWITCH(shader,Diplane) prog = compileProgram(diplaneVertex,diplaneGeometry,diplaneFragment,GL_TRIANGLES_ADJACENCY,GL_TRIANGLES,"diplane",display,Diplane);
+    CASE(Dipoint) prog = compileProgram(dipointVertex,dipointGeometry,dipointFragment,GL_TRIANGLES,GL_TRIANGLES,"dipoint",display,Dipoint);
+    CASE(Coplane) prog = compileProgram(coplaneVertex,coplaneGeometry,coplaneFragment,GL_TRIANGLES,GL_POINTS,"coplane",display,Coplane);
+    CASE(Copoint) prog = compileProgram(copointVertex,copointGeometry,copointFragment,GL_TRIANGLES,GL_POINTS,"copoint",display,Copoint);
+    CASE(Adplane) prog = compileProgram(adplaneVertex,adplaneGeometry,adplaneFragment,GL_POINTS,GL_POINTS,"adplane",display,Adplane);
+    CASE(Adpoint) prog = compileProgram(adpointVertex,adpointGeometry,adpointFragment,GL_POINTS,GL_POINTS,"adpoint",display,Adpoint);
+    CASE(Perplane) prog = compileProgram(perplaneVertex,perplaneGeometry,perplaneFragment,GL_TRIANGLES_ADJACENCY,GL_POINTS,"perplane",display,Perplane);
+    CASE(Perpoint) prog = compileProgram(perpointVertex,perpointGeometry,perpointFragment,GL_TRIANGLES,GL_POINTS,"perpoint",display,Perpoint);
+    CASE(Replane) prog = compileProgram(replaneVertex,replaneGeometry,replaneFragment,GL_POINTS,GL_POINTS,"replane",display,Replane);
+    CASE(Repoint) prog = compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",display,Repoint);
     DEFAULT(exitErrstr("unknown shader type\n");)
     code->handle = prog;
     for (int i = 0; i < 3; i++) code->vertex[i] = bufferVertex(i,shader);
@@ -423,13 +423,13 @@ void setupCode(enum Shader shader)
     glUseProgram(0);
 }
 
-void setupDisplay(int name)
+int setupDisplay(int name)
 {
-    struct Display *save = current;
-    int context = sizeDisplay();
-    current = enlocDisplay(1);
+    struct Display *save = current; // temporary change to current is ok
+    int sub = sizeDisplay();
+    current = enlocDisplay(1); // because no called functions depend on current
+    contextHandle = sub;
     displayName = name;
-    contextHandle = context;
     click = Init;
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -480,13 +480,14 @@ void setupDisplay(int name)
     for (int i = 0; i < 16; i++) displayMata[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatb[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     for (int i = 0; i < 16; i++) displayMatc[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    if (contextHandle == 0) for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
     current = save;
-    if (current == 0) for (int i = 0; i < 16; i++) affineMat[i] = (i / 4 == i % 4 ? 1.0 : 0.0);
+    return sub;
 }
 
-void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
+void updateBuffer(int ctx, int file, enum Data sub, int done, int todo, void *data)
 {
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayDisplayPoly(ctx,file,1)->buffer[sub];
     int client = buffer->client;
     int size = buffer->dimn*bufferType(buffer->type);
     done *= size; todo *= size;
@@ -529,7 +530,7 @@ void updateBuffer(int file, enum Data sub, int done, int todo, void *data)
 
 void *dndateBuffer(int file, enum Data sub, int done, int todo)
 {
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayDisplayPoly(0,file,1)->buffer[sub];
     int client = buffer->client;
     int base = bufferUntodo(file,sub,done);
     int size = bufferUntodo(file,sub,todo);
@@ -538,7 +539,7 @@ void *dndateBuffer(int file, enum Data sub, int done, int todo)
 
 void resetBuffer(int file, enum Data sub)
 {
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayDisplayPoly(0,file,1)->buffer[sub];
     int client = buffer->client;
     int lim = sizeRange(client);
     int len = sizeClient(client);
@@ -549,7 +550,7 @@ void resetBuffer(int file, enum Data sub)
 
 int sizeBuffer(int file, enum Data sub)
 {
-    struct Buffer *buffer = &arrayPoly(file,1)->buffer[sub];
+    struct Buffer *buffer = &arrayDisplayPoly(0,file,1)->buffer[sub];
     int client = buffer->client;
     int size = sizeClient(client);
     return bufferTodo(file,sub,size);
@@ -558,7 +559,7 @@ int sizeBuffer(int file, enum Data sub)
 void updateFile(int ctx, int sub, int cpy)
 {
     struct File *file = arrayDisplayPoly(ctx,sub,1);
-    struct File *copy = arrayPoly(cpy,1);
+    struct File *copy = arrayDisplayPoly(0,cpy,1);
     file->fixed = copy->fixed;
     file->last = copy->last;
     copymat(file->saved,copy->saved,4);
@@ -569,27 +570,19 @@ void updateFile(int ctx, int sub, int cpy)
     int size = sizeClient(client);
     int todo = bufferTodo(cpy, i, size);
     char *buf = arrayClient(client,0,size);
-    int save = contextHandle;
-    updateContext(ctx);
-    updateBuffer(sub, i, 0, todo, buf);
-    updateContext(save);}
+    updateBuffer(ctx,sub, i, 0, todo, buf);}
 }
 
-void updateTarget(int display, int file, int context)
+void updateTarget(int display, int file)
 {
     struct File *ptr = arrayDisplayPoly(display,file,1);
-    SWITCH(mode[Target],Plane) {
-    enum Usage usage = arrayShare(file,1)->usage;
-    ptr->fixed = !(usage==Scratch&&contextHandle==context);}
-    CASE(Polytope) ptr->fixed = 1;
-    CASE(Alternate) ptr->fixed = !(contextHandle==context);
+    struct Share *share = arrayShare(file,1);
+    SWITCH(mode[Target],Plane) ptr->fixed = !(share->usage==Scratch&&share->disp==display);
+    CASE(Polytope) ptr->fixed = !(file==qPoint)&&!(share->usage==Scratch&&share->file==file);
+    CASE(Alternate) ptr->fixed = !(display==contextHandle);
     CASE(Session) ptr->fixed = 0;
     DEFAULT(exitErrstr("target too line\n");)
 }
-/* Two calls to updateTarget (changes to affineMat) are the same as
-   just one, the last one, call to updateTarget (change to affineMat).
-   The call to updateAffine applies the last call to updateTarget
-   (change to affineMat).*/
 
 void updateAffine(int file)
 {

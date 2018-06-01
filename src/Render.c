@@ -207,7 +207,7 @@ enum Action dequeFilter(int state)
     int size = sizeReint(layer);
     int todo = bufferUnflat(file,data,size);
     int *buf = arrayReint(layer,0,size);
-    updateBuffer(file,data,0,todo,buf);
+    updateBuffer(contextHandle,file,data,0,todo,buf);
     delocReint(layer,size);}}
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     enqueDishader();
@@ -398,11 +398,11 @@ enum Action renderClient(int state)
     SWITCH(buffer[*i].type,GL_UNSIGNED_INT) {
         int result[done*dimn];
         glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, result);
-        updateBuffer(render->file,*i,0,done,result);}
+        updateBuffer(contextHandle,render->file,*i,0,done,result);}
     CASE(GL_FLOAT) {
         Myfloat result[done*dimn];
         glGetBufferSubData(GL_ARRAY_BUFFER, 0, size, result);
-        updateBuffer(render->file,*i,0,done,result);}
+        updateBuffer(contextHandle,render->file,*i,0,done,result);}
     DEFAULT(exitErrstr("unknown render type\n");)
     glBindBuffer(GL_ARRAY_BUFFER, 0);}
     return Advance;    
