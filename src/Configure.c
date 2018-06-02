@@ -36,6 +36,8 @@ void processAlias(int pos, int sup, int sub);
 int processIdent(int pos, enum Queue base, int sup, int *sub);
 void processError(int index);
 
+void inject(void);
+
 DECLARE_MSGSTR(PcsChar)
 DECLARE_SCAN(Pcs)
 
@@ -143,7 +145,7 @@ int processConfigure(int index)
 		usePcsFloat(); copyPcsCmdFloat(sizePcsCmdFloat(),floatpos,16);
 		*enlocPcsCommand(1) = configureMatrix;
 		DELOC}
-	pos = scanPcs(pattern,10,TEXT4("--inject"),FILLER6,Scans); if (pos>=0) {
+	pos = scanPcs(pattern,10,TEXT4("--option"),FILLER6,Scans); if (pos>=0) {
 		SKIP
 		usePcsChar(); copyOption(sizeOption(),charpos,sizePcsChar()-charpos);
 		*enlocOption(1) = '\n';
@@ -163,6 +165,20 @@ int processConfigure(int index)
 		else *arrayPcsOutput(j,1) = ofalpha(*arrayPcsOutput(i,1));}
 		if (k) *arrayPcsOutput(j,1) = ofalpha('\n');
 		unlocPcsOutput(sizePcsOutput()-j);
+		DELOC}
+	pos = scanPcs(pattern,27,TEXT4("--motion"),WHITE3,While,19,If,2,2,Int,Term,"0",
+		If,15,1,Text,"n",If,13,1,Text,"s",If,11,1,Text,"w",If,9,1,Text,"e",
+		If,7,1,Text,"u",If,5,1,Text,"d",If,3,1,Text,"l",If,1,1,Text,"r",Scans); if (pos >= 0) {
+		SKIP
+		for (int i = charpos, j = intpos; i < sizePcsChar(); i++) {
+		if (*arrayPcsChar(i,1) == '0' && j == sizePcsInt()) exitErrstr("pattern too impossible\n");
+		if (*arrayPcsChar(i,1) == '0' && i+1 == sizePcsInt()) exitErrstr("pattern too impossible\n");
+		int count = 1; if (*arrayPcsChar(i,1) == '0') {count = *arrayPcsInt(j,1); i++; j++;}
+		enum Motion motion = Motions;
+		SWITCH(*arrayPcsChar(i,1),'n') motion = North; CASE('s') motion = South; CASE('w') motion = West; CASE('e') motion = East;
+    	CASE('u') motion = Counter; CASE('d') motion = Wise; CASE('l') motion = Click; CASE('r') motion = Suspend;
+    	DEFAULT(exitErrstr("char too motion\n");)
+		*enlocPcsCmdInt(1) = count; *enlocPcsCmdByte(1) = ofmotion(motion); *enlocPcsCommand(1) = inject;}
 		DELOC}
 	pos = scanPcs(pattern,4,TEXT4("--yield"),Scans); if (pos>=0) {
 		SKIP

@@ -80,6 +80,7 @@ extern int alternate;
 extern int layer;
 extern struct Display *current;
 extern Myfloat affineMat[16];
+extern int context;
 extern const enum Shader dishader;
 extern const enum Shader pershader;
 extern const enum Data data;

@@ -380,6 +380,7 @@ enum Scan {
     Not, // mismatch discard and rewind to pass, or match to fail
     While, // match repeat, or mismatch discard and rewind, to pass
     Loop, // match repeat to pass
+    If, // match for first, or mismatch discard rewind for second
     Char, // match to pass
     White, // match to pass
     Text, // match to pass
@@ -525,6 +526,10 @@ int rescan##THD(struct Spoof *s, const char *pattern, int *index, int accum) \
     while (*index<match.idx && pos>=0) pos = rescan##THD(s,pattern+pos,index,pos);} \
     if (pos>=0) return pos; \
     break;} \
+    case (If): { /*match for first, or mismatch discard rewind for second*/ \
+    while (*index<match.idx && *index<match.alt && pos>=0) pos = rescan##THD(s,pattern+pos,index,pos); \
+    if (pos>=0) *index = match.idx; else *index = match.alt; \
+    return pos;} \
     case (Char): { /*match and consume to pass*/ \
     if (*pattern) pos += 1; \
     else {pos = -1; break;} \
@@ -579,6 +584,7 @@ int prescan##THD(struct Spoof *s, const char *pattern, int len, va_list args) \
     case (Not): match.idx = index + va_arg(args,int); break; \
     case (While): match.idx = index + va_arg(args,int); break; \
     case (Loop): match.idx = index + va_arg(args,int); match.alt = index + va_arg(args,int); break; \
+    case (If): match.idx = index + va_arg(args,int); match.alt = index + va_arg(args,int); break; \
     case (Char): break; \
     case (White): break; \
     case (Text): match.str = va_arg(args,const char *); break; \
@@ -736,7 +742,6 @@ void enque##THD##NAME(int file, int mask) { \
 extern struct Item item[Menus];
 extern int augpid[PROCESS_PID];
 extern int augpids;
-
 
 enum Motion motionof(char code);
 char alphaof(char code);

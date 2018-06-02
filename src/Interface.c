@@ -34,6 +34,7 @@ DEFINE_INDEX(Cmd)
 void inject(void)
 {
     char chr = *delocCmdInt(1);
+    updateContext(context);
     SWITCH(motionof(chr),North) compass(0.0,-COMPASS_DELTA);
     CASE(South) compass(0.0,COMPASS_DELTA);
     CASE(West) compass(-COMPASS_DELTA,0.0);
@@ -150,8 +151,7 @@ void file(void)
 
 void focus(void)
 {
-    int context = *delocCmdInt(1);
-    updateContext(context);
+    context = *delocCmdInt(1);
 }
 
 void transform(Myfloat *matrix, int file, int plane)

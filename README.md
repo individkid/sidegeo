@@ -112,8 +112,9 @@ For example, a whitespace delimited nonempty string optionally preceded by white
   * --color takes plane subscript decoration and transformation  
   * --action attaches Lua function to boundary to be activated by click  
   * --configure change behaviors by degree  
-  * --inject specifies command line option to inject  
+  * --option specifies command line option to inject  
   * --menu changes to menu item to inject to console  
+  * --motion mouse and roller motion and click to inject  
   * --bind binds Lua function to function key in console  
   * --yield allow other files and command line options to proceed  
   * --call takes Lua function and arguments to start  
@@ -192,8 +193,6 @@ The code is partitioned to the following files grouped by thread:
   * Haskell thread: Sculpt.hs Naive.hs Haskell.c  
   * Panel thread: Topology.fl Decorate.fl System.fl Fltk.cpp Panel.c
   * Other threads: Timewheel.c Lua.c Console.c Socket.c  
-
-TODO: call/schedule graph of functions with dependence on and changes to global current context
 
 This is covered by GNU GENERAL PUBLIC LICENSE https://github.com/individkid/sidegeo/blob/master/LICENSE
 
