@@ -85,6 +85,9 @@ void bringupBuiltin(void)
     };
 
     updateContext(0);
+    setupShare(msgstrCmdBuf("Debug",'0'),Draft,0,0);
+    setupTarget(0);
+    usedRelate(0);
     updateBuffer(0,0,PlaneBuf,0,NUM_PLANES,plane);
     updateBuffer(0,0,VersorBuf,0,NUM_PLANES,versor);
     updateBuffer(0,0,FaceSub,0,NUM_FACES,face);

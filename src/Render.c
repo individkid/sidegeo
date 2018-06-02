@@ -458,10 +458,8 @@ void enqueDishader(void)
 
 void enquePershader(void)
 {
-    if (layer != 0) exitErrstr("enque too layer\n");
     if (glfwGetTime() < RENDER_DELAY) return;
     glfwSetTime(0.0);
-    updateContext(0);
     for (int i = 0; i < sizeShare(); i++)
     enqueShader(pershader,i,0,renderPierce);
 }
