@@ -195,10 +195,11 @@ void enqueUniform(int context, enum Server server)
 
 enum Action dequeFilter(int state)
 {
+    int context = *deargCmdInt(1);
     int file = *deargCmdInt(1);
-    for (int context = 0; context < sizeDisplay(); context++) {
     if (state-- == 0) {
     int mask = 1<<context;
+    layer = uniqueLayer();
     enqueCmdEvent(file,mask,responseList,layer);
     return Continue;}
     if (state-- == 0) {
@@ -208,7 +209,7 @@ enum Action dequeFilter(int state)
     int todo = bufferUnflat(file,data,size);
     int *buf = arrayReint(layer,0,size);
     updateBuffer(contextHandle,file,data,0,todo,buf);
-    delocReint(layer,size);}}
+    delocReint(layer,size);}
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     enqueDishader();
     return Advance;
@@ -216,9 +217,11 @@ enum Action dequeFilter(int state)
 
 void enqueFilter(void)
 {
-    layer = uniqueLayer();
-    relocCmdInt(1); // file
-    enqueMachine(dequeFilter);    
+    int file = *delocCmdInt(1);
+    for (int context = 0; context < sizeDisplay(); context++) {
+    *enlocCmdInt(1) = context;
+    *enlocCmdInt(1) = file;
+    enqueMachine(dequeFilter);}
 }
 
 #define RENDER_DEARG \

@@ -288,6 +288,7 @@ enum Action manipulateClick(int state)
     if (relate->relate == plane)
     transform(matrix,relate->file,relate->plane);}
     // sideband msgstr --side responseProceed and wait
+    layer = uniqueLayer();
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--side %d",-1);
     for (int i = 1; i < augpids; i++) msgstrCmdConfigure(",%d",-1,augpid[i]);
@@ -437,7 +438,6 @@ void configurePlane(void)
     relocCmdInt(1); // versor
     relocCmdFloat(3); // plane vector
     *enlocCmdInt(1) = arrayShare(*ident,1)->pending;
-    layer = uniqueLayer();
     arrayShare(*ident,1)->pending += 1;
     enqueMachine(configureRefine);
 }
