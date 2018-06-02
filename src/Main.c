@@ -23,7 +23,6 @@ int alternate = 0; // which display to move to and from
 int layer = 0; // argument shared by command and commands it schedules
 struct Display *current = 0; // display currently in focus
 Myfloat affineMat[16] = {0}; // transformation state sent to uniform
-int context = 0; // which display to inject motion to
 
 int augpid[PROCESS_PID] = {0};
 int augpids = 0;
