@@ -431,35 +431,6 @@ struct Pack { // for Panel configuration
     int plane;
 };
 
-enum When {
-    Setv, // no response; just change value
-    Getv, // immediately schedule response with value
-    Call, // schedule response when value changes
-    Test}; // no response; just check value
-enum What {
-    Map, // from Haskell
-    Signal, // from Wave
-    Value, // from State
-    Element}; // from Buffer
-enum Where {
-    Skt, // Socket.c
-    Lua, // Lua.c
-    Cmd, // Command.c
-    Pnl}; // Panel.c
-struct Query {
-    enum When when;
-    int ival;
-    Myfloat fval;
-    enum What what;
-    enum Data data;
-    int context;
-    int index;
-    int sub;
-    int siz;
-    enum Where where;
-    int tag;
-};
-
 #define DECLARE_MSGSTR(NAME) \
 int msgstr##NAME(const char *fmt, int trm, ...);
 #define DEFINE_MSGSTR(NAME) \

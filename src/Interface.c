@@ -133,10 +133,8 @@ void display(void)
     current = save;
     for (int i = 0; i < sizeShare(); i++) {
     int sub = setupFile(new);
-    updateFile(new,sub,i);}
-    current = save;}
+    updateFile(new,sub,i);}}
     alternate = new;
-    updateContext(alternate);
 }
 
 void file(void)
@@ -329,7 +327,6 @@ enum Action sculptClick(int state)
     int len = lengthCmdByte(0,0)+1;
     int str = 0; deargCmdByte(len); str -= len;
     struct Share *share = arrayShare(file,1);
-    updateContext(0);
     if (state-- == 0) {
     layer = uniqueLayer();
     if (insertReint(layer) < 0) exitErrstr("reint too insert\n");
