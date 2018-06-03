@@ -187,7 +187,7 @@ enum Action dequeUniform(int state)
 
 void enqueUniform(int context, enum Server server)
 {
-    *enlocCmdInt(1) = contextHandle;
+    *enlocCmdInt(1) = context;
     *enlocCmdInt(1) = server;
     *enlocCmdInt(1) = 0;
     enqueMachine(dequeUniform);
