@@ -204,11 +204,10 @@ enum Action dequeFilter(int state)
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;
-    updateContext(context);
     int size = sizeReint(layer);
     int todo = bufferUnflat(file,data,size);
     int *buf = arrayReint(layer,0,size);
-    updateBuffer(contextHandle,file,data,0,todo,buf);
+    updateBuffer(context,file,data,0,todo,buf);
     delocReint(layer,size);}
     if (removeReint(layer) < 0) exitErrstr("reint too insert\n");
     enqueDishader();

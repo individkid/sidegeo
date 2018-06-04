@@ -336,7 +336,7 @@ enum Action sculptClick(int state)
     return Continue;}
     if (state-- == 0) {
     if (sizeReint(layer) == 0) return Defer;
-    enqueCmdLocate(file,sizeReint(layer),ptrReint(layer),responseLists,layer);
+    enqueCmdLocate(file,plane,sizeReint(layer),ptrReint(layer),responseLists,layer);
     return Continue;}
     if (sizeReint(layer) == 0) return Defer;
     *enlocCmdConfigurer(1) = share->ident;
@@ -487,8 +487,7 @@ void configurePoint(void)
 void configureInflate(void)
 {
     int ident = *delocCmdInt(1);
-    int file = -1; while (++file < sizeShare())
-    if (arrayShare(file,1)->ident == ident) break;
+    int file = fileSlot(ident);
     enqueCmdInflate(file,enqueFilter,file);
 }
 
