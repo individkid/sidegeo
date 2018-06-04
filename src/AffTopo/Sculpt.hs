@@ -128,7 +128,11 @@ handleOutputs a = do
  pokeArray ptr (map fromIntegral a)
 
 handleLocate :: Int -> [Int] -> State -> [Region]
-handleLocate = undefined -- TODO1 regions with given sidedness, excluding given plane
+handleLocate a b (State c _ _) = let
+ space = placeToSpace c
+ onsides = map Side b
+ offsides = replace a (notOfSide (onsides !! a)) onsides
+ in [(regionOfSides onsides space),(regionOfSides offsides space)]
 
 handleLocateA :: [Region] -> State -> [Int]
 handleLocateA = undefined -- TODO1 inside attachments
@@ -173,7 +177,7 @@ handleIndex :: Int -> State -> [Int]
 handleIndex = undefined -- TODO1 return indices of triples of boundary with previous boundaries
 
 handleState :: Event -> State -> IO State
-handleState Locate state = do -- of regions with given sidedness, ignoring sidedness wrt given plane, return attached planes on inside and outside
+handleState Locate state = do
  plane <- handleInput
  wrt <- handleInputs
  regions <- return (handleLocate plane wrt state)
@@ -181,62 +185,62 @@ handleState Locate state = do -- of regions with given sidedness, ignoring sided
  handleOutputs (handleLocateB regions state)
  handleInput >>= handleOutput
  return state
-handleState Fill state = do -- add to embed, region not in embed, attached as inside and outside, attached to plane
+handleState Fill state = do
  plane <- handleInput
  inside <- handleInputs
  outside <- handleInputs
  handleInput >>= handleOutput
  return (handleFill plane inside outside state)
-handleState Hollow state = do -- remove from embed, region in embed, attached as inside and outside, attached to plane
+handleState Hollow state = do
  plane <- handleInput
  inside <- handleInputs
  outside <- handleInputs
  handleInput >>= handleOutput
  return (handleHollow plane inside outside state)
-handleState Inflate state = do -- change embed to all inside regions
+handleState Inflate state = do
  handleInput >>= handleOutput
  return (handleInflate state)
-handleState Faces state = do -- faces on planes associated with mask with nonzero bitwise and with given
+handleState Faces state = do
  mask <- handleInput
  handleOutputs (handleFaces mask state)
  handleInput >>= handleOutput
  return state
-handleState Frames state = do -- frames on planes associated with mask with nonzero bitwise and with given
+handleState Frames state = do
  mask <- handleInput
  handleOutputs (handleFrames mask state)
  handleInput >>= handleOutput
  return state
-handleState Face state = do -- faces (plane sextuples) with given as base
+handleState Face state = do
  plane <- handleInput
  handleOutputs (handleFace plane state)
  handleInput >>= handleOutput
  return state
-handleState Frame state = do -- frames (locations in list of all triples) with given as base
+handleState Frame state = do
  plane <- handleInput
  handleOutputs (handleFrame plane state)
  handleInput >>= handleOutput
  return state
-handleState Get state = do -- get mask associated with given plane
+handleState Get state = do
  plane <- handleInput
  handleOutput (handleGet plane state)
  handleInput >>= handleOutput
  return state
-handleState Set state = do -- set mask associated with given plane
+handleState Set state = do
  plane <- handleInput
  mask <- handleInput
  handleInput >>= handleOutput
  return (handleSet plane mask state)
-handleState Divide state = do -- add or change plane such that all triples have given sidedness wrt the plane
+handleState Divide state = do
  plane <- handleInput
  wrt <- handleInputs
  handleInput >>= handleOutput
  return (handleDivide plane wrt state)
-handleState Vertex state = do -- triples of planes with given in each triple
+handleState Vertex state = do
  plane <- handleInput
  handleOutputs (handleVertex plane state)
  handleInput >>= handleOutput
  return state
-handleState Index state = do -- locations of triples with given in list of all triples
+handleState Index state = do
  plane <- handleInput
  handleOutputs (handleIndex plane state)
  handleInput >>= handleOutput
