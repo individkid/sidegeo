@@ -127,18 +127,19 @@ handleOutputs a = do
  ptr <- (outputC (fromIntegral (length a)))
  pokeArray ptr (map fromIntegral a)
 
-handleLocate :: Int -> [Int] -> State -> [Region]
-handleLocate a b (State c _ _) = let
- space = placeToSpace c
- onsides = map Side b
- offsides = replace a (notOfSide (onsides !! a)) onsides
- in [(regionOfSides onsides space),(regionOfSides offsides space)]
+handleLocateA :: [Boundary] -> Region -> Side -> Space -> [Int]
+handleLocateA a b c d = map (\(Boundary x) -> x) (filter (\x -> (regionWrtBoundary x b d) == c) a)
 
-handleLocateA :: [Region] -> State -> [Int]
-handleLocateA = undefined -- TODO1 inside attachments
+handleLocateB :: [Int] -> Space -> Region
+handleLocateB a b = let
+ sides = map Side a
+ in regionOfSides sides b
 
-handleLocateB :: [Region] -> State -> [Int]
-handleLocateB = undefined -- TODO1 outside attachments
+handleLocateC :: Boundary -> Region -> Space -> [Boundary]
+handleLocateC a b c = let
+ region = oppositeOfRegion [a] b c
+ bound = attachedBoundaries region c
+ in bound \\ [a]
 
 handleFill :: Int -> [Int] -> [Int] -> State -> State
 handleFill = undefined -- TODO1 add indicated embed
@@ -177,14 +178,17 @@ handleIndex :: Int -> State -> [Int]
 handleIndex = undefined -- TODO1 return indices of triples of boundary with previous boundaries
 
 handleState :: Event -> State -> IO State
-handleState Locate state = do
+handleState Locate (State place embed mask) = do
  plane <- handleInput
  wrt <- handleInputs
- regions <- return (handleLocate plane wrt state)
- handleOutputs (handleLocateA regions state)
- handleOutputs (handleLocateB regions state)
+ space <- return (placeToSpace place)
+ region <- return (handleLocateB wrt space)
+ bound <- return (Boundary plane)
+ bounds <- return (handleLocateC bound region space)
+ handleOutputs (handleLocateA bounds region (Side 0) space)
+ handleOutputs (handleLocateA bounds region (Side 1) space)
  handleInput >>= handleOutput
- return state
+ return (State place embed mask)
 handleState Fill state = do
  plane <- handleInput
  inside <- handleInputs

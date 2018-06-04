@@ -123,7 +123,7 @@ void display(void)
     int name = sizeCmdBuf();
     int len = lengthCmdByte(0,0);
     useCmdByte(); xferCmdBuf(len+1);
-    int new = setupDisplay(name);
+    int new = setupDisplay(name); // TODO2 use position and sizes from *arrayDisplay(alternate,1)
     for (enum Shader shader = 0; shader < Shaders; shader++) setupCode(new,shader);
     if (new > 0) {
     struct Display *save = current;
