@@ -134,15 +134,34 @@ handleLocate a b (State c _ _) = let
  region = regionOfSides sides space
  bound = Boundary a
  other = oppositeOfRegion [bound] region space
- bounds = ((attachedBoundaries region space) +\ (attachedBoundaries other space)) \\ [bound]
- result d = map (\(Boundary x) -> x) (filter (\x -> (regionWrtBoundary x region space) == (Side d)) bounds)
+ onbound = attachedBoundaries region space
+ offbound = attachedBoundaries other space
+ bounds = (onbound +\ offbound) \\ [bound]
+ regions d = filter (\x -> (regionWrtBoundary x region space) == (Side d)) bounds
+ result d = map (\(Boundary x) -> x) (regions d)
  in (result 0, result 1)
 
+handleFillG :: [Int] -> Int -> Place -> [Region]
+handleFillG b c d = let
+ bound = map Boundary b
+ sub = unsubSpace bound d
+ side = map (\_ -> Side c) bound
+ reg = regionOfSides side (placeToSpace sub)
+ embed = embedSpace [reg] sub
+ in takeRegions embed d
+
+handleFillF :: Int -> [Int] -> [Int] -> Place -> [Region]
+handleFillF a b c d = let
+ regs = attachedRegions [Boundary a] (placeToSpace d)
+ inregs = handleFillG b 0 d
+ outregs = handleFillG c 1 d
+ in (inregs +\ outregs) +\ regs
+
 handleFill :: Int -> [Int] -> [Int] -> State -> State
-handleFill = undefined -- TODO1 add indicated embed
+handleFill a b c (State d e f) = State d (e ++ (handleFillF a b c d)) f
 
 handleHollow :: Int -> [Int] -> [Int] -> State -> State
-handleHollow = undefined -- TODO1 remove indicated embed
+handleHollow a b c (State d e f) = State d (e \\ (handleFillF a b c d)) f
 
 handleInflate :: State -> State
 handleInflate = undefined -- TODO1 set embed to all inside regions
