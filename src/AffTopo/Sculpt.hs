@@ -164,7 +164,12 @@ handleHollow :: Int -> [Int] -> [Int] -> State -> State
 handleHollow a b c (State d e f) = State d (e \\ (handleFillF a b c d)) f
 
 handleInflate :: State -> State
-handleInflate = undefined -- TODO1 set embed to all inside regions
+handleInflate (State a b c) = let
+ regions = regionsOfPlace a
+ space = placeToSpace a
+ outside x = outsideOfRegionExists x space
+ embed = filter outside regions
+ in State a embed c
 
 handleFaces :: Int -> State -> [Int]
 handleFaces = undefined -- TODO1 return boundary sextuples
