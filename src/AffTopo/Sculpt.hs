@@ -127,19 +127,16 @@ handleOutputs a = do
  ptr <- (outputC (fromIntegral (length a)))
  pokeArray ptr (map fromIntegral a)
 
-handleLocateA :: [Boundary] -> Region -> Side -> Space -> [Int]
-handleLocateA a b c d = map (\(Boundary x) -> x) (filter (\x -> (regionWrtBoundary x b d) == c) a)
-
-handleLocateB :: [Int] -> Space -> Region
-handleLocateB a b = let
- sides = map Side a
- in regionOfSides sides b
-
-handleLocateC :: Boundary -> Region -> Space -> [Boundary]
-handleLocateC a b c = let
- region = oppositeOfRegion [a] b c
- bound = attachedBoundaries region c
- in bound \\ [a]
+handleLocate :: Int -> [Int] -> State -> ([Int],[Int])
+handleLocate a b (State c _ _) = let
+ space = placeToSpace c
+ sides = map Side b
+ region = regionOfSides sides space
+ bound = Boundary a
+ other = oppositeOfRegion [bound] region space
+ bounds = ((attachedBoundaries region space) +\ (attachedBoundaries other space)) \\ [bound]
+ result d = map (\(Boundary x) -> x) (filter (\x -> (regionWrtBoundary x region space) == (Side d)) bounds)
+ in (result 0, result 1)
 
 handleFill :: Int -> [Int] -> [Int] -> State -> State
 handleFill = undefined -- TODO1 add indicated embed
@@ -178,17 +175,13 @@ handleIndex :: Int -> State -> [Int]
 handleIndex = undefined -- TODO1 return indices of triples of boundary with previous boundaries
 
 handleState :: Event -> State -> IO State
-handleState Locate (State place embed mask) = do
+handleState Locate state = do
  plane <- handleInput
  wrt <- handleInputs
- space <- return (placeToSpace place)
- region <- return (handleLocateB wrt space)
- bound <- return (Boundary plane)
- bounds <- return (handleLocateC bound region space)
- handleOutputs (handleLocateA bounds region (Side 0) space)
- handleOutputs (handleLocateA bounds region (Side 1) space)
+ handleOutputs (fst (handleLocate plane wrt state))
+ handleOutputs (snd (handleLocate plane wrt state))
  handleInput >>= handleOutput
- return (State place embed mask)
+ return state
 handleState Fill state = do
  plane <- handleInput
  inside <- handleInputs
