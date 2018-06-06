@@ -24,6 +24,7 @@ import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.C.String
 import Foreign.Marshal.Array
+import Data.Bits ((.&.))
 import AffTopo.Naive
 
 foreign import ccall "event" eventC :: IO CInt
@@ -33,7 +34,7 @@ foreign import ccall "mapping" mappingC :: CInt -> CInt -> IO CInt
 foreign export ccall handleEvents :: IO Bool
 foreign export ccall handleEnum :: Ptr CChar -> IO CInt
 
-data State = State Place [Region] [Int]
+data State = State Place [Region] [(Boundary,Int)]
 
 data Event =
     Locate | -- inout(wrt), place: inout(polyant)
@@ -171,8 +172,13 @@ handleInflate (State a b c) = let
  embed = filter outside regions
  in State a embed c
 
+handleFacesF :: Place -> [Region] -> Boundary -> [Int]
+handleFacesF = undefined -- concat of sextuples with given boundary as base
+
 handleFaces :: Int -> State -> [Int]
-handleFaces = undefined -- TODO1 return boundary sextuples
+handleFaces a (State b c d) = let
+ bounds = domain (filter (\(_,x) -> (a .&. x) /= 0) d)
+ in concat (map (handleFacesF b c) bounds)
 
 handleFrames :: Int -> State -> [Int]
 handleFrames = undefined -- TODO1 return vertex index triples
