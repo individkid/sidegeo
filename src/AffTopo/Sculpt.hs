@@ -172,8 +172,17 @@ handleInflate (State a b c) = let
  embed = filter outside regions
  in State a embed c
 
+handleFacesG :: Boundary -> Place -> Region -> [Int]
+handleFacesG = undefined -- choose base segment and return sextuples of fan
+
 handleFacesF :: Place -> [Region] -> Boundary -> [Int]
-handleFacesF = undefined -- concat of sextuples with given boundary as base
+handleFacesF a b c = let -- concat of sextuples with given boundary as base
+ space = placeToSpace a
+ attached = attachedRegions [c] space
+ mapping = map (\x -> (x, oppositeOfRegion [c] x space)) attached
+ -- those of embed intersect attached whose neighbor is not in embed
+ regions = (preimage (attached \\ b) mapping) +\ b
+ in concat (map (handleFacesG c a) regions)
 
 handleFaces :: Int -> State -> [Int]
 handleFaces a (State b c d) = let
