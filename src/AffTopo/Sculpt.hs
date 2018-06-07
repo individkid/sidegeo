@@ -153,10 +153,12 @@ handleFillG b c d = let
 
 handleFillF :: Int -> [Int] -> [Int] -> Place -> [Region]
 handleFillF a b c d = let
- regs = attachedRegions [Boundary a] (placeToSpace d)
+ space = placeToSpace d
+ regs = attachedRegions [Boundary a] space
  inregs = handleFillG b 0 d
  outregs = handleFillG c 1 d
- in (inregs +\ outregs) +\ regs
+ inside x = not (outsideOfRegionExists x space)
+ in filter inside ((inregs +\ outregs) +\ regs)
 
 handleFill :: Int -> [Int] -> [Int] -> State -> State
 handleFill a b c (State d e f) = State d (e ++ (handleFillF a b c d)) f
@@ -172,8 +174,26 @@ handleInflate (State a b c) = let
  embed = filter outside regions
  in State a embed c
 
+handleFacesI :: Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]
+handleFacesI a b [c,d] [e,f] = let
+ sextuple = [a,b,c,d,e,f]
+ in map (\(Boundary x) -> x) sextuple
+
 handleFacesG :: Boundary -> Place -> Region -> [Int]
-handleFacesG = undefined -- choose base segment and return sextuples of fan
+handleFacesG a b c = let -- choose base segment and return sextuples of fan
+ section = sectionSpace a b
+ single = embedSpace [c] b
+ region = head (takeRegions single section)
+ corner = attachedFacets 2 region (placeToSpace section)
+ bound = head (head corner)
+ other [x,y]
+  | x == bound = y
+  | otherwise = x
+ either [x,y] = (x == bound) || (y == bound)
+ neither [x,y] = (x /= bound) && (y /= bound)
+ endpoint = map other (filter either corner)
+ apex = filter neither corner
+ in concat (map (handleFacesI a bound endpoint) apex)
 
 handleFacesF :: Place -> [Region] -> Boundary -> [Int]
 handleFacesF a b c = let -- concat of sextuples with given boundary as base
