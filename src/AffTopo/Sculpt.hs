@@ -230,29 +230,35 @@ handleFramesF [a,b,c,d,e,f] = let
 handleFramesF _ = undefined
 
 handleFrames :: Int -> State -> [Int]
-handleFrames a (State b c d) = let -- TODO1 return vertex index triples
+handleFrames a (State b c d) = let -- return vertex index triples
  bounds = handleFacesH a d
  in concat (map (handleFacesF b c handleFramesF) bounds)
 
 handleFace :: Int -> State -> [Int]
-handleFace = undefined -- TODO1 return boundary sextuples with given base plane
+handleFace a (State b c _) = concat (map (handleFacesF b c handleFacesI) [Boundary a]) -- return boundary sextuples with given base plane
 
 handleFrame :: Int -> State -> [Int]
-handleFrame = undefined -- TODO1 return vertex index triples with given base plane
+handleFrame a (State b c _) = concat (map (handleFacesF b c handleFramesF) [Boundary a]) -- return vertex index triples with given base plane
 
 handleGet :: Int -> State -> Int
-handleGet = undefined -- TODO1 return mask associated with given boundary
+handleGet a (State _ _ b) = head (image [Boundary a] b) -- return mask associated with given boundary
 
 handleSet :: Int -> Int -> State -> State
-handleSet = undefined -- TODO1 set mask associated with given boundary
+handleSet a b (State c d e) = let -- set mask associated with given boundary
+ bound = Boundary a
+ index = findIndex' (\(x,_) -> x == bound) e
+ in State c d (replace index (bound,b) e)
 
 handleDivide :: Int -> [Int] -> State -> State
 handleDivide = undefined -- TODO1 change or add given boundary with given vertex sidednesses
 
-handleVertex :: Int -> State -> [Int]
+handleVertexF :: Int -> [Int]
+handleVertexF = undefined -- return doubles of boundary with previous boundaries
+
+handleVertex :: Int -> [Int]
 handleVertex = undefined -- TODO1 return triples of boundary with previous boundaries
 
-handleIndex :: Int -> State -> [Int]
+handleIndex :: Int -> [Int]
 handleIndex = undefined -- TODO1 return indices of triples of boundary with previous boundaries
 
 handleState :: Event -> State -> IO State
@@ -315,12 +321,12 @@ handleState Divide state = do
  return (handleDivide plane wrt state)
 handleState Vertex state = do
  plane <- handleInput
- handleOutputs (handleVertex plane state)
+ handleOutputs (handleVertex plane)
  handleInput >>= handleOutput
  return state
 handleState Index state = do
  plane <- handleInput
- handleOutputs (handleIndex plane state)
+ handleOutputs (handleIndex plane)
  handleInput >>= handleOutput
  return state
 handleState _ state = return state
