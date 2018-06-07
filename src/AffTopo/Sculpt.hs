@@ -252,14 +252,17 @@ handleSet a b (State c d e) = let -- set mask associated with given boundary
 handleDivide :: Int -> [Int] -> State -> State
 handleDivide = undefined -- TODO1 change or add given boundary with given vertex sidednesses
 
-handleVertexF :: Int -> [Int]
-handleVertexF = undefined -- return doubles of boundary with previous boundaries
+handleVertexF :: Int -> State -> [[Int]]
+handleVertexF a (State b _ _) = let
+ pairs = subsets 2 ((indices (length b)) \\ [a])
+ triples = map (\x -> a:x) pairs
+ in map sort triples
 
-handleVertex :: Int -> [Int]
-handleVertex = undefined -- TODO1 return triples of boundary with previous boundaries
+handleVertex :: Int -> State -> [Int]
+handleVertex a b = concat (handleVertexF a b) -- return triples of boundary with given
 
-handleIndex :: Int -> [Int]
-handleIndex = undefined -- TODO1 return indices of triples of boundary with previous boundaries
+handleIndex :: Int -> State -> [Int]
+handleIndex a b = map handleFramesG (handleVertexF a b) -- return indices of triples of boundary with given
 
 handleState :: Event -> State -> IO State
 handleState Locate state = do
@@ -321,12 +324,12 @@ handleState Divide state = do
  return (handleDivide plane wrt state)
 handleState Vertex state = do
  plane <- handleInput
- handleOutputs (handleVertex plane)
+ handleOutputs (handleVertex plane state)
  handleInput >>= handleOutput
  return state
 handleState Index state = do
  plane <- handleInput
- handleOutputs (handleIndex plane)
+ handleOutputs (handleIndex plane state)
  handleInput >>= handleOutput
  return state
 handleState _ state = return state
