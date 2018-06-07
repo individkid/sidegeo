@@ -214,22 +214,17 @@ handleFaces a (State b c d) = let
  bounds = handleFacesH a d
  in concat (map (handleFacesF b c handleFacesI) bounds)
 
-handleFramesI :: [Int] -> Int
-handleFramesI [a,b,c] = (handleFramesH (c-1)) + (handleFramesH (b-1)) + a
-handleFramesI _ = undefined
-
-handleFramesH :: Int -> Int
-handleFramesH a
- | a < 1 = 0
- | otherwise = quot (a*(a+1)) 2
-
 -- 0,1,2
 -- 0,1,3 0,2,3 1,2,3
 -- 0,1,4 0,2,4 1,2,4 0,3,4 1,3,4 2,3,4
 -- 0,1,5 0,2,5 1,2,5 0,3,5 1,3,5 2,3,5 0,4,5 1,4,5 2,4,5 3,4,5
--- f(a,b,c) = sum(1..c-1)+sum(1..b-1)+a
+-- f(a,b,c) = tet(c-2)+tri(b-1)+a
+handleFramesH :: [Int] -> Int
+handleFramesH [a,b,c] = (figurate 3 (c-2)) + (figurate 2 (b-1)) + a
+handleFramesH _ = undefined
+
 handleFramesG :: [Int] -> Int
-handleFramesG a = handleFramesI (sort a)
+handleFramesG a = handleFramesH (sort a)
 
 handleFramesF :: [Boundary] -> [Int]
 handleFramesF [a,b,c,d,e,f] = let

@@ -223,6 +223,13 @@ nubF (a:b:c)
  | otherwise = a:(nubF (b:c))
 nubF a = a
 
+figurate :: Int -> Int -> Int
+figurate a b
+ | a < 0 || b < 0 = undefined
+ | b == 0 = 0
+ | a == 0 = 1
+ | otherwise = (figurate (a-1) b) + (figurate a (b-1))
+
 --
 -- now for something new
 --
