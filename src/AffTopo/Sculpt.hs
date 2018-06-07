@@ -219,17 +219,14 @@ handleFaces a (State b c d) = let
 -- 0,1,4 0,2,4 1,2,4 0,3,4 1,3,4 2,3,4
 -- 0,1,5 0,2,5 1,2,5 0,3,5 1,3,5 2,3,5 0,4,5 1,4,5 2,4,5 3,4,5
 -- f(a,b,c) = tet(c-2)+tri(b-1)+a
-handleFramesH :: [Int] -> Int
-handleFramesH [a,b,c] = (figurate 3 (c-2)) + (figurate 2 (b-1)) + a
-handleFramesH _ = undefined
-
 handleFramesG :: [Int] -> Int
-handleFramesG a = handleFramesH (sort a)
+handleFramesG [a,b,c] = (figurate 3 (c-2)) + (figurate 2 (b-1)) + a
+handleFramesG _ = undefined
 
 handleFramesF :: [Boundary] -> [Int]
 handleFramesF [a,b,c,d,e,f] = let
  triples = map2 (\(Boundary x) -> x) [[a,b,c],[a,b,d],[a,e,f]]
- in map handleFramesG triples
+ in map (handleFramesG . sort) triples
 handleFramesF _ = undefined
 
 handleFrames :: Int -> State -> [Int]
