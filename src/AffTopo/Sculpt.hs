@@ -25,6 +25,7 @@ import Foreign.C.Types
 import Foreign.C.String
 import Foreign.Marshal.Array
 import Data.Bits ((.&.))
+import Data.List (sort)
 import AffTopo.Naive
 
 foreign import ccall "event" eventC :: IO CInt
@@ -167,7 +168,7 @@ handleHollow :: Int -> [Int] -> [Int] -> State -> State
 handleHollow a b c (State d e f) = State d (e \\ (handleFillF a b c d)) f
 
 handleInflate :: State -> State
-handleInflate (State a b c) = let
+handleInflate (State a _ c) = let
  regions = regionsOfPlace a
  space = placeToSpace a
  outside x = outsideOfRegionExists x space
@@ -178,9 +179,13 @@ handleFacesI :: Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]
 handleFacesI a b [c,d] [e,f] = let
  sextuple = [a,b,c,d,e,f]
  in map (\(Boundary x) -> x) sextuple
+handleFacesI _ _ _ _ = undefined
 
-handleFacesG :: Boundary -> Place -> Region -> [Int]
-handleFacesG a b c = let -- choose base segment and return sextuples of fan
+handleFacesH :: Int -> [(Boundary,Int)] -> [Boundary]
+handleFacesH a b = domain (filter (\(_,x) -> (a .&. x) /= 0) b)
+
+handleFacesG :: Boundary -> Place -> (Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]) -> Region -> [Int]
+handleFacesG a b f c = let -- choose base segment and return sextuples of fan
  section = sectionSpace a b
  single = embedSpace [c] b
  region = head (takeRegions single section)
@@ -189,28 +194,56 @@ handleFacesG a b c = let -- choose base segment and return sextuples of fan
  other [x,y]
   | x == bound = y
   | otherwise = x
- either [x,y] = (x == bound) || (y == bound)
- neither [x,y] = (x /= bound) && (y /= bound)
- endpoint = map other (filter either corner)
- apex = filter neither corner
- in concat (map (handleFacesI a bound endpoint) apex)
+ other _ = undefined
+ either_ [x,y] = (x == bound) || (y == bound)
+ either_ _ = undefined
+ neither_ [x,y] = (x /= bound) && (y /= bound)
+ neither_ _ = undefined
+ endpoint = map other (filter either_ corner)
+ apex = filter neither_ corner
+ in concat (map (f a bound endpoint) apex)
 
-handleFacesF :: Place -> [Region] -> Boundary -> [Int]
-handleFacesF a b c = let -- concat of sextuples with given boundary as base
+handleFacesF :: Place -> [Region] -> (Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]) -> Boundary -> [Int]
+handleFacesF a b f c = let -- concat of sextuples with given boundary as base
  space = placeToSpace a
  attached = attachedRegions [c] space
  mapping = map (\x -> (x, oppositeOfRegion [c] x space)) attached
  -- those of embed intersect attached whose neighbor is not in embed
  regions = (preimage (attached \\ b) mapping) +\ b
- in concat (map (handleFacesG c a) regions)
+ in concat (map (handleFacesG c a f) regions)
 
 handleFaces :: Int -> State -> [Int]
 handleFaces a (State b c d) = let
- bounds = domain (filter (\(_,x) -> (a .&. x) /= 0) d)
- in concat (map (handleFacesF b c) bounds)
+ bounds = handleFacesH a d
+ in concat (map (handleFacesF b c handleFacesI) bounds)
+
+handleFramesI :: [Int] -> Int
+handleFramesI [a,b,c] = (handleFramesH (c-1)) + (handleFramesH (b-1)) + a
+handleFramesI _ = undefined
+
+handleFramesH :: Int -> Int
+handleFramesH a
+ | a < 1 = 0
+ | otherwise = quot (a*(a+1)) 2
+
+-- 0,1,2
+-- 0,1,3 0,2,3 1,2,3
+-- 0,1,4 0,2,4 1,2,4 0,3,4 1,3,4 2,3,4
+-- 0,1,5 0,2,5 1,2,5 0,3,5 1,3,5 2,3,5 0,4,5 1,4,5 2,4,5 3,4,5
+-- f(a,b,c) = sum(1..c-1)+sum(1..b-1)+a
+handleFramesG :: [Int] -> Int
+handleFramesG a = handleFramesI (sort a)
+
+handleFramesF :: Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]
+handleFramesF a b [c,d] [e,f] = let
+ triples = map2 (\(Boundary x) -> x) [[a,b,c],[a,b,d],[a,e,f]]
+ in map handleFramesG triples
+handleFramesF _ _ _ _ = undefined
 
 handleFrames :: Int -> State -> [Int]
-handleFrames = undefined -- TODO1 return vertex index triples
+handleFrames a (State b c d) = let -- TODO1 return vertex index triples
+ bounds = handleFacesH a d
+ in concat (map (handleFacesF b c handleFramesF) bounds)
 
 handleFace :: Int -> State -> [Int]
 handleFace = undefined -- TODO1 return boundary sextuples with given base plane
