@@ -175,16 +175,13 @@ handleInflate (State a _ c) = let
  embed = filter outside regions
  in State a embed c
 
-handleFacesI :: Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]
-handleFacesI a b [c,d] [e,f] = let
- sextuple = [a,b,c,d,e,f]
- in map (\(Boundary x) -> x) sextuple
-handleFacesI _ _ _ _ = undefined
+handleFacesI :: [Boundary] -> [Int]
+handleFacesI = map (\(Boundary x) -> x)
 
 handleFacesH :: Int -> [(Boundary,Int)] -> [Boundary]
 handleFacesH a b = domain (filter (\(_,x) -> (a .&. x) /= 0) b)
 
-handleFacesG :: Boundary -> Place -> (Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]) -> Region -> [Int]
+handleFacesG :: Boundary -> Place -> ([Boundary] -> [Int]) -> Region -> [Int]
 handleFacesG a b f c = let -- choose base segment and return sextuples of fan
  section = sectionSpace a b
  single = embedSpace [c] b
@@ -201,9 +198,9 @@ handleFacesG a b f c = let -- choose base segment and return sextuples of fan
  neither_ _ = undefined
  endpoint = map other (filter either_ corner)
  apex = filter neither_ corner
- in concat (map (f a bound endpoint) apex)
+ in concat (map (f . (append (concat [[a],[bound],endpoint]))) apex)
 
-handleFacesF :: Place -> [Region] -> (Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]) -> Boundary -> [Int]
+handleFacesF :: Place -> [Region] -> ([Boundary] -> [Int]) -> Boundary -> [Int]
 handleFacesF a b f c = let -- concat of sextuples with given boundary as base
  space = placeToSpace a
  attached = attachedRegions [c] space
@@ -234,11 +231,11 @@ handleFramesH a
 handleFramesG :: [Int] -> Int
 handleFramesG a = handleFramesI (sort a)
 
-handleFramesF :: Boundary -> Boundary -> [Boundary] -> [Boundary] -> [Int]
-handleFramesF a b [c,d] [e,f] = let
+handleFramesF :: [Boundary] -> [Int]
+handleFramesF [a,b,c,d,e,f] = let
  triples = map2 (\(Boundary x) -> x) [[a,b,c],[a,b,d],[a,e,f]]
  in map handleFramesG triples
-handleFramesF _ _ _ _ = undefined
+handleFramesF _ = undefined
 
 handleFrames :: Int -> State -> [Int]
 handleFrames a (State b c d) = let -- TODO1 return vertex index triples
