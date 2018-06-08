@@ -250,7 +250,56 @@ handleSet a b (State c d e) = let -- set mask associated with given boundary
  in State c d (replace index (bound,b) e)
 
 handleDivide :: Int -> [Int] -> State -> State
-handleDivide = undefined -- TODO1 change or add given boundary with given vertex sidednesses
+handleDivide a b (State c d e) = let -- change or add given boundary with given vertex sidednesses
+ boundary = Boundary a
+ sides = map Side b
+ boundaries = boundariesOfPlace c
+ vertices = map sort (subsets 3 boundaries)
+ triples = map2 (\(Boundary x) -> x) vertices
+ sortable = map handleFramesG triples
+ sorted = sort (zip sortable vertices)
+ -- find map from boundary triple to sidedness
+ mapping = map (\((_,x),y) -> (x,y)) (zip sorted sides)
+ -- find subspace with given plane missing
+ -- add mask if plane already missing
+ (subspace,masks) = handleDivideF boundary c e
+ subregions = regionsOfPlace subspace
+ -- find regions with vertex facets on both sides
+ regions = filter (handleDivideG mapping subspace) subregions
+ -- take embed to subspace
+ embed = embedSpace d c
+ embeds = takeRegions embed subspace
+ -- divide those regions
+ degen = embedSpace regions subspace
+ divided = divideSpace boundary degen subspace
+ -- find vertex without added boundary
+ vertex = find' (\x -> not (any (\y -> y == boundary) x)) vertices
+ side = head (image [vertex] mapping)
+ -- choose divided that puts vertex on correct side
+ chosen = handleDivideH boundary vertex side divided
+ -- take embed from subspace to divided
+ regen = embedSpace embeds subspace
+ taken = takeRegions regen chosen
+ in State chosen taken masks
+
+handleDivideF :: Boundary -> Place -> [(Boundary,Int)] -> (Place, [(Boundary,Int)])
+handleDivideF a b c
+ | a > bound = undefined -- TODO2 return error from handleEvents
+ | a < bound = (subSpace a b, c)
+ | otherwise = (b, append c [(a,1)]) where
+ bound = Boundary (length b)
+
+handleDivideG :: [([Boundary],Side)] -> Place -> Region -> Bool
+handleDivideG a b c = let
+ corners = attachedFacets 3 c (placeToSpace b)
+ side y = any (\x -> (head (image [x] a)) == y) corners
+ in (side (Side 0)) && (side (Side 1))
+
+handleDivideH :: Boundary -> [Boundary] -> Side -> [Place] -> Place
+handleDivideH a b c [d,e]
+ | (vertexWrtBoundary a b (placeToSpace d)) == c = d
+ | otherwise = e
+handleDivideH _ _ _ _ = undefined
 
 handleVertexF :: Int -> State -> [[Int]]
 handleVertexF a (State b _ _) = let
