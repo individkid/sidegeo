@@ -37,6 +37,7 @@ int processIdent(int pos, enum Queue base, int sup, int *sub);
 void processError(int index);
 
 void inject(void);
+void focus(void);
 
 DECLARE_MSGSTR(PcsChar)
 DECLARE_SCAN(Pcs)
@@ -203,6 +204,12 @@ int processConfigure(int index)
 		SKIP
 		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos+augpids,1); // layer
 		*enlocPcsCommand(1) = responseProceed;
+		DELOC}
+    pos = scanPcs(pattern,25,TEXT4("--side"),INT4,Loop,8,augpids-1,TEXT4(","),INT4,TEXT4("text"),INT4,Scans);
+    if (pos>=0 && intncmp(arrayPcsInt(intpos,augpids),augpid,augpids)==0) {
+		SKIP
+		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos+augpids,1); // context
+		*enlocPcsCommand(1) = focus;
 		DELOC}
 	pos = scanPcs(pattern,10,TEXT4("-"),FILLER6,Scans); if (pos>=0) {
 		DELOC}

@@ -235,10 +235,10 @@ handleFrames a (State b c d) = let -- return vertex index triples
  in concat (map (handleFacesF b c handleFramesF) bounds)
 
 handleFace :: Int -> State -> [Int]
-handleFace a (State b c _) = concat (map (handleFacesF b c handleFacesI) [Boundary a]) -- return boundary sextuples with given base plane
+handleFace a (State b c _) = concat (map (handleFacesF b c handleFacesI) [Boundary a])
 
 handleFrame :: Int -> State -> [Int]
-handleFrame a (State b c _) = concat (map (handleFacesF b c handleFramesF) [Boundary a]) -- return vertex index triples with given base plane
+handleFrame a (State b c _) = concat (map (handleFacesF b c handleFramesF) [Boundary a])
 
 handleGet :: Int -> State -> Int
 handleGet a (State _ _ b) = head (image [Boundary a] b) -- return mask associated with given boundary
@@ -249,8 +249,8 @@ handleSet a b (State c d e) = let -- set mask associated with given boundary
  index = findIndex' (\(x,_) -> x == bound) e
  in State c d (replace index (bound,b) e)
 
-handleDivide :: Int -> [Int] -> State -> State
-handleDivide a b (State c d e) = let -- change or add given boundary with given vertex sidednesses
+handleDivide :: Int -> Int -> [Int] -> State -> State
+handleDivide a m b (State c d e) = let -- change or add given boundary with given vertex sidednesses
  boundary = Boundary a
  sides = map Side b
  boundaries = boundariesOfPlace c
@@ -262,7 +262,7 @@ handleDivide a b (State c d e) = let -- change or add given boundary with given 
  mapping = map (\((_,x),y) -> (x,y)) (zip sorted sides)
  -- find subspace with given plane missing
  -- add mask if plane already missing
- (subspace,masks) = handleDivideF boundary c e
+ (subspace,masks) = handleDivideF boundary m c e
  subregions = regionsOfPlace subspace
  -- find regions with vertex facets on both sides
  regions = filter (handleDivideG mapping subspace) subregions
@@ -282,11 +282,12 @@ handleDivide a b (State c d e) = let -- change or add given boundary with given 
  taken = takeRegions regen chosen
  in State chosen taken masks
 
-handleDivideF :: Boundary -> Place -> [(Boundary,Int)] -> (Place, [(Boundary,Int)])
-handleDivideF a b c
+handleDivideF :: Boundary -> Int -> Place -> [(Boundary,Int)] -> (Place, [(Boundary,Int)])
+handleDivideF a m b c
  | a > bound = undefined -- TODO2 return error from handleEvents
  | a < bound = (subSpace a b, c)
- | otherwise = (b, append c [(a,1)]) where
+ -- TODO2 use given mask
+ | otherwise = (b, append c [(a,m)]) where
  bound = Boundary (length b)
 
 handleDivideG :: [([Boundary],Side)] -> Place -> Region -> Bool
@@ -368,9 +369,10 @@ handleState Set state = do
  return (handleSet plane mask state)
 handleState Divide state = do
  plane <- handleInput
+ mask <- handleInput
  wrt <- handleInputs
  handleInput >>= handleOutput
- return (handleDivide plane wrt state)
+ return (handleDivide plane mask wrt state)
 handleState Vertex state = do
  plane <- handleInput
  handleOutputs (handleVertex plane state)

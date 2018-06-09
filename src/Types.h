@@ -598,6 +598,20 @@ void enque##THD##EVENT(int file, int plane, int len, struct QueueBase *ptr, Comm
     *enloc##THD##HsCmd(1) = cmd; \
     *enloc##THD##Event(1) = EVENT; \
 }
+#define DECLARE_EVENT_2IN_1INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int mask, int len, struct QueueBase *ptr, Command cmd, int arg);
+#define DEFINE_EVENT_2IN_1INS_1TAG(THD,EVENT) \
+void enque##THD##EVENT(int file, int plane, int mask, int len, struct QueueBase *ptr, Command cmd, int arg) { \
+    *enloc##THD##HsInt(1) = file; \
+    *enloc##THD##HsInt(1) = plane; \
+    *enloc##THD##HsInt(1) = mask; \
+    *enloc##THD##HsInt(1) = len; \
+    useQueueBase(ptr); xfer##THD##HsInt(len); \
+    *enloc##THD##HsInt(1) = arg; \
+    *enloc##THD##HsPtr(1) = ptrHs##THD##Int(); \
+    *enloc##THD##HsCmd(1) = cmd; \
+    *enloc##THD##Event(1) = EVENT; \
+}
 #define DECLARE_EVENT_1IN_2INS_1TAG(THD,EVENT) \
 void enque##THD##EVENT(int file, int plane, int len0, int len1, struct QueueBase *ptr, Command cmd, int arg);
 #define DEFINE_EVENT_1IN_2INS_1TAG(THD,EVENT) \
@@ -666,7 +680,7 @@ void enque##THD##NAME(int file, int mask) { \
 #define DECLARE_GET(THD) DECLARE_EVENT_1IN_1TAG(THD,Get)
 #define DECLARE_SET(THD) DECLARE_EVENT_2IN_1TAG(THD,Set)
 #define DECLARE_FILTER(THD) DECLARE_EVENT_1IN_1TAG(THD,Filter)
-#define DECLARE_DIVIDE(THD) DECLARE_EVENT_1IN_1INS_1TAG(THD,Divide)
+#define DECLARE_DIVIDE(THD) DECLARE_EVENT_2IN_1INS_1TAG(THD,Divide)
 #define DECLARE_VERTEX(THD) DECLARE_EVENT_1IN_1TAG(THD,Vertex)
 #define DECLARE_INDEX(THD) DECLARE_EVENT_1IN_1TAG(THD,Index)
 #define DECLARE_CLOSE(THD) DECLARE_EVENT_1IN(THD,Filter,Close)
@@ -682,7 +696,7 @@ void enque##THD##NAME(int file, int mask) { \
 #define DEFINE_GET(THD) DEFINE_EVENT_1IN_1TAG(THD,Get)
 #define DEFINE_SET(THD) DEFINE_EVENT_2IN_1TAG(THD,Set)
 #define DEFINE_FILTER(THD) DEFINE_EVENT_1IN_1TAG(THD,Filter)
-#define DEFINE_DIVIDE(THD) DEFINE_EVENT_1IN_1INS_1TAG(THD,Divide)
+#define DEFINE_DIVIDE(THD) DEFINE_EVENT_2IN_1INS_1TAG(THD,Divide)
 #define DEFINE_VERTEX(THD) DEFINE_EVENT_1IN_1TAG(THD,Vertex)
 #define DEFINE_INDEX(THD) DEFINE_EVENT_1IN_1TAG(THD,Index)
 #define DEFINE_CLOSE(THD) DEFINE_EVENT_1IN(THD,Filter,Close)

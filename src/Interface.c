@@ -153,6 +153,11 @@ void focus(void)
     alternate = *delocCmdInt(1);
 }
 
+void context(void)
+{
+    override = *delocCmdInt(1);
+}
+
 void transform(Myfloat *matrix, int file, int plane)
 {
     Myfloat *vec = dndateBuffer(file,PlaneBuf,plane,1);
@@ -290,7 +295,7 @@ enum Action manipulateClick(int state)
     // sideband msgstr --side responseProceed and wait
     layer = uniqueLayer();
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("--side %d",-1);
+    msgstrCmdConfigure("--side %d",-1,augpid[0]);
     for (int i = 1; i < augpids; i++) msgstrCmdConfigure(",%d",-1,augpid[i]);
     msgstrCmdConfigure(" mark %d",'\n',layer);
     *enlocReint(layer,1) = 0;
@@ -356,9 +361,10 @@ enum Action configureRefine(int state)
 {
     int plane = *deargCmdInt(1);
     int file = *deargCmdInt(1);
+    int context = *deargCmdInt(1);
     int vsr = 0; deargCmdInt(1); vsr -= 1; // versor
-    int vec = 0; deargCmdFloat(1); vec -= 3; // plane
-    int pending = *deargCmdInt(1); vsr -= 1;
+    int vec = 0; deargCmdFloat(1); vec -= 3; vsr -= 3; // plane
+    int pending = *deargCmdInt(1); vec -= 1; vsr -= 1;
     struct Share *share = arrayShare(file,1);
     // wait for lock on file shared struct
     if (share->complete+1 < pending) return Defer;
@@ -415,7 +421,7 @@ enum Action configureRefine(int state)
     updateBuffer(0,file,PointBuf,index,1,point);}
     unlocReint(layer,len);
     share->points += len;
-    enqueCmdDivide(file,plane,sizeReint(layer),ptrReint(layer),responseProceed,layer);
+    enqueCmdDivide(file,plane,1<<context,sizeReint(layer),ptrReint(layer),responseProceed,layer);
     *enlocReint(layer,1) = 0;
     return Continue;}
     // wait for proceed response
@@ -435,6 +441,7 @@ void configurePlane(void)
     relocCmdInt(1); // plane subscript
     int *ident = relocCmdInt(1);
     *ident = fileSlot(*ident);
+    *enlocCmdInt(1) = override; override = 0;
     relocCmdInt(1); // versor
     relocCmdFloat(3); // plane vector
     *enlocCmdInt(1) = arrayShare(*ident,1)->pending;

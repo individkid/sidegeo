@@ -20,6 +20,7 @@
 
 enum Menu mode[Modes] = INIT; // sync to mark in Console.c
 int alternate = 0; // which display to move to and from
+int override = 0; // which display for new planes
 int layer = 0; // argument shared by command and commands it schedules
 struct Display *current = 0; // display currently in focus
 Myfloat affineMat[16] = {0}; // transformation state sent to uniform

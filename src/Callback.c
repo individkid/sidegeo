@@ -93,6 +93,11 @@ void leftRefine(void)
     tweakvec(v,1.0,1.0,3);
     int versor;
     basearrow(u,v,&versor,basisMat,3);
+    if (contextHandle != 0) {
+    *enlocCmdConfigurer(1) = qPos;
+    msgstrCmdConfigure("--side %d",-1,augpid[0]);
+    for (int i = 1; i < augpids; i++) msgstrCmdConfigure(",%d",-1,augpid[i]);
+    msgstrCmdConfigure(" text %d",' ',contextHandle);}
     *enlocCmdConfigurer(1) = qPos;
     msgstrCmdConfigure("--plane _ %d %f %f %f",'\n',versor,u[0],u[1],u[2]);
 }
@@ -126,9 +131,9 @@ void leftManipulate(void)
     Myfloat matrix[16];
     jumpmat(invmat(copymat(matrix,share->saved,4),4),affineMat,4);
     *enlocCmdConfigurer(1) = share->ident;
-    msgstrCmdConfigure("--side %d",-1);
+    msgstrCmdConfigure("--side %d",-1,augpid[0]);
     for (int i = 1; i < augpids; i++) msgstrCmdConfigure(",%d",-1,augpid[i]);
-    msgstrCmdConfigure(" skip",'\n');
+    msgstrCmdConfigure(" skip",' ');
     *enlocCmdConfigurer(1) = share->ident;
     msgstrCmdConfigure("--matrix",-1);
     for (int i = 0; i < 16; i++) msgstrCmdConfigure(" %f",matrix[i]);
@@ -276,7 +281,7 @@ void displayClose(GLFWwindow* ptr)
     updateDisplay(ptr);
     if (contextHandle == 0) {
     enqueCommand(0); return;}
-    alternate = 0;
+    if (alternate == contextHandle) alternate = 0;
     displayHandle = 0;
     for (int file = 0; file < sizeShare(); file++) {
     *enlocCmdFunc(1) = moveHub;

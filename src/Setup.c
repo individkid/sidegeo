@@ -682,7 +682,6 @@ void updateContext(int sub)
 {
     if (current == 0) exitErrstr("display too current\n");
     if (sub == contextHandle) return;
-    if (sub == 0) alternate = contextHandle;
     save(); current = arrayDisplay(sub,1); restore(); target();
     if (sub != contextHandle) exitErrstr("display too context\n");
     glfwMakeContextCurrent(displayHandle);

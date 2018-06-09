@@ -77,6 +77,7 @@
 
 extern enum Menu mode[Modes];
 extern int alternate;
+extern int override;
 extern int layer;
 extern struct Display *current;
 extern Myfloat affineMat[16];
