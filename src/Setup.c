@@ -445,7 +445,12 @@ int setupDisplay(int name)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    displayHandle = glfwCreateWindow(800, 600, stringCmdBuf(displayName,0), NULL, NULL);
+    if (sub == 0) displayHandle = glfwCreateWindow(800, 600, stringCmdBuf(displayName,0), NULL, NULL);
+    else {int xpos = 0; int ypos = 0; int xsiz = 0; int ysiz = 0;
+    glfwGetWindowPos(arrayDisplay(alternate,1)->handle,&xpos,&ypos);
+    glfwGetWindowSize(arrayDisplay(alternate,1)->handle,&xsiz,&ysiz);
+    displayHandle = glfwCreateWindow(xsiz, ysiz, stringCmdBuf(displayName,0), NULL, NULL);
+    glfwSetWindowPos(displayHandle,xpos,ypos);}
     if (!displayHandle) exitErrstr("could not create display\n");
 #ifdef __linux__
     screenHandle = glfwGetX11Display();
