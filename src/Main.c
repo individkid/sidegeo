@@ -82,7 +82,6 @@ int main(int argc, char **argv)
 
     sigset_t sigs = {0};
     sigaddset(&sigs, SIGUSR1);
-    sigaddset(&sigs, SIGUSR2);
     sigprocmask(SIG_BLOCK,&sigs,0);
 
     createCmnHaskells(0);

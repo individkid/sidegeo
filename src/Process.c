@@ -272,13 +272,13 @@ int processIdent(int pos, enum Queue base, int sup, int *sub)
 
 int processName(const void *left, const void *right)
 {
-    return strcmp(stringPcsBuf(void2int(left),0),stringPcsBuf(void2int(right),0));
+    return strcmp(stringPcsBuf(compName(left),0),stringPcsBuf(compName(right),0));
 }
 
 int processSuffix(const void *left, const void *right)
 {
-    int lpos = void2int(left);
-    int rpos = void2int(right);
+    int lpos = compName(left);
+    int rpos = compName(right);
     int llen = lengthPcsBuf(lpos,0);
     int rlen = lengthPcsBuf(rpos,0);
     int len = (llen < rlen ? llen : rlen);
@@ -287,8 +287,8 @@ int processSuffix(const void *left, const void *right)
 
 int processPerfile(const void *left, const void *right)
 {
-    struct Ident lidt = *arrayIdent(void2int(left),1);
-    struct Ident ridt = *arrayIdent(void2int(right),1);
+    struct Ident lidt = *arrayIdent(compName(left),1);
+    struct Ident ridt = *arrayIdent(compName(right),1);
     int diff = lidt.idx-ridt.idx;
     if (diff) return diff;
     return strcmp(stringPcsBuf(lidt.pos,0),stringPcsBuf(ridt.pos,0));

@@ -184,7 +184,8 @@ EXTERNC int find##NAME(KEY *key); \
 EXTERNC int choose##NAME(KEY *key); \
 EXTERNC int insert##NAME(KEY key); \
 EXTERNC int remove##NAME(KEY key); \
-EXTERNC VAL *cast##NAME(KEY key);
+EXTERNC VAL *cast##NAME(KEY key); \
+EXTERNC KEY comp##NAME(const void *ptr);
 
 #define DECLARE_TRUE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
@@ -209,7 +210,8 @@ EXTERNC int find##NAME(int idx,KEY *key); \
 EXTERNC int choose##NAME(int idx,KEY *key); \
 EXTERNC int insert##NAME(int idx,KEY key); \
 EXTERNC int remove##NAME(int idx,KEY key); \
-EXTERNC VAL *cast##NAME(int idx,KEY key);
+EXTERNC VAL *cast##NAME(int idx,KEY key); \
+EXTERNC KEY comp##NAME(const void *ptr);
 
 #ifdef __cplusplus
 
@@ -1317,6 +1319,11 @@ template<class KEY, class VAL> struct QueueTree {
         if (found == rbop.nil) exitErrstr("cast too found\n");
         return &found->val;
     }
+    static KEY comp(const void *ptr)
+    {
+        Rbtree<KEY,VAL> *key = (Rbtree<KEY,VAL> *)ptr;
+        return key->key;
+    }
 };
 
 #define DEFINE_TREE(NAME,KEY,VAL) \
@@ -1329,7 +1336,8 @@ extern "C" int find##NAME(KEY *key) {return NAME##Inst.find(key);} \
 extern "C" int choose##NAME(KEY *key) {return NAME##Inst.choose(key);} \
 extern "C" int insert##NAME(KEY key) {return NAME##Inst.insert(key);} \
 extern "C" int remove##NAME(KEY key) {return NAME##Inst.remove(key);} \
-extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);}
+extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);} \
+extern "C" KEY comp##NAME(const void *ptr) {return QueueTree<KEY,VAL>::comp(ptr);}
 
 template<class KEY, class VAL> struct QueueTrue {
     QueueTree<KEY,QueueStruct<VAL> > tree;
@@ -1424,7 +1432,8 @@ extern "C" int find##NAME(int idx,KEY *key) {return NAME##Inst.meta.array(idx,1)
 extern "C" int choose##NAME(int idx,KEY *key) {return NAME##Inst.meta.array(idx,1)->choose(key);} \
 extern "C" int insert##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->insert(key);} \
 extern "C" int remove##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->remove(key);} \
-extern "C" VAL *cast##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->cast(key);}
+extern "C" VAL *cast##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->cast(key);} \
+extern "C" KEY comp##NAME(const void *ptr) {return QueueTree<KEY,VAL>::comp(ptr);}
 
 #endif // __cplusplus
 

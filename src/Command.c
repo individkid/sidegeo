@@ -91,7 +91,7 @@ void commandBefore()
     msgstrCmdByte("Sculpt",0);
     enqueCommand(display); // main display
 #ifdef BRINGUP
-    enqueCommand(&bringupBuiltin);
+    // enqueCommand(&bringupBuiltin);
 #endif
 }
 
