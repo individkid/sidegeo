@@ -310,7 +310,7 @@ void processBefore(void)
     unlocPcsChar(donesiz);
     int pos = sizePcsChar(); msgstrPcsChar("_",0); struct Ident ident = {0};
     int sub = 0; int ret = processIdent(pos,Windows,0,&sub); delocPcsChar(sizePcsChar()-pos);
-    if (ret != 0 || sub != 0) exitErrstr("before too zero\n");
+    if (ret >= 0 || sub != 0) exitErrstr("before too zero\n");
     if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("mutex init failed: %s\n",strerror(errno));
     if (pthread_cond_init(&cond,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
 }

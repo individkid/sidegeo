@@ -1,4 +1,7 @@
-all : clean build
+all : clean build test
+
+test :
+	./dist/build/sculpt/sculpt -o cfg/test.--
 
 src/%.cpp : src/%.fl
 	cp $< $@
