@@ -363,7 +363,8 @@ void timewheelChange(struct Change *change)
 
 void timewheelBefore(void)
 {
-    if (sizeof(paFloat32) != sizeof(Myfloat)) exitErrstr("pafloat too sizeof\n");
+    // TODO convert Myfloat to paFloat32 where necessary
+    // if (sizeof(paFloat32) != sizeof(Myfloat)) exitErrstr("pafloat too sizeof\n");
     struct timeval tv;
     if (gettimeofday(&tv,NULL) < 0) exitErrstr("time too get\n");
     timeBase = tv.tv_sec;

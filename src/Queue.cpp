@@ -18,6 +18,8 @@
 
 #include "Queue.h"
 
+const char *carg = 0; // argument to constructors
+
 EXTERNCBEGIN
 
 struct termios savedTermios = {0}; // for restoring from non canonical unechoed io

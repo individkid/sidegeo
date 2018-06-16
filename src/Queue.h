@@ -215,6 +215,8 @@ EXTERNC KEY comp##NAME(const void *ptr);
 
 #ifdef __cplusplus
 
+extern const char *carg;
+
 struct QueueBase {
     int flag;
     QueueBase *next;
@@ -637,6 +639,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
     TYPE *limit;
     TYPE *head;
     TYPE *tail;
+    const char *name;
     QueueStruct()
     {
         flag = 0;
@@ -647,6 +650,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
         head = 0;
         tail = 0;
         next = 0;
+        name = carg;
     }
     QueueStruct(QueueBase *ptr, int fl = 0)
     {
@@ -659,6 +663,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
         tail = 0;
         ptr->next = this;
         next = 0;
+        name = carg;
     }
     QueueStruct(QueueMutex *ptr, int fl = 0)
     {
@@ -671,6 +676,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
         tail = 0;
         ptr->next = this;
         next = 0;
+        name = carg;
     }
     QueueStruct(QueueXfer *ptr, int fl = 0)
     {
@@ -683,6 +689,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
         tail = 0;
         ptr->next = this;
         next = 0;
+        name = carg;
     }
     virtual ~QueueStruct()
     {
@@ -723,10 +730,10 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     TYPE *array(int sub, int siz)
     {
-        if (siz < 0) exitErrstr("array too neg\n");
-        if (sub+siz > size()) exitErrstr("array too siz\n");
-        if (para == 0 && sub < 0) exitErrstr("array too para\n");
-        if (para != 0 && sub < 0 && head < para - sub) exitErrstr("array too sub\n");
+        if (siz < 0) exitErrstr("array too neg %s\n", name);
+        if (sub+siz > size()) exitErrstr("array too siz %s\n", name);
+        if (para == 0 && sub < 0) exitErrstr("array too para %s\n", name);
+        if (para != 0 && sub < 0 && head < para - sub) exitErrstr("array too sub %s\n", name);
         return head + sub;
     }
     TYPE *enloc(int siz)
@@ -736,7 +743,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
             limit = base + QUEUE_STEP;
             head = base;
             tail = base;}
-        if (siz < 0) exitErrstr("enlocv too siz\n");
+        if (siz < 0) exitErrstr("enloc too siz %s\n", name);
         while ((para == 0 ? head : para) - base >= QUEUE_STEP) {
             int diff = tail - base;
             for (int i = QUEUE_STEP; i < diff; i++) {
@@ -760,16 +767,16 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     TYPE *deloc(int siz)
     {
-        if (siz < 0) exitErrstr("deloc too siz\n");
+        if (siz < 0) exitErrstr("deloc too siz %s\n", name);
         head += siz;
-        if (head > tail) exitErrstr("deloc too siz\n");
+        if (head > tail) exitErrstr("deloc too siz %s\n", name);
         return head-siz;
     }
     TYPE *unloc(int siz)
     {
-        if (siz < 0) exitErrstr("unloc too siz\n");
+        if (siz < 0) exitErrstr("unloc too siz %s\n", name);
         tail -= siz;
-        if (head > tail) exitErrstr("unloc too siz\n");
+        if (head > tail) exitErrstr("unloc too siz %s\n", name);
         return tail;
     }
     TYPE *reloc(int siz)
@@ -790,8 +797,8 @@ template<class TYPE> struct QueueStruct : QueueBase {
     {
         if (sub == 0) return alloc(siz);
         if (sub == size()) return enloc(siz);
-        if (sub < 0 || sub > size()) exitErrstr("pack too siz\n");
-        if (siz > 0 && sub+siz > size()) exitErrstr("pack too siz\n");
+        if (sub < 0 || sub > size()) exitErrstr("pack too siz %s\n", name);
+        if (siz > 0 && sub+siz > size()) exitErrstr("pack too siz %s\n", name);
         if (siz > 0) {
             for (int i = sub; i+siz < size(); i++)
                 *array(i,1) = *array(i+siz,1);
@@ -813,7 +820,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     int enarg()
     {
-        if ((para == 0) != (keep == 0)) exitErrstr("enarg too para\n");
+        if ((para == 0) != (keep == 0)) exitErrstr("enarg too para %s\n", name);
         if (para == 0) return 0;
         int len = 0;
         while (keep > para) {len += 1; head -= 1; keep -= 1; *head = *keep;}
@@ -832,7 +839,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     TYPE *copy(int to, int from, int siz)
     {
-        if (!src) exitErrstr("enack too src\n");
+        if (!src) exitErrstr("enack too src %s\n", name);
         TYPE *buf = src->array(from,siz);
         src = 0;
         if (to+siz > size()) enloc(to+siz - size());
@@ -857,7 +864,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
 template<class TYPE> QueueStruct<TYPE> *QueueStruct<TYPE>::src = 0;
 
 #define DEFINE_LOCAL(NAME,TYPE,FUNC...) \
-QueueStruct<TYPE> NAME##Inst = QueueStruct<TYPE>(FUNC); \
+QueueStruct<TYPE> NAME##Inst = (carg = #NAME, QueueStruct<TYPE>(FUNC)); \
 extern "C" void use##NAME(void) {NAME##Inst.use();} \
 extern "C" int size##NAME(void) {return NAME##Inst.size();} \
 extern "C" void xfer##NAME(int siz) {NAME##Inst.xfer(siz);} \
@@ -877,23 +884,23 @@ extern "C" TYPE *over##NAME(int to, int from, int siz) {return NAME##Inst.over(t
 extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.ptr();}
 
 #define DEFINE_INDEXED(NAME,TYPE,INDEX,PTR) \
-extern "C" void use##NAME(INDEX idx) {NAME##Inst.PTR->use();} \
-extern "C" int size##NAME(INDEX idx) {return NAME##Inst.PTR->size();} \
-extern "C" void xfer##NAME(INDEX idx, int siz) {NAME##Inst.PTR->xfer(siz);} \
-extern "C" TYPE *array##NAME(INDEX idx, int sub, int siz) {return NAME##Inst.PTR->array(sub,siz);} \
-extern "C" TYPE *enloc##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->enloc(siz);} \
-extern "C" TYPE *deloc##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->deloc(siz);} \
-extern "C" TYPE *unloc##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->unloc(siz);} \
-extern "C" TYPE *reloc##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->reloc(siz);} \
-extern "C" TYPE *alloc##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->alloc(siz);} \
-extern "C" TYPE *pack##NAME(INDEX idx, int sub, int siz) {return NAME##Inst.PTR->pack(sub,siz);} \
-extern "C" TYPE *dearg##NAME(INDEX idx, int siz) {return NAME##Inst.PTR->dearg(siz);} \
-extern "C" int enarg##NAME(INDEX idx) {return NAME##Inst.PTR->enarg();} \
-extern "C" int length##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->length(sub,val);} \
-extern "C" TYPE *string##NAME(INDEX idx, int sub, TYPE val) {return NAME##Inst.PTR->string(sub,val);} \
-extern "C" TYPE *copy##NAME(INDEX idx, int to, int from, int siz) {return NAME##Inst.PTR->copy(to,from,siz);} \
-extern "C" TYPE *over##NAME(INDEX idx, int to, int from, int siz) {return NAME##Inst.PTR->over(to,from,siz);} \
-extern "C" QueueBase *ptr##NAME(INDEX idx) {return NAME##Inst.PTR->ptr();}
+extern "C" void use##NAME(INDEX idx) {(*NAME##Inst.PTR)->use();} \
+extern "C" int size##NAME(INDEX idx) {return (*NAME##Inst.PTR)->size();} \
+extern "C" void xfer##NAME(INDEX idx, int siz) {(*NAME##Inst.PTR)->xfer(siz);} \
+extern "C" TYPE *array##NAME(INDEX idx, int sub, int siz) {return (*NAME##Inst.PTR)->array(sub,siz);} \
+extern "C" TYPE *enloc##NAME(INDEX idx, int siz) {return (*NAME##Inst.PTR)->enloc(siz);} \
+extern "C" TYPE *deloc##NAME(INDEX idx, int siz) {return (*NAME##Inst.PTR)->deloc(siz);} \
+extern "C" TYPE *unloc##NAME(INDEX idx, int siz) {return (*NAME##Inst.PTR)->unloc(siz);} \
+extern "C" TYPE *reloc##NAME(INDEX idx, int siz) {return (*NAME##Inst.PTR)->reloc(siz);} \
+extern "C" TYPE *alloc##NAME(INDEX idx, int siz) {return (*NAME##Inst.PTR)->alloc(siz);} \
+extern "C" TYPE *pack##NAME(INDEX idx, int sub, int siz) {return (*NAME##Inst.PTR)->pack(sub,siz);} \
+extern "C" TYPE *dearg##NAME(INDEX idx, int siz) {return (*NAME##Inst.PTR)->dearg(siz);} \
+extern "C" int enarg##NAME(INDEX idx) {return (*NAME##Inst.PTR)->enarg();} \
+extern "C" int length##NAME(INDEX idx, int sub, TYPE val) {return (*NAME##Inst.PTR)->length(sub,val);} \
+extern "C" TYPE *string##NAME(INDEX idx, int sub, TYPE val) {return (*NAME##Inst.PTR)->string(sub,val);} \
+extern "C" TYPE *copy##NAME(INDEX idx, int to, int from, int siz) {return (*NAME##Inst.PTR)->copy(to,from,siz);} \
+extern "C" TYPE *over##NAME(INDEX idx, int to, int from, int siz) {return (*NAME##Inst.PTR)->over(to,from,siz);} \
+extern "C" QueueBase *ptr##NAME(INDEX idx) {return (*NAME##Inst.PTR)->ptr();}
 
 #define DEFINE_PTR(NAME,TYPE,PTR) \
 extern "C" void use##NAME(void) {NAME##Inst.PTR->use();} \
@@ -920,7 +927,11 @@ extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.PTR->ptr();}
 // does not trigger consume
 
 template<class TYPE> struct QueueMeta {
-    QueueStruct<QueueStruct<TYPE> > meta;
+    QueueStruct<QueueStruct<TYPE>*> meta;
+    ~QueueMeta()
+    {
+        for (int i = 0; i < meta.size(); i++) delete *meta.array(i,1);
+    }
     int size()
     {
         return meta.size();
@@ -928,7 +939,7 @@ template<class TYPE> struct QueueMeta {
     void touch(int idx)
     {
         while (idx >= meta.size()) {
-            QueueStruct<TYPE> inst = QueueStruct<TYPE>();
+            QueueStruct<TYPE> *inst = new QueueStruct<TYPE>();
             *meta.enloc(1) = inst;}
     }
     void use(int idx)
@@ -944,7 +955,7 @@ template<class TYPE> struct QueueMeta {
 };
 
 #define DEFINE_META(NAME,TYPE) \
-QueueMeta<TYPE> NAME##Inst = QueueMeta<TYPE>(); \
+QueueMeta<TYPE> NAME##Inst = (carg = #NAME, QueueMeta<TYPE>()); \
 extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" void used##NAME(int idx) {NAME##Inst.touch(idx);} \
 DEFINE_INDEXED(NAME,TYPE,int,meta.array(idx,1))
@@ -1045,7 +1056,7 @@ struct QueueLink {
 };
 
 #define DEFINE_LINK(NAME) \
-QueueLink NAME##Inst = QueueLink(); \
+QueueLink NAME##Inst = (carg = #NAME; QueueLink()); \
 extern "C" void move##NAME(int index, int pool) {NAME##Inst.move(index,pool);} \
 extern "C" int get##NAME(int index) {return NAME##Inst.get(index);} \
 extern "C" void set##NAME(int index, int val) {NAME##Inst.set(index,val);} \
@@ -1103,7 +1114,7 @@ template<class TYPE> struct QueuePool {
 };
 
 #define DEFINE_POOL(NAME,TYPE) \
-QueuePool<TYPE> NAME##Inst = QueuePool<TYPE>(); \
+QueuePool<TYPE> NAME##Inst = (carg = #NAME, QueuePool<TYPE>()); \
 extern "C" int alloc##NAME(void) {return NAME##Inst.alloc();} \
 extern "C" void free##NAME(int sub) {NAME##Inst.free(sub);} \
 extern "C" TYPE *cast##NAME(int sub) {return NAME##Inst.cast(sub);} \
@@ -1121,6 +1132,7 @@ template<class TYPE> struct Pqueue {
 template<class TYPE> struct QueuePriority {
     QueuePool<Pqueue<TYPE> > pool;
     pqueue_t *pqueue;
+    const char *name;
     QueuePriority(
         pqueue_cmp_pri_f cmppri,
         pqueue_get_pri_f getpri,
@@ -1129,6 +1141,7 @@ template<class TYPE> struct QueuePriority {
         pqueue_set_pos_f setpos)
     {
         pqueue = pqueue_init(PQUEUE_STEP,cmppri,getpri,setpri,getpos,setpos);
+        name = carg;
     }
     ~QueuePriority()
     {
@@ -1191,7 +1204,7 @@ extern "C" int cmp_pri_##NAME(pqueue_pri_t next, pqueue_pri_t curr); \
 extern "C" size_t get_pos_##NAME(void *sub); \
 extern "C" void set_pos_##NAME(void *sub, size_t pos); \
 extern "C" void print_entry_##NAME(FILE *out, void *sub); \
-QueuePriority<TYPE> NAME##Inst = QueuePriority<TYPE>(&cmp_pri_##NAME,&get_pri_##NAME,&set_pri_##NAME,&get_pos_##NAME,&set_pos_##NAME); \
+QueuePriority<TYPE> NAME##Inst = (carg = #NAME, QueuePriority<TYPE>(&cmp_pri_##NAME,&get_pri_##NAME,&set_pri_##NAME,&get_pos_##NAME,&set_pos_##NAME)); \
 extern "C" pqueue_pri_t get_pri_##NAME(void *sub) {return NAME##Inst.get_pri(sub);} \
 extern "C" void set_pri_##NAME(void *sub, pqueue_pri_t pri) {NAME##Inst.set_pri(sub,pri);} \
 extern "C" int cmp_pri_##NAME(pqueue_pri_t next, pqueue_pri_t curr) {return NAME##Inst.cmp_pri(next,curr);} \
@@ -1227,6 +1240,7 @@ template<class KEY, class VAL> struct QueueTree {
     int hole;
     rbop_t rbop;
     void *top;
+    const char *name;
     QueueTree()
     {
         Rbtree<KEY,VAL> temp;
@@ -1241,6 +1255,12 @@ template<class KEY, class VAL> struct QueueTree {
         room = QUEUE_STEP;
         uses = 0;
         hole = 0;
+        name = carg;
+    }
+    ~QueueTree()
+    {
+        delete[] base;
+        delete[] pool;
     }
     void init(int (*cmp)(const void *, const void *))
     {
@@ -1283,7 +1303,7 @@ template<class KEY, class VAL> struct QueueTree {
     {
         if (check(key) >= 0) return -1;
         if (uses == room) {
-        if (hole) exitErrstr("hole too room\n");
+        if (hole) exitErrstr("hole too room %s\n",name);
         void *t = rbop.nil;
         Rbtree<KEY,VAL> *b = new Rbtree<KEY,VAL>[room*2];
         Rbtree<KEY,VAL> **p = new Rbtree<KEY,VAL>*[room*2];
@@ -1316,7 +1336,7 @@ template<class KEY, class VAL> struct QueueTree {
     {
         Rbtree<KEY,VAL> temp = {0,0,0,key};
         Rbtree<KEY,VAL> *found = (Rbtree<KEY,VAL> *)lookup_node(top,&temp,&rbop);
-        if (found == rbop.nil) exitErrstr("cast too found\n");
+        if (found == rbop.nil) exitErrstr("cast too found %s\n",name);
         return &found->val;
     }
     static KEY comp(const void *ptr)
@@ -1327,7 +1347,7 @@ template<class KEY, class VAL> struct QueueTree {
 };
 
 #define DEFINE_TREE(NAME,KEY,VAL) \
-QueueTree<KEY,VAL> NAME##Inst = QueueTree<KEY,VAL>(); \
+QueueTree<KEY,VAL> NAME##Inst = (carg = #NAME, QueueTree<KEY,VAL>()); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int size##NAME(void) {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
@@ -1340,8 +1360,16 @@ extern "C" VAL *cast##NAME(KEY key) {return NAME##Inst.cast(key);} \
 extern "C" KEY comp##NAME(const void *ptr) {return QueueTree<KEY,VAL>::comp(ptr);}
 
 template<class KEY, class VAL> struct QueueTrue {
-    QueueTree<KEY,QueueStruct<VAL> > tree;
-    QueueTrue() {}
+    QueueTree<KEY,QueueStruct<VAL>*> tree;
+    const char *name;
+    QueueTrue() {
+        name = carg;
+    }
+    ~QueueTrue()
+    {
+        int i = 0; while (tree.choose(&i) >= 0) {
+        delete *tree.cast(i); tree.remove(i);}
+    }
     void init(int (*cmp)(const void *, const void *))
     {
         tree.init(cmp);
@@ -1368,14 +1396,16 @@ template<class KEY, class VAL> struct QueueTrue {
     }
     int insert(KEY key)
     {
+        carg = name;
         if (tree.insert(key) < 0) return -1;
-        if (tree.cast(key)->size() > 0) return -1;
+        *tree.cast(key) = new QueueStruct<VAL>();
+        if ((*tree.cast(key))->size() > 0) return -1;
         return 0;
     }
     int remove(KEY key)
     {
         if (tree.test(key) < 0) return -1;
-        tree.cast(key)->deloc(tree.cast(key)->size());
+        (*tree.cast(key))->deloc((*tree.cast(key))->size());
         if (tree.remove(key) < 0) return -1;
         return 0;
     }
@@ -1388,7 +1418,7 @@ template<class KEY, class VAL> struct QueueTrue {
 
 #define DEFINE_TRUE(NAME,KEY,VAL) \
 extern "C" int comp##NAME(const void *left, const void *right); \
-QueueTrue<KEY,VAL> NAME##Inst = QueueTrue<KEY,VAL>(); \
+QueueTrue<KEY,VAL> NAME##Inst = (carg = #NAME, QueueTrue<KEY,VAL>()); \
 extern "C" void init##NAME(int (*cmp)(const void *, const void *)) {NAME##Inst.init(cmp);} \
 extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" int test##NAME(KEY key) {return NAME##Inst.test(key);} \
@@ -1401,12 +1431,16 @@ DEFINE_INDEXED(NAME,VAL,KEY,tree.cast(idx))
 
 template<class KEY, class VAL> struct QueueFalse {
     int (*func)(const void *, const void *);
-    QueueStruct<QueueTree<KEY,VAL> > meta;
+    QueueStruct<QueueTree<KEY,VAL>*> meta;
     QueueFalse() : func(0) {}
+    ~QueueFalse()
+    {
+        for (int i = 0; i < meta.size(); i++) delete *meta.array(i,1);
+    }
     void init(int idx, int (*cmp)(const void *, const void *))
     {
         touch(idx);
-        meta.array(idx,1)->init(cmp);
+        (*meta.array(idx,1))->init(cmp);
     }
     int size()
     {
@@ -1415,24 +1449,24 @@ template<class KEY, class VAL> struct QueueFalse {
     void touch(int idx)
     {
         while (idx >= meta.size()) {
-            QueueTree<KEY,VAL> inst = QueueTree<KEY,VAL>();
+            QueueTree<KEY,VAL> *inst = new QueueTree<KEY,VAL>();
             *meta.enloc(1) = inst;}
     }
 };
 
 #define DEFINE_FALSE(NAME,KEY,VAL) \
-QueueFalse<KEY,VAL> NAME##Inst = QueueFalse<KEY,VAL>(); \
+QueueFalse<KEY,VAL> NAME##Inst = (carg = #NAME, QueueFalse<KEY,VAL>()); \
 extern "C" int usage##NAME(void) {return NAME##Inst.size();} \
 extern "C" void used##NAME(int idx) {NAME##Inst.touch(idx);} \
 extern "C" void init##NAME(int idx, int (*cmp)(const void *, const void *)) {NAME##Inst.init(idx,cmp);} \
 extern "C" int size##NAME(int idx) {return NAME##Inst.size();} \
-extern "C" int test##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->test(key);} \
-extern "C" int check##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->check(key);} \
-extern "C" int find##NAME(int idx,KEY *key) {return NAME##Inst.meta.array(idx,1)->find(key);} \
-extern "C" int choose##NAME(int idx,KEY *key) {return NAME##Inst.meta.array(idx,1)->choose(key);} \
-extern "C" int insert##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->insert(key);} \
-extern "C" int remove##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->remove(key);} \
-extern "C" VAL *cast##NAME(int idx,KEY key) {return NAME##Inst.meta.array(idx,1)->cast(key);} \
+extern "C" int test##NAME(int idx,KEY key) {return (*NAME##Inst.meta.array(idx,1))->test(key);} \
+extern "C" int check##NAME(int idx,KEY key) {return (*NAME##Inst.meta.array(idx,1))->check(key);} \
+extern "C" int find##NAME(int idx,KEY *key) {return (*NAME##Inst.meta.array(idx,1))->find(key);} \
+extern "C" int choose##NAME(int idx,KEY *key) {return (*NAME##Inst.meta.array(idx,1))->choose(key);} \
+extern "C" int insert##NAME(int idx,KEY key) {return (*NAME##Inst.meta.array(idx,1))->insert(key);} \
+extern "C" int remove##NAME(int idx,KEY key) {return (*NAME##Inst.meta.array(idx,1))->remove(key);} \
+extern "C" VAL *cast##NAME(int idx,KEY key) {return (*NAME##Inst.meta.array(idx,1))->cast(key);} \
 extern "C" KEY comp##NAME(const void *ptr) {return QueueTree<KEY,VAL>::comp(ptr);}
 
 #endif // __cplusplus
