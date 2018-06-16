@@ -39,6 +39,7 @@ void processError(int index);
 void inject(void);
 void focus(void);
 
+DECLARE_MSGSTR(PcsOutput)
 DECLARE_MSGSTR(PcsChar)
 DECLARE_SCAN(Pcs)
 
@@ -210,6 +211,10 @@ int processConfigure(int index)
 		SKIP
 		*enlocPcsCmdInt(1) = *arrayPcsInt(intpos+augpids,1); // context
 		*enlocPcsCommand(1) = focus;
+		DELOC}
+	pos = scanPcs(pattern,4,TEXT4("--test"),Scans); if (pos>=0) {
+		SKIP
+		msgstrPcsOutput("hello world",'\n');
 		DELOC}
 	pos = scanPcs(pattern,10,TEXT4("-"),FILLER6,Scans); if (pos>=0) {
 		DELOC}

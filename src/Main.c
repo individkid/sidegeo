@@ -68,12 +68,6 @@ int main(int argc, char **argv)
 
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
-#ifdef __linux__
-    glewExperimental = GL_TRUE;
-    GLenum err = glewInit();
-    if (GLEW_OK != err) {
-        exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));}
-#endif
 
     for (int i = 1; i < argc; i++) {
     for (char *j = argv[i]; *j; j++)
