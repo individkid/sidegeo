@@ -233,6 +233,8 @@ struct QueueBase {
 
 struct QueueXbase {
     QueueXbase *xptr;
+    const char *name;
+    QueueXbase() {name = carg;}
     virtual int xfer() = 0;
 };
 
@@ -244,6 +246,7 @@ struct QueueMutex {
     void (*consume)(void *);
     void (*produce)(void *);
     int done;
+    const char *name;
     QueueMutex()
     {
         next = 0;
@@ -251,6 +254,7 @@ struct QueueMutex {
         done = 0;
         consume = 0;
         produce = 0;
+        name = carg;
         if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
     }
     QueueMutex(void (*fnc3)(void *), void (*fnc4)(void *))
@@ -260,27 +264,28 @@ struct QueueMutex {
         done = 0;
         consume = fnc3;
         produce = fnc4;
-        if (pthread_mutex_init(&mutex,0) != 0) exitErrstr("cond init failed: %s\n",strerror(errno));
+        name = carg;
+        int err = pthread_mutex_init(&mutex,0); if (err != 0) exitErrstr("cond init failed: %s\n",strerror(err));
     }
     virtual ~QueueMutex()
     {
-        if (pthread_mutex_destroy(&mutex) != 0) exitErrstr("cond destroy failed: %s\n",strerror(errno));
+        int err = pthread_mutex_destroy(&mutex); if (err != 0) exitErrstr("%s destroy failed: %s\n",name,strerror(err));
     }
     void create(void *(*func) (void *), int arg)
     {
-        if (pthread_create(&thread,0,func,int2void(arg)) != 0) exitErrstr("cannot create thread\n");
+        int err = pthread_create(&thread,0,func,int2void(arg)); if (err != 0) exitErrstr("%s create thread: %s\n",name,strerror(err));
     }
     void lock()
     {
-        if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+        int err = pthread_mutex_lock(&mutex); if (err != 0) exitErrstr("%s lock failed: %s\n",name, strerror(err));
     }
     void unlock()
     {
-        if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+        int err = pthread_mutex_unlock(&mutex); if (err != 0) exitErrstr("mutex unlock failed: %s\n",strerror(err));
     }
     void join()
     {
-        if (pthread_join(thread,0) != 0) exitErrstr("cannot join thread\n");
+        int err = pthread_join(thread,0); if (err != 0) exitErrstr("%s join thread\n",name,strerror(err));
     }
     virtual void signal() = 0;
     virtual void before() = 0;
@@ -536,7 +541,7 @@ struct QueueCond : QueueMutex {
 };
 
 #define DEFINE_MUTEX(NAME,TYPE,FUNC...) \
-TYPE NAME##Inst = TYPE(FUNC); \
+TYPE NAME##Inst = (carg = #NAME, TYPE(FUNC)); \
 extern "C" int done##NAME(void) {return NAME##Inst.done;} \
 extern "C" int xfer##NAME(void) {return NAME##Inst.xfer();} \
 extern "C" void *loop##NAME(void *arg) {return NAME##Inst.loop(arg);} \
@@ -620,13 +625,13 @@ struct QueueXfer : QueueXbase {
 };
 
 #define DEFINE_SOURCE(NAME,NEXT,XPTR) \
-QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,1); \
+QueueXfer NAME##Inst = (carg = #NAME, QueueXfer(&NEXT##Inst,&XPTR##Inst,1)); \
 // xfer, signal, no consume
 #define DEFINE_DEST(NAME,NEXT,XPTR) \
-QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,0); \
+QueueXfer NAME##Inst = (carg = #NAME, QueueXfer(&NEXT##Inst,&XPTR##Inst,0)); \
 // xfer, no signal, consume
 #define DEFINE_WAIT(NAME,NEXT,XPTR) \
-QueueXfer NAME##Inst = QueueXfer(&NEXT##Inst,&XPTR##Inst,0); \
+QueueXfer NAME##Inst = (carg = #NAME, QueueXfer(&NEXT##Inst,&XPTR##Inst,0)); \
 // wait, xfer, consume
 
 #define QUEUE_STEP 10
