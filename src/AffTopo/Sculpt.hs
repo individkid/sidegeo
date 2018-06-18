@@ -48,6 +48,7 @@ data Event =
     Frame | -- inout(boundary), place, embed: inout(frame)
     Get | -- inout(boundary), tag: inout(mask)
     Set | -- inout(boundary,mask), tag: tag
+    Filter | -- inout(mask), tag: tag
     Divide | -- inout(boundary, filter, wrt), place, embed, tag: place, embed, tag
     Vertex | -- inout(boundary), place: inout(vertex)
     Index | -- inout(boundary), place: inout(index)
@@ -65,10 +66,11 @@ eventOf 6 = Face
 eventOf 7 = Frame
 eventOf 8 = Get
 eventOf 9 = Set
-eventOf 10 = Divide
-eventOf 11 = Vertex
-eventOf 12 = Index
-eventOf 13 = Done
+eventOf 10 = Filter
+eventOf 11 = Divide
+eventOf 12 = Vertex
+eventOf 13 = Index
+eventOf 14 = Done
 eventOf _ = Error
 
 ofEvent :: Event -> Int
@@ -82,10 +84,11 @@ ofEvent Face = 6
 ofEvent Frame = 7
 ofEvent Get = 8
 ofEvent Set = 9
-ofEvent Divide = 10
-ofEvent Vertex = 11
-ofEvent Index = 12
-ofEvent Done = 13
+ofEvent Filter = 10
+ofEvent Divide = 11
+ofEvent Vertex = 12
+ofEvent Index = 13
+ofEvent Done = 14
 ofEvent _ = (-1)
 
 ofString :: [Char] -> Event
@@ -99,6 +102,7 @@ ofString "Face" = Face
 ofString "Frame" = Frame
 ofString "Get" = Get
 ofString "Set" = Set
+ofString "Filter" = Filter
 ofString "Divide" = Divide
 ofString "Vertex" = Vertex
 ofString "Index" = Index
@@ -249,6 +253,11 @@ handleSet a b (State c d e) = let -- set mask associated with given boundary
  index = findIndex' (\(x,_) -> x == bound) e
  in State c d (replace index (bound,b) e)
 
+handleFilter :: Int -> (Boundary,Int) -> IO (Boundary,Int)
+handleFilter a (b,c) = do
+ mask <- mappingC (fromIntegral a) (fromIntegral c)
+ return (b, fromIntegral mask)
+
 handleDivide :: Int -> Int -> [Int] -> State -> State
 handleDivide a m b (State c d e) = let -- change or add given boundary with given vertex sidednesses
  boundary = Boundary a
@@ -367,6 +376,10 @@ handleState Set state = do
  mask <- handleInput
  handleInput >>= handleOutput
  return (handleSet plane mask state)
+handleState Filter (State a b c) = do
+ arg <- handleInput
+ result <- mapM (handleFilter arg) c
+ return (State a b result)
 handleState Divide state = do
  plane <- handleInput
  mask <- handleInput

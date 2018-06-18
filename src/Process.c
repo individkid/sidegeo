@@ -46,10 +46,10 @@ int donesiz = 0;
 
 void inithlp(struct Helper *hlp)
 {
-    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("mutex lock failed: %s\n",strerror(errno));
+    if (pthread_mutex_lock(&mutex) != 0) exitErrstr("helper lock failed: %s\n",strerror(errno));
     *hlp = helper;
-    if (pthread_cond_signal(&cond) != 0) exitErrstr("cond signal failed: %s\n",strerror(errno));
-    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("mutex unlock failed: %s\n",strerror(errno));
+    if (pthread_cond_signal(&cond) != 0) exitErrstr("helper signal failed: %s\n",strerror(errno));
+    if (pthread_mutex_unlock(&mutex) != 0) exitErrstr("helper unlock failed: %s\n",strerror(errno));
 }
 
 int intncmp(int *left, int *right, int n)

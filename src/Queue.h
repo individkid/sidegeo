@@ -1322,6 +1322,7 @@ template<class KEY, class VAL> struct QueueTree {
         Rbtree<KEY,VAL> *found = 0;
         if (hole) {hole -= 1; found = pool[hole];}
         else found = base+uses;
+        found->key = key;
         add_node(&top,found,&rbop);
         uses += 1;
         return 0;
