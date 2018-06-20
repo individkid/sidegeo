@@ -379,6 +379,7 @@ handleState Set state = do
 handleState Filter (State a b c) = do
  arg <- handleInput
  result <- mapM (handleFilter arg) c
+ handleInput >>= handleOutput
  return (State a b result)
 handleState Divide state = do
  plane <- handleInput

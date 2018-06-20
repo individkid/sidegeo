@@ -445,24 +445,12 @@ int setupDisplay(int name)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    if (sub == 0) {
-    displayHandle = glfwCreateWindow(800, 600, stringCmdBuf(displayName,0), NULL, NULL);
-#ifdef __linux__
-    glfwMakeContextCurrent(displayHandle);
-    glewExperimental = GL_TRUE;
-    GLenum err = glewInit();
-    if (GLEW_OK != err) exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));
-#endif
-    } else {int xpos = 0; int ypos = 0; int xsiz = 0; int ysiz = 0;
-    glfwGetWindowPos(arrayDisplay(alternate,1)->handle,&xpos,&ypos);
-    glfwGetWindowSize(arrayDisplay(alternate,1)->handle,&xsiz,&ysiz);
+    int xpos = 0; int ypos = 0; int xsiz = 800; int ysiz = 600;
+    if (sub > 0) glfwGetWindowPos(arrayDisplay(alternate,1)->handle,&xpos,&ypos);
+    if (sub > 0) glfwGetWindowSize(arrayDisplay(alternate,1)->handle,&xsiz,&ysiz);
     displayHandle = glfwCreateWindow(xsiz, ysiz, stringCmdBuf(displayName,0), NULL, NULL);
-    glfwSetWindowPos(displayHandle,xpos,ypos);}
     if (!displayHandle) exitErrstr("could not create display\n");
-#ifdef __linux__
-    screenHandle = glfwGetX11Display();
-    if (!screenHandle) exitErrstr("could not get display pointer\n");
-#endif
+    if (sub > 0) glfwSetWindowPos(displayHandle,xpos,ypos);
     glfwSetWindowCloseCallback(displayHandle, displayClose);
     glfwSetKeyCallback(displayHandle, displayKey);
     glfwSetMouseButtonCallback(displayHandle, displayClick);
@@ -474,11 +462,16 @@ int setupDisplay(int name)
     glfwGetWindowSize(displayHandle,&xSiz,&ySiz);
     glfwGetWindowPos(displayHandle,&xLoc,&yLoc);
     glfwMakeContextCurrent(displayHandle);
+#ifdef __linux__
+    screenHandle = glfwGetX11Display();
+    if (!screenHandle) exitErrstr("could not get display pointer\n");
+    glewExperimental = GL_TRUE;
+    GLenum err = glewInit();
+    if (GLEW_OK != err) exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));
+    glViewport(0, 0, xSiz, ySiz);
+#endif
 #ifdef __APPLE__
     glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
-#ifdef __linux__
-    glViewport(0, 0, xSiz, ySiz);
 #endif
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
@@ -679,11 +672,11 @@ void updateUniform(enum Server server, int file, enum Shader shader)
     CASE(Slope)
         glUniform1f(uniform->handle,slope);
     CASE(Aspect) {
-#ifdef __APPLE__
-        glViewport(0, 0, xSiz*2, ySiz*2);
-#endif
 #ifdef __linux__
         glViewport(0, 0, xSiz, ySiz);
+#endif
+#ifdef __APPLE__
+        glViewport(0, 0, xSiz*2, ySiz*2);
 #endif
         aspect = (Myfloat)ySiz/(Myfloat)xSiz;
         glUniform1f(uniform->handle,aspect);}
@@ -697,6 +690,11 @@ void updateContext(int sub)
     save(); current = arrayDisplay(sub,1); restore(); target();
     if (sub != contextHandle) exitErrstr("display too context\n");
     glfwMakeContextCurrent(displayHandle);
+#ifdef __linux__
+    glewExperimental = GL_TRUE;
+    GLenum err = glewInit();
+    if (GLEW_OK != err) exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));
+#endif
     useDisplayCode(contextHandle); referCode();
     useDisplayPoly(contextHandle); referPoly();
 }
