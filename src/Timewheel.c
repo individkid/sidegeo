@@ -385,10 +385,13 @@ void timewheelConsume(void *arg)
 long long timewheelDelay(void)
 {
     long long current = getTime();
-    long long time = whenTime();
-    long long wheel = whenWheel();
-    if (time < wheel) return time-current;
-    return wheel-current;
+    if (sizeTime() == 0 && sizeWheel() == 0) return -1;
+    if (sizeTime() > 0 && whenTime() < current) return 0;
+    if (sizeWheel() > 0 && whenWheel() < current) return 0;
+    if (sizeTime() == 0) return whenWheel()-current;
+    if (sizeWheel() == 0) return whenTime()-current;
+    if (whenTime() < whenWheel()) return whenTime()-current;
+    return whenWheel()-current;
 }
 
 void timewheelProduce(void *arg)

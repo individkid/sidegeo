@@ -173,7 +173,8 @@ EXTERNC int avail##NAME(void);
 EXTERNC TYPE *schedule##NAME(pqueue_pri_t pri); \
 EXTERNC TYPE *advance##NAME(void); \
 EXTERNC int ready##NAME(pqueue_pri_t pri); \
-EXTERNC pqueue_pri_t when##NAME(void);
+EXTERNC pqueue_pri_t when##NAME(void); \
+EXTERNC int size##NAME(void);
 
 #define DECLARE_TREE(NAME,KEY,VAL) \
 EXTERNC void init##NAME(int (*cmp)(const void *, const void *)); \
@@ -489,7 +490,9 @@ struct QueueTime : QueueMutex {
         if (time == 0) return 1;
         struct timespec delay = {0};
         delay.tv_nsec = time;
-        int lenSel = pselect(0, 0, 0, 0, &delay, &saved);
+        int lenSel = (time < 0 ?
+        pselect(0, 0, 0, 0, 0, &saved) :
+        pselect(0, 0, 0, 0, &delay, &saved));
         if (lenSel < 0 && errno == EINTR) return 0;
         if (lenSel != 0) exitErrstr("pselect failed: %s\n", strerror(errno));
         return 1;
@@ -1200,6 +1203,10 @@ template<class TYPE> struct QueuePriority {
         int sub = void2int(pqueue_peek(pqueue));
         return pool.cast(sub)->pri;
     }
+    int size()
+    {
+        return pool.size();
+    }
 };
 
 #define DEFINE_PRIORITY(NAME,TYPE) \
@@ -1219,7 +1226,8 @@ extern "C" void print_entry_##NAME(FILE *out, void *sub) {NAME##Inst.print_entry
 extern "C" TYPE *schedule##NAME(pqueue_pri_t pri) {return NAME##Inst.schedule(pri);} \
 extern "C" TYPE *advance##NAME(void) {return NAME##Inst.advance();} \
 extern "C" int ready##NAME(pqueue_pri_t pri) {return NAME##Inst.ready(pri);} \
-extern "C" pqueue_pri_t when##NAME(void) {return NAME##Inst.when();}
+extern "C" pqueue_pri_t when##NAME(void) {return NAME##Inst.when();} \
+extern "C" int size##NAME(void) {return NAME##Inst.size();}
 
 template<class KEY, class VAL> struct Rbtree {
     void *left;
