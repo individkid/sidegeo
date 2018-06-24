@@ -461,13 +461,10 @@ int setupDisplay(int name)
     glfwSetWindowRefreshCallback(displayHandle, displayRefresh);
     glfwGetWindowSize(displayHandle,&xSiz,&ySiz);
     glfwGetWindowPos(displayHandle,&xLoc,&yLoc);
-    glfwMakeContextCurrent(displayHandle);
+    updateHandle();
 #ifdef __linux__
     screenHandle = glfwGetX11Display();
     if (!screenHandle) exitErrstr("could not get display pointer\n");
-    glewExperimental = GL_TRUE;
-    GLenum err = glewInit();
-    if (GLEW_OK != err) exitErrstr("could not initialize glew: %s\n", glewGetErrorString(err));
     glViewport(0, 0, xSiz, ySiz);
 #endif
 #ifdef __APPLE__
@@ -683,12 +680,8 @@ void updateUniform(enum Server server, int file, enum Shader shader)
     DEFAULT(exitErrstr("invalid server uniform\n");)
 }
 
-void updateContext(int sub)
+void updateHandle(void)
 {
-    if (current == 0) exitErrstr("display too current\n");
-    if (sub == contextHandle) return;
-    save(); current = arrayDisplay(sub,1); restore(); target();
-    if (sub != contextHandle) exitErrstr("display too context\n");
     glfwMakeContextCurrent(displayHandle);
 #ifdef __linux__
     glewExperimental = GL_TRUE;
@@ -697,6 +690,15 @@ void updateContext(int sub)
 #endif
     useDisplayCode(contextHandle); referCode();
     useDisplayPoly(contextHandle); referPoly();
+}
+
+void updateContext(int sub)
+{
+    if (current == 0) exitErrstr("display too current\n");
+    if (sub == contextHandle) return;
+    save(); current = arrayDisplay(sub,1); restore(); target();
+    if (sub != contextHandle) exitErrstr("display too context\n");
+    updateHandle();
 }
 
 void updateDisplay(GLFWwindow *ptr)

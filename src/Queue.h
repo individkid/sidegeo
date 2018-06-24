@@ -970,23 +970,30 @@ DEFINE_INDEXED(NAME,TYPE,int,meta.array(idx,1))
 
 template<class TYPE> struct QueuePointer {
     QueueStruct<TYPE> *ptr;
+    const char *name;
     QueuePointer()
     {
         ptr = 0;
+        name = carg;
     }
     ~QueuePointer(void) {}
     void refer()
     {
         ptr = QueueStruct<TYPE>::src;
-        if (ptr == 0) exitErrstr("refer too ptr\n");
+        if (ptr == 0) exitErrstr("refer too ptr %s\n",name);
         QueueStruct<TYPE>::src = 0;
+    }
+    QueueStruct<TYPE> *get()
+    {
+        if (ptr == 0) exitErrstr("get too ptr %s\n",name);
+        return ptr;
     }
 };
 
 #define DEFINE_POINTER(NAME,TYPE) \
-QueuePointer<TYPE> NAME##Inst = QueuePointer<TYPE>(); \
+QueuePointer<TYPE> NAME##Inst = (carg = #NAME, QueuePointer<TYPE>()); \
 extern "C" void refer##NAME(void) {NAME##Inst.refer();} \
-DEFINE_PTR(NAME,TYPE,ptr)
+DEFINE_PTR(NAME,TYPE,get())
 
 struct Link {
     int pool; // head tail subscript

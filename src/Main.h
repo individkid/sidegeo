@@ -158,6 +158,7 @@ void setupTarget(int sub);
 void updateTarget(int display, int file);
 void updateAffine(int display, int file);
 void updateFile(int ctx, int sub, int cpy);
+void updateHandle(void);
 void updateContext(int sub);
 void updateDisplay(GLFWwindow *ptr);
 void updateUniform(enum Server server, int file, enum Shader shader);
