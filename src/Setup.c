@@ -162,7 +162,7 @@ int locationCode(int sub, enum Shader shader)
     for (int i = 0; i < 3; i++) buffer[i] = bufferVertex(i,shader);
     int location[3];
     for (int i = 0; i < 3 && buffer[i] < Datas; i++) location[i] = locationBuffer(buffer[i]);
-    if (location[sub] < INVALID_LOCATION) return msgstrCmdBuf("#define LOCATION%d %d",0,sub,location[sub]);
+    if (location[sub] < INVALID_LOCATION) return msgstrCmdBuf("#define LOCATION%d %d\n",0,sub,location[sub]);
     return 0;
 }
 
@@ -399,7 +399,7 @@ void setupUniform(struct Uniform *ptr, enum Server server, Myuint program)
 
 void setupCode(int display, enum Shader shader)
 {
-    while (sizeCode() < shader) {struct Code code = {0}; *enlocCode(1) = code;}
+    while (sizeDisplayCode(display) <= shader) {struct Code code = {0}; *enlocDisplayCode(display,1) = code;}
     struct Code *code = arrayDisplayCode(display,shader,1);
     if (code->name != 0) return;
     Myuint prog = 0;
@@ -438,6 +438,8 @@ int setupDisplay(int name)
     struct Display *save = current; // temporary change to current is ok
     int sub = sizeDisplay();
     current = enlocDisplay(1); // because no called functions depend on current
+    usedDisplayCode(sub);
+    usedDisplayPoly(sub);
     contextHandle = sub;
     displayName = name;
     click = Init;

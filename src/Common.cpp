@@ -135,12 +135,12 @@ DEFINE_TRUE(Reint,int,int)
 DEFINE_TRUE(Refloat,int,Myfloat)
 DEFINE_TRUE(Rebyte,int,char)
 
-DEFINE_LOCAL(Display,struct Display)
-DEFINE_LOCAL(Share,struct Share)
-DEFINE_META(DisplayCode,struct Code)
-DEFINE_POINTER(Code,struct Code)
-DEFINE_META(DisplayPoly,struct File)
-DEFINE_POINTER(Poly,struct File)
+DEFINE_LOCAL(Display,struct Display) // per display
+DEFINE_LOCAL(Share,struct Share) // per file
+DEFINE_META(DisplayCode,struct Code) // per display per shader
+DEFINE_POINTER(Code,struct Code) // per shader
+DEFINE_META(DisplayPoly,struct File) // per display per file
+DEFINE_POINTER(Poly,struct File) // per file
 DEFINE_POOL(Slot,int)
 DEFINE_LOCAL(CmdBuf,char)
 DEFINE_LOCAL(Seqmax,int)

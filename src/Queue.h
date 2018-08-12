@@ -721,7 +721,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
     }
     virtual void use()
     {
-        if (src) exitErrstr("src too use\n");
+        if (src) exitErrstr("src too use %s\n",name);
         src = this;
     }
     virtual int size()
@@ -739,7 +739,7 @@ template<class TYPE> struct QueueStruct : QueueBase {
     TYPE *array(int sub, int siz)
     {
         if (siz < 0) exitErrstr("array too neg %s\n", name);
-        if (sub+siz > size()) exitErrstr("array too siz %s\n", name);
+        if (sub+siz > size()) exitErrstr("array too siz %s %p\n", name, this);
         if (para == 0 && sub < 0) exitErrstr("array too para %s\n", name);
         if (para != 0 && sub < 0 && head < para - sub) exitErrstr("array too sub %s\n", name);
         return head + sub;
@@ -936,6 +936,11 @@ extern "C" QueueBase *ptr##NAME(void) {return NAME##Inst.PTR->ptr();}
 
 template<class TYPE> struct QueueMeta {
     QueueStruct<QueueStruct<TYPE>*> meta;
+    const char *name;
+    QueueMeta()
+    {
+        name = carg;
+    }
     ~QueueMeta()
     {
         for (int i = 0; i < meta.size(); i++) delete *meta.array(i,1);
@@ -946,6 +951,7 @@ template<class TYPE> struct QueueMeta {
     }
     void touch(int idx)
     {
+        carg = name;
         while (idx >= meta.size()) {
             QueueStruct<TYPE> *inst = new QueueStruct<TYPE>();
             *meta.enloc(1) = inst;}
@@ -953,7 +959,7 @@ template<class TYPE> struct QueueMeta {
     void use(int idx)
     {
         touch(idx);
-        if (QueueStruct<TYPE>::src) exitErrstr("src too use\n");
+        if (QueueStruct<TYPE>::src) exitErrstr("src too use %s\n",name);
         QueueStruct<TYPE>::src = meta.array(idx,1);
     }
     QueueBase *ptr(int idx)
