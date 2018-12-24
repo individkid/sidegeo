@@ -26,6 +26,7 @@ Built in tests include the following, where "linear" refers to any linear space 
   * classify of sample of classify of any embed in a linear should be equivalent  
   * every plane through a point should have a coplane on the copoint  
   * every edge facet of a region should have two and only two vertex facets  
+  * classify of inflate of equivalent space is equivalent  
 
 The main display window is a hub from which parts or collections of polytopes can be moved to various alternate displays. But from alternate displays, things can only move back to the main display. The following command line arguments are processed in order.
 
@@ -64,6 +65,7 @@ Left mouse button selects pierce point, and activates menu selected action. Righ
   * Move -- click moves pierced target to alternate display  
   * Copy -- click copies pierced target to alternate display  
   * Sample -- whether space fixed in Tweak mode  
+    * Invariant -- classification of polytope does not change  
     * Symbolic -- classification of space does not change  
     * Numeric -- configuration controls amount of change  
   * Tweak -- click tweaks plane possibly holding space fixed  

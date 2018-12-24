@@ -247,7 +247,7 @@ enum Usage {
     Scratch,
     Draft,
     Usages};
-struct File {
+struct File { // per file transforms per display
     int fixed; // whether object moves opposite to view
     int last; // last value of fixed
     Myfloat saved[16]; // Sp sent to uniform when fixed went to 1

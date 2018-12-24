@@ -295,13 +295,19 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn,
     buffer.type = type;
     buffer.dimn = dimn;
     buffer.client = client;
+    *ptr = buffer;
+}
+
+void setupAttrib(int ctx, enum Data sub)
+{
+    Myuint loc = locationBuffer(sub);
+    struct Buffer *buffer = arrayDisplayPoly(ctx,0,1)->buffer+sub; // FIXME use functions instead of buffer fields because this is called before setupBuffer
     if (loc != INVALID_LOCATION) {
-    glBindBuffer(GL_ARRAY_BUFFER, buffer.handle);
-    SWITCH(buffer.type,GL_FLOAT) glVertexAttribPointer(buffer.loc, buffer.dimn, buffer.type, GL_FALSE, 0, 0);
-    CASE(GL_UNSIGNED_INT) glVertexAttribIPointer(buffer.loc, buffer.dimn, buffer.type, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
+    SWITCH(buffer->type,GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
+    CASE(GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
     DEFAULT(exitErrstr("buffer too type\n");)
     glBindBuffer(GL_ARRAY_BUFFER, 0);}
-    *ptr = buffer;
 }
 
 int setupClient(int file, enum Data data)
@@ -618,9 +624,10 @@ void updateUniform(enum Server server, int file, enum Shader shader)
     CASE(Basis)
         glUniformMatrix3fv(uniform->handle,3,GL_FALSE,basisMat);
     CASE(Affine)
-        if (file < 0) exitErrstr("affine too file\n");
-        updateAffine(contextHandle,file);
-        glUniformMatrix4fv(uniform->handle,1,GL_FALSE,arrayPoly(file,1)->sent);
+        if (file >= 0) {
+            updateAffine(contextHandle,file);
+            glUniformMatrix4fv(uniform->handle,1,GL_FALSE,arrayPoly(file,1)->sent);
+        }
     CASE(Feather) {
         SWITCH(shader,Perplane) FALL(Perpoint) FALL(Adplane) {
             Myfloat xpoint, ypoint, zpoint;

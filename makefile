@@ -1,7 +1,7 @@
 all : clean build test
 
 test :
-	./dist/build/sculpt/sculpt -o cfg/test.--
+	./dist/build/sculpt/sculpt
 
 src/%.cpp : src/%.fl
 	cp $< $@

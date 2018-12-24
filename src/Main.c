@@ -32,6 +32,7 @@ int augpids = 0;
 const enum Shader dishader = Diplane;
 const enum Shader pershader = Perplane;
 const enum Data data = FaceSub;
+void bringupMicrocode(void);
 #else
 const enum Shader dishader = Dipoint;
 const enum Shader pershader = Perpoint;
@@ -68,6 +69,11 @@ int main(int argc, char **argv)
 
     glfwSetErrorCallback(displayError);
     if (!glfwInit()) exitErrstr("could not initialize glfw\n");
+
+#ifdef BRINGUP
+    bringupMicrocode();
+    return 0;
+#endif
 
     for (int i = 1; i < argc; i++) {
     for (char *j = argv[i]; *j; j++)

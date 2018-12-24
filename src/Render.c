@@ -112,12 +112,6 @@ enum Action dequeWrap(int state)
         glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
         glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
         glBindBuffer(GL_ARRAY_BUFFER,0);}
-    if (buffer->loc != INVALID_LOCATION) {
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-        SWITCH(buffer->type,GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
-        CASE(GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
-        DEFAULT(exitErrstr("unknown type\n");)
-        glBindBuffer(GL_ARRAY_BUFFER, 0);}
     buffer->room = buffer->wrap; buffer->wrap = 0;
     return Advance;
 }
