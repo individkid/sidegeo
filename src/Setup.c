@@ -298,18 +298,6 @@ void setupBuffer(struct Buffer *ptr, char *name, Myuint loc, int type, int dimn,
     *ptr = buffer;
 }
 
-void setupAttrib(int ctx, enum Data sub)
-{
-    Myuint loc = locationBuffer(sub);
-    struct Buffer *buffer = arrayDisplayPoly(ctx,0,1)->buffer+sub; // FIXME use functions instead of buffer fields because this is called before setupBuffer
-    if (loc != INVALID_LOCATION) {
-    glBindBuffer(GL_ARRAY_BUFFER, buffer->handle);
-    SWITCH(buffer->type,GL_FLOAT) glVertexAttribPointer(buffer->loc, buffer->dimn, buffer->type, GL_FALSE, 0, 0);
-    CASE(GL_UNSIGNED_INT) glVertexAttribIPointer(buffer->loc, buffer->dimn, buffer->type, 0, 0);
-    DEFAULT(exitErrstr("buffer too type\n");)
-    glBindBuffer(GL_ARRAY_BUFFER, 0);}
-}
-
 int setupClient(int file, enum Data data)
 {
     struct Share *ptr = arrayShare(file,1);
@@ -361,6 +349,17 @@ int setupFile(int display)
     setupBuffer(file->buffer+VertSub,"vertex",locationBuffer(VertSub),GL_UNSIGNED_INT,INCIDENCE_DIMENSIONS,setupClient(sub,VertSub));
     setupBuffer(file->buffer+CnstrSub,"construct",locationBuffer(CnstrSub),GL_UNSIGNED_INT,CONSTRUCT_DIMENSIONS,setupClient(sub,CnstrSub));
     return sub;
+}
+
+void setupAttrib(enum Data data)
+{
+    SWITCH(data,PlaneBuf) glVertexAttribPointer(PLANE_LOCATION,PLANE_DIMENSIONS,GL_FLOAT,GL_FALSE,0,0);
+    CASE(VersorBuf) glVertexAttribIPointer(VERSOR_LOCATION,SCALAR_DIMENSIONS,GL_UNSIGNED_INT,0,0);
+    CASE(PointBuf) glVertexAttribPointer(POINT_LOCATION,POINT_DIMENSIONS,GL_FLOAT,GL_FALSE,0,0);
+    CASE(VertBuf) glVertexAttribPointer(VERTEX_LOCATION,POINT_DIMENSIONS,GL_FLOAT,GL_FALSE,0,0);
+    CASE(CnstrBuf) glVertexAttribPointer(CONSTRUCT_LOCATION,PLANE_DIMENSIONS,GL_FLOAT,GL_FALSE,0,0);
+    CASE(DimnBuf) glVertexAttribIPointer(DIMENSION_LOCATION,SCALAR_DIMENSIONS,GL_UNSIGNED_INT,0,0);
+    DEFAULT()
 }
 
 int setupShare(int name, enum Usage usage, int ident, int file)
@@ -421,6 +420,8 @@ void setupCode(int display, enum Shader shader)
     CASE(Repoint) prog = compileProgram(repointVertex,repointGeometry,repointFragment,GL_POINTS,GL_POINTS,"repoint",display,Repoint);
     DEFAULT(exitErrstr("unknown shader type\n");)
     code->handle = prog;
+    glUseProgram(code->handle);
+    for (enum Data data = 0; data < Datas; data++) setupAttrib(data);
     for (int i = 0; i < 3; i++) code->vertex[i] = bufferVertex(i,shader);
     for (int i = 0; i < 3; i++) for (int j = 0; j < Usages; j++) code->element[j][i] = bufferElement(i,shader);
     for (int i = 0; i < 3; i++) code->element[Scratch][i] = bufferScratch(i,shader);
@@ -428,7 +429,6 @@ void setupCode(int display, enum Shader shader)
     for (int i = 0; i < 4; i++) code->server[i] = uniformServer(i,shader);
     for (int i = 0; i < 4; i++) code->config[i] = uniformGlobal(i,shader);
     for (int i = 0; i < 4; i++) code->reader[i] = uniformConstant(i,shader);
-    glUseProgram(code->handle);
     enum Server temp = Servers;
     for (int i = 0; (temp = code->server[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);
     for (int i = 0; (temp = code->config[i]) < Servers; i++) setupUniform(code->uniform+temp,temp,prog);

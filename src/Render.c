@@ -100,6 +100,7 @@ enum Action dequeWrap(int state)
         glBindBuffer(GL_ARRAY_BUFFER, buffer->copy);
         glBufferData(GL_ARRAY_BUFFER, buffer->wrap*size, NULL, GL_STATIC_DRAW);
         glBindBuffer(GL_ARRAY_BUFFER,0);
+        // TODO cause dequeBuffer to copy all from client instead of the following
         glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
         glBindBuffer(GL_COPY_WRITE_BUFFER, buffer->copy);
         glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,0,0,buffer->done*size);
@@ -142,7 +143,7 @@ enum Action dequeBuffer(int state)
     int seq = buffer->seqnum;
     int lim = sizeRange(client);
     int max = *arraySeqmax(client,1);
-    buffer->seqnum = max;
+    buffer->done = room; buffer->seqnum = max;
     int loc = 0;
     for (int i = 0; i < lim; i++) {
         int len = *delocRange(client,1);

@@ -125,7 +125,6 @@ void display(void)
     useCmdByte(); xferCmdBuf(len+1);
     int new = setupDisplay(name);
     for (enum Shader shader = 0; shader < Shaders; shader++) setupCode(new,shader);
-    for (enum Data data = 0; data < Datas; data++) setupAttrib(new,data);
     if (new > 0) {
     struct Display *save = current;
     current = arrayDisplay(new,1);

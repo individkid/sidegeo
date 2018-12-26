@@ -156,7 +156,6 @@ int setupFile(int context);
 int setupShare(int name, enum Usage usage, int ident, int file);
 void setupTarget(int sub);
 void updateTarget(int display, int file);
-void setupAttrib(int ctx, enum Data sub);
 void updateAffine(int display, int file);
 void updateFile(int ctx, int sub, int cpy);
 void updateHandle(void);
